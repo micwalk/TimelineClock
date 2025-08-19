@@ -33,13 +33,8 @@ export class TimelineRenderer {
   }
 
   private clear() {
-    // Clear with gradient background spanning full screen
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height)
-    gradient.addColorStop(0, '#0f172a') // Dark blue
-    gradient.addColorStop(1, '#000000') // Black
-    
-    this.ctx.fillStyle = gradient
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+    // Clear with transparent background - let the page gradient show through
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
   }
 
   private drawTimeline() {
