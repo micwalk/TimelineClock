@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect } from 'react'
 import { TimelineRenderer } from '../canvas/TimelineRenderer'
 
 interface TimelineCanvasProps {
@@ -8,8 +8,6 @@ interface TimelineCanvasProps {
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [currentTime, setCurrentTime] = useState<string>('')
-  const [nowPosition, setNowPosition] = useState<number>(0)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -57,29 +55,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     resizeCanvas()
     window.addEventListener('resize', handleResize)
 
-    // Update current time and NOW position
-    const updateTime = () => {
-      const now = new Date()
-      const currentHour = now.getHours()
-      const currentMinute = now.getMinutes()
-      
-      // Calculate NOW position using CSS width (not canvas buffer width)
-      const minutesSinceMidnight = currentHour * 60 + currentMinute
-      const cssWidth = parseFloat(canvas.style.width) || canvas.offsetWidth
-      const timelinePosition = (minutesSinceMidnight / (24 * 60)) * cssWidth
-      setNowPosition(timelinePosition)
-      
-      // Format time in 12-hour format with AM/PM
-      setCurrentTime(now.toLocaleTimeString('en-US', { 
-        hour12: true,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }))
-    }
-    updateTime()
-    const timeInterval = setInterval(updateTime, 1000)
-
     // Start rendering loop
     let animationId: number
     const renderLoop = () => {
@@ -96,7 +71,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         clearTimeout(resizeTimeout)
       }
       cancelAnimationFrame(animationId)
-      clearInterval(timeInterval)
       if (renderer) {
         renderer.destroy()
       }
@@ -115,32 +89,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           minWidth: '100%'
         }}
       />
-      
-      {/* NOW label - positioned at actual NOW line position */}
-      <div 
-        className="absolute top-1/2 transform -translate-y-1/2 z-10"
-        style={{ 
-          left: `${nowPosition}px`,
-          transform: 'translate(-50%, -50%) translateY(40px)'
-        }}
-      >
-        <div className="text-red-500 font-bold text-lg tracking-wider">
-          NOW
-        </div>
-      </div>
-      
-      {/* Current time display - positioned below NOW label */}
-      <div 
-        className="absolute top-1/2 transform -translate-y-1/2 z-10"
-        style={{ 
-          left: `${nowPosition}px`,
-          transform: 'translate(-50%, -50%) translateY(70px)'
-        }}
-      >
-        <div className="text-white font-mono text-2xl font-bold tracking-wider">
-          {currentTime}
-        </div>
-      </div>
     </div>
   )
 }
