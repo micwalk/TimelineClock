@@ -1,3 +1,19 @@
+// Format information for drawing instants
+export interface InstantFormatInfo {
+  lineColor: string
+  lineWidth: number
+  lineHeight: number
+  glowColor?: string
+  glowBlur?: number
+  labelBackgroundColor?: string
+  labelBorderColor?: string
+  labelTextColor?: string
+  labelFont?: string
+  timeStringFont?: string
+  timeStringOffset: number
+  labelStringOffset: number
+}
+
 export class TimelineRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
@@ -59,10 +75,8 @@ export class TimelineRenderer {
     
     this.clear()
     this.drawTimeline()
-    this.drawNowLine()
     this.drawTimeTicks()
-    this.drawNowLabel()
-    this.drawCurrentTime()
+    this.drawNowLabel() // This now draws the line, label, and time string
 
     this.lastUpdateTime = Date.now()
   }
@@ -110,35 +124,14 @@ export class TimelineRenderer {
   }
 
   private drawNowLine() {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
-    const lineHeight = (this.canvas.height / dpr) * 0.6
-    
-    // Get current time position using helper function
-    const now = Date.now()
-    const timelinePosition = this.timeToPosition(now)
-    
-    const startY = centerY - lineHeight / 2
-    const endY = centerY + lineHeight / 2
-
-    // Draw bright red NOW line at actual current time position
-    this.ctx.save()
-    
-    // Create glow effect for NOW line
-    this.ctx.shadowColor = '#ef4444'
-    this.ctx.shadowBlur = 10
-    this.ctx.shadowOffsetX = 0
-    this.ctx.shadowOffsetY = 0
-    
-    this.ctx.strokeStyle = '#ef4444'
-    this.ctx.lineWidth = 4
-    this.ctx.lineCap = 'round'
-    this.ctx.beginPath()
-    this.ctx.moveTo(timelinePosition, startY)
-    this.ctx.lineTo(timelinePosition, endY)
-    this.ctx.stroke()
-    
-    this.ctx.restore()
+    // Draw the NOW line using the drawInstant helper
+    this.drawInstant(Date.now(), undefined, {
+      lineColor: '#ef4444',
+      lineWidth: 4,
+      lineHeight: (this.canvas.height / (window.devicePixelRatio || 1)) * 0.6,
+      glowColor: '#ef4444',
+      glowBlur: 10
+    })
   }
 
   private drawTimeTicks() {
@@ -214,81 +207,21 @@ export class TimelineRenderer {
   }
 
   private drawNowLabel() {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
-    
-    // Get current time position using helper function
-    const now = Date.now()
-    const timelinePosition = this.timeToPosition(now)
-    
-    this.ctx.save()
-    
-    // Draw background rectangle for NOW label
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
-    this.ctx.strokeStyle = '#ef4444'
-    this.ctx.lineWidth = 2
-    
-    const labelWidth = 60
-    const labelHeight = 30
-    const labelX = timelinePosition - labelWidth / 2
-    const labelY = centerY + 20
-    
-    this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
-    this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
-    
-    // Draw NOW text
-    this.ctx.fillStyle = '#ef4444'
-    this.ctx.font = 'bold 16px Arial'
-    this.ctx.textAlign = 'center'
-    this.ctx.textBaseline = 'middle'
-    this.ctx.fillText('NOW', timelinePosition, labelY + labelHeight / 2)
-    
-    this.ctx.restore()
+    // Draw the NOW label using the drawInstant helper
+    this.drawInstant(Date.now(), 'NOW', {
+      lineColor: '#ef4444',
+      lineWidth: 4,
+      lineHeight: (this.canvas.height / (window.devicePixelRatio || 1)) * 0.6,
+      glowColor: '#ef4444',
+      glowBlur: 10,
+      labelBackgroundColor: 'rgba(0, 0, 0, 0.8)',
+      labelBorderColor: '#ef4444',
+      labelTextColor: '#ef4444',
+      labelFont: 'bold 16px Arial'
+    })
   }
 
-  private drawCurrentTime() {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
-    
-    // Get current time position using helper function
-    const now = Date.now()
-    const timelinePosition = this.timeToPosition(now)
-    
-    // Format current time
-    const nowDate = new Date(now)
-    const currentHour = nowDate.getHours()
-    const currentMinute = nowDate.getMinutes()
-    const currentSecond = nowDate.getSeconds()
-    
-    // Format time in 12-hour format
-    const displayHour = currentHour === 0 ? 12 : currentHour > 12 ? currentHour - 12 : currentHour
-    const ampm = currentHour >= 12 ? 'PM' : 'AM'
-    const timeString = `${displayHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}:${currentSecond.toString().padStart(2, '0')} ${ampm}`
-    
-    this.ctx.save()
-    
-    // Draw background rectangle for time
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
-    this.ctx.strokeStyle = '#ffffff'
-    this.ctx.lineWidth = 2
-    
-    const timeWidth = 140
-    const timeHeight = 40
-    const timeX = timelinePosition - timeWidth / 2
-    const timeY = centerY + 60
-    
-    this.ctx.fillRect(timeX, timeY, timeWidth, timeHeight)
-    this.ctx.strokeRect(timeX, timeY, timeWidth, timeHeight)
-    
-    // Draw time text
-    this.ctx.fillStyle = '#ffffff'
-    this.ctx.font = 'bold 20px monospace'
-    this.ctx.textAlign = 'center'
-    this.ctx.textBaseline = 'middle'
-    this.ctx.fillText(timeString, timelinePosition, timeY + timeHeight / 2)
-    
-    this.ctx.restore()
-  }
+
 
   // Public getters for state variables
   public getScreenWidth(): number {
@@ -324,6 +257,120 @@ export class TimelineRenderer {
     return this.timeStart + (progress * (this.timeEnd - this.timeStart))
   }
 
+  private formatTimeString12h(timestamp: number): string {
+    const d = new Date(timestamp)
+    const h = d.getHours()
+    const m = d.getMinutes()
+    const s = d.getSeconds()
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    return `${displayHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} ${ampm}`
+  }
+
+  // Draw an instant (timestamp) on the timeline with optional label
+  public drawInstant(timestamp: number, label?: string, formatInfo?: Partial<InstantFormatInfo>): void {
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    
+    // Default format info
+    const defaultFormat: InstantFormatInfo = {
+      lineColor: '#ffffff',
+      lineWidth: 2,
+      lineHeight: (this.canvas.height / dpr) * 0.6,
+      glowColor: undefined,
+      glowBlur: 0,
+      labelBackgroundColor: 'rgba(0, 0, 0, 0.8)',
+      labelBorderColor: '#ffffff',
+      labelTextColor: '#ffffff',
+      labelFont: 'bold 16px Arial',
+      timeStringFont: 'bold 20px monospace',
+      labelStringOffset: 40,
+      timeStringOffset: 80
+    }
+    
+    const format: InstantFormatInfo = { ...defaultFormat, ...formatInfo }
+    
+    // Calculate position
+    const timelinePosition = this.timeToPosition(timestamp)
+    const startY = centerY - format.lineHeight / 2
+    const endY = centerY + format.lineHeight / 2
+
+    this.ctx.save()
+    
+    // Draw line with optional glow effect
+    if (format.glowColor && format.glowBlur) {
+      this.ctx.shadowColor = format.glowColor
+      this.ctx.shadowBlur = format.glowBlur
+      this.ctx.shadowOffsetX = 0
+      this.ctx.shadowOffsetY = 0
+    }
+    
+    this.ctx.strokeStyle = format.lineColor
+    this.ctx.lineWidth = format.lineWidth
+    this.ctx.lineCap = 'round'
+    this.ctx.beginPath()
+    this.ctx.moveTo(timelinePosition, startY)
+    this.ctx.lineTo(timelinePosition, endY)
+    this.ctx.stroke()
+    
+    this.ctx.restore()
+    
+    // Draw label if provided
+    if (label) {
+      this.ctx.save()
+      
+      // Draw background rectangle for label
+      this.ctx.fillStyle = format.labelBackgroundColor!
+      this.ctx.strokeStyle = format.labelBorderColor!
+      this.ctx.lineWidth = 2
+      
+      const labelWidth = this.ctx.measureText(label).width + 20 // Add padding
+      const labelHeight = 30
+      const labelX = timelinePosition - labelWidth / 2
+      const labelY = centerY + format.labelStringOffset
+      
+      this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
+      this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
+      
+      // Draw label text
+      this.ctx.fillStyle = format.labelTextColor!
+      this.ctx.font = format.labelFont!
+      this.ctx.textAlign = 'center'
+      this.ctx.textBaseline = 'middle'
+      this.ctx.fillText(label, timelinePosition, labelY + labelHeight / 2)
+      
+      this.ctx.restore()
+    }
+    
+    // Draw the time string (intrinsic part of an instant)
+    this.ctx.save()
+    
+    // Format the time string
+    const timeString = this.formatTimeString12h(timestamp)
+    
+    // Draw background rectangle for time string - always white for consistency
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.lineWidth = 2
+    
+    const timeBoxWidth = this.ctx.measureText(timeString).width + 80 // Lots of padding needed for some reason
+    const timeBoxHeight = 40
+    const timeX = timelinePosition - timeBoxWidth / 2
+    const timeY = centerY + format.timeStringOffset
+    
+    this.ctx.fillRect(timeX, timeY, timeBoxWidth, timeBoxHeight)
+    this.ctx.strokeRect(timeX, timeY, timeBoxWidth, timeBoxHeight)
+    
+    // Draw time string text - always white for better readability
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.font = format.timeStringFont!
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillText(timeString, timelinePosition, timeY + timeBoxHeight / 2)
+    
+    this.ctx.restore()
+  }
+
   public setZoom(zoom: number) {
     this.zoomLevel = Math.max(0.1, Math.min(10, zoom))
     // TODO: Implement zoom logic that affects timeWidth
@@ -341,6 +388,8 @@ export class TimelineRenderer {
   public setTimeCenter(centerMs: number) {
     this.timeCenter = centerMs
   }
+
+
 
   public destroy() {
     if (this.animationId) {
