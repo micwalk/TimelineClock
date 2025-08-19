@@ -65,12 +65,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     }
     renderLoop()
 
+    // Cleanup function
     return () => {
       window.removeEventListener('resize', handleResize)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)
       }
-      cancelAnimationFrame(animationId)
+      if (animationId) {
+        cancelAnimationFrame(animationId)
+      }
       if (renderer) {
         renderer.destroy()
       }

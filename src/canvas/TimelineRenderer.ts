@@ -4,6 +4,7 @@ export class TimelineRenderer {
   private animationId: number | null = null
   private zoomLevel: number = 1
   private panOffset: number = 0
+  private lastUpdateTime: number = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -13,6 +14,7 @@ export class TimelineRenderer {
     }
     this.ctx = context
     this.setupCanvas()
+    this.lastUpdateTime = Date.now()
   }
 
   private setupCanvas() {
@@ -26,22 +28,32 @@ export class TimelineRenderer {
   }
 
   public render() {
+    // Update time continuously
+    const currentTime = Date.now()
+    
+    // For now, keep pan offset at 0 to get basic timeline working
+    this.panOffset = 0
+    
     this.clear()
     this.drawTimeline()
     this.drawNowLine()
     this.drawTimeTicks()
     this.drawNowLabel()
     this.drawCurrentTime()
+
+    this.lastUpdateTime = currentTime
   }
 
   private clear() {
     // Clear with transparent background - let the page gradient show through
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    const dpr = window.devicePixelRatio || 1
+    this.ctx.clearRect(0, 0, this.canvas.width / dpr, this.canvas.height / dpr)
   }
 
   private drawTimeline() {
-    const centerY = this.canvas.height / 2
-    const timelineWidth = this.canvas.width // Full width
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const timelineWidth = this.canvas.width / dpr // Full width
     const startX = 0
     const endX = timelineWidth
 
@@ -76,23 +88,33 @@ export class TimelineRenderer {
   }
 
   private drawNowLine() {
-    const centerY = this.canvas.height / 2
-    const timelineWidth = this.canvas.width
-    const lineHeight = this.canvas.height * 0.6
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const timelineWidth = this.canvas.width / dpr
+    const lineHeight = (this.canvas.height / dpr) * 0.6
     
-    // Get current time to position NOW line correctly
+    // Get current time
     const now = new Date()
     const currentHour = now.getHours()
     const currentMinute = now.getMinutes()
     
-    // Calculate position based on current time (24-hour format)
-    const minutesSinceMidnight = currentHour * 60 + currentMinute
-    const timelinePosition = (minutesSinceMidnight / (24 * 60)) * timelineWidth
+    // Calculate start and end hours for the 6-hour window
+    const startHour = currentHour - 3
+    const endHour = currentHour + 3
+    
+    // Calculate current time's position within the 6-hour window
+    const currentMinutesInDay = currentHour * 60 + currentMinute
+    const startMinutesInDay = startHour * 60
+    const endMinutesInDay = endHour * 60
+    
+    // Calculate progress through the 6-hour window (0 = startHour, 1 = endHour)
+    const progress = (currentMinutesInDay - startMinutesInDay) / (endMinutesInDay - startMinutesInDay)
+    const timelinePosition = progress * timelineWidth
     
     const startY = centerY - lineHeight / 2
     const endY = centerY + lineHeight / 2
 
-    // Draw bright red NOW line at center
+    // Draw bright red NOW line at actual current time position
     this.ctx.save()
     
     // Create glow effect for NOW line
@@ -113,8 +135,9 @@ export class TimelineRenderer {
   }
 
   private drawTimeTicks() {
-    const centerY = this.canvas.height / 2
-    const timelineWidth = this.canvas.width
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const timelineWidth = this.canvas.width / dpr
     
     // Show NOW ±3 hours (6 hour range total)
     const now = new Date()
@@ -182,17 +205,27 @@ export class TimelineRenderer {
   }
 
   private drawNowLabel() {
-    const centerY = this.canvas.height / 2
-    const timelineWidth = this.canvas.width
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const timelineWidth = this.canvas.width / dpr
     
-    // Get current time to position NOW label correctly
+    // Get current time
     const now = new Date()
     const currentHour = now.getHours()
     const currentMinute = now.getMinutes()
     
-    // Calculate position based on current time (24-hour format)
-    const minutesSinceMidnight = currentHour * 60 + currentMinute
-    const timelinePosition = (minutesSinceMidnight / (24 * 60)) * timelineWidth
+    // Calculate start and end hours for the 6-hour window
+    const startHour = currentHour - 3
+    const endHour = currentHour + 3
+    
+    // Calculate current time's position within the 6-hour window
+    const currentMinutesInDay = currentHour * 60 + currentMinute
+    const startMinutesInDay = startHour * 60
+    const endMinutesInDay = endHour * 60
+    
+    // Calculate progress through the 6-hour window (0 = startHour, 1 = endHour)
+    const progress = (currentMinutesInDay - startMinutesInDay) / (endMinutesInDay - startMinutesInDay)
+    const timelinePosition = progress * timelineWidth
     
     this.ctx.save()
     
@@ -220,8 +253,9 @@ export class TimelineRenderer {
   }
 
   private drawCurrentTime() {
-    const centerY = this.canvas.height / 2
-    const timelineWidth = this.canvas.width
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const timelineWidth = this.canvas.width / dpr
     
     // Get current time
     const now = new Date()
@@ -229,9 +263,18 @@ export class TimelineRenderer {
     const currentMinute = now.getMinutes()
     const currentSecond = now.getSeconds()
     
-    // Calculate position based on current time (24-hour format)
-    const minutesSinceMidnight = currentHour * 60 + currentMinute
-    const timelinePosition = (minutesSinceMidnight / (24 * 60)) * timelineWidth
+    // Calculate start and end hours for the 6-hour window
+    const startHour = currentHour - 3
+    const endHour = currentHour + 3
+    
+    // Calculate current time's position within the 6-hour window
+    const currentMinutesInDay = currentHour * 60 + currentMinute
+    const startMinutesInDay = startHour * 60
+    const endMinutesInDay = endHour * 60
+    
+    // Calculate progress through the 6-hour window (0 = startHour, 1 = endHour)
+    const progress = (currentMinutesInDay - startMinutesInDay) / (endMinutesInDay - startMinutesInDay)
+    const timelinePosition = progress * timelineWidth
     
     // Format time in 12-hour format
     const displayHour = currentHour === 0 ? 12 : currentHour > 12 ? currentHour - 12 : currentHour
