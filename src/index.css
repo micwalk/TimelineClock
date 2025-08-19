@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    color-scheme: light dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Timeline-specific base styles */
+  .timeline-container {
+    @apply relative w-full h-full overflow-hidden;
+  }
+
+  .timeline-canvas {
+    @apply absolute inset-0;
+    touch-action: none; /* Prevent default touch behaviors */
+  }
+
+  .now-line {
+    @apply absolute top-0 bottom-0 w-0.5 bg-timeline-now;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+
+  .now-line::after {
+    content: '';
+    @apply absolute w-3 h-3 bg-timeline-now rounded-full;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@layer components {
+  .timeline-card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4;
+  }
+
+  .timeline-button {
+    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .timeline-button-primary {
+    @apply timeline-button bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  .timeline-button-secondary {
+    @apply timeline-button bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+  }
+
+  .quick-add-input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
