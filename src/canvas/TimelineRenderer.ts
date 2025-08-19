@@ -29,6 +29,11 @@ export class TimelineRenderer {
   private timeStart: number = 0 // Start of visible timeline
   private timeEnd: number = 0 // End of visible timeline
 
+  // Zoom configuration
+  private zoomPercent: number = 0.1 // 10% per step
+  private readonly minTimeWidthMs: number = 1000 // 1s
+  private readonly maxTimeWidthMs: number = 30 * 24 * 60 * 60 * 1000 // 30d
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     const context = canvas.getContext('2d')
@@ -242,6 +247,26 @@ export class TimelineRenderer {
     // Convert x coordinate to timestamp
     const progress = x / this.screenWidth
     return this.timeStart + (progress * (this.timeEnd - this.timeStart))
+  }
+
+  // Zoom API (percent-based around current center)
+  public setZoomPercent(zoomPercent: number): void {
+    const clamped = Math.max(0.001, Math.min(0.9, zoomPercent))
+    this.zoomPercent = clamped
+  }
+
+  public zoomIn(): void {
+    const factor = 1 - this.zoomPercent
+    this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
+  }
+
+  public zoomOut(): void {
+    const factor = 1 + this.zoomPercent
+    this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
+  }
+
+  private clampTimeWidth(width: number): number {
+    return Math.max(this.minTimeWidthMs, Math.min(this.maxTimeWidthMs, width))
   }
 
   private formatTimeString12h(timestamp: number): string {

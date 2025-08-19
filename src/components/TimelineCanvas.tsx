@@ -52,8 +52,20 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       resizeTimeout = window.setTimeout(resizeCanvas, 16) // ~60fps
     }
 
+    // Wheel handler for zoom
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      if (!renderer) return
+      if (e.deltaY > 0) {
+        renderer.zoomOut()
+      } else if (e.deltaY < 0) {
+        renderer.zoomIn()
+      }
+    }
+
     resizeCanvas()
     window.addEventListener('resize', handleResize)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
 
     // Start rendering loop
     let animationId: number
@@ -68,6 +80,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     // Cleanup function
     return () => {
       window.removeEventListener('resize', handleResize)
+      canvas.removeEventListener('wheel', handleWheel)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)
       }
