@@ -123,17 +123,6 @@ export class TimelineRenderer {
     this.ctx.restore()
   }
 
-  private drawNowLine() {
-    // Draw the NOW line using the drawInstant helper
-    this.drawInstant(Date.now(), undefined, {
-      lineColor: '#ef4444',
-      lineWidth: 4,
-      lineHeight: (this.canvas.height / (window.devicePixelRatio || 1)) * 0.6,
-      glowColor: '#ef4444',
-      glowBlur: 10
-    })
-  }
-
   private drawTimeTicks() {
     const dpr = window.devicePixelRatio || 1
     const centerY = (this.canvas.height / dpr) / 2
@@ -220,8 +209,6 @@ export class TimelineRenderer {
       labelFont: 'bold 16px Arial'
     })
   }
-
-
 
   // Public getters for state variables
   public getScreenWidth(): number {
