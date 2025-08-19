@@ -1,0 +1,101 @@
+# Timeline Clock - Cursor Rules
+
+## Project Overview
+This is a timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
+
+## Core Architecture
+- **Frontend**: React + TypeScript + Vite
+- **Timeline**: Canvas-based (PixiJS or optimized 2D Canvas) for smooth 60fps
+- **Styling**: Tailwind CSS
+- **State Management**: Zustand
+- **Storage**: IndexedDB via `idb` (local-first)
+- **PWA**: Service Worker with Workbox, installable manifest
+- **Optional**: Capacitor wrapper for precise alarms
+
+## Data Model
+```typescript
+interface Instant { 
+  id: string; 
+  tsEpochMs: number; 
+  label?: string; 
+  tz?: string; 
+  favorite?: boolean; 
+  notify?: NotificationSpec[] 
+}
+
+interface Duration { 
+  id: string; 
+  ms: number; 
+  label?: string 
+}
+
+interface TimeRange { 
+  id: string; 
+  startInstantId: string; 
+  endInstantId: string; 
+  label?: string; 
+  favorite?: boolean 
+}
+
+interface NotificationSpec { 
+  id: string; 
+  fireAtTs: number; 
+  repeat?: 'none'|'daily'|'weekly'; 
+  sound?: string; 
+}
+```
+
+## Key Principles
+1. **Single Timeline View**: All time entities (instants, durations, ranges) on one scrollable/zoomable timeline
+2. **Fast Creation**: Tap/drag/type to create timers/alarms/stopwatches quickly
+3. **Accuracy**: Monotonic timing for running items, handle DST/timezone changes
+4. **PWA First**: Works offline, installable, cross-platform
+5. **Local-First**: Data stays on device unless user opts into sync
+
+## UX Patterns
+- **Timeline**: Horizontal by default, Now line fixed in center, content scrolls right→left
+- **Gestures**: 
+  - Tap empty space = create Instant
+  - Press-drag = create TimeRange
+  - Long-press = context menu
+  - Pinch = zoom, drag = pan
+- **Quick Add**: Natural language parsing (`25m`, `tomorrow 8am`, `in 10m`)
+- **Cards**: Favorites & active items below timeline with controls
+
+## Technical Requirements
+- **Performance**: 60fps timeline, <2s cold start, <500ms warm start
+- **Accuracy**: Use `performance.now()` for monotonic timing
+- **Notifications**: Local when app open, Web Push when backgrounded
+- **Accessibility**: Full keyboard support, screen reader friendly, prefers-reduced-motion
+- **Internationalization**: 12/24-hour, locale-aware formats, RTL support
+
+## Code Style
+- Use TypeScript strictly - no `any` types
+- Prefer functional components with hooks
+- Use semantic HTML and ARIA attributes
+- Follow React best practices for performance
+- Implement proper error boundaries
+- Use proper TypeScript interfaces for all data structures
+
+## File Organization
+- `/src/components/` - React components
+- `/src/hooks/` - Custom React hooks
+- `/src/store/` - Zustand state management
+- `/src/utils/` - Utility functions
+- `/src/types/` - TypeScript type definitions
+- `/src/services/` - API and storage services
+- `/public/` - Static assets and PWA files
+
+## Important Constraints
+- PWA limitations for wake-up alarms (need Capacitor for precise alarms)
+- Handle device sleep, timezone changes, app backgrounding
+- Support offline functionality
+- Ensure cross-browser compatibility
+- Implement proper error handling for storage failures
+
+## Testing Strategy
+- Unit tests for utility functions and hooks
+- Integration tests for timeline interactions
+- E2E tests for critical user flows
+- Performance testing for timeline rendering
+- Accessibility testing with screen readers
