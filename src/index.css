@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
   :root {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.5;
@@ -14,11 +20,41 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    background: linear-gradient(to bottom, #0f172a 0%, #000000 100%) !important;
+    background-attachment: fixed !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+  }
+
   body {
-    margin: 0;
-    min-width: 320px;
-    min-height: 100vh;
-    overflow-x: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    overflow: hidden !important;
+    background: linear-gradient(to bottom, #0f172a 0%, #000000 100%) !important;
+    background-attachment: fixed !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+  }
+
+  #root {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    background: linear-gradient(to bottom, #0f172a 0%, #000000 100%) !important;
+    background-attachment: fixed !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
   }
 
   /* Timeline-specific base styles */
