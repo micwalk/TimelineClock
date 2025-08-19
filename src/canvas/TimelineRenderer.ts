@@ -131,73 +131,132 @@ export class TimelineRenderer {
   private drawTimeTicks() {
     const dpr = window.devicePixelRatio || 1
     const centerY = (this.canvas.height / dpr) / 2
-    
-    // Calculate hour boundaries for the visible time range
-    const startDate = new Date(this.timeStart)
-    const endDate = new Date(this.timeEnd)
-    
-    // Round to nearest hour for cleaner display
-    const startHour = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), startDate.getHours(), 0, 0, 0)
-    const endHour = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endDate.getHours() + 1, 0, 0, 0)
-    
-    // Draw time ticks
+
+    // Determine tiers
+    const { tier0Ms, tier1Ms, tier2Ms } = this.pickTickTiers()
+
+    // Draw low tier (unlabeled)
+    this.drawTickTier(tier0Ms, 5, false, false)
+    // Draw middle tier (labeled)
+    this.drawTickTier(tier1Ms, 10, true, false)
+    // Draw high tier (labeled, bold, longest)
+    this.drawTickTier(tier2Ms, 20, true, true)
+  }
+
+  private getTickUnitsMs(): number[] {
+    return [
+      250,
+      1000,
+      5000,
+      15000,
+      60 * 1000,
+      5 * 60 * 1000,
+      15 * 60 * 1000,
+      60 * 60 * 1000,
+      3 * 60 * 60 * 1000,
+      24 * 60 * 60 * 1000,
+      7 * 24 * 60 * 60 * 1000,
+      30 * 24 * 60 * 60 * 1000,
+      365 * 24 * 60 * 60 * 1000,
+    ]
+  }
+
+  private pickTickTiers(): { tier0Ms: number; tier1Ms: number; tier2Ms: number } {
+    const units = this.getTickUnitsMs()
+    const pxPerMs = this.screenWidth / this.timeWidth
+    const minLabelSpacingPx = 100
+    let middleIdx = units.length - 1
+    for (let i = 0; i < units.length; i++) {
+      const spacingPx = units[i] * pxPerMs
+      if (spacingPx >= minLabelSpacingPx) {
+        middleIdx = i
+        break
+      }
+    }
+    const lowIdx = Math.max(0, middleIdx - 1)
+    const highIdx = Math.min(units.length - 1, middleIdx + 1)
+    return { tier0Ms: units[lowIdx], tier1Ms: units[middleIdx], tier2Ms: units[highIdx] }
+  }
+
+  private drawTickTier(unitMs: number, tickHalfHeightPx: number, drawLabels: boolean, bold: boolean) {
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
     this.ctx.save()
     this.ctx.strokeStyle = '#ffffff'
     this.ctx.lineWidth = 1
-    
-    const now = Date.now()
-    const nowDate = new Date(now)
-    const currentHour = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), nowDate.getHours(), 0, 0, 0)
-    
-    // Draw ticks for each hour in the visible range
-    for (let hourTime = startHour.getTime(); hourTime <= endHour.getTime(); hourTime += 60 * 60 * 1000) {
-      const hourDate = new Date(hourTime)
-      const normalizedHour = hourDate.getHours()
-      
-      // Calculate position using helper function
-      const x = this.timeToPosition(hourTime)
-      const tickHeight = hourTime === currentHour.getTime() ? 20 : 10
-      
+
+    // Align start to unit boundary
+    const startAligned = Math.floor(this.timeStart / unitMs) * unitMs
+    for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
+      const x = this.timeToPosition(t)
       this.ctx.beginPath()
-      this.ctx.moveTo(x, centerY - tickHeight)
-      this.ctx.lineTo(x, centerY + tickHeight)
+      this.ctx.moveTo(x, centerY - tickHalfHeightPx)
+      this.ctx.lineTo(x, centerY + tickHalfHeightPx)
       this.ctx.stroke()
-      
-      // Draw hour labels for all ticks (12-hour format with AM/PM)
-      this.ctx.fillStyle = '#ffffff'
-      this.ctx.font = '12px monospace'
-      this.ctx.textAlign = 'center'
-      
-      // Convert to 12-hour format
-      let displayHour = normalizedHour
-      let ampm = 'AM'
-      if (normalizedHour === 0) {
-        displayHour = 12
-        ampm = 'AM'
-      } else if (normalizedHour === 12) {
-        displayHour = 12
-        ampm = 'PM'
-      } else if (normalizedHour > 12) {
-        displayHour = normalizedHour - 12
-        ampm = 'PM'
-      }
-      
-      this.ctx.fillText(`${displayHour}${ampm}`, x, centerY + tickHeight + 20)
-      
-      // Draw 15-minute minor ticks for this hour
-      for (let minute = 15; minute < 60; minute += 15) {
-        const minuteTime = hourTime + (minute * 60 * 1000)
-        const minorX = this.timeToPosition(minuteTime)
-        const minorTickHeight = 5
-        
-        this.ctx.beginPath()
-        this.ctx.moveTo(minorX, centerY - minorTickHeight)
-        this.ctx.lineTo(minorX, centerY + minorTickHeight)
-        this.ctx.stroke()
+
+      if (drawLabels) {
+        const label = this.formatTickLabel(t, unitMs)
+        this.ctx.fillStyle = '#ffffff'
+        this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+        this.ctx.textAlign = 'center'
+        this.ctx.textBaseline = 'alphabetic'
+        const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+        this.ctx.fillText(label, x, centerY + labelYOffset)
       }
     }
-    
     this.ctx.restore()
+  }
+
+  private formatTickLabel(timestamp: number, unitMs: number): string {
+    const d = new Date(timestamp)
+    if (unitMs < 1000) {
+      // sub-second → mm:ss.S
+      const mm = d.getMinutes().toString().padStart(2, '0')
+      const ss = d.getSeconds().toString().padStart(2, '0')
+      const ms = Math.floor(d.getMilliseconds() / 100)
+      return `${mm}:${ss}.${ms}`
+    }
+    if (unitMs < 60 * 1000) {
+      // seconds → mm:ss
+      const mm = d.getMinutes().toString().padStart(2, '0')
+      const ss = d.getSeconds().toString().padStart(2, '0')
+      return `${mm}:${ss}`
+    }
+    if (unitMs < 60 * 60 * 1000) {
+      // minutes → HH:MM
+      const h = d.getHours()
+      const m = d.getMinutes()
+      const hh = (h === 0 ? 12 : h > 12 ? h - 12 : h).toString().padStart(2, '0')
+      const mm = m.toString().padStart(2, '0')
+      return `${hh}:${mm}`
+    }
+    if (unitMs < 24 * 60 * 60 * 1000) {
+      // hours → h AM/PM
+      const h = d.getHours()
+      const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      return `${displayHour}${ampm}`
+    }
+    if (unitMs < 7 * 24 * 60 * 60 * 1000) {
+      // days → MMM d
+      const month = d.toLocaleString(undefined, { month: 'short' })
+      const day = d.getDate()
+      return `${month} ${day}`
+    }
+    if (unitMs < 30 * 24 * 60 * 60 * 1000) {
+      // weeks → 'Wk NN' (ISO week number is complex; simple week-of-year placeholder)
+      const month = d.toLocaleString(undefined, { month: 'short' })
+      const day = d.getDate()
+      return `${month} ${day}`
+    }
+    if (unitMs < 365 * 24 * 60 * 60 * 1000) {
+      // months → MMM yyyy
+      const month = d.toLocaleString(undefined, { month: 'short' })
+      const year = d.getFullYear()
+      return `${month} ${year}`
+    }
+    // years → yyyy
+    return `${d.getFullYear()}`
   }
 
   private drawNowLabel() {
