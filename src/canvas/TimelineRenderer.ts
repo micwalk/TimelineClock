@@ -54,10 +54,11 @@ export class TimelineRenderer {
 
   // Centralized vertical offsets for span rows
   private readonly spanRows = {
-    cursorNow: 170,
-    instantNow: 200,
-    prevToSelected: 230,
-    focusedSaved: 260,
+    cursorNow: -80, // Aka Row 0
+    selectedCursor: 170, // Aka Row 1
+    selectedNow: 200, // Aka Row 2
+    selectedPrev: 230, // Aka Row 3
+    focusedSaved: 260, // Aka Row 4
   } as const
 
   // Zoom configuration
@@ -154,8 +155,10 @@ export class TimelineRenderer {
     // Draw saved instants
     this.drawSavedInstants()
     // Removed: favorite implied spans are now represented as saved spans with endIsNow and visible
-    if (this.viewFocusMode === 'cursor') {
-      this.drawCursorInstant()
+    if (this.viewFocusMode === 'cursor' || this.viewFocusMode === 'instant') {
+      if (this.viewFocusMode === 'cursor') {
+        this.drawCursorInstant()
+      }
       this.drawCursorNowSpan()
     }
     // Draw focused saved span if any (and suppress implied spans)
@@ -191,7 +194,7 @@ export class TimelineRenderer {
         const startName = aRec?.label || '?'
         const endName = sp.endIsNow ? 'Now' : (bRec?.label || '?')
         const header = sp.label && sp.label.length > 0 ? sp.label : undefined
-        const y = centerY + this.spanRows.instantNow + 60 + rowOffset * 30
+        const y = centerY + this.spanRows.focusedSaved + rowOffset * 30
         this.drawSpanVisual(a, b, { y, color: '#34d399', spanId: sp.id, startName, endName, headerLabel: header, startFocus: { kind: 'instant', id: aRec?.id }, endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id } })
         rowOffset++
       }
@@ -200,22 +203,54 @@ export class TimelineRenderer {
     // Draw implied spans for selected/current instant
     const selected = this.currentSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.currentSelectedInstantId) : null
     const prev = this.previousSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.previousSelectedInstantId) : null
-    if (selected && this.showImpliedSelectedNow) {
-      const y = this.TimelineCenterY() + this.spanRows.instantNow
-      const color = '#2563eb' // selected → Now uses deeper blue
+    // Row 1: Selected ↔ Cursor (when focusing cursor), or Selected ↔ Focused Instant (when focusing a different instant)
+    if (selected) {
+      const y = this.TimelineCenterY() + this.spanRows.selectedCursor
+      const color = '#22d3ee' // light blue always for this row
+      if (this.viewFocusMode === 'cursor') {
+        const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
+        const endName = 'Cursor'
+        this.drawSpanVisual(selected.tsEpochMs, this.timeCenter, {
+          y,
+          color,
+          startName,
+          endName,
+          showPin: true,
+          saveLabel: 'Selected to Cursor',
+          startFocus: { kind: 'instant', id: selected.id! },
+          endFocus: { kind: 'cursor' },
+        })
+      } else if (this.viewFocusMode === 'instant' && this.focusedInstantId && this.focusedInstantId !== selected.id) {
+        const f = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+        if (f) {
+          const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
+          const endName = f.label && f.label.length > 0 ? f.label : '?'
+          this.drawSpanVisual(selected.tsEpochMs, f.tsEpochMs, {
+            y,
+            color,
+            startName,
+            endName,
+            showPin: true,
+            saveLabel: 'Selected to Focus',
+            startFocus: { kind: 'instant', id: selected.id! },
+            endFocus: { kind: 'instant', id: f.id },
+          })
+        }
+      }
+    }
+    // Row 3: Selected → Now (always shown)
+    if (selected) {
+      const y = this.TimelineCenterY() + this.spanRows.selectedNow
+      const color = '#2563eb'
+      const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
+      const endName = 'Now'
       this.drawSpanVisual(selected.tsEpochMs, Date.now(), {
         y,
         color,
-        labelText: (() => {
-          const diffMs = Math.abs(selected.tsEpochMs - Date.now())
-          const dur = this.formatDurationHMS(diffMs)
-          const sinceOrUntil = (selected.tsEpochMs - Date.now()) <= 0 ? 'since' : 'until'
-          const name = selected.label && selected.label.trim().length > 0 ? selected.label : '?'
-          return `Now ${dur} ${sinceOrUntil} ${name}.`
-        })(),
+        startName,
+        endName,
         showPin: true,
-        recordImplied: { aTs: selected.tsEpochMs, bTs: Date.now(), label: 'Selected to Now' },
-        addFocusNowButton: true,
+        saveLabel: 'Selected to Now',
         startFocus: { kind: 'instant', id: selected.id! },
         endFocus: { kind: 'now' },
       })
@@ -223,7 +258,7 @@ export class TimelineRenderer {
     if (selected && prev && this.showImpliedSelectedPrev) {
       const startName = prev.label && prev.label.length > 0 ? prev.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
-      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { y: this.TimelineCenterY() + this.spanRows.prevToSelected, color: '#8b5cf6', startName, endName, headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id } })
+      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { y: this.TimelineCenterY() + this.spanRows.selectedPrev, color: '#8b5cf6', startName, endName, headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id } })
     }
   }
 
@@ -766,8 +801,12 @@ export class TimelineRenderer {
     const xB = this.timeToPosition(bTs)
     const leftX = Math.min(xA, xB)
     const rightX = Math.max(xA, xB)
-    const leftVisible = leftX >= 0
-    const rightVisible = rightX <= this.screenWidth
+    const aVisible = xA >= 0 && xA <= this.screenWidth
+    const bVisible = xB >= 0 && xB <= this.screenWidth
+    // If both endpoints are off-screen, skip drawing entirely
+    if (!aVisible && !bVisible) {
+      return
+    }
     const clampedLeft = Math.max(0, leftX)
     const clampedRight = Math.min(this.screenWidth, rightX)
 
@@ -788,8 +827,10 @@ export class TimelineRenderer {
       this.ctx.fillStyle = opts.color
       this.ctx.fill()
     }
-    if (!leftVisible) drawArrow(0, -1)
-    if (!rightVisible) drawArrow(this.screenWidth, 1)
+    const leftOffscreen = leftX < 0
+    const rightOffscreen = rightX > this.screenWidth
+    if (leftOffscreen) drawArrow(0, -1)
+    if (rightOffscreen) drawArrow(this.screenWidth, 1)
 
     const midX = (Math.max(0, Math.min(this.screenWidth, xA)) + Math.max(0, Math.min(this.screenWidth, xB))) / 2
     const diff = bTs - aTs
@@ -925,8 +966,12 @@ export class TimelineRenderer {
       this.hitTargets.push({ type: 'span-end-focus', rect, focus: target.kind === 'now' ? 'now' : 'instant', id: target.id })
     }
 
-    if (opts.startFocus) makeFocusArrow('left', opts.startFocus)
-    if (opts.endFocus) makeFocusArrow('right', opts.endFocus)
+    // Place arrows based on time order: left arrow → older endpoint, right arrow → newer endpoint
+    const aIsOlder = aTs <= bTs
+    const leftTarget = aIsOlder ? opts.startFocus : opts.endFocus
+    const rightTarget = aIsOlder ? opts.endFocus : opts.startFocus
+    if (leftTarget) makeFocusArrow('left', leftTarget)
+    if (rightTarget) makeFocusArrow('right', rightTarget)
 
     this.ctx.restore()
   }
@@ -1305,17 +1350,23 @@ export class TimelineRenderer {
 
   private drawCursorNowSpan() {
     const now = Date.now()
-    const cursor = this.timeCenter
-    const diffMsSigned = cursor - now
-    const color = diffMsSigned >= 0 ? '#22d3ee' : '#ef4444' // future → blue, past → red
+    // Use focused instant when focus is on an instant; otherwise use cursor/timeCenter
+    let sourceTs = this.timeCenter
+    if (this.viewFocusMode === 'instant' && this.focusedInstantId) {
+      const s = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+      if (s) sourceTs = s.tsEpochMs
+    }
+    const diffMsSigned = sourceTs - now
+    const color = '#ef4444' // always red per spec
 
     const xNow = this.timeToPosition(now)
-    const xCursor = this.timeToPosition(cursor)
+    const xSource = this.timeToPosition(sourceTs)
+    // Place using configured row (can be negative to position near top)
     const spanY = this.TimelineCenterY() + this.spanRows.cursorNow
 
     // Compute visible endpoints; arrows if off-screen
-    const leftX = Math.min(xNow, xCursor)
-    const rightX = Math.max(xNow, xCursor)
+    const leftX = Math.min(xNow, xSource)
+    const rightX = Math.max(xNow, xSource)
     const leftVisible = leftX >= 0
     const rightVisible = rightX <= this.screenWidth
     const clampedLeft = Math.max(0, leftX)
@@ -1344,7 +1395,7 @@ export class TimelineRenderer {
     if (!rightVisible) drawArrow(this.screenWidth, 1)
 
     // Label at midpoint of visible segment
-    const midX = (Math.max(0, Math.min(this.screenWidth, xNow)) + Math.max(0, Math.min(this.screenWidth, xCursor))) / 2
+    const midX = (Math.max(0, Math.min(this.screenWidth, xNow)) + Math.max(0, Math.min(this.screenWidth, xSource))) / 2
     const label = this.formatDurationHMS(Math.abs(diffMsSigned))
     const font = 'bold 14px monospace'
     const labelWidth = this.measureTextWidth(font, label) + 16
@@ -1377,7 +1428,7 @@ export class TimelineRenderer {
     this.ctx.fillRect(iconX, iconY, iconW, iconH)
     this.ctx.strokeRect(iconX, iconY, iconW, iconH)
     // draw small arrow pointing toward Now line
-    const towardNow = xNow < xCursor ? -1 : 1
+    const towardNow = xNow < xSource ? -1 : 1
     this.ctx.beginPath()
     const ax = iconX + iconW / 2
     const ay = iconY + iconH / 2
@@ -1388,7 +1439,7 @@ export class TimelineRenderer {
     this.ctx.restore()
     this.hitTargets.push({ type: 'save-now', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
 
-    // Pin icon to save span (cursor ↔ now) placed opposite the arrow side
+    // Pin icon to save span (source ↔ now) placed opposite the arrow side
     const pinW = 24, pinH = 24
     let pinX = (placeRight ? (labelX - 8 - pinW) : (labelX + labelWidth + 8))
     if (pinX < 0) pinX = labelX + labelWidth + 8
@@ -1410,7 +1461,7 @@ export class TimelineRenderer {
     this.ctx.stroke()
     this.ctx.restore()
     this.hitTargets.push({ type: 'span-pin', rect: { x: pinX, y: pinY, w: pinW, h: pinH } })
-    this.lastImpliedSpan = { aTs: cursor, bTs: now, label: 'Selected to Now' }
+    this.lastImpliedSpan = { aTs: sourceTs, bTs: now, label: 'To Now' }
   }
 
 
