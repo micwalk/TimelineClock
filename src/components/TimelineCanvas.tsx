@@ -67,27 +67,35 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     // Drag to pan
     let isPointerDown = false
     let dragDistance = 0
+    let hasDragActivated = false
     let skipNextClick = false
     let lastX = 0
     const onPointerDown = (e: PointerEvent) => {
       isPointerDown = true
       dragDistance = 0
+      hasDragActivated = false
       lastX = e.clientX
       canvas.setPointerCapture(e.pointerId)
-      if (renderer) renderer.setViewFocus('cursor')
+      // Don't switch to cursor yet; wait until small movement threshold
     }
     const onPointerMove = (e: PointerEvent) => {
       if (!isPointerDown || !renderer) return
       const dx = e.clientX - lastX
       lastX = e.clientX
       dragDistance += Math.abs(dx)
-      renderer.panByPixels(dx)
+      if (!hasDragActivated && dragDistance >= 2) {
+        hasDragActivated = true
+        renderer.setViewFocus('cursor')
+      }
+      if (hasDragActivated) {
+        renderer.panByPixels(dx)
+      }
     }
     const onPointerUp = (e: PointerEvent) => {
       if (!isPointerDown) return
       isPointerDown = false
       canvas.releasePointerCapture(e.pointerId)
-      if (renderer) {
+      if (renderer && hasDragActivated) {
         // If center is near now, snap back to now mode
         const snappedNow = renderer.snapToNowIfClose(12)
         const snappedInstant = renderer.snapToInstantIfClose(12)
@@ -107,6 +115,14 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerup', onPointerUp)
     canvas.addEventListener('pointercancel', onPointerUp)
+    const onDblClick = (e: MouseEvent) => {
+      if (!renderer) return
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      renderer.handleDoubleClick(x, y)
+    }
+    canvas.addEventListener('dblclick', onDblClick)
 
     // Start rendering loop
     let animationId: number
@@ -196,6 +212,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('pointercancel', onPointerUp)
+      canvas.removeEventListener('dblclick', onDblClick)
       canvas.removeEventListener('click', onClick)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)

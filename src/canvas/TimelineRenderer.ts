@@ -32,7 +32,7 @@ export class TimelineRenderer {
 
   // Saved instants and hit targets for interactions
   private savedInstants: { id: string; ts: number; label: string }[] = []
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
 
@@ -459,6 +459,9 @@ export class TimelineRenderer {
       labelTextColor: '#ef4444',
     })
     this.drawSaveIconAt(Date.now(), 'save-now')
+    // Add double-click target on NOW time box to focus now
+    const rect = this.computeTimeBoxRect(Date.now())
+    this.hitTargets.push({ type: 'instant-time', rect })
   }
 
   // Render all saved instants with label editing and delete icon
@@ -485,6 +488,9 @@ export class TimelineRenderer {
       const h = 30
       const rect = { x: x - w / 2, y: centerY + 50, w, h }
       this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
+      // Add a double-click target for the time box
+      const timeRect = this.computeTimeBoxRect(s.ts)
+      this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
       // Only include overlay input for the one being edited
       if (this.editingInstantId === s.id) {
         this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
@@ -505,6 +511,35 @@ export class TimelineRenderer {
     })
     // Draw save icon box below
     this.drawSaveIconAt(this.timeCenter, 'save-cursor')
+    // (Removed cursor trash icon; double-click handles snap-to-now)
+    // Double-click target on cursor time box
+    const rect = this.computeTimeBoxRect(this.timeCenter)
+    this.hitTargets.push({ type: 'instant-time', id: undefined, rect })
+  }
+
+  private drawCursorTrashIcon() {
+    const centerY = this.getCenterY()
+    const x = this.timeToPosition(this.timeCenter)
+    const boxW = 28, boxH = 28, y = centerY + 120
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = '#ef4444'
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(x - boxW - 36, y, boxW, boxH)
+    this.ctx.strokeRect(x - boxW - 36, y, boxW, boxH)
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.beginPath()
+    this.ctx.moveTo(x - 36 - 6, y + 10)
+    this.ctx.lineTo(x - 36 + 6, y + 10)
+    this.ctx.moveTo(x - 36 - 4, y + 10)
+    this.ctx.lineTo(x - 36 - 3, y + 20)
+    this.ctx.moveTo(x - 36, y + 10)
+    this.ctx.lineTo(x - 36, y + 20)
+    this.ctx.moveTo(x - 36 + 4, y + 10)
+    this.ctx.lineTo(x - 36 + 3, y + 20)
+    this.ctx.stroke()
+    this.ctx.restore()
+    this.hitTargets.push({ type: 'instant-trash', rect: { x: x - boxW - 36, y, w: boxW, h: boxH } })
   }
 
   // Public getters for state variables
@@ -535,6 +570,23 @@ export class TimelineRenderer {
     return progress * this.screenWidth
   }
 
+  private getCenterY(): number {
+    const dpr = window.devicePixelRatio || 1
+    return (this.canvas.height / dpr) / 2
+  }
+
+  private computeTimeBoxRect(timestamp: number): { x: number; y: number; w: number; h: number } {
+    const centerY = this.getCenterY()
+    const timelinePosition = this.timeToPosition(timestamp)
+    const font = 'bold 20px monospace'
+    const timeString = this.formatTimeString12h(timestamp)
+    const timeBoxWidth = this.measureTextWidth(font, timeString) + 20
+    const timeBoxHeight = 40
+    const timeX = timelinePosition - timeBoxWidth / 2
+    const timeY = centerY + 80
+    return { x: timeX, y: timeY, w: timeBoxWidth, h: timeBoxHeight }
+  }
+
   public positionToTime(x: number): number {
     // Convert x coordinate to timestamp
     const progress = x / this.screenWidth
@@ -548,6 +600,11 @@ export class TimelineRenderer {
       const { rect } = target
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
         if (target.type === 'save-now') {
+          // If this came from the span arrow button, treat as focus-now
+          if (this.viewFocusMode !== 'now') {
+            this.setViewFocus('now')
+            return
+          }
           this.createInstantAt(Date.now(), '')
           // focus remains unchanged
           return
@@ -559,18 +616,23 @@ export class TimelineRenderer {
           if (last) this.setViewFocus('instant', last.id)
           return
         }
-        if (target.type === 'instant-trash' && target.id) {
-          const id = target.id
-          const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === id
-          const ts = this.savedInstants.find(si => si.id === id)?.ts
-          this.deleteInstant(id)
-          if (isFocused) {
-            if (typeof ts === 'number') {
-              this.timeCenter = ts
-              this.setViewFocus('cursor')
-            } else {
-              this.setViewFocus('now')
+        if (target.type === 'instant-trash') {
+          if (target.id) {
+            const id = target.id
+            const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === id
+            const ts = this.savedInstants.find(si => si.id === id)?.ts
+            this.deleteInstant(id)
+            if (isFocused) {
+              if (typeof ts === 'number') {
+                this.timeCenter = ts
+                this.setViewFocus('cursor')
+              } else {
+                this.setViewFocus('now')
+              }
             }
+          } else {
+            // Cursor trash: snap back to now
+            this.setViewFocus('now')
           }
           return
         }
@@ -578,6 +640,32 @@ export class TimelineRenderer {
           const inst = this.savedInstants.find(si => si.id === target.id)
           if (inst) {
             this.editingInstantId = target.id
+          }
+          return
+        }
+      }
+    }
+  }
+
+  public handleDoubleClick(x: number, y: number) {
+    for (const target of this.hitTargets) {
+      const { rect } = target
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+        if (target.type === 'instant-time') {
+          if (target.id) {
+            const ts = this.savedInstants.find(si => si.id === target.id)?.ts
+            if (typeof ts === 'number') {
+              this.timeCenter = ts
+              this.setViewFocus('instant', target.id)
+            }
+          } else {
+            // Cursor/Now time box
+            if (this.viewFocusMode === 'cursor') {
+              this.setViewFocus('now')
+            } else {
+              // Double-click Now keeps Now
+              this.setViewFocus('now')
+            }
           }
           return
         }
@@ -763,13 +851,37 @@ export class TimelineRenderer {
     this.ctx.lineWidth = 2
     this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
     this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
-    this.ctx.fillStyle = '#ffffff'
+      this.ctx.fillStyle = '#ffffff'
     this.ctx.font = font
-    this.ctx.textAlign = 'center'
+      this.ctx.textAlign = 'center'
     this.ctx.textBaseline = 'middle'
     this.ctx.fillText(label, midX, labelY + labelHeight / 2)
 
     this.ctx.restore()
+
+    // Arrow square icon near the duration label to jump focus to Now
+    const iconW = 24, iconH = 24
+    // Place icon on side toward Now
+    const placeRight = xNow > midX
+    const iconX = placeRight ? (midX + labelWidth / 2 + 8) : (midX - labelWidth / 2 - 8 - iconW)
+    const iconY = labelY + (labelHeight - iconH) / 2
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(iconX, iconY, iconW, iconH)
+    this.ctx.strokeRect(iconX, iconY, iconW, iconH)
+    // draw small arrow pointing toward Now line
+    const towardNow = xNow < xCursor ? -1 : 1
+    this.ctx.beginPath()
+    const ax = iconX + iconW / 2
+    const ay = iconY + iconH / 2
+    this.ctx.moveTo(ax - 6 * towardNow, ay - 5)
+    this.ctx.lineTo(ax + 6 * towardNow, ay)
+    this.ctx.lineTo(ax - 6 * towardNow, ay + 5)
+    this.ctx.stroke()
+    this.ctx.restore()
+    this.hitTargets.push({ type: 'save-now', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
   }
 
   private drawInstantNowSpan(ts: number) {
@@ -792,10 +904,10 @@ export class TimelineRenderer {
     this.ctx.save()
     this.ctx.strokeStyle = color
     this.ctx.lineWidth = 3
-    this.ctx.beginPath()
+        this.ctx.beginPath()
     this.ctx.moveTo(clampedLeft, spanY)
     this.ctx.lineTo(clampedRight, spanY)
-    this.ctx.stroke()
+        this.ctx.stroke()
     const drawArrow = (x: number, dir: 1 | -1) => {
       const size = 8
       this.ctx.beginPath()
@@ -827,6 +939,28 @@ export class TimelineRenderer {
     this.ctx.textBaseline = 'middle'
     this.ctx.fillText(label, midX, labelY + labelHeight / 2)
     this.ctx.restore()
+
+    // Add arrow square to focus Now
+    const iconW = 24, iconH = 24
+    const placeRight = xNow > midX
+    const iconX = placeRight ? (midX + labelWidth / 2 + 8) : (midX - labelWidth / 2 - 8 - iconW)
+    const iconY = labelY + (labelHeight - iconH) / 2
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(iconX, iconY, iconW, iconH)
+    this.ctx.strokeRect(iconX, iconY, iconW, iconH)
+    const towardNow = xNow < xTs ? -1 : 1
+    this.ctx.beginPath()
+    const ax = iconX + iconW / 2
+    const ay = iconY + iconH / 2
+    this.ctx.moveTo(ax - 6 * towardNow, ay - 5)
+    this.ctx.lineTo(ax + 6 * towardNow, ay)
+    this.ctx.lineTo(ax - 6 * towardNow, ay + 5)
+    this.ctx.stroke()
+    this.ctx.restore()
+    this.hitTargets.push({ type: 'save-now', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
   }
 
   // Draw an instant (timestamp) on the timeline with optional label
