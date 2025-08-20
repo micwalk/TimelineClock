@@ -35,6 +35,7 @@ export class TimelineRenderer {
   private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
+  private stateVersion: number = 0
 
   // Zoom configuration
   private zoomPercent: number = 0.1 // 10% per step
@@ -113,6 +114,7 @@ export class TimelineRenderer {
         savedInstants: this.savedInstants,
       }
       localStorage.setItem('timeline.state', JSON.stringify(payload))
+      this.stateVersion++
     } catch {}
   }
 
@@ -781,17 +783,22 @@ export class TimelineRenderer {
       minute: 60 * 1000,
       second: 1000,
     }
-    const parts: string[] = []
-    const pushPart = (n: number, label: string) => {
-      if (n > 0) parts.push(`${n} ${label}${n !== 1 ? 's' : ''}`)
-    }
-    const years = Math.floor(remaining / msPer.year); remaining -= years * msPer.year; pushPart(years, 'year')
-    const days = Math.floor(remaining / msPer.day); remaining -= days * msPer.day; pushPart(days, 'day')
-    const hours = Math.floor(remaining / msPer.hour); remaining -= hours * msPer.hour; pushPart(hours, 'hour')
-    const minutes = Math.floor(remaining / msPer.minute); remaining -= minutes * msPer.minute; pushPart(minutes, 'minute')
-    const seconds = Math.floor(remaining / msPer.second); pushPart(seconds, 'second')
+    const parts: Array<{ n: number; label: string }> = []
+    const push = (n: number, label: string) => parts.push({ n, label })
+    const years = Math.floor(remaining / msPer.year); remaining -= years * msPer.year; push(years, 'year')
+    const days = Math.floor(remaining / msPer.day); remaining -= days * msPer.day; push(days, 'day')
+    const hours = Math.floor(remaining / msPer.hour); remaining -= hours * msPer.hour; push(hours, 'hour')
+    const minutes = Math.floor(remaining / msPer.minute); remaining -= minutes * msPer.minute; push(minutes, 'minute')
+    const seconds = Math.floor(remaining / msPer.second); push(seconds, 'second')
 
-    const summary = parts.length > 0 ? parts[0] : '0 seconds'
+    // Pick at least two units
+    let firstIdx = parts.findIndex(p => p.n > 0)
+    if (firstIdx === -1) firstIdx = parts.length - 1 // all zero → seconds
+    const secondIdx = Math.min(parts.length - 1, firstIdx + 1)
+    const a = parts[firstIdx]
+    const b = parts[secondIdx]
+    const fmt = (p: { n: number; label: string }) => `${p.n} ${p.label}${p.n !== 1 ? 's' : ''}`
+    const summary = `${fmt(a)} ${fmt(b)}`
     const suffix = sign < 0 ? 'ago' : 'from now'
     return { text: `${summary} ${suffix}`, sign }
   }
@@ -1154,5 +1161,29 @@ export class TimelineRenderer {
 
   public endEditing() {
     this.editingInstantId = null
+  }
+
+  // Public read APIs for HTML list
+  public getSavedInstantsSnapshot(): { id: string; ts: number; label: string }[] {
+    return this.savedInstants.map(s => ({ id: s.id, ts: s.ts, label: s.label }))
+  }
+
+  public getCenterTimestamp(): number {
+    if (this.viewFocusMode === 'now') return Date.now()
+    if (this.viewFocusMode === 'cursor') return this.timeCenter
+    if (this.viewFocusMode === 'instant') {
+      const s = this.savedInstants.find(si => si.id === this.focusedInstantId)
+      return s ? s.ts : Date.now()
+    }
+    return Date.now()
+  }
+
+  public getStateVersion(): number {
+    return this.stateVersion
+  }
+
+  public getHumanDurationTo(ts: number): { text: string; sign: 1 | -1 } {
+    const now = Date.now()
+    return this.formatDurationHuman(now, ts)
   }
 }
