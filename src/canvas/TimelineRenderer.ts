@@ -133,41 +133,41 @@ export class TimelineRenderer {
     const centerY = (this.canvas.height / dpr) / 2
 
     // Determine tiers
-    const { tier0Ms, tier1Ms, tier2Ms } = this.pickTickTiers()
+    const { tier0, tier1, tier2 } = this.pickTickTiers()
 
     // Draw low tier (unlabeled)
-    this.drawTickTier(tier0Ms, 5, false, false)
+    this.drawTickTier(tier0, 5, false, false)
     // Draw middle tier (labeled)
-    this.drawTickTier(tier1Ms, 10, true, false)
+    this.drawTickTier(tier1, 10, true, false)
     // Draw high tier (labeled, bold, longest)
-    this.drawTickTier(tier2Ms, 20, true, true)
+    this.drawTickTier(tier2, 20, true, true)
   }
 
-  private getTickUnitsMs(): number[] {
+  private getTickUnits(): { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }[] {
     return [
-      250,
-      1000,
-      5000,
-      15000,
-      60 * 1000,
-      5 * 60 * 1000,
-      15 * 60 * 1000,
-      60 * 60 * 1000,
-      3 * 60 * 60 * 1000,
-      24 * 60 * 60 * 1000,
-      7 * 24 * 60 * 60 * 1000,
-      30 * 24 * 60 * 60 * 1000,
-      365 * 24 * 60 * 60 * 1000,
+      { kind: 'duration', ms: 250 }, // 250ms
+      { kind: 'duration', ms: 1000 }, // 1s
+      { kind: 'duration', ms: 5000 }, // 5s
+      { kind: 'duration', ms: 15000 }, // 15s
+      { kind: 'duration', ms: 60 * 1000 }, // 1 minute
+      { kind: 'duration', ms: 5 * 60 * 1000 }, // 5 minutes
+      { kind: 'duration', ms: 15 * 60 * 1000 }, // 15 minutes
+      { kind: 'duration', ms: 60 * 60 * 1000 }, // 1 hour
+      { kind: 'duration', ms: 6 * 60 * 60 * 1000 }, // 6 hours
+      { kind: 'calendar', ms: 24 * 60 * 60 * 1000, calendarUnit: 'day' }, // 1 day (midnight)
+      { kind: 'calendar', ms: 7 * 24 * 60 * 60 * 1000, calendarUnit: 'week' }, // 1 week (midnight)
+      { kind: 'calendar', ms: 30 * 24 * 60 * 60 * 1000, calendarUnit: 'month' }, // 1 month (midnight)
+      { kind: 'calendar', ms: 365 * 24 * 60 * 60 * 1000, calendarUnit: 'year' }, // 1 year (midnight)
     ]
   }
 
-  private pickTickTiers(): { tier0Ms: number; tier1Ms: number; tier2Ms: number } {
-    const units = this.getTickUnitsMs()
+  private pickTickTiers(): { tier0: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }; tier1: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }; tier2: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' } } {
+    const units = this.getTickUnits()
     const pxPerMs = this.screenWidth / this.timeWidth
     const minLabelSpacingPx = 100
     let middleIdx = units.length - 1
     for (let i = 0; i < units.length; i++) {
-      const spacingPx = units[i] * pxPerMs
+      const spacingPx = units[i].ms * pxPerMs
       if (spacingPx >= minLabelSpacingPx) {
         middleIdx = i
         break
@@ -175,39 +175,87 @@ export class TimelineRenderer {
     }
     const lowIdx = Math.max(0, middleIdx - 1)
     const highIdx = Math.min(units.length - 1, middleIdx + 1)
-    return { tier0Ms: units[lowIdx], tier1Ms: units[middleIdx], tier2Ms: units[highIdx] }
+    return { tier0: units[lowIdx], tier1: units[middleIdx], tier2: units[highIdx] }
   }
 
-  private drawTickTier(unitMs: number, tickHalfHeightPx: number, drawLabels: boolean, bold: boolean) {
+  private drawTickTier(unit: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }, tickHalfHeightPx: number, drawLabels: boolean, bold: boolean) {
     const dpr = window.devicePixelRatio || 1
     const centerY = (this.canvas.height / dpr) / 2
     this.ctx.save()
     this.ctx.strokeStyle = '#ffffff'
     this.ctx.lineWidth = 1
 
-    // Align start to unit boundary
-    const startAligned = Math.floor(this.timeStart / unitMs) * unitMs
-    for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
-      const x = this.timeToPosition(t)
-      this.ctx.beginPath()
-      this.ctx.moveTo(x, centerY - tickHalfHeightPx)
-      this.ctx.lineTo(x, centerY + tickHalfHeightPx)
-      this.ctx.stroke()
+    if (unit.kind === 'duration') {
+      const unitMs = unit.ms
+      // Special alignment for 6-hour grid: snap to 00/06/12/18
+      if (unitMs === 6 * 60 * 60 * 1000) {
+        const first = this.getFirstSixHourBoundaryAtOrBefore(this.timeStart)
+        for (let t = first; t <= this.timeEnd; t += unitMs) {
+          const x = this.timeToPosition(t)
+          this.ctx.beginPath()
+          this.ctx.moveTo(x, centerY - tickHalfHeightPx)
+          this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+          this.ctx.stroke()
 
-      if (drawLabels) {
-        const label = this.formatTickLabel(t, unitMs)
-        this.ctx.fillStyle = '#ffffff'
-        this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
-        this.ctx.textAlign = 'center'
-        this.ctx.textBaseline = 'alphabetic'
-        const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
-        this.ctx.fillText(label, x, centerY + labelYOffset)
+          if (drawLabels) {
+            const label = this.formatTickLabel(t, unitMs, unit)
+            this.ctx.fillStyle = '#ffffff'
+            this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+            this.ctx.textAlign = 'center'
+            this.ctx.textBaseline = 'alphabetic'
+            const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+            this.ctx.fillText(label, x, centerY + labelYOffset)
+          }
+        }
+        this.ctx.restore()
+        return
+      }
+      const startAligned = Math.floor(this.timeStart / unitMs) * unitMs
+      for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
+        const x = this.timeToPosition(t)
+        this.ctx.beginPath()
+        this.ctx.moveTo(x, centerY - tickHalfHeightPx)
+        this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+        this.ctx.stroke()
+
+        if (drawLabels) {
+          const label = this.formatTickLabel(t, unitMs, unit)
+          this.ctx.fillStyle = '#ffffff'
+          this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+          this.ctx.textAlign = 'center'
+          this.ctx.textBaseline = 'alphabetic'
+          const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+          this.ctx.fillText(label, x, centerY + labelYOffset)
+        }
+      }
+    } else {
+      // Calendar-aligned ticks (midnight boundaries)
+      const first = this.getFirstCalendarBoundaryAtOrBefore(this.timeStart, unit.calendarUnit!)
+      let t = first
+      while (t <= this.timeEnd) {
+        const x = this.timeToPosition(t)
+        this.ctx.beginPath()
+        this.ctx.moveTo(x, centerY - tickHalfHeightPx)
+        this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+        this.ctx.stroke()
+
+        if (drawLabels) {
+          const label = this.formatTickLabel(t, unit.ms, unit)
+          this.ctx.fillStyle = '#ffffff'
+          this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+          this.ctx.textAlign = 'center'
+          this.ctx.textBaseline = 'alphabetic'
+          const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+          this.ctx.fillText(label, x, centerY + labelYOffset)
+        }
+
+        t = this.addCalendar(t, unit.calendarUnit!, 1)
       }
     }
     this.ctx.restore()
   }
 
-  private formatTickLabel(timestamp: number, unitMs: number): string {
+  private formatTickLabel(timestamp: number, unitMs: number, unit?: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }): string {
     const d = new Date(timestamp)
     if (unitMs < 1000) {
       // sub-second → mm:ss.S
@@ -237,19 +285,19 @@ export class TimelineRenderer {
       const ampm = h >= 12 ? 'PM' : 'AM'
       return `${displayHour}${ampm}`
     }
-    if (unitMs < 7 * 24 * 60 * 60 * 1000) {
+    if (unit && unit.kind === 'calendar' && unit.calendarUnit === 'day') {
       // days → MMM d
       const month = d.toLocaleString(undefined, { month: 'short' })
       const day = d.getDate()
       return `${month} ${day}`
     }
-    if (unitMs < 30 * 24 * 60 * 60 * 1000) {
-      // weeks → 'Wk NN' (ISO week number is complex; simple week-of-year placeholder)
+    if (unit && unit.kind === 'calendar' && unit.calendarUnit === 'week') {
+      // week → MMM d (start of week)
       const month = d.toLocaleString(undefined, { month: 'short' })
       const day = d.getDate()
       return `${month} ${day}`
     }
-    if (unitMs < 365 * 24 * 60 * 60 * 1000) {
+    if (unit && unit.kind === 'calendar' && unit.calendarUnit === 'month') {
       // months → MMM yyyy
       const month = d.toLocaleString(undefined, { month: 'short' })
       const year = d.getFullYear()
@@ -257,6 +305,59 @@ export class TimelineRenderer {
     }
     // years → yyyy
     return `${d.getFullYear()}`
+  }
+
+  private getFirstCalendarBoundaryAtOrBefore(ts: number, unit: 'day' | 'week' | 'month' | 'year'): number {
+    const d = new Date(ts)
+    if (unit === 'day') {
+      d.setHours(0, 0, 0, 0)
+      return d.getTime()
+    }
+    if (unit === 'week') {
+      // Align to Sunday 00:00 local
+      d.setHours(0, 0, 0, 0)
+      const day = d.getDay() // 0=Sun
+      const deltaToSunday = day
+      d.setDate(d.getDate() - deltaToSunday)
+      return d.getTime()
+    }
+    if (unit === 'month') {
+      d.setHours(0, 0, 0, 0)
+      d.setDate(1)
+      return d.getTime()
+    }
+    // year
+    d.setHours(0, 0, 0, 0)
+    d.setMonth(0, 1)
+    return d.getTime()
+  }
+
+  private addCalendar(ts: number, unit: 'day' | 'week' | 'month' | 'year', amount: number): number {
+    const d = new Date(ts)
+    if (unit === 'day') {
+      d.setDate(d.getDate() + amount)
+      return d.getTime()
+    }
+    if (unit === 'week') {
+      d.setDate(d.getDate() + 7 * amount)
+      return d.getTime()
+    }
+    if (unit === 'month') {
+      d.setMonth(d.getMonth() + amount, 1)
+      return d.getTime()
+    }
+    // year
+    d.setFullYear(d.getFullYear() + amount, 0, 1)
+    return d.getTime()
+  }
+
+  private getFirstSixHourBoundaryAtOrBefore(ts: number): number {
+    const d = new Date(ts)
+    d.setMinutes(0, 0, 0)
+    const hour = d.getHours()
+    const alignedHour = Math.floor(hour / 6) * 6
+    d.setHours(alignedHour, 0, 0, 0)
+    return d.getTime()
   }
 
   private drawNowLabel() {
