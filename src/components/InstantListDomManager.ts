@@ -144,7 +144,7 @@ export class InstantListDomManager {
 					card = document.createElement('div')
 					card.dataset.key = key
 					card.style.display = 'grid'
-					card.style.gridTemplateColumns = '1.6fr 1fr 1.2fr 1.1fr 1.2fr 1fr'
+					card.style.gridTemplateColumns = '1.2fr 1.6fr 1fr 1.2fr 1.1fr 1.2fr 1fr'
 					card.style.alignItems = 'center'
 					card.style.background = 'rgba(0,0,0,0.6)'
 					card.style.color = '#ffffff'
@@ -153,12 +153,14 @@ export class InstantListDomManager {
 					card.style.cursor = 'pointer'
 					card.style.willChange = 'transform'
 					card.onpointerdown = (ev) => { ev.stopPropagation() }
+					const vis = document.createElement('div'); vis.dataset.role = 'vis'; vis.style.font = 'bold 16px Arial'; vis.style.textAlign = 'center'
 					const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'
 					const sname = document.createElement('div'); sname.dataset.role = 'sname'; sname.style.font = 'bold 14px Arial'
 					const stime = document.createElement('div'); stime.dataset.role = 'stime'; stime.style.font = 'bold 14px monospace'; stime.style.textAlign = 'right'
 					const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.textAlign = 'center'
 					const etime = document.createElement('div'); etime.dataset.role = 'etime'; etime.style.font = 'bold 14px monospace'; etime.style.textAlign = 'right'
 					const ename = document.createElement('div'); ename.dataset.role = 'ename'; ename.style.font = 'bold 14px Arial'
+					card.appendChild(vis)
 					card.appendChild(name)
 					card.appendChild(sname)
 					card.appendChild(stime)
@@ -167,12 +169,19 @@ export class InstantListDomManager {
 					card.appendChild(ename)
 				}
 				const isFocused = (focus.mode === 'span') && (s.kind === 'saved') && (focus.focusedSpanId === s.id)
+				if (s.kind !== 'saved') {
+					card.style.background = 'rgba(76, 29, 149, 0.35)' // dark purple
+					card.style.borderColor = '#a78bfa'
+				}
+				const visEl = card.querySelector('[data-role="vis"]') as HTMLElement
 				const nameEl = card.querySelector('[data-role="name"]') as HTMLElement
 				const snameEl = card.querySelector('[data-role="sname"]') as HTMLElement
 				const stimeEl = card.querySelector('[data-role="stime"]') as HTMLElement
 				const durEl = card.querySelector('[data-role="dur"]') as HTMLElement
 				const etimeEl = card.querySelector('[data-role="etime"]') as HTMLElement
 				const enameEl = card.querySelector('[data-role="ename"]') as HTMLElement
+				const saved = (s.kind === 'saved')
+				visEl.textContent = '👁'
 				nameEl.textContent = s.label
 				snameEl.textContent = s.start.name
 				stimeEl.textContent = new Date(s.start.tsEpochMs).toLocaleString()
@@ -190,6 +199,34 @@ export class InstantListDomManager {
 				etimeEl.textContent = new Date(s.end.tsEpochMs).toLocaleString()
 				enameEl.textContent = s.end.name
 				card.style.border = `2px solid ${isFocused ? '#22d3ee' : '#ffffff'}`
+				if (saved && s.id) {
+					visEl.style.cursor = 'pointer'
+					visEl.onclick = (ev: MouseEvent) => {
+						ev.stopPropagation()
+						const currentVisible: boolean = visEl.style.opacity !== '0.3'
+						// toggle via renderer pass-through
+						if (typeof (renderer as unknown as { setSpanVisible?: (id: string, value: boolean) => void }).setSpanVisible === 'function' && s.id) {
+							(renderer as unknown as { setSpanVisible: (id: string, value: boolean) => void }).setSpanVisible(s.id!, !currentVisible)
+						}
+						visEl.style.opacity = !currentVisible ? '1' : '0.3'
+					}
+					const isVisible = (s.kind === 'saved') ? !!(s as { visible?: boolean }).visible : true
+					visEl.style.opacity = isVisible ? '1' : '0.3'
+				}
+				if (s.kind !== 'saved') {
+					visEl.style.cursor = 'pointer'
+					visEl.onclick = (ev: MouseEvent) => {
+						ev.stopPropagation()
+						const currentVisible: boolean = visEl.style.opacity !== '0.3'
+						// Toggle implied visibility through renderer
+						const r = renderer as unknown as { setImpliedVisibility?: (which: 'selected-now'|'selected-prev', value: boolean) => void }
+						if (s.label === 'Selected to Now') r.setImpliedVisibility?.('selected-now', !currentVisible)
+						if (s.label === 'Selected to Previous') r.setImpliedVisibility?.('selected-prev', !currentVisible)
+						visEl.style.opacity = !currentVisible ? '1' : '0.3'
+					}
+					const isVisible = (s as { visible?: boolean }).visible !== false
+					visEl.style.opacity = isVisible ? '1' : '0.3'
+				}
 				if (s.kind === 'saved' && s.id) {
 					card.onclick = () => {
 						renderer.setViewFocus('span', undefined, s.id!)

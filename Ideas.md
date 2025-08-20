@@ -8,4 +8,5 @@ Next ideas to implement:
 * multi level duration lines
 * focus history
 
-spans that dont have "NOW" as the destination shouldn't render time string as "minutes ago" , they should simply list a signed duration hh:mm:ss.ssss like in the instant list ui. hide hh and ssss if zero.
+add days to span duraiton 
+lets make it possible to delete instances and spans using a new icon on the rightmost side of the all instants and all spans views.

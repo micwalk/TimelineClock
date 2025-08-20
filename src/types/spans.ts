@@ -5,6 +5,8 @@ export interface SpanRecord {
   startInstantId: string
   endInstantId: string
   label: string
+  visible?: boolean
+  endIsNow?: boolean
 }
 
 export interface SpanViewBase {
@@ -14,6 +16,7 @@ export interface SpanViewBase {
   start: { id?: string; name: string; tsEpochMs: number }
   end: { id?: string; name: string; tsEpochMs: number }
   durationMs: number
+  visible?: boolean
 }
 
 export type SpanView = SpanViewBase
