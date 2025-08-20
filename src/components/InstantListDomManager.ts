@@ -152,7 +152,7 @@ export class InstantListDomManager {
 					card = document.createElement('div')
 					card.dataset.key = key
 					card.style.display = 'grid'
-					card.style.gridTemplateColumns = '1.2fr 1.6fr 1fr 1.2fr 1.1fr 1.2fr 1fr 0.8fr'
+					card.style.gridTemplateColumns = '0.6fr 1.8fr 1fr 1.2fr 1.1fr 1.2fr 1fr 0.8fr'
 					card.style.alignItems = 'center'
 					card.style.background = 'rgba(0,0,0,0.6)'
 					card.style.color = '#ffffff'
@@ -161,22 +161,24 @@ export class InstantListDomManager {
 					card.style.cursor = 'pointer'
 					card.style.willChange = 'transform'
 					card.onpointerdown = (ev) => { ev.stopPropagation() }
-					const vis = document.createElement('div'); vis.dataset.role = 'vis'; vis.style.font = 'bold 16px Arial'; vis.style.textAlign = 'center'
-					const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'; name.style.display = 'flex'; name.style.alignItems = 'center'; name.style.gap = '8px'
+					const vis = document.createElement('div'); vis.dataset.role = 'vis'; vis.style.display = 'flex'; vis.style.alignItems = 'center'; vis.style.gap = '8px'; vis.style.justifyContent = 'flex-start'
+					const eye = document.createElement('span'); eye.dataset.role = 'eye'; eye.textContent = '👁'; eye.style.font = 'bold 16px Arial'; eye.style.cursor = 'pointer'
 					const btnEdit = document.createElement('button'); btnEdit.dataset.role = 'edit'; btnEdit.type = 'button'; btnEdit.style.background = 'transparent'; btnEdit.style.border = 'none'; btnEdit.style.cursor = 'pointer'; btnEdit.style.padding = '0'; btnEdit.style.display = 'inline-flex'; btnEdit.style.alignItems = 'center'
-					btnEdit.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a3e635" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L8.25 18.463 4.5 19.5l1.037-3.75L16.862 3.487z"/><path d="M19.5 7.5l-3-3"/></svg>'
+					btnEdit.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a3e635" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L8.25 18.463 4.5 19.5l1.037-3.75L16.862 3.487z"/><path d="M19.5 7.5l-3-3"/></svg>'
+					vis.appendChild(eye); vis.appendChild(btnEdit)
+					const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'; name.style.display = 'flex'; name.style.alignItems = 'center'
 					const nameText = document.createElement('span'); nameText.dataset.role = 'name-text'
+					name.appendChild(nameText)
 					const sname = document.createElement('div'); sname.dataset.role = 'sname'; sname.style.font = 'bold 14px Arial'
 					const stime = document.createElement('div'); stime.dataset.role = 'stime'; stime.style.font = 'bold 14px monospace'; stime.style.textAlign = 'right'
 					const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.textAlign = 'center'
-					const etime = document.createElement('div'); etime.dataset.role = 'etime'; etime.style.font = 'bold 14px monospace'; etime.style.textAlign = 'right'
+					const etime = document.createElement('div'); etime.dataset.role = 'etime'; etime.style.font = 'bold 14px monospace'; etime.style.textAlign = 'left'
 					const ename = document.createElement('div'); ename.dataset.role = 'ename'; ename.style.font = 'bold 14px Arial'
 					const actions = document.createElement('div'); actions.dataset.role = 'actions'; actions.style.display = 'flex'; actions.style.justifyContent = 'flex-end'; actions.style.gap = '10px'
 					const btnDelete = document.createElement('button'); btnDelete.dataset.role = 'delete'; btnDelete.type = 'button'; btnDelete.style.background = 'transparent'; btnDelete.style.border = 'none'; btnDelete.style.cursor = 'pointer'; btnDelete.style.padding = '0'; btnDelete.style.display = 'inline-flex'; btnDelete.style.alignItems = 'center'
 					btnDelete.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>'
 					actions.appendChild(btnDelete)
 					card.appendChild(vis)
-					name.appendChild(btnEdit)
 					name.appendChild(nameText)
 					card.appendChild(name)
 					card.appendChild(sname)
@@ -192,9 +194,10 @@ export class InstantListDomManager {
 					card.style.borderColor = '#a78bfa'
 				}
 				const visEl = card.querySelector('[data-role="vis"]') as HTMLElement
+				const eyeEl = visEl.querySelector('[data-role="eye"]') as HTMLElement
+				const editBtn = visEl.querySelector('[data-role="edit"]') as HTMLButtonElement
 				const nameEl = card.querySelector('[data-role="name"]') as HTMLElement
-				const editBtn = card.querySelector('[data-role="edit"]') as HTMLButtonElement
-				const nameTextEl = card.querySelector('[data-role="name-text"]') as HTMLElement | null
+				const nameTextEl = nameEl.querySelector('[data-role="name-text"]') as HTMLElement | null
 				const snameEl = card.querySelector('[data-role="sname"]') as HTMLElement
 				const stimeEl = card.querySelector('[data-role="stime"]') as HTMLElement
 				const durEl = card.querySelector('[data-role="dur"]') as HTMLElement
@@ -203,7 +206,7 @@ export class InstantListDomManager {
 				const actionsEl = card.querySelector('[data-role="actions"]') as HTMLElement
 				const btnDelete = actionsEl.querySelector('[data-role="delete"]') as HTMLButtonElement
 				const saved = (s.kind === 'saved')
-				visEl.textContent = '👁'
+				eyeEl.textContent = '👁'
 				// if not editing, ensure visible label
 				const existingInput = nameEl.querySelector('input[data-role="edit-input"]') as HTMLInputElement | null
 				if (!existingInput && nameTextEl) nameTextEl.textContent = s.label.length > 0 ? s.label : '?'
@@ -224,21 +227,23 @@ export class InstantListDomManager {
 				enameEl.textContent = s.end.name.length > 0 ? s.end.name : '?'
 				card.style.border = `2px solid ${isFocused ? '#22d3ee' : '#ffffff'}`
 				if (saved && s.id) {
-					visEl.style.cursor = 'pointer'
-					visEl.onclick = (ev: MouseEvent) => {
+					eyeEl.style.cursor = 'pointer'
+					eyeEl.onclick = (ev: MouseEvent) => {
 						ev.stopPropagation()
-						const currentVisible: boolean = visEl.style.opacity !== '0.3'
+						const currentVisible: boolean = eyeEl.style.opacity !== '0.3'
 						// toggle via renderer pass-through
 						if (typeof (renderer as unknown as { setSpanVisible?: (id: string, value: boolean) => void }).setSpanVisible === 'function' && s.id) {
 							(renderer as unknown as { setSpanVisible: (id: string, value: boolean) => void }).setSpanVisible(s.id!, !currentVisible)
 						}
-						visEl.style.opacity = !currentVisible ? '1' : '0.3'
+						eyeEl.style.opacity = !currentVisible ? '1' : '0.3'
 					}
 					const isVisible = (s.kind === 'saved') ? !!(s as { visible?: boolean }).visible : true
-					visEl.style.opacity = isVisible ? '1' : '0.3'
+					eyeEl.style.opacity = isVisible ? '1' : '0.3'
 					// Actions for saved spans
-					editBtn.style.visibility = 'visible'
 					btnDelete.style.visibility = 'visible'
+					// Determine if this is a Favorite span (no rename)
+					const isFavoriteSpan = (s.label === 'Favorite') && (s.end.name === 'Now')
+					editBtn.style.visibility = isFavoriteSpan ? 'hidden' : 'visible'
 					editBtn.onclick = (ev) => {
 						ev.stopPropagation()
 						if (nameEl.querySelector('input[data-role="edit-input"]')) return
@@ -281,18 +286,18 @@ export class InstantListDomManager {
 					btnDelete.style.visibility = 'hidden'
 				}
 				if (s.kind !== 'saved') {
-					visEl.style.cursor = 'pointer'
-					visEl.onclick = (ev: MouseEvent) => {
+					eyeEl.style.cursor = 'pointer'
+					eyeEl.onclick = (ev: MouseEvent) => {
 						ev.stopPropagation()
-						const currentVisible: boolean = visEl.style.opacity !== '0.3'
+						const currentVisible: boolean = eyeEl.style.opacity !== '0.3'
 						// Toggle implied visibility through renderer
 						const r = renderer as unknown as { setImpliedVisibility?: (which: 'selected-now'|'selected-prev', value: boolean) => void }
 						if (s.label === 'Selected to Now') r.setImpliedVisibility?.('selected-now', !currentVisible)
 						if (s.label === 'Selected to Previous') r.setImpliedVisibility?.('selected-prev', !currentVisible)
-						visEl.style.opacity = !currentVisible ? '1' : '0.3'
+						eyeEl.style.opacity = !currentVisible ? '1' : '0.3'
 					}
-					const isVisible = (s as { visible?: boolean }).visible !== false
-					visEl.style.opacity = isVisible ? '1' : '0.3'
+					const isVisible2 = (s as { visible?: boolean }).visible !== false
+					eyeEl.style.opacity = isVisible2 ? '1' : '0.3'
 				}
 				if (s.kind === 'saved' && s.id) {
 					card.onclick = () => {

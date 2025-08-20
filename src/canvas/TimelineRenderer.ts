@@ -1129,8 +1129,7 @@ export class TimelineRenderer {
         if (target.type === 'instant-fav' && target.id) {
           const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
           if (inst) {
-            this.savedStore.setFavorite(target.id, !inst.favorite)
-            this.stateVersion++
+            this.toggleFavorite(target.id, !inst.favorite)
           }
           return
         }
@@ -1827,7 +1826,7 @@ export class TimelineRenderer {
     // Implied: selected → previously focused
     if (this.currentSelectedInstantId) {
       const prevId = this.getPrevFocusedInstantId()
-      const a = savedMap.get(prevId)
+      const a = prevId ? savedMap.get(prevId) : undefined
       const b = savedMap.get(this.currentSelectedInstantId)
       if (a && b) {
         spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.showImpliedSelectedPrev })
