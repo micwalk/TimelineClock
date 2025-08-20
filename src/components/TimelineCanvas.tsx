@@ -127,6 +127,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       }
       renderer = new TimelineRenderer(canvas)
       rendererRef.current = renderer
+      ;(window as unknown as { getRenderer?: () => TimelineRenderer | null }).getRenderer = () => rendererRef.current
 
       // Position list below canvas
       const controlsEl = controlsRef.current
@@ -137,7 +138,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       if (listRef.current) {
         const controlsH = controlsEl?.getBoundingClientRect().height ?? 0
         listRef.current.style.top = `${containerHeight + Math.ceil(controlsH)}px`
-        listRef.current.style.zIndex = '10'
+        listRef.current.style.zIndex = '1000'
+        listRef.current.style.pointerEvents = 'auto'
+        ;(window as unknown as { getListEl?: () => HTMLDivElement | null }).getListEl = () => listRef.current
       }
     }
 
@@ -282,7 +285,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           const list = renderer.getOverlayElements()
           const desiredKeys = new Set<string>()
           for (const o of list) {
-            if (o.type === 'instant-label' && o.id) {
+            if ((o.type === 'instant-label' || o.type === 'span-label') && o.id) {
               const key = `${o.type}:${o.id}`
               desiredKeys.add(key)
               let input = overlayNodes.get(key)
@@ -304,7 +307,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
                 input.onpointerdown = (ev) => { ev.stopPropagation() }
                 input.onmousedown = (ev) => { ev.stopPropagation() }
                 input.onwheel = (ev) => { ev.stopPropagation() }
-                input.onchange = () => { renderer!.updateInstantLabel(o.id!, input!.value) }
+                input.onchange = () => { if (o.type === 'instant-label') { renderer!.updateInstantLabel(o.id!, input!.value) } else { renderer!.updateSpanLabel(o.id!, input!.value) } }
                 input.onblur = () => { renderer!.endEditing() }
                 input.onkeydown = (ev) => {
                   if (ev.key === 'Enter') { (ev.target as HTMLInputElement).blur() }
