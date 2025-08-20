@@ -1,4 +1,5 @@
 import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
+import type { InstantView } from '../types/instants.ts'
 
 type ListElement = HTMLDivElement & { _lastVersion?: number; _lastRenderAt?: number }
 
@@ -84,20 +85,22 @@ export class InstantListDomManager {
 		})
 
 		// Build unified entries
-		const items = renderer.getSavedInstantsSnapshot().slice().sort((a, b) => a.ts - b.ts)
+		const items: InstantView[] = renderer.getAllInstantsView()
 		const focus = renderer.getViewFocus?.() ?? { mode: 'now', focusedInstantId: null as string | null }
 		const entries: Array<{ key: string; ts: number; name: string; focused: boolean; instantKind: 'now'|'cursor'|'instant'; id?: string }> = []
-		const nowTsEntry = nowTs
-		entries.push({ key: 'now', ts: nowTsEntry, name: 'Now', focused: focus.mode === 'now', instantKind: 'now' })
-		if (focus.mode === 'cursor') {
-			const cursorTs = renderer.getTimeCenter?.() ?? nowTsEntry
-			entries.push({ key: 'cursor', ts: cursorTs, name: 'Cursor', focused: true, instantKind: 'cursor' })
-		}
 		for (const it of items) {
-			const focused = focus.mode === 'instant' && focus.focusedInstantId === it.id
-			entries.push({ key: `i:${it.id}`, ts: it.ts, name: it.label || '(unnamed)', focused, instantKind: 'instant', id: it.id })
+			if (it.kind === 'now') {
+				entries.push({ key: 'now', ts: it.tsEpochMs, name: 'Now', focused: focus.mode === 'now', instantKind: 'now' })
+				continue
+			}
+			if (it.kind === 'cursor') {
+				if (it.visible) {
+					entries.push({ key: 'cursor', ts: it.tsEpochMs, name: 'Cursor', focused: focus.mode === 'cursor', instantKind: 'cursor' })
+				}
+				continue
+			}
+			entries.push({ key: `i:${it.id}`, ts: it.tsEpochMs, name: it.label || '(unnamed)', focused: focus.mode === 'instant' && focus.focusedInstantId === it.id, instantKind: 'instant', id: it.id })
 		}
-		entries.sort((a, b) => a.ts - b.ts)
 
 		// Reconcile DOM nodes in sorted order
 		const presentKeys = new Set<string>()

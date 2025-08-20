@@ -1,5 +1,8 @@
 // Format information for drawing instants
 import { formatTimeString12h, formatDurationHuman } from '../utils/timeFormat.ts'
+import type { SavedInstantCompat } from '../types/instants.ts'
+import type { InstantView } from '../types/instants.ts'
+import { SavedInstantsStore } from '../services/SavedInstantsStore.ts'
 export interface InstantFormatInfo {
   lineColor: string
   lineWidth: number
@@ -32,7 +35,7 @@ export class TimelineRenderer {
   private focusedInstantId: string | null = null
 
   // Saved instants and hit targets for interactions
-  private savedInstants: { id: string; ts: number; label: string }[] = []
+  private savedStore: SavedInstantsStore
   private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
@@ -43,7 +46,7 @@ export class TimelineRenderer {
   private readonly minTimeWidthMs: number = 1000 // 1s
   private readonly maxTimeWidthMs: number = 30 * 24 * 60 * 60 * 1000 // 30d
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, deps?: { saved?: SavedInstantsStore }) {
     this.canvas = canvas
     const context = canvas.getContext('2d')
     if (!context) {
@@ -51,6 +54,8 @@ export class TimelineRenderer {
     }
     this.ctx = context
     this.setupCanvas()
+    this.savedStore = deps?.saved ?? new SavedInstantsStore()
+    this.savedStore.subscribe(() => { this.stateVersion++ })
     this.loadPersistedState()
     this.updateTimelineState()
   }
@@ -98,9 +103,9 @@ export class TimelineRenderer {
       this.drawCursorInstant()
       this.drawCursorNowSpan()
     } else if (this.viewFocusMode === 'instant' && this.focusedInstantId) {
-      const s = this.savedInstants.find(si => si.id === this.focusedInstantId)
+      const s = this.savedStore.getSnapshot().find((si) => si.id === this.focusedInstantId)
       if (s) {
-        this.drawInstantNowSpan(s.ts)
+        this.drawInstantNowSpan(s.tsEpochMs)
       }
     }
   }
@@ -112,7 +117,6 @@ export class TimelineRenderer {
         timeCenter: this.timeCenter,
         viewFocusMode: this.viewFocusMode,
         focusedInstantId: this.focusedInstantId,
-        savedInstants: this.savedInstants,
       }
       localStorage.setItem('timeline.state', JSON.stringify(payload))
       this.stateVersion++
@@ -123,12 +127,11 @@ export class TimelineRenderer {
     try {
       const raw = localStorage.getItem('timeline.state')
       if (!raw) return
-      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'; focusedInstantId: string|null; savedInstants: {id:string;ts:number;label:string}[] }>
+      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'; focusedInstantId: string|null }>
       if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
       if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
       if (data.viewFocusMode === 'now' || data.viewFocusMode === 'cursor' || data.viewFocusMode === 'instant') this.viewFocusMode = data.viewFocusMode
       if (typeof data.focusedInstantId === 'string' || data.focusedInstantId === null) this.focusedInstantId = data.focusedInstantId ?? null
-      if (Array.isArray(data.savedInstants)) this.savedInstants = data.savedInstants
     } catch (err) { void err }
   }
 
@@ -469,7 +472,8 @@ export class TimelineRenderer {
 
   // Render all saved instants with label editing and delete icon
   private drawSavedInstants() {
-    for (const s of this.savedInstants) {
+    const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label }))
+    for (const s of saved) {
       const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
       const label = s.label && s.label.length > 0 ? s.label : '(unnamed)'
       this.drawInstant(s.ts, label, {
@@ -590,17 +594,15 @@ export class TimelineRenderer {
           return
         }
         if (target.type === 'save-cursor') {
-          this.createInstantAt(this.timeCenter, '')
-          // transfer focus to new instant
-          const last = this.savedInstants[this.savedInstants.length - 1]
-          if (last) this.setViewFocus('instant', last.id)
+          const newId = this.createInstantAt(this.timeCenter, '')
+          if (newId) this.setViewFocus('instant', newId)
           return
         }
         if (target.type === 'instant-trash') {
           if (target.id) {
             const id = target.id
             const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === id
-            const ts = this.savedInstants.find(si => si.id === id)?.ts
+            const ts = this.savedStore.getSnapshot().find(si => si.id === id)?.tsEpochMs
             this.deleteInstant(id)
             if (isFocused) {
               if (typeof ts === 'number') {
@@ -617,7 +619,7 @@ export class TimelineRenderer {
           return
         }
         if (target.type === 'instant-label' && target.id) {
-          const inst = this.savedInstants.find(si => si.id === target.id)
+          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
           if (inst) {
             this.editingInstantId = target.id
           }
@@ -633,7 +635,7 @@ export class TimelineRenderer {
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
         if (target.type === 'instant-time') {
           if (target.id) {
-            const ts = this.savedInstants.find(si => si.id === target.id)?.ts
+            const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
             if (typeof ts === 'number') {
               this.timeCenter = ts
               this.setViewFocus('instant', target.id)
@@ -1042,14 +1044,14 @@ export class TimelineRenderer {
   public snapToInstantIfClose(tolerancePx: number): boolean {
     const xCenter = this.screenWidth / 2
     let best: { id: string; dist: number } | null = null
-    for (const s of this.savedInstants) {
-      const x = this.timeToPosition(s.ts)
+    for (const s of this.savedStore.getSnapshot()) {
+      const x = this.timeToPosition(s.tsEpochMs)
       const d = Math.abs(x - xCenter)
       if (d <= tolerancePx && (!best || d < best.dist)) best = { id: s.id, dist: d }
     }
     if (best) {
       this.setViewFocus('instant', best.id)
-      this.timeCenter = this.savedInstants.find(si => si.id === best!.id)!.ts
+      this.timeCenter = this.savedStore.getSnapshot().find(si => si.id === best!.id)!.tsEpochMs
       return true
     }
     return false
@@ -1064,14 +1066,14 @@ export class TimelineRenderer {
   }
 
   // Instant storage helpers
-  private createInstantAt(ts: number, label: string) {
-    const id = `i_${Math.random().toString(36).slice(2, 9)}`
-    this.savedInstants.push({ id, ts, label })
+  private createInstantAt(ts: number, label: string): string {
+    const id = this.savedStore.create(ts, label)
     this.persistState()
+    return id
   }
 
   private deleteInstant(id: string) {
-    this.savedInstants = this.savedInstants.filter(si => si.id !== id)
+    this.savedStore.delete(id)
     if (this.focusedInstantId === id) this.focusedInstantId = null
     this.persistState()
   }
@@ -1088,11 +1090,8 @@ export class TimelineRenderer {
   }
 
   public updateInstantLabel(id: string, newLabel: string) {
-    const inst = this.savedInstants.find(si => si.id === id)
-    if (inst) {
-      inst.label = newLabel
-      this.persistState()
-    }
+    this.savedStore.updateLabel(id, newLabel)
+    this.persistState()
     this.editingInstantId = null
   }
 
@@ -1101,16 +1100,16 @@ export class TimelineRenderer {
   }
 
   // Public read APIs for HTML list
-  public getSavedInstantsSnapshot(): { id: string; ts: number; label: string }[] {
-    return this.savedInstants.map(s => ({ id: s.id, ts: s.ts, label: s.label }))
+  public getSavedInstantsSnapshot(): SavedInstantCompat[] {
+    return this.savedStore.getSnapshot().map(s => ({ id: s.id, ts: s.tsEpochMs, label: s.label }))
   }
 
   public getCenterTimestamp(): number {
     if (this.viewFocusMode === 'now') return Date.now()
     if (this.viewFocusMode === 'cursor') return this.timeCenter
     if (this.viewFocusMode === 'instant') {
-      const s = this.savedInstants.find(si => si.id === this.focusedInstantId)
-      return s ? s.ts : Date.now()
+      const s = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+      return s ? s.tsEpochMs : Date.now()
     }
     return Date.now()
   }
@@ -1122,5 +1121,19 @@ export class TimelineRenderer {
   public getHumanDurationTo(ts: number): { text: string; sign: 1 | -1 } {
     const now = Date.now()
     return formatDurationHuman(now, ts)
+  }
+
+  // Unified list of all instants for UI consumption (Now, Cursor, Saved)
+  public getAllInstantsView(): InstantView[] {
+    const nowTs = Date.now()
+    const centerTs = this.getCenterTimestamp()
+    const focus = this.getViewFocus()
+    const list: InstantView[] = [
+      { kind: 'now', tsEpochMs: nowTs },
+      { kind: 'cursor', tsEpochMs: centerTs, visible: focus.mode === 'cursor' },
+      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label }))
+    ]
+    list.sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+    return list
   }
 }

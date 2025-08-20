@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react'
 import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
 import { InstantListDomManager } from './InstantListDomManager.ts'
+import type { InstantView } from '../types/instants.ts'
 
 interface TimelineCanvasProps {
   className?: string
@@ -27,47 +28,64 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const goToPreviousInstant = () => {
     const r = rendererRef.current
     if (!r) return
-    const instants = r.getSavedInstantsSnapshot().slice().sort((a, b) => a.ts - b.ts)
+    const instants: InstantView[] = r.getAllInstantsView()
     if (instants.length === 0) return
     const focus = r.getViewFocus?.() ?? { mode: 'now', focusedInstantId: null as string | null }
     let anchorTs: number
     if (focus.mode === 'instant' && focus.focusedInstantId) {
-      const cur = instants.find(i => i.id === focus.focusedInstantId)
-      anchorTs = cur ? cur.ts : Date.now()
+      const cur = instants.find(i => i.kind === 'saved' && i.id === focus.focusedInstantId)
+      anchorTs = cur ? cur.tsEpochMs : Date.now()
     } else if (focus.mode === 'cursor') {
-      anchorTs = r.getTimeCenter?.() ?? Date.now()
+      const cur = instants.find(i => i.kind === 'cursor' && i.visible)
+      anchorTs = cur ? cur.tsEpochMs : (r.getTimeCenter?.() ?? Date.now())
     } else {
       anchorTs = Date.now()
     }
-    let target: { id: string; ts: number } | null = null
+    let target: InstantView | null = null
     for (let i = instants.length - 1; i >= 0; i--) {
-      if (instants[i].ts < anchorTs) { target = instants[i]; break }
+      const it = instants[i]
+      if (it.tsEpochMs < anchorTs) { target = it; break }
     }
     if (target) {
-      r.setViewFocus('instant', target.id)
-      r.setTimeCenter(target.ts)
+      if (target.kind === 'saved') {
+        r.setViewFocus('instant', target.id)
+        r.setTimeCenter(target.tsEpochMs)
+      } else if (target.kind === 'cursor') {
+        r.setViewFocus('cursor')
+        r.setTimeCenter(target.tsEpochMs)
+      } else {
+        r.setViewFocus('now')
+      }
     }
   }
 
   const goToNextInstant = () => {
     const r = rendererRef.current
     if (!r) return
-    const instants = r.getSavedInstantsSnapshot().slice().sort((a, b) => a.ts - b.ts)
+    const instants: InstantView[] = r.getAllInstantsView()
     if (instants.length === 0) return
     const focus = r.getViewFocus?.() ?? { mode: 'now', focusedInstantId: null as string | null }
     let anchorTs: number
     if (focus.mode === 'instant' && focus.focusedInstantId) {
-      const cur = instants.find(i => i.id === focus.focusedInstantId)
-      anchorTs = cur ? cur.ts : Date.now()
+      const cur = instants.find(i => i.kind === 'saved' && i.id === focus.focusedInstantId)
+      anchorTs = cur ? cur.tsEpochMs : Date.now()
     } else if (focus.mode === 'cursor') {
-      anchorTs = r.getTimeCenter?.() ?? Date.now()
+      const cur = instants.find(i => i.kind === 'cursor' && i.visible)
+      anchorTs = cur ? cur.tsEpochMs : (r.getTimeCenter?.() ?? Date.now())
     } else {
       anchorTs = Date.now()
     }
-    const target = instants.find(i => i.ts > anchorTs) || null
+    const target = instants.find(i => i.tsEpochMs > anchorTs) || null
     if (target) {
-      r.setViewFocus('instant', target.id)
-      r.setTimeCenter(target.ts)
+      if (target.kind === 'saved') {
+        r.setViewFocus('instant', target.id)
+        r.setTimeCenter(target.tsEpochMs)
+      } else if (target.kind === 'cursor') {
+        r.setViewFocus('cursor')
+        r.setTimeCenter(target.tsEpochMs)
+      } else {
+        r.setViewFocus('now')
+      }
     }
   }
 
