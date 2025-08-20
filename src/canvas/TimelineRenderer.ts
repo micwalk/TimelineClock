@@ -24,6 +24,10 @@ export class TimelineRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private animationId: number | null = null
+  private zoomPanAnim: { active: boolean; startTs: number; durationMs: number; fromCenter: number; toCenter: number; fromWidth: number; toWidth: number } | null = null
+  private pendingPersistAfterAnim: boolean = false
+  private zoomTargetWidth: number | null = null
+  private zoomTargetPersistPending: boolean = false
 
   // Core timeline state variables
   private screenWidth: number = 0
@@ -136,17 +140,55 @@ export class TimelineRenderer {
     const dpr = window.devicePixelRatio || 1
     this.screenWidth = this.canvas.width / dpr
     
-    // Update time center depending on view mode
-    if (this.viewFocusMode === 'now') {
-      this.timeCenter = Date.now()
-    } else if (this.viewFocusMode === 'span' && this.focusedSpanId) {
-      const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
-      if (span) {
-        const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
-        const b = this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
-        if (typeof a === 'number' && typeof b === 'number') {
-          this.timeCenter = (a + b) / 2
+    // Update time center depending on view mode (skip if animating)
+    const animating = !!(this.zoomPanAnim && this.zoomPanAnim.active)
+    if (!animating) {
+      if (this.viewFocusMode === 'now') {
+        this.timeCenter = Date.now()
+      } else if (this.viewFocusMode === 'span' && this.focusedSpanId) {
+        const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
+        if (span) {
+          const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
+          const b = this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
+          if (typeof a === 'number' && typeof b === 'number') {
+            this.timeCenter = (a + b) / 2
+          }
         }
+      }
+    }
+    // Apply zoom/pan animation if active
+    if (this.zoomPanAnim && this.zoomPanAnim.active) {
+      const nowTs = performance.now()
+      const tRaw = (nowTs - this.zoomPanAnim.startTs) / this.zoomPanAnim.durationMs
+      const t = Math.max(0, Math.min(1, tRaw))
+      // cubic ease-in-out
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+      this.timeCenter = this.zoomPanAnim.fromCenter + (this.zoomPanAnim.toCenter - this.zoomPanAnim.fromCenter) * ease
+      this.timeWidth = this.zoomPanAnim.fromWidth + (this.zoomPanAnim.toWidth - this.zoomPanAnim.fromWidth) * ease
+      if (t >= 1) {
+        this.zoomPanAnim.active = false
+        if (this.pendingPersistAfterAnim) {
+          this.persistState()
+          this.pendingPersistAfterAnim = false
+        }
+      }
+    }
+    // Smooth towards wheel-zoom target if present and no center animation is running
+    const centerAnimating = !!(this.zoomPanAnim && this.zoomPanAnim.active)
+    if (!centerAnimating && this.zoomTargetWidth !== null) {
+      const target = this.clampTimeWidth(this.zoomTargetWidth)
+      const diff = target - this.timeWidth
+      // Exponential smoothing
+      const step = diff * 0.25
+      if (Math.abs(diff) <= 0.5) {
+        this.timeWidth = target
+        this.zoomTargetWidth = null
+        if (this.zoomTargetPersistPending) {
+          this.persistState()
+          this.zoomTargetPersistPending = false
+        }
+      } else {
+        this.timeWidth += step
       }
     }
     
@@ -1120,9 +1162,10 @@ export class TimelineRenderer {
           if (target.focus === 'now') {
             this.setViewFocus('now')
           } else if (target.focus === 'instant' && target.id) {
-            this.setViewFocus('instant', target.id)
             const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
-            if (typeof ts === 'number') this.setTimeCenter(ts)
+            if (typeof ts === 'number') {
+              this.focusInstantAnimated(target.id, ts)
+            }
           }
           return
         }
@@ -1160,6 +1203,11 @@ export class TimelineRenderer {
           this.setSelectedInstant(target.id)
           return
         }
+        if (target.type === 'instant-time' && !target.id) {
+          // Clicked cursor/now time box — snap/animate to now
+          this.focusNowAnimated()
+          return
+        }
         if (target.type === 'instant-trash') {
           if (target.id) {
             const id = target.id
@@ -1168,8 +1216,8 @@ export class TimelineRenderer {
             this.deleteInstant(id)
             if (isFocused) {
               if (typeof ts === 'number') {
-                this.timeCenter = ts
                 this.setViewFocus('cursor')
+                this.startZoomPanAnimation(ts, this.timeWidth)
               } else {
                 this.setViewFocus('now')
               }
@@ -1218,17 +1266,12 @@ export class TimelineRenderer {
           if (target.id) {
             const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
             if (typeof ts === 'number') {
-              this.timeCenter = ts
-              this.setViewFocus('instant', target.id)
+              this.focusInstantAnimated(target.id, ts)
             }
           } else {
             // Cursor/Now time box
-            if (this.viewFocusMode === 'cursor') {
-              this.setViewFocus('now')
-            } else {
-              // Double-click Now keeps Now
-              this.setViewFocus('now')
-            }
+            // Double-click Now: animate to Now
+            this.focusNowAnimated()
           }
           return
         }
@@ -1353,15 +1396,17 @@ export class TimelineRenderer {
   }
 
   public zoomIn(): void {
-    const factor = 1 - this.zoomPercent
-    this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
-    this.persistState()
+    this.setZoomTargetFactor(1 - this.zoomPercent)
   }
 
   public zoomOut(): void {
-    const factor = 1 + this.zoomPercent
-    this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
-    this.persistState()
+    this.setZoomTargetFactor(1 + this.zoomPercent)
+  }
+
+  private setZoomTargetFactor(factor: number) {
+    const base = this.zoomTargetWidth !== null ? this.zoomTargetWidth : this.timeWidth
+    this.zoomTargetWidth = this.clampTimeWidth(base * factor)
+    this.zoomTargetPersistPending = true
   }
 
   private clampTimeWidth(width: number): number {
@@ -1643,12 +1688,12 @@ export class TimelineRenderer {
     if (nextIndex === this.focusHistoryIndex) return
     const nextId = this.focusHistory[nextIndex]
     if (!nextId) return
+    const ts = this.savedStore.getSnapshot().find(si => si.id === nextId)?.tsEpochMs
+    if (typeof ts !== 'number') return
     this.suppressHistoryPush = true
-    this.setViewFocus('instant', nextId)
+    this.focusInstantAnimated(nextId, ts)
     this.suppressHistoryPush = false
     this.focusHistoryIndex = nextIndex
-    const ts = this.savedStore.getSnapshot().find(si => si.id === nextId)?.tsEpochMs
-    if (typeof ts === 'number') this.setTimeCenter(ts)
   }
 
   // Select an instant without changing focus mode
@@ -1666,6 +1711,7 @@ export class TimelineRenderer {
   }
 
   public panByPixels(deltaX: number) {
+    this.cancelZoomPanAnimation()
     const msPerPx = this.timeWidth / Math.max(1, this.screenWidth)
     // Drag right should move timeline with the finger: shift center earlier
     this.timeCenter -= deltaX * msPerPx
@@ -1703,7 +1749,79 @@ export class TimelineRenderer {
   }
 
   public setTimeCenter(centerMs: number) {
+    this.cancelZoomPanAnimation()
     this.timeCenter = centerMs
+  }
+
+  // Smoothly focus an instant by id or timestamp; keeps current zoom
+  public focusInstantAnimated(instantId?: string, tsEpochMs?: number): void {
+    let targetTs: number | undefined = tsEpochMs
+    if (typeof targetTs !== 'number' && instantId) {
+      targetTs = this.savedStore.getSnapshot().find(i => i.id === instantId)?.tsEpochMs
+    }
+    if (typeof targetTs !== 'number') return
+    if (instantId) {
+      this.setViewFocus('instant', instantId)
+    } else {
+      this.setViewFocus('instant')
+    }
+    this.startZoomPanAnimation(targetTs, this.timeWidth)
+  }
+
+  private startZoomPanAnimation(targetCenter: number, targetWidth: number, durationMs = 350): void {
+    const fromCenter = this.timeCenter
+    const fromWidth = this.timeWidth
+    this.zoomPanAnim = {
+      active: true,
+      startTs: performance.now(),
+      durationMs,
+      fromCenter,
+      toCenter: targetCenter,
+      fromWidth,
+      toWidth: this.clampTimeWidth(targetWidth),
+    }
+    this.pendingPersistAfterAnim = true
+  }
+
+  public focusNowAnimated(): void {
+    this.setViewFocus('now')
+    this.startZoomPanAnimation(Date.now(), this.timeWidth)
+  }
+
+  private cancelZoomPanAnimation(): void {
+    if (this.zoomPanAnim && this.zoomPanAnim.active) {
+      this.zoomPanAnim.active = false
+      this.pendingPersistAfterAnim = false
+    }
+  }
+
+  // Adjust zoom so a time range [aTs, bTs] fits with margins or is enlarged when too close
+  public adjustZoomToRange(aTs: number, bTs: number): void {
+    const early = Math.min(aTs, bTs)
+    const late = Math.max(aTs, bTs)
+    const xEarly = this.timeToPosition(early)
+    const xLate = this.timeToPosition(late)
+    const offscreen = (xEarly < 0) || (xLate > this.screenWidth)
+    if (offscreen) {
+      const desiredTimeWidth = (late - early) / 0.8 // leave 10% margins on each side
+      this.startZoomPanAnimation((early + late) / 2, desiredTimeWidth)
+      return
+    }
+    const distancePx = Math.max(0, xLate - xEarly)
+    if (distancePx < 0.2 * this.screenWidth) {
+      const desiredTimeWidth = 2 * (late - early) // make distance 50% of width
+      this.startZoomPanAnimation((early + late) / 2, desiredTimeWidth)
+    }
+  }
+
+  // Convenience: adjust zoom for a saved span by id
+  public adjustZoomForSpan(spanId: string): void {
+    const sp = this.spansStore.getSnapshot().find(s => s.id === spanId)
+    if (!sp) return
+    const start = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+    const end = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+    if (typeof start !== 'number' || typeof end !== 'number') return
+    this.adjustZoomToRange(start, end)
   }
 
   // Instant storage helpers

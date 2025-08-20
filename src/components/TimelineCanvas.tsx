@@ -48,8 +48,8 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     }
     if (target) {
       if (target.kind === 'saved') {
-        r.setViewFocus('instant', target.id)
-        r.setTimeCenter(target.tsEpochMs)
+        const rr = r as unknown as { focusInstantAnimated?: (id?: string, ts?: number) => void }
+        rr.focusInstantAnimated?.(target.id, target.tsEpochMs)
       } else if (target.kind === 'cursor') {
         r.setViewFocus('cursor')
         r.setTimeCenter(target.tsEpochMs)
@@ -78,8 +78,8 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     const target = instants.find(i => i.tsEpochMs > anchorTs) || null
     if (target) {
       if (target.kind === 'saved') {
-        r.setViewFocus('instant', target.id)
-        r.setTimeCenter(target.tsEpochMs)
+        const rr = r as unknown as { focusInstantAnimated?: (id?: string, ts?: number) => void }
+        rr.focusInstantAnimated?.(target.id, target.tsEpochMs)
       } else if (target.kind === 'cursor') {
         r.setViewFocus('cursor')
         r.setTimeCenter(target.tsEpochMs)
@@ -254,7 +254,8 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       }
       if (lower === 'r') {
         e.preventDefault()
-        rendererRef.current?.setViewFocus('now')
+        const rr = rendererRef.current as unknown as { focusNowAnimated?: () => void }
+        rr.focusNowAnimated?.()
         return
       }
       if (lower === 'd' || key === 'ArrowRight' || key === 'ArrowDown') {

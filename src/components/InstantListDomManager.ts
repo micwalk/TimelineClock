@@ -302,8 +302,7 @@ export class InstantListDomManager {
 				if (s.kind === 'saved' && s.id) {
 					card.onclick = () => {
 						renderer.setViewFocus('span', undefined, s.id!)
-						const mid = (s.start.tsEpochMs + s.end.tsEpochMs) / 2
-						renderer.setTimeCenter(mid)
+						renderer.adjustZoomForSpan?.(s.id!)
 						card!.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 					}
 				} else {
@@ -420,8 +419,7 @@ export class InstantListDomManager {
 				} else if (en.instantKind === 'cursor') {
 					r.setViewFocus('cursor')
 				} else {
-					r.setViewFocus('instant', en.id!)
-					r.setTimeCenter(en.ts)
+					r.focusInstantAnimated?.(en.id!, en.ts)
 				}
 				card!.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 			}
