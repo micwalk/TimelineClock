@@ -158,7 +158,7 @@ export class TimelineRenderer {
     const selected = this.currentSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.currentSelectedInstantId) : null
     if (selected) {
       // Row 1: implied selected → now
-      this.drawInstantNowSpan(selected.tsEpochMs, this.getCenterY() + this.spanRows.instantNow)
+      this.drawInstantNowSpan(selected.tsEpochMs, this.TimelineCenterY() + this.spanRows.instantNow)
     }
     // Draw implied selected→previous span
     const prev = this.previousSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.previousSelectedInstantId) : null
@@ -166,7 +166,7 @@ export class TimelineRenderer {
       // Row 2: implied previous → selected; label: "END_NAME DURATION DIR START_NAME"
       const startName = prev.label && prev.label.length > 0 ? prev.label : 'previous'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
-      this.drawSpanBetween(prev.tsEpochMs, selected.tsEpochMs, this.getCenterY() + this.spanRows.prevToSelected, '#a78bfa', { showPin: true, startName, endName, saveLabel: 'selected to previous' })
+      this.drawSpanBetween(prev.tsEpochMs, selected.tsEpochMs, this.TimelineCenterY() + this.spanRows.prevToSelected, '#a78bfa', { showPin: true, startName, endName, saveLabel: 'selected to previous' })
     }
     // Draw focused saved span if any (and suppress implied spans)
     if (this.viewFocusMode === 'span' && this.focusedSpanId) {
@@ -181,7 +181,7 @@ export class TimelineRenderer {
           const startName = aRec?.label || '(unnamed)'
           const endName = bRec?.label || '(unnamed)'
           const header = sp.label && sp.label.length > 0 ? sp.label : undefined
-          this.drawSpanBetween(a, b, this.getCenterY() + this.spanRows.focusedSaved, '#34d399', { showPin: false, spanId: sp.id, startName, endName, headerLabel: header })
+          this.drawSpanBetween(a, b, this.TimelineCenterY() + this.spanRows.focusedSaved, '#34d399', { showPin: false, spanId: sp.id, startName, endName, headerLabel: header })
           return
         }
       }
@@ -226,8 +226,7 @@ export class TimelineRenderer {
   }
 
   private drawTimeline() {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
+    const centerY = this.TimelineCenterY()
     const startX = 0
     const endX = this.screenWidth
 
@@ -316,8 +315,7 @@ export class TimelineRenderer {
   }
 
   private drawTickTier(unit: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }, style: { halfHeight: number; labelAlpha: number; fontSizePx: number; bold: boolean }) {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
+    const centerY = this.TimelineCenterY()
     this.ctx.save()
     this.ctx.strokeStyle = '#ffffff'
     this.ctx.lineWidth = 1
@@ -343,7 +341,7 @@ export class TimelineRenderer {
             this.ctx.textAlign = 'center'
             this.ctx.textBaseline = 'alphabetic'
             const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
-            this.ctx.fillText(label, x, centerY + labelYOffset)
+            this.ctx.fillText(label, x, centerY - labelYOffset)
             this.ctx.restore()
           }
         }
@@ -367,7 +365,7 @@ export class TimelineRenderer {
       this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'alphabetic'
           const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
-          this.ctx.fillText(label, x, centerY + labelYOffset)
+          this.ctx.fillText(label, x, centerY - labelYOffset)
           this.ctx.restore()
         }
       }
@@ -391,7 +389,7 @@ export class TimelineRenderer {
           this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'alphabetic'
           const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
-          this.ctx.fillText(label, x, centerY + labelYOffset)
+          this.ctx.fillText(label, x, centerY - labelYOffset)
           this.ctx.restore()
         }
 
@@ -571,8 +569,7 @@ export class TimelineRenderer {
       })
       this.drawTrashIconAt(s.ts, s.id)
       // Record label hit target roughly using current font and box metrics similar to drawInstant
-      const dpr = window.devicePixelRatio || 1
-      const centerY = (this.canvas.height / dpr) / 2
+      const centerY = this.TimelineCenterY()
       const x = this.timeToPosition(s.ts)
       const font = 'bold 16px Arial'
       const w = this.measureTextWidth(font, label) + 10
@@ -759,13 +756,16 @@ export class TimelineRenderer {
     return progress * this.screenWidth
   }
 
-  private getCenterY(): number {
+  // Recentered vertical baseline for the timeline: lesser of one-third of canvas CSS height or constant pixels
+  private TimelineCenterY(): number {
     const dpr = window.devicePixelRatio || 1
-    return (this.canvas.height / dpr) / 2
+    const cssHeight = this.canvas.height / dpr
+
+    return Math.min(cssHeight / 3, 100)
   }
 
   private computeTimeBoxRect(timestamp: number): { x: number; y: number; w: number; h: number } {
-    const centerY = this.getCenterY()
+    const centerY = this.TimelineCenterY()
     const timelinePosition = this.timeToPosition(timestamp)
     const font = 'bold 20px monospace'
     const timeString = formatTimeString12h(timestamp)
@@ -889,8 +889,7 @@ export class TimelineRenderer {
   }
 
   private drawSaveIconAt(ts: number, type: 'save-now' | 'save-cursor') {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
+    const centerY = this.TimelineCenterY()
     const x = this.timeToPosition(ts)
     const boxW = 28
     const boxH = 28
@@ -915,8 +914,7 @@ export class TimelineRenderer {
   }
 
   private drawTrashIconAt(ts: number, id: string) {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
+    const centerY = this.TimelineCenterY()
     const x = this.timeToPosition(ts)
     const boxW = 28
     const boxH = 28
@@ -975,7 +973,7 @@ export class TimelineRenderer {
 
     const xNow = this.timeToPosition(now)
     const xCursor = this.timeToPosition(cursor)
-    const spanY = this.getCenterY() + this.spanRows.cursorNow
+    const spanY = this.TimelineCenterY() + this.spanRows.cursorNow
 
     // Compute visible endpoints; arrows if off-screen
     const leftX = Math.min(xNow, xCursor)
@@ -1188,7 +1186,7 @@ export class TimelineRenderer {
   // Draw an instant (timestamp) on the timeline with optional label
   public drawInstant(timestamp: number, label?: string, formatInfo?: Partial<InstantFormatInfo>): void {
     const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
+    const centerY = this.TimelineCenterY()
     
     // Default format info
     const defaultFormat: InstantFormatInfo = {
