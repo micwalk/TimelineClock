@@ -135,12 +135,19 @@ export class TimelineRenderer {
     // Determine tiers
     const { tier0, tier1, tier2 } = this.pickTickTiers()
 
-    // Draw low tier (unlabeled)
-    this.drawTickTier(tier0, 5, false, false)
-    // Draw middle tier (labeled)
-    this.drawTickTier(tier1, 10, true, false)
-    // Draw high tier (labeled, bold, longest)
-    this.drawTickTier(tier2, 20, true, true)
+    const pxPerMs = this.screenWidth / this.timeWidth
+    const spacing0 = tier0.ms * pxPerMs
+    const spacing1 = tier1.ms * pxPerMs
+    const spacing2 = tier2.ms * pxPerMs
+
+    const style0 = this.computeTickStyle('low', spacing0)
+    const style1 = this.computeTickStyle('mid', spacing1)
+    const style2 = this.computeTickStyle('high', spacing2)
+
+    // Draw tiers with dynamic heights and label fades
+    this.drawTickTier(tier0, style0)
+    this.drawTickTier(tier1, style1)
+    this.drawTickTier(tier2, style2)
   }
 
   private getTickUnits(): { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }[] {
@@ -178,7 +185,7 @@ export class TimelineRenderer {
     return { tier0: units[lowIdx], tier1: units[middleIdx], tier2: units[highIdx] }
   }
 
-  private drawTickTier(unit: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }, tickHalfHeightPx: number, drawLabels: boolean, bold: boolean) {
+  private drawTickTier(unit: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }, style: { halfHeight: number; labelAlpha: number; fontSizePx: number; bold: boolean }) {
     const dpr = window.devicePixelRatio || 1
     const centerY = (this.canvas.height / dpr) / 2
     this.ctx.save()
@@ -193,18 +200,21 @@ export class TimelineRenderer {
         for (let t = first; t <= this.timeEnd; t += unitMs) {
           const x = this.timeToPosition(t)
           this.ctx.beginPath()
-          this.ctx.moveTo(x, centerY - tickHalfHeightPx)
-          this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+          this.ctx.moveTo(x, centerY - style.halfHeight)
+          this.ctx.lineTo(x, centerY + style.halfHeight)
           this.ctx.stroke()
 
-          if (drawLabels) {
+          if (style.labelAlpha > 0) {
             const label = this.formatTickLabel(t, unitMs, unit)
+            this.ctx.save()
+            this.ctx.globalAlpha = style.labelAlpha
             this.ctx.fillStyle = '#ffffff'
-            this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+            this.ctx.font = `${style.bold ? 'bold ' : ''}${Math.round(style.fontSizePx)}px monospace`
             this.ctx.textAlign = 'center'
             this.ctx.textBaseline = 'alphabetic'
-            const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+            const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
             this.ctx.fillText(label, x, centerY + labelYOffset)
+            this.ctx.restore()
           }
         }
         this.ctx.restore()
@@ -214,18 +224,21 @@ export class TimelineRenderer {
       for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
         const x = this.timeToPosition(t)
         this.ctx.beginPath()
-        this.ctx.moveTo(x, centerY - tickHalfHeightPx)
-        this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+        this.ctx.moveTo(x, centerY - style.halfHeight)
+        this.ctx.lineTo(x, centerY + style.halfHeight)
         this.ctx.stroke()
 
-        if (drawLabels) {
+        if (style.labelAlpha > 0) {
           const label = this.formatTickLabel(t, unitMs, unit)
+          this.ctx.save()
+          this.ctx.globalAlpha = style.labelAlpha
           this.ctx.fillStyle = '#ffffff'
-          this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+          this.ctx.font = `${style.bold ? 'bold ' : ''}${Math.round(style.fontSizePx)}px monospace`
           this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'alphabetic'
-          const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+          const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
           this.ctx.fillText(label, x, centerY + labelYOffset)
+          this.ctx.restore()
         }
       }
     } else {
@@ -235,24 +248,57 @@ export class TimelineRenderer {
       while (t <= this.timeEnd) {
         const x = this.timeToPosition(t)
         this.ctx.beginPath()
-        this.ctx.moveTo(x, centerY - tickHalfHeightPx)
-        this.ctx.lineTo(x, centerY + tickHalfHeightPx)
+        this.ctx.moveTo(x, centerY - style.halfHeight)
+        this.ctx.lineTo(x, centerY + style.halfHeight)
         this.ctx.stroke()
 
-        if (drawLabels) {
+        if (style.labelAlpha > 0) {
           const label = this.formatTickLabel(t, unit.ms, unit)
+          this.ctx.save()
+          this.ctx.globalAlpha = style.labelAlpha
           this.ctx.fillStyle = '#ffffff'
-          this.ctx.font = `${bold ? 'bold ' : ''}12px monospace`
+          this.ctx.font = `${style.bold ? 'bold ' : ''}${Math.round(style.fontSizePx)}px monospace`
           this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'alphabetic'
-          const labelYOffset = tickHalfHeightPx + (bold ? 26 : 20)
+          const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
           this.ctx.fillText(label, x, centerY + labelYOffset)
+          this.ctx.restore()
         }
 
         t = this.addCalendar(t, unit.calendarUnit!, 1)
       }
     }
     this.ctx.restore()
+  }
+
+  private computeTickStyle(tier: 'low' | 'mid' | 'high', spacingPx: number): { halfHeight: number; labelAlpha: number; fontSizePx: number; bold: boolean } {
+    const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
+    const smoothstep = (edge0: number, edge1: number, x: number) => {
+      const t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
+      return t * t * (3 - 2 * t)
+    }
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+    if (tier === 'low') {
+      const tH = smoothstep(8, 40, spacingPx)
+      const halfHeight = lerp(2, 6, tH)
+      return { halfHeight, labelAlpha: 0, fontSizePx: 10, bold: false }
+    }
+    if (tier === 'mid') {
+      const tH = smoothstep(40, 160, spacingPx)
+      const halfHeight = lerp(5, 10, tH)
+      const tAlpha = smoothstep(90, 140, spacingPx)
+      const tFont = smoothstep(100, 180, spacingPx)
+      const fontSizePx = lerp(10, 12, tFont)
+      return { halfHeight, labelAlpha: tAlpha, fontSizePx, bold: false }
+    }
+    // high tier
+    const tH = smoothstep(120, 260, spacingPx)
+    const halfHeight = lerp(10, 20, tH)
+    const tAlpha = smoothstep(160, 220, spacingPx)
+    const tFont = smoothstep(160, 240, spacingPx)
+    const fontSizePx = lerp(12, 14, tFont)
+    return { halfHeight, labelAlpha: tAlpha, fontSizePx, bold: true }
   }
 
   private formatTickLabel(timestamp: number, unitMs: number, unit?: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }): string {
