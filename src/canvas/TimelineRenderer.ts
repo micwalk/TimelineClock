@@ -42,7 +42,7 @@ export class TimelineRenderer {
   // Saved instants and hit targets for interactions
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'instant-fav'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
   private editingSpanId: string | null = null
@@ -150,6 +150,15 @@ export class TimelineRenderer {
     this.drawNowInstant() // This now draws the line, label, and time string
     // Draw saved instants
     this.drawSavedInstants()
+    // Always draw implied spans for favorite instants
+    const favs = this.savedStore.getSnapshot().filter(x => !!x.favorite)
+    const centerY = this.TimelineCenterY()
+    let favRow = 0
+    for (const f of favs) {
+      const y = centerY + this.spanRows.instantNow + 60 + favRow * 30
+      this.drawInstantNowSpan(f.tsEpochMs, y)
+      favRow++
+    }
     if (this.viewFocusMode === 'cursor') {
       this.drawCursorInstant()
       this.drawCursorNowSpan()
@@ -554,7 +563,7 @@ export class TimelineRenderer {
 
   // Render all saved instants with label editing and delete icon
   private drawSavedInstants() {
-    const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label }))
+    const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label, favorite: !!rec.favorite }))
     for (const s of saved) {
       const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
       const label = s.label && s.label.length > 0 ? s.label : '(unnamed)'
@@ -576,6 +585,15 @@ export class TimelineRenderer {
       const h = 30
       const rect = { x: x - w / 2, y: centerY + 50, w, h }
       this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
+      // Favorite star next to label with hit target
+      {
+        const starSize = 20
+        const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
+        const starCx = starRect.x + starRect.w / 2
+        const starCy = starRect.y + starRect.h / 2
+        this.drawStarIcon(starCx, starCy, !!s.favorite)
+        this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
+      }
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
@@ -726,6 +744,28 @@ export class TimelineRenderer {
     }
   }
 
+  private drawStarIcon(cx: number, cy: number, filled: boolean) {
+    const r = 8
+    this.ctx.save()
+    this.ctx.beginPath()
+    for (let i = 0; i < 10; i++) {
+      const angle = (Math.PI / 5) * i - Math.PI / 2
+      const radius = i % 2 === 0 ? r : r * 0.5
+      const x = cx + Math.cos(angle) * radius
+      const y = cy + Math.sin(angle) * radius
+      if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y)
+    }
+    this.ctx.closePath()
+    if (filled) {
+      this.ctx.fillStyle = '#facc15'
+      this.ctx.fill()
+    }
+    this.ctx.strokeStyle = '#facc15'
+    this.ctx.lineWidth = 2
+    this.ctx.stroke()
+    this.ctx.restore()
+  }
+
   // removed unused drawCursorTrashIcon
 
   // Public getters for state variables
@@ -819,6 +859,14 @@ export class TimelineRenderer {
           if (newId) this.setViewFocus('instant', newId)
           return
         }
+        if (target.type === 'instant-fav' && target.id) {
+          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
+          if (inst) {
+            this.savedStore.setFavorite(target.id, !inst.favorite)
+            this.stateVersion++
+          }
+          return
+        }
         if (target.type === 'span-label' && target.id) {
           this.editingSpanId = target.id
           return
@@ -852,6 +900,12 @@ export class TimelineRenderer {
         }
       }
     }
+  }
+
+  // Exposed for list UI to toggle favorite status
+  public toggleFavorite(id: string, value: boolean) {
+    this.savedStore.setFavorite(id, value)
+    this.stateVersion++
   }
 
   public handleDoubleClick(x: number, y: number) {
@@ -1428,7 +1482,7 @@ export class TimelineRenderer {
     const list: InstantView[] = [
       { kind: 'now', tsEpochMs: nowTs },
       { kind: 'cursor', tsEpochMs: centerTs, visible: focus.mode === 'cursor' },
-      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label }))
+      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label, favorite: !!s.favorite }))
     ]
     list.sort((a, b) => a.tsEpochMs - b.tsEpochMs)
     return list
@@ -1451,6 +1505,13 @@ export class TimelineRenderer {
       if (a) {
         const now = Date.now()
         spans.push({ kind: 'implied', label: 'selected to now', start: { id: a.id, name: a.label || '(unnamed)', tsEpochMs: a.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - a.tsEpochMs })
+      }
+    }
+    // Implied: favorite → now
+    for (const it of this.savedStore.getSnapshot()) {
+      if (it.favorite) {
+        const now = Date.now()
+        spans.push({ kind: 'implied', label: 'Favorite', start: { id: it.id, name: it.label || '(unnamed)', tsEpochMs: it.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - it.tsEpochMs })
       }
     }
     // Implied: selected → previous

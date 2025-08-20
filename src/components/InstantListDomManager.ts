@@ -217,19 +217,24 @@ export class InstantListDomManager {
 
 		// Default Instants tab
 		const items: InstantView[] = renderer.getAllInstantsView()
-		const entries: Array<{ key: string; ts: number; name: string; focused: boolean; instantKind: 'now'|'cursor'|'instant'; id?: string }> = []
+		const showOnlyFavorites = this.activeTab === 'favorites'
+		const entries: Array<{ key: string; ts: number; name: string; focused: boolean; instantKind: 'now'|'cursor'|'instant'; id?: string; favorite?: boolean }> = []
 		for (const it of items) {
 			if (it.kind === 'now') {
-				entries.push({ key: 'now', ts: it.tsEpochMs, name: 'Now', focused: focus.mode === 'now', instantKind: 'now' })
+				if (!showOnlyFavorites) entries.push({ key: 'now', ts: it.tsEpochMs, name: 'Now', focused: focus.mode === 'now', instantKind: 'now' })
 				continue
 			}
 			if (it.kind === 'cursor') {
 				if (it.visible) {
-					entries.push({ key: 'cursor', ts: it.tsEpochMs, name: 'Cursor', focused: focus.mode === 'cursor', instantKind: 'cursor' })
+					if (!showOnlyFavorites) entries.push({ key: 'cursor', ts: it.tsEpochMs, name: 'Cursor', focused: focus.mode === 'cursor', instantKind: 'cursor' })
 				}
 				continue
 			}
-			entries.push({ key: `i:${it.id}`, ts: it.tsEpochMs, name: it.label || '(unnamed)', focused: focus.mode === 'instant' && focus.focusedInstantId === it.id, instantKind: 'instant', id: it.id })
+			// saved instant
+			const isFav = it.kind === 'saved' ? !!it.favorite : false
+			if (!showOnlyFavorites || isFav) {
+				entries.push({ key: `i:${it.id!}`, ts: it.tsEpochMs, name: it.label || '(unnamed)', focused: focus.mode === 'instant' && focus.focusedInstantId === it.id, instantKind: 'instant', id: it.id, favorite: isFav })
+			}
 		}
 
 		// Reconcile DOM nodes in sorted order
@@ -251,16 +256,33 @@ export class InstantListDomManager {
 				card.style.cursor = 'pointer'
 				card.style.willChange = 'transform'
 				card.onpointerdown = (ev) => { ev.stopPropagation() }
-				const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'
+				const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'; name.style.display = 'flex'; name.style.alignItems = 'center'; name.style.gap = '6px'
+				const star = document.createElement('span'); star.dataset.role = 'star'; star.textContent = '☆'; star.style.color = '#facc15'; star.style.cursor = 'pointer'
 				const dt = document.createElement('div'); dt.dataset.role = 'dt'; dt.style.font = 'bold 14px monospace'
 				const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.opacity = '0.9'; dur.style.whiteSpace = 'pre'
+				name.appendChild(star)
 				card.appendChild(name); card.appendChild(dt); card.appendChild(dur)
 			}
 			// Update content
 			const nameEl = card.querySelector('[data-role="name"]') as HTMLElement
+			const starEl = card.querySelector('[data-role="star"]') as HTMLElement
 			const dtEl = card.querySelector('[data-role="dt"]') as HTMLElement
 			const durEl = card.querySelector('[data-role="dur"]') as HTMLElement
 			nameEl.textContent = en.name
+			nameEl.insertBefore(starEl, nameEl.firstChild)
+			if (en.instantKind === 'instant') {
+				starEl.style.visibility = 'visible'
+				const isFav = !!en.favorite
+				starEl.textContent = isFav ? '★' : '☆'
+				starEl.onclick = (ev) => {
+					ev.stopPropagation()
+					renderer.toggleFavorite(en.id!, !isFav)
+					this.listEl._lastRenderAt = 0
+				}
+			} else {
+				starEl.style.visibility = 'hidden'
+				starEl.onclick = null
+			}
 			dtEl.textContent = new Date(en.ts).toLocaleString()
 			if (en.instantKind === 'now') {
 				durEl.textContent = ' 00:00:00'

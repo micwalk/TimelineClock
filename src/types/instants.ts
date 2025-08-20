@@ -5,6 +5,7 @@ export interface InstantRecord {
 	id: string
 	tsEpochMs: number
 	label: string
+	favorite?: boolean
 }
 
 // View-only kinds
@@ -26,6 +27,7 @@ export interface SavedInstantView {
 	id: string
 	tsEpochMs: number
 	label: string
+	favorite: boolean
 }
 
 export type InstantView = NowInstant | CursorInstant | SavedInstantView
@@ -46,11 +48,11 @@ export function compareByTsAsc(a: { tsEpochMs: number }, b: { tsEpochMs: number 
 }
 
 export function createSavedInstant(tsEpochMs: number, label = ''): InstantRecord {
-	return { id: `i_${Math.random().toString(36).slice(2, 9)}`, tsEpochMs, label }
+	return { id: `i_${Math.random().toString(36).slice(2, 9)}`, tsEpochMs, label, favorite: false }
 }
 
 export function toViewSaved(r: InstantRecord): SavedInstantView {
-	return { kind: 'saved', id: r.id, tsEpochMs: r.tsEpochMs, label: r.label }
+	return { kind: 'saved', id: r.id, tsEpochMs: r.tsEpochMs, label: r.label, favorite: !!r.favorite }
 }
 
 export function toCursor(tsEpochMs: number, visible: boolean): CursorInstant {

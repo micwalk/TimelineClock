@@ -20,7 +20,7 @@ export class SavedInstantsStore {
 
 	create(tsEpochMs: number, label = ''): string {
 		const id = `i_${Math.random().toString(36).slice(2, 9)}`
-		this.items.push({ id, tsEpochMs, label })
+		this.items.push({ id, tsEpochMs, label, favorite: false })
 		this.persist()
 		return id
 	}
@@ -34,6 +34,13 @@ export class SavedInstantsStore {
 		const it = this.items.find(x => x.id === id)
 		if (!it) return
 		it.label = label
+		this.persist()
+	}
+
+	setFavorite(id: string, value: boolean) {
+		const it = this.items.find(x => x.id === id)
+		if (!it) return
+		it.favorite = value
 		this.persist()
 	}
 
@@ -57,7 +64,7 @@ export class SavedInstantsStore {
 			if (legacy) {
 				const data = JSON.parse(legacy) as { savedInstants?: { id: string; ts: number; label: string }[] }
 				if (Array.isArray(data.savedInstants)) {
-					this.items = data.savedInstants.map(x => ({ id: x.id, tsEpochMs: x.ts, label: x.label }))
+					this.items = data.savedInstants.map(x => ({ id: x.id, tsEpochMs: x.ts, label: x.label, favorite: false }))
 					this.persist()
 				}
 			}
