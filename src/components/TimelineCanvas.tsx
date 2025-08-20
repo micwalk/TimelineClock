@@ -267,6 +267,16 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         goToPreviousInstant()
         return
       }
+      if (lower === 'q') {
+        e.preventDefault()
+        rendererRef.current?.navigateFocusHistory(-1)
+        return
+      }
+      if (lower === 'e') {
+        e.preventDefault()
+        rendererRef.current?.navigateFocusHistory(1)
+        return
+      }
     }
     window.addEventListener('keydown', onKeyDown)
 

@@ -51,14 +51,28 @@ export class TimelineRenderer {
   // Visibility toggles for implied spans
   private showImpliedSelectedNow: boolean = true
   private showImpliedSelectedPrev: boolean = true
+  // Focus history (previous = previously focused instant)
+  private focusHistory: string[] = []
+  private focusHistoryIndex: number = -1
+  private suppressHistoryPush: boolean = false
+
+  
+  // Recentered vertical baseline for the timeline: lesser of one-third of canvas CSS height or constant pixels
+  private TimelineCenterY(): number {
+    // const dpr = window.devicePixelRatio || 1
+    // const cssHeight = this.canvas.height / dpr
+    //return Math.min(cssHeight / 3, 130)
+    
+    return 130 // TODO: Make responsive
+  }
 
   // Centralized vertical offsets for span rows
   private readonly spanRows = {
-    cursorNow: -80, // Aka Row 0
+    cursorNow: -100, // Aka Row 0
+    selectedNow: -70, // FKA Row 2
     selectedCursor: 170, // Aka Row 1
-    selectedNow: 200, // Aka Row 2
-    selectedPrev: 230, // Aka Row 3
-    focusedSaved: 260, // Aka Row 4
+    selectedPrev: 200, // Aka Row 3
+    focusedSaved: 230, // Aka Row 4
   } as const
 
   // Zoom configuration
@@ -202,7 +216,12 @@ export class TimelineRenderer {
 
     // Draw implied spans for selected/current instant
     const selected = this.currentSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.currentSelectedInstantId) : null
-    const prev = this.previousSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.previousSelectedInstantId) : null
+    // Previously focused instant for the purple span
+    const prev = (() => {
+      const id = this.getPrevFocusedInstantId()
+      if (!id) return null
+      return this.savedStore.getSnapshot().find(si => si.id === id) || null
+    })()
     // Row 1: Selected ↔ Cursor (when focusing cursor), or Selected ↔ Focused Instant (when focusing a different instant)
     if (selected) {
       const y = this.TimelineCenterY() + this.spanRows.selectedCursor
@@ -272,6 +291,8 @@ export class TimelineRenderer {
         focusedSpanId: this.focusedSpanId,
         currentSelectedInstantId: this.currentSelectedInstantId,
         previousSelectedInstantId: this.previousSelectedInstantId,
+        focusHistory: this.focusHistory,
+        focusHistoryIndex: this.focusHistoryIndex,
       }
       localStorage.setItem('timeline.state', JSON.stringify(payload))
       this.stateVersion++
@@ -282,7 +303,7 @@ export class TimelineRenderer {
     try {
       const raw = localStorage.getItem('timeline.state')
       if (!raw) return
-      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'|'span'; focusedInstantId: string|null; focusedSpanId: string|null; currentSelectedInstantId: string|null; previousSelectedInstantId: string|null }>
+      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'|'span'; focusedInstantId: string|null; focusedSpanId: string|null; currentSelectedInstantId: string|null; previousSelectedInstantId: string|null; focusHistory: string[]; focusHistoryIndex: number }>
       if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
       if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
       if (data.viewFocusMode === 'now' || data.viewFocusMode === 'cursor' || data.viewFocusMode === 'instant' || data.viewFocusMode === 'span') this.viewFocusMode = data.viewFocusMode
@@ -290,6 +311,8 @@ export class TimelineRenderer {
       if (typeof data.focusedSpanId === 'string' || data.focusedSpanId === null) this.focusedSpanId = data.focusedSpanId ?? null
       if (typeof data.currentSelectedInstantId === 'string' || data.currentSelectedInstantId === null) this.currentSelectedInstantId = data.currentSelectedInstantId ?? null
       if (typeof data.previousSelectedInstantId === 'string' || data.previousSelectedInstantId === null) this.previousSelectedInstantId = data.previousSelectedInstantId ?? null
+      if (Array.isArray(data.focusHistory)) this.focusHistory = data.focusHistory
+      if (typeof data.focusHistoryIndex === 'number') this.focusHistoryIndex = data.focusHistoryIndex
     } catch (err) { void err }
   }
 
@@ -649,7 +672,8 @@ export class TimelineRenderer {
     for (const s of saved) {
       const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
       const isSelected = this.currentSelectedInstantId === s.id
-      const isPrevSelected = this.previousSelectedInstantId === s.id
+      const prevId = this.getPrevFocusedInstantId()
+      const isPrevFocused = !!prevId && prevId === s.id
       const label = s.label && s.label.length > 0 ? s.label : '?'
       let lineColor = '#ffffff'
       let borderColor = '#ffffff'
@@ -668,7 +692,7 @@ export class TimelineRenderer {
         glowColor = '#2563eb'
         glowBlur = 8
         lineWidth = 3
-      } else if (isPrevSelected) {
+      } else if (isPrevFocused) {
         lineColor = '#8b5cf6' // previously selected: purple
         borderColor = '#8b5cf6'
         glowColor = '#8b5cf6'
@@ -796,6 +820,9 @@ export class TimelineRenderer {
     startFocus?: { kind: 'instant'|'cursor'|'now'; id?: string }
     endFocus?: { kind: 'instant'|'cursor'|'now'; id?: string }
   }) {
+    if(aTs === bTs) {
+      return
+    }
     const spanY = opts.y
     const xA = this.timeToPosition(aTs)
     const xB = this.timeToPosition(bTs)
@@ -804,9 +831,12 @@ export class TimelineRenderer {
     const aVisible = xA >= 0 && xA <= this.screenWidth
     const bVisible = xB >= 0 && xB <= this.screenWidth
     // If both endpoints are off-screen, skip drawing entirely
-    if (!aVisible && !bVisible) {
+    // BUT if one is left and the other is right (spanning across), we still draw
+    const spansScreen = leftX < 0 && rightX > this.screenWidth
+    if (!aVisible && !bVisible && !spansScreen) {
       return
     }
+
     const clampedLeft = Math.max(0, leftX)
     const clampedRight = Math.min(this.screenWidth, rightX)
 
@@ -1030,13 +1060,6 @@ export class TimelineRenderer {
     return progress * this.screenWidth
   }
 
-  // Recentered vertical baseline for the timeline: lesser of one-third of canvas CSS height or constant pixels
-  private TimelineCenterY(): number {
-    const dpr = window.devicePixelRatio || 1
-    const cssHeight = this.canvas.height / dpr
-
-    return Math.min(cssHeight / 3, 100)
-  }
 
   private computeTimeBoxRect(timestamp: number): { x: number; y: number; w: number; h: number } {
     const centerY = this.TimelineCenterY()
@@ -1577,10 +1600,56 @@ export class TimelineRenderer {
       }
       this.currentSelectedInstantId = instantId ?? null
     }
+    // If leaving an instant focus to cursor, push current focused instant into history tail
+    const prevMode = this.viewFocusMode
+    const leavingInstantToCursor = (prevMode === 'instant' && mode === 'cursor' && this.focusedInstantId)
     this.viewFocusMode = mode
-    this.focusedInstantId = mode === 'instant' ? (instantId ?? null) : this.focusedInstantId
+    // Update focused instant and push into history unless suppressed
+    if (mode === 'instant') {
+      const nextId = instantId ?? null
+      const prevId = this.focusedInstantId
+      this.focusedInstantId = nextId
+      if (!this.suppressHistoryPush && nextId && nextId !== prevId) {
+        // If navigating within history (index not at tail), drop forward history
+        if (this.focusHistoryIndex >= 0 && this.focusHistoryIndex < this.focusHistory.length - 1) {
+          this.focusHistory = this.focusHistory.slice(0, this.focusHistoryIndex + 1)
+        }
+        this.focusHistory.push(nextId)
+        this.focusHistoryIndex = this.focusHistory.length - 1
+      }
+    }
     this.focusedSpanId = mode === 'span' ? (spanId ?? null) : this.focusedSpanId
+    if (leavingInstantToCursor) {
+      const id = this.focusedInstantId!
+      if (!this.suppressHistoryPush) {
+        if (this.focusHistoryIndex >= 0 && this.focusHistoryIndex < this.focusHistory.length - 1) {
+          this.focusHistory = this.focusHistory.slice(0, this.focusHistoryIndex + 1)
+        }
+        this.focusHistory.push(id)
+        this.focusHistoryIndex = this.focusHistory.length - 1
+      }
+    }
     this.persistState()
+  }
+
+  private getPrevFocusedInstantId(): string | null {
+    if (this.focusHistoryIndex > 0) return this.focusHistory[this.focusHistoryIndex - 1] ?? null
+    return null
+  }
+
+  public navigateFocusHistory(delta: -1 | 1) {
+    if (this.focusHistory.length === 0) return
+    let nextIndex = this.focusHistoryIndex + delta
+    nextIndex = Math.max(0, Math.min(this.focusHistory.length - 1, nextIndex))
+    if (nextIndex === this.focusHistoryIndex) return
+    const nextId = this.focusHistory[nextIndex]
+    if (!nextId) return
+    this.suppressHistoryPush = true
+    this.setViewFocus('instant', nextId)
+    this.suppressHistoryPush = false
+    this.focusHistoryIndex = nextIndex
+    const ts = this.savedStore.getSnapshot().find(si => si.id === nextId)?.tsEpochMs
+    if (typeof ts === 'number') this.setTimeCenter(ts)
   }
 
   // Select an instant without changing focus mode
@@ -1755,9 +1824,10 @@ export class TimelineRenderer {
       }
     }
     // Removed: favorites implied spans are now saved spans managed by spans store
-    // Implied: selected → previous
-    if (this.currentSelectedInstantId && this.previousSelectedInstantId) {
-      const a = savedMap.get(this.previousSelectedInstantId)
+    // Implied: selected → previously focused
+    if (this.currentSelectedInstantId) {
+      const prevId = this.getPrevFocusedInstantId()
+      const a = savedMap.get(prevId)
       const b = savedMap.get(this.currentSelectedInstantId)
       if (a && b) {
         spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.showImpliedSelectedPrev })
