@@ -1118,7 +1118,7 @@ export class TimelineRenderer {
     })()
     const durText = this.formatDurationHMS(Math.abs(diffMs))
     const sinceOrUntil = diffMs <= 0 ? 'since' : 'until'
-    const label = `${durText} ${sinceOrUntil} ${name}.`
+    const label = `Now ${durText} ${sinceOrUntil} ${name}.`
     const font = 'bold 14px monospace'
     const labelWidth = this.measureTextWidth(font, label) + 16
     const labelHeight = 28
