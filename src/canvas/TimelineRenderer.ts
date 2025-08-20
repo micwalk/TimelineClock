@@ -627,9 +627,9 @@ export class TimelineRenderer {
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
-      // Only include overlay input for the one being edited
+      // Only include overlay input for the one being edited; ensure we use the saved label, not the time string
       if (this.editingInstantId === s.id) {
-        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
+        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: label, focused: true })
       }
     }
   }
@@ -769,7 +769,8 @@ export class TimelineRenderer {
     if (opts.spanId) {
       this.hitTargets.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight } })
       if (this.editingSpanId === opts.spanId) {
-        this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: labelText, focused: true })
+        const initialText = (typeof opts.headerLabel === 'string' && opts.headerLabel.length > 0) ? opts.headerLabel : labelText
+        this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: initialText, focused: true })
       }
     }
 
@@ -1479,6 +1480,13 @@ export class TimelineRenderer {
     this.spansStore.updateLabel(id, newLabel)
     this.persistState()
     this.editingSpanId = null
+  }
+
+  public deleteSpan(id: string) {
+    if (this.focusedSpanId === id) this.focusedSpanId = null
+    this.spansStore.delete(id)
+    this.stateVersion++
+    this.persistState()
   }
 
   public endEditing() {

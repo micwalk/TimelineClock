@@ -24,8 +24,9 @@ export class InstantListDomManager {
 		}
 		const version = renderer.getStateVersion?.() ?? 0
 		const nowTs = Date.now()
+		const editingActive = !!(this.listEl.querySelector('input[data-role="edit-input"]') as HTMLInputElement | null)
 		const tabChanged = this.lastRenderedTab !== this.activeTab
-		if (!tabChanged && this.listEl._lastVersion === version && this.listEl._lastRenderAt && nowTs - this.listEl._lastRenderAt < 1000) {
+		if (!editingActive && !tabChanged && this.listEl._lastVersion === version && this.listEl._lastRenderAt && nowTs - this.listEl._lastRenderAt < 1000) {
 			// throttle frequent refreshes
 			return
 		}
@@ -133,6 +134,13 @@ export class InstantListDomManager {
 			const spans: SpanView[] = typeof (renderer as unknown as { getAllSpansView?: () => SpanView[] }).getAllSpansView === 'function'
 				? ((renderer as unknown as { getAllSpansView: () => SpanView[] }).getAllSpansView())
 				: []
+			// If an inline edit input is present, avoid re-rendering the list to preserve focus
+			const editingInput = this.listEl.querySelector('input[data-role="edit-input"]') as HTMLInputElement | null
+			if (editingInput && document.activeElement === editingInput) {
+				this.lastRenderedTab = this.activeTab
+				this.listEl._lastRenderAt = Date.now()
+				return
+			}
 			const presentKeys = new Set<string>()
 			let focusedRowEl: HTMLElement | null = null
 			for (let idx = 0; idx < spans.length; idx++) {
@@ -144,7 +152,7 @@ export class InstantListDomManager {
 					card = document.createElement('div')
 					card.dataset.key = key
 					card.style.display = 'grid'
-					card.style.gridTemplateColumns = '1.2fr 1.6fr 1fr 1.2fr 1.1fr 1.2fr 1fr'
+					card.style.gridTemplateColumns = '1.2fr 1.6fr 1fr 1.2fr 1.1fr 1.2fr 1fr 0.8fr'
 					card.style.alignItems = 'center'
 					card.style.background = 'rgba(0,0,0,0.6)'
 					card.style.color = '#ffffff'
@@ -154,19 +162,29 @@ export class InstantListDomManager {
 					card.style.willChange = 'transform'
 					card.onpointerdown = (ev) => { ev.stopPropagation() }
 					const vis = document.createElement('div'); vis.dataset.role = 'vis'; vis.style.font = 'bold 16px Arial'; vis.style.textAlign = 'center'
-					const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'
+					const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'; name.style.display = 'flex'; name.style.alignItems = 'center'; name.style.gap = '8px'
+					const btnEdit = document.createElement('button'); btnEdit.dataset.role = 'edit'; btnEdit.type = 'button'; btnEdit.style.background = 'transparent'; btnEdit.style.border = 'none'; btnEdit.style.cursor = 'pointer'; btnEdit.style.padding = '0'; btnEdit.style.display = 'inline-flex'; btnEdit.style.alignItems = 'center'
+					btnEdit.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a3e635" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L8.25 18.463 4.5 19.5l1.037-3.75L16.862 3.487z"/><path d="M19.5 7.5l-3-3"/></svg>'
+					const nameText = document.createElement('span'); nameText.dataset.role = 'name-text'
 					const sname = document.createElement('div'); sname.dataset.role = 'sname'; sname.style.font = 'bold 14px Arial'
 					const stime = document.createElement('div'); stime.dataset.role = 'stime'; stime.style.font = 'bold 14px monospace'; stime.style.textAlign = 'right'
 					const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.textAlign = 'center'
 					const etime = document.createElement('div'); etime.dataset.role = 'etime'; etime.style.font = 'bold 14px monospace'; etime.style.textAlign = 'right'
 					const ename = document.createElement('div'); ename.dataset.role = 'ename'; ename.style.font = 'bold 14px Arial'
+					const actions = document.createElement('div'); actions.dataset.role = 'actions'; actions.style.display = 'flex'; actions.style.justifyContent = 'flex-end'; actions.style.gap = '10px'
+					const btnDelete = document.createElement('button'); btnDelete.dataset.role = 'delete'; btnDelete.type = 'button'; btnDelete.style.background = 'transparent'; btnDelete.style.border = 'none'; btnDelete.style.cursor = 'pointer'; btnDelete.style.padding = '0'; btnDelete.style.display = 'inline-flex'; btnDelete.style.alignItems = 'center'
+					btnDelete.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>'
+					actions.appendChild(btnDelete)
 					card.appendChild(vis)
+					name.appendChild(btnEdit)
+					name.appendChild(nameText)
 					card.appendChild(name)
 					card.appendChild(sname)
 					card.appendChild(stime)
 					card.appendChild(dur)
 					card.appendChild(etime)
 					card.appendChild(ename)
+					card.appendChild(actions)
 				}
 				const isFocused = (focus.mode === 'span') && (s.kind === 'saved') && (focus.focusedSpanId === s.id)
 				if (s.kind !== 'saved') {
@@ -175,14 +193,20 @@ export class InstantListDomManager {
 				}
 				const visEl = card.querySelector('[data-role="vis"]') as HTMLElement
 				const nameEl = card.querySelector('[data-role="name"]') as HTMLElement
+				const editBtn = card.querySelector('[data-role="edit"]') as HTMLButtonElement
+				const nameTextEl = card.querySelector('[data-role="name-text"]') as HTMLElement | null
 				const snameEl = card.querySelector('[data-role="sname"]') as HTMLElement
 				const stimeEl = card.querySelector('[data-role="stime"]') as HTMLElement
 				const durEl = card.querySelector('[data-role="dur"]') as HTMLElement
 				const etimeEl = card.querySelector('[data-role="etime"]') as HTMLElement
 				const enameEl = card.querySelector('[data-role="ename"]') as HTMLElement
+				const actionsEl = card.querySelector('[data-role="actions"]') as HTMLElement
+				const btnDelete = actionsEl.querySelector('[data-role="delete"]') as HTMLButtonElement
 				const saved = (s.kind === 'saved')
 				visEl.textContent = '👁'
-				nameEl.textContent = s.label
+				// if not editing, ensure visible label
+				const existingInput = nameEl.querySelector('input[data-role="edit-input"]') as HTMLInputElement | null
+				if (!existingInput && nameTextEl) nameTextEl.textContent = s.label
 				snameEl.textContent = s.start.name
 				stimeEl.textContent = new Date(s.start.tsEpochMs).toLocaleString()
 				{
@@ -212,6 +236,49 @@ export class InstantListDomManager {
 					}
 					const isVisible = (s.kind === 'saved') ? !!(s as { visible?: boolean }).visible : true
 					visEl.style.opacity = isVisible ? '1' : '0.3'
+					// Actions for saved spans
+					editBtn.style.visibility = 'visible'
+					btnDelete.style.visibility = 'visible'
+					editBtn.onclick = (ev) => {
+						ev.stopPropagation()
+						if (nameEl.querySelector('input[data-role="edit-input"]')) return
+						const input = document.createElement('input')
+						input.type = 'text'
+						input.dataset.role = 'edit-input'
+						input.value = s.label
+						input.style.font = 'bold 16px Arial'
+						input.style.color = '#ffffff'
+						input.style.background = 'transparent'
+						input.style.border = '1px solid #22d3ee'
+						input.style.borderRadius = '4px'
+						input.style.padding = '2px 6px'
+						input.style.minWidth = '120px'
+						const spanText = nameTextEl
+						if (spanText) nameEl.replaceChild(input, spanText)
+						input.focus(); input.select()
+						const commit = () => {
+							const val = input.value
+							if (spanText) { spanText.textContent = val; nameEl.replaceChild(spanText, input) }
+							renderer.updateSpanLabel(s.id!, val)
+							this.listEl._lastRenderAt = 0
+						}
+						const cancel = () => {
+							if (spanText) nameEl.replaceChild(spanText, input)
+						}
+						input.onkeydown = (e) => {
+							if (e.key === 'Enter') { e.preventDefault(); commit() }
+							if (e.key === 'Escape') { e.preventDefault(); cancel() }
+						}
+						input.onblur = () => { commit() }
+					}
+					btnDelete.onclick = (ev) => {
+						ev.stopPropagation()
+						renderer.deleteSpan(s.id!)
+						this.listEl._lastRenderAt = 0
+					}
+				} else {
+					editBtn.style.visibility = 'hidden'
+					btnDelete.style.visibility = 'hidden'
 				}
 				if (s.kind !== 'saved') {
 					visEl.style.cursor = 'pointer'
