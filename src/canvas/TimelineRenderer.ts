@@ -18,9 +18,6 @@ export class TimelineRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private animationId: number | null = null
-  private zoomLevel: number = 1
-  private panOffset: number = 0
-  private lastUpdateTime: number = 0
 
   // Core timeline state variables
   private screenWidth: number = 0
@@ -30,7 +27,14 @@ export class TimelineRenderer {
   private timeEnd: number = 0 // End of visible timeline
 
   // View behavior
-  private viewMode: 'now' | 'cursor' = 'now'
+  private viewFocusMode: 'now' | 'cursor' | 'instant' = 'now'
+  private focusedInstantId: string | null = null
+
+  // Saved instants and hit targets for interactions
+  private savedInstants: { id: string; ts: number; label: string }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number } }[] = []
+  private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
+  private editingInstantId: string | null = null
 
   // Zoom configuration
   private zoomPercent: number = 0.1 // 10% per step
@@ -47,7 +51,6 @@ export class TimelineRenderer {
     this.setupCanvas()
     this.loadPersistedState()
     this.updateTimelineState()
-    this.lastUpdateTime = Date.now()
   }
 
   private setupCanvas() {
@@ -67,7 +70,7 @@ export class TimelineRenderer {
     this.screenWidth = this.canvas.width / dpr
     
     // Update time center depending on view mode
-    if (this.viewMode === 'now') {
+    if (this.viewFocusMode === 'now') {
       this.timeCenter = Date.now()
     }
     
@@ -81,19 +84,23 @@ export class TimelineRenderer {
     // Update timeline state
     this.updateTimelineState()
     
-    // For now, keep pan offset at 0 to get basic timeline working
-    this.panOffset = 0
-    
     this.clear()
     this.drawTimeline()
     this.drawTimeTicks()
+    this.hitTargets = []
+    this.overlayElements = []
     this.drawNowInstant() // This now draws the line, label, and time string
-    if (this.viewMode === 'cursor') {
+    // Draw saved instants
+    this.drawSavedInstants()
+    if (this.viewFocusMode === 'cursor') {
       this.drawCursorInstant()
       this.drawCursorNowSpan()
+    } else if (this.viewFocusMode === 'instant' && this.focusedInstantId) {
+      const s = this.savedInstants.find(si => si.id === this.focusedInstantId)
+      if (s) {
+        this.drawInstantNowSpan(s.ts)
+      }
     }
-
-    this.lastUpdateTime = Date.now()
   }
 
   private persistState() {
@@ -101,7 +108,9 @@ export class TimelineRenderer {
       const payload = {
         timeWidth: this.timeWidth,
         timeCenter: this.timeCenter,
-        viewMode: this.viewMode,
+        viewFocusMode: this.viewFocusMode,
+        focusedInstantId: this.focusedInstantId,
+        savedInstants: this.savedInstants,
       }
       localStorage.setItem('timeline.state', JSON.stringify(payload))
     } catch {}
@@ -111,10 +120,12 @@ export class TimelineRenderer {
     try {
       const raw = localStorage.getItem('timeline.state')
       if (!raw) return
-      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewMode: 'now'|'cursor' }>
+      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'; focusedInstantId: string|null; savedInstants: {id:string;ts:number;label:string}[] }>
       if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
       if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
-      if (data.viewMode === 'now' || data.viewMode === 'cursor') this.viewMode = data.viewMode
+      if (data.viewFocusMode === 'now' || data.viewFocusMode === 'cursor' || data.viewFocusMode === 'instant') this.viewFocusMode = data.viewFocusMode
+      if (typeof data.focusedInstantId === 'string' || data.focusedInstantId === null) this.focusedInstantId = data.focusedInstantId ?? null
+      if (Array.isArray(data.savedInstants)) this.savedInstants = data.savedInstants
     } catch {}
   }
 
@@ -161,9 +172,6 @@ export class TimelineRenderer {
   }
 
   private drawTimeTicks() {
-    const dpr = window.devicePixelRatio || 1
-    const centerY = (this.canvas.height / dpr) / 2
-
     // Determine tiers
     const { tier0, tier1, tier2 } = this.pickTickTiers()
 
@@ -450,6 +458,38 @@ export class TimelineRenderer {
       labelBorderColor: '#ef4444',
       labelTextColor: '#ef4444',
     })
+    this.drawSaveIconAt(Date.now(), 'save-now')
+  }
+
+  // Render all saved instants with label editing and delete icon
+  private drawSavedInstants() {
+    for (const s of this.savedInstants) {
+      const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
+      const label = s.label && s.label.length > 0 ? s.label : '(unnamed)'
+      this.drawInstant(s.ts, label, {
+        lineColor: isFocused ? '#22d3ee' : '#ffffff',
+        glowColor: isFocused ? '#22d3ee' : undefined,
+        glowBlur: isFocused ? 8 : 0,
+        lineWidth: isFocused ? 3 : 2,
+        labelBackgroundColor: 'rgba(0,0,0,0.8)',
+        labelBorderColor: isFocused ? '#22d3ee' : '#ffffff',
+        labelTextColor: '#ffffff',
+      })
+      this.drawTrashIconAt(s.ts, s.id)
+      // Record label hit target roughly using current font and box metrics similar to drawInstant
+      const dpr = window.devicePixelRatio || 1
+      const centerY = (this.canvas.height / dpr) / 2
+      const x = this.timeToPosition(s.ts)
+      const font = 'bold 16px Arial'
+      const w = this.measureTextWidth(font, label) + 10
+      const h = 30
+      const rect = { x: x - w / 2, y: centerY + 50, w, h }
+      this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
+      // Only include overlay input for the one being edited
+      if (this.editingInstantId === s.id) {
+        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
+      }
+    }
   }
   
   private drawCursorInstant() {
@@ -463,6 +503,8 @@ export class TimelineRenderer {
       labelBorderColor: '#22d3ee',
       labelTextColor: '#22d3ee',
     })
+    // Draw save icon box below
+    this.drawSaveIconAt(this.timeCenter, 'save-cursor')
   }
 
   // Public getters for state variables
@@ -499,12 +541,111 @@ export class TimelineRenderer {
     return this.timeStart + (progress * (this.timeEnd - this.timeStart))
   }
 
+  // Interaction hooks to be called by component
+  public handleClick(x: number, y: number) {
+    // Scan hit targets recorded during render
+    for (const target of this.hitTargets) {
+      const { rect } = target
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+        if (target.type === 'save-now') {
+          this.createInstantAt(Date.now(), '')
+          // focus remains unchanged
+          return
+        }
+        if (target.type === 'save-cursor') {
+          this.createInstantAt(this.timeCenter, '')
+          // transfer focus to new instant
+          const last = this.savedInstants[this.savedInstants.length - 1]
+          if (last) this.setViewFocus('instant', last.id)
+          return
+        }
+        if (target.type === 'instant-trash' && target.id) {
+          const id = target.id
+          const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === id
+          const ts = this.savedInstants.find(si => si.id === id)?.ts
+          this.deleteInstant(id)
+          if (isFocused) {
+            if (typeof ts === 'number') {
+              this.timeCenter = ts
+              this.setViewFocus('cursor')
+            } else {
+              this.setViewFocus('now')
+            }
+          }
+          return
+        }
+        if (target.type === 'instant-label' && target.id) {
+          const inst = this.savedInstants.find(si => si.id === target.id)
+          if (inst) {
+            this.editingInstantId = target.id
+          }
+          return
+        }
+      }
+    }
+  }
+
   private measureTextWidth(font: string, text: string): number {
     this.ctx.save()
     this.ctx.font = font
     const metrics = this.ctx.measureText(text)
     this.ctx.restore()
     return metrics.width
+  }
+
+  private drawSaveIconAt(ts: number, type: 'save-now' | 'save-cursor') {
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const x = this.timeToPosition(ts)
+    const boxW = 28
+    const boxH = 28
+    const y = centerY + 120
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = '#22c55e'
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(x - boxW / 2, y, boxW, boxH)
+    this.ctx.strokeRect(x - boxW / 2, y, boxW, boxH)
+    // simple save icon (arrow)
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.beginPath()
+    this.ctx.moveTo(x, y + 6)
+    this.ctx.lineTo(x, y + 16)
+    this.ctx.moveTo(x - 5, y + 12)
+    this.ctx.lineTo(x, y + 18)
+    this.ctx.lineTo(x + 5, y + 12)
+    this.ctx.stroke()
+    this.ctx.restore()
+    this.hitTargets.push({ type, rect: { x: x - boxW / 2, y, w: boxW, h: boxH } })
+  }
+
+  private drawTrashIconAt(ts: number, id: string) {
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const x = this.timeToPosition(ts)
+    const boxW = 28
+    const boxH = 28
+    const y = centerY + 120
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = '#ef4444'
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(x - boxW / 2, y, boxW, boxH)
+    this.ctx.strokeRect(x - boxW / 2, y, boxW, boxH)
+    // trash lines
+    this.ctx.strokeStyle = '#ffffff'
+    this.ctx.beginPath()
+    this.ctx.moveTo(x - 6, y + 10)
+    this.ctx.lineTo(x + 6, y + 10)
+    this.ctx.moveTo(x - 4, y + 10)
+    this.ctx.lineTo(x - 3, y + 20)
+    this.ctx.moveTo(x, y + 10)
+    this.ctx.lineTo(x, y + 20)
+    this.ctx.moveTo(x + 4, y + 10)
+    this.ctx.lineTo(x + 3, y + 20)
+    this.ctx.stroke()
+    this.ctx.restore()
+    this.hitTargets.push({ type: 'instant-trash', id, rect: { x: x - boxW / 2, y, w: boxW, h: boxH } })
   }
 
   // Zoom API (percent-based around current center)
@@ -631,6 +772,63 @@ export class TimelineRenderer {
     this.ctx.restore()
   }
 
+  private drawInstantNowSpan(ts: number) {
+    const now = Date.now()
+    const { text, sign } = this.formatDurationHuman(now, ts)
+    const color = sign > 0 ? '#22d3ee' : '#ef4444'
+    const xNow = this.timeToPosition(now)
+    const xTs = this.timeToPosition(ts)
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const spanY = centerY + 150
+
+    const leftX = Math.min(xNow, xTs)
+    const rightX = Math.max(xNow, xTs)
+    const leftVisible = leftX >= 0
+    const rightVisible = rightX <= this.screenWidth
+    const clampedLeft = Math.max(0, leftX)
+    const clampedRight = Math.min(this.screenWidth, rightX)
+
+    this.ctx.save()
+    this.ctx.strokeStyle = color
+    this.ctx.lineWidth = 3
+    this.ctx.beginPath()
+    this.ctx.moveTo(clampedLeft, spanY)
+    this.ctx.lineTo(clampedRight, spanY)
+    this.ctx.stroke()
+    const drawArrow = (x: number, dir: 1 | -1) => {
+      const size = 8
+      this.ctx.beginPath()
+      this.ctx.moveTo(x, spanY)
+      this.ctx.lineTo(x - dir * size, spanY - size)
+      this.ctx.lineTo(x - dir * size, spanY + size)
+      this.ctx.closePath()
+      this.ctx.fillStyle = color
+      this.ctx.fill()
+    }
+    if (!leftVisible) drawArrow(0, -1)
+    if (!rightVisible) drawArrow(this.screenWidth, 1)
+
+    const midX = (Math.max(0, Math.min(this.screenWidth, xNow)) + Math.max(0, Math.min(this.screenWidth, xTs))) / 2
+    const label = `(${text})`
+    const font = 'bold 14px monospace'
+    const labelWidth = this.measureTextWidth(font, label) + 16
+    const labelHeight = 28
+    const labelX = midX - labelWidth / 2
+    const labelY = spanY + 20
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = color
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
+    this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.font = font
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillText(label, midX, labelY + labelHeight / 2)
+    this.ctx.restore()
+  }
+
   // Draw an instant (timestamp) on the timeline with optional label
   public drawInstant(timestamp: number, label?: string, formatInfo?: Partial<InstantFormatInfo>): void {
     const dpr = window.devicePixelRatio || 1
@@ -735,19 +933,15 @@ export class TimelineRenderer {
     this.ctx.restore()
   }
 
-  public setZoom(zoom: number) {
-    this.zoomLevel = Math.max(0.1, Math.min(10, zoom))
-    // TODO: Implement zoom logic that affects timeWidth
-  }
-
   // View/pan API
-  public setViewMode(mode: 'now' | 'cursor') {
-    this.viewMode = mode
+  public setViewFocus(mode: 'now' | 'cursor' | 'instant', instantId?: string) {
+    this.viewFocusMode = mode
+    this.focusedInstantId = mode === 'instant' ? (instantId ?? null) : null
     this.persistState()
   }
 
-  public getViewMode(): 'now' | 'cursor' {
-    return this.viewMode
+  public getViewFocus(): { mode: 'now' | 'cursor' | 'instant'; focusedInstantId: string | null } {
+    return { mode: this.viewFocusMode, focusedInstantId: this.focusedInstantId }
   }
 
   public panByPixels(deltaX: number) {
@@ -761,15 +955,26 @@ export class TimelineRenderer {
     const xNow = this.timeToPosition(Date.now())
     const xCenter = this.screenWidth / 2
     if (Math.abs(xNow - xCenter) <= tolerancePx) {
-      this.setViewMode('now')
+      this.setViewFocus('now')
       return true
     }
     return false
   }
 
-  public setPan(offset: number) {
-    this.panOffset = offset
-    // TODO: Implement pan logic that affects timeCenter
+  public snapToInstantIfClose(tolerancePx: number): boolean {
+    const xCenter = this.screenWidth / 2
+    let best: { id: string; dist: number } | null = null
+    for (const s of this.savedInstants) {
+      const x = this.timeToPosition(s.ts)
+      const d = Math.abs(x - xCenter)
+      if (d <= tolerancePx && (!best || d < best.dist)) best = { id: s.id, dist: d }
+    }
+    if (best) {
+      this.setViewFocus('instant', best.id)
+      this.timeCenter = this.savedInstants.find(si => si.id === best!.id)!.ts
+      return true
+    }
+    return false
   }
 
   public setTimeWidth(widthMs: number) {
@@ -780,9 +985,40 @@ export class TimelineRenderer {
     this.timeCenter = centerMs
   }
 
+  // Instant storage helpers
+  private createInstantAt(ts: number, label: string) {
+    const id = `i_${Math.random().toString(36).slice(2, 9)}`
+    this.savedInstants.push({ id, ts, label })
+    this.persistState()
+  }
+
+  private deleteInstant(id: string) {
+    this.savedInstants = this.savedInstants.filter(si => si.id !== id)
+    if (this.focusedInstantId === id) this.focusedInstantId = null
+    this.persistState()
+  }
+
   public destroy() {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId)
     }
+  }
+
+  // Expose overlays for HTML layer
+  public getOverlayElements(): { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] {
+    return this.overlayElements
+  }
+
+  public updateInstantLabel(id: string, newLabel: string) {
+    const inst = this.savedInstants.find(si => si.id === id)
+    if (inst) {
+      inst.label = newLabel
+      this.persistState()
+    }
+    this.editingInstantId = null
+  }
+
+  public endEditing() {
+    this.editingInstantId = null
   }
 }

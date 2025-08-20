@@ -8,6 +8,7 @@ interface TimelineCanvasProps {
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const overlaysRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -65,17 +66,21 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
 
     // Drag to pan
     let isPointerDown = false
+    let dragDistance = 0
+    let skipNextClick = false
     let lastX = 0
     const onPointerDown = (e: PointerEvent) => {
       isPointerDown = true
+      dragDistance = 0
       lastX = e.clientX
       canvas.setPointerCapture(e.pointerId)
-      if (renderer) renderer.setViewMode('cursor')
+      if (renderer) renderer.setViewFocus('cursor')
     }
     const onPointerMove = (e: PointerEvent) => {
       if (!isPointerDown || !renderer) return
       const dx = e.clientX - lastX
       lastX = e.clientX
+      dragDistance += Math.abs(dx)
       renderer.panByPixels(dx)
     }
     const onPointerUp = (e: PointerEvent) => {
@@ -84,10 +89,14 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       canvas.releasePointerCapture(e.pointerId)
       if (renderer) {
         // If center is near now, snap back to now mode
-        const snapped = renderer.snapToNowIfClose(12)
-        if (!snapped) {
-          renderer.setViewMode('cursor')
+        const snappedNow = renderer.snapToNowIfClose(12)
+        const snappedInstant = renderer.snapToInstantIfClose(12)
+        if (!snappedNow && !snappedInstant) {
+          renderer.setViewFocus('cursor')
         }
+      }
+      if (dragDistance > 3) {
+        skipNextClick = true
       }
     }
 
@@ -101,13 +110,83 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
 
     // Start rendering loop
     let animationId: number
+    // Cache of overlay DOM nodes to avoid recreating every frame
+    const overlayNodes: Map<string, HTMLInputElement> = new Map()
+
     const renderLoop = () => {
       if (renderer) {
         renderer.render()
+        // Sync overlays
+        const overlays = overlaysRef.current
+        if (overlays) {
+          const rect = canvas.getBoundingClientRect()
+          const list = renderer.getOverlayElements()
+          const desiredKeys = new Set<string>()
+          for (const o of list) {
+            if (o.type === 'instant-label' && o.id) {
+              const key = `${o.type}:${o.id}`
+              desiredKeys.add(key)
+              let input = overlayNodes.get(key)
+              if (!input) {
+                input = document.createElement('input')
+                input.type = 'text'
+                input.value = o.text ?? ''
+                // Match canvas styling
+                input.className = ''
+                input.style.background = 'rgba(0,0,0,1)'
+                input.style.color = '#ffffff'
+                input.style.border = '2px solid #ffffff'
+                input.style.borderRadius = '0px'
+                input.style.font = 'bold 16px Arial'
+                input.style.padding = '0px'
+                input.style.position = 'absolute'
+                input.style.pointerEvents = 'auto'
+                input.style.zIndex = '10000'
+                input.onpointerdown = (ev) => { ev.stopPropagation() }
+                input.onmousedown = (ev) => { ev.stopPropagation() }
+                input.onwheel = (ev) => { ev.stopPropagation() }
+                input.onchange = () => { renderer!.updateInstantLabel(o.id!, input!.value) }
+                input.onblur = () => { renderer!.endEditing() }
+                input.onkeydown = (ev) => {
+                  if (ev.key === 'Enter') { (ev.target as HTMLInputElement).blur() }
+                  if (ev.key === 'Escape') { (ev.target as HTMLInputElement).blur() }
+                }
+                overlays.appendChild(input)
+                overlayNodes.set(key, input)
+                if (o.focused) {
+                  setTimeout(() => { input!.focus(); input!.select() }, 0)
+                }
+              }
+              // Update position/size only; do not overwrite value during typing
+              input.style.left = `${Math.round(o.rect.x + rect.left)}px`
+              input.style.top = `${Math.round(o.rect.y + rect.top - 1)}px`
+              input.style.width = `${Math.round(o.rect.w)}px`
+              input.style.height = `${Math.round(o.rect.h)}px`
+            }
+          }
+          // Remove stale nodes
+          for (const [key, node] of overlayNodes) {
+            if (!desiredKeys.has(key)) {
+              node.remove()
+              overlayNodes.delete(key)
+            }
+          }
+        }
       }
       animationId = requestAnimationFrame(renderLoop)
     }
     renderLoop()
+
+    // Click support for save/rename/delete
+    const onClick = (e: MouseEvent) => {
+      if (!renderer) return
+      if (skipNextClick) { skipNextClick = false; return }
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      renderer.handleClick(x, y)
+    }
+    canvas.addEventListener('click', onClick)
 
     // Cleanup function
     return () => {
@@ -117,6 +196,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('pointercancel', onPointerUp)
+      canvas.removeEventListener('click', onClick)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)
       }
@@ -141,6 +221,8 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           minWidth: '100%'
         }}
       />
+      {/* HTML overlays (no pointer events except on children we enable) */}
+      <div ref={overlaysRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} />
     </div>
   )
 }
