@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react'
-import { TimelineRenderer } from '../canvas/TimelineRenderer'
+import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
 
 interface TimelineCanvasProps {
   className?: string
@@ -9,7 +9,65 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const overlaysRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<(HTMLDivElement & { _lastVersion?: number; _lastRenderAt?: number }) | null>(null)
+  const controlsRef = useRef<HTMLDivElement>(null)
+  const rendererRef = useRef<TimelineRenderer | null>(null)
+
+  // Helpers for navigation and cursor movement
+  const moveCursorByMs = (deltaMs: number) => {
+    const r = rendererRef.current
+    if (!r) return
+    const center = r.getTimeCenter?.() ?? Date.now()
+    r.setTimeCenter(center + deltaMs)
+    r.setViewFocus('cursor')
+  }
+
+  const goToPreviousInstant = () => {
+    const r = rendererRef.current
+    if (!r) return
+    const instants = r.getSavedInstantsSnapshot().slice().sort((a, b) => a.ts - b.ts)
+    if (instants.length === 0) return
+    const focus = r.getViewFocus?.() ?? { mode: 'now', focusedInstantId: null as string | null }
+    let anchorTs: number
+    if (focus.mode === 'instant' && focus.focusedInstantId) {
+      const cur = instants.find(i => i.id === focus.focusedInstantId)
+      anchorTs = cur ? cur.ts : Date.now()
+    } else if (focus.mode === 'cursor') {
+      anchorTs = r.getTimeCenter?.() ?? Date.now()
+    } else {
+      anchorTs = Date.now()
+    }
+    let target: { id: string; ts: number } | null = null
+    for (let i = instants.length - 1; i >= 0; i--) {
+      if (instants[i].ts < anchorTs) { target = instants[i]; break }
+    }
+    if (target) {
+      r.setViewFocus('instant', target.id)
+      r.setTimeCenter(target.ts)
+    }
+  }
+
+  const goToNextInstant = () => {
+    const r = rendererRef.current
+    if (!r) return
+    const instants = r.getSavedInstantsSnapshot().slice().sort((a, b) => a.ts - b.ts)
+    if (instants.length === 0) return
+    const focus = r.getViewFocus?.() ?? { mode: 'now', focusedInstantId: null as string | null }
+    let anchorTs: number
+    if (focus.mode === 'instant' && focus.focusedInstantId) {
+      const cur = instants.find(i => i.id === focus.focusedInstantId)
+      anchorTs = cur ? cur.ts : Date.now()
+    } else if (focus.mode === 'cursor') {
+      anchorTs = r.getTimeCenter?.() ?? Date.now()
+    } else {
+      anchorTs = Date.now()
+    }
+    const target = instants.find(i => i.ts > anchorTs) || null
+    if (target) {
+      r.setViewFocus('instant', target.id)
+      r.setTimeCenter(target.ts)
+    }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -48,10 +106,17 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         renderer.destroy()
       }
       renderer = new TimelineRenderer(canvas)
+      rendererRef.current = renderer
 
       // Position list below canvas
+      const controlsEl = controlsRef.current
+      if (controlsEl) {
+        controlsEl.style.top = `${containerHeight}px`
+        controlsEl.style.zIndex = '20'
+      }
       if (listRef.current) {
-        listRef.current.style.top = `${containerHeight}px`
+        const controlsH = controlsEl?.getBoundingClientRect().height ?? 0
+        listRef.current.style.top = `${containerHeight + Math.ceil(controlsH)}px`
         listRef.current.style.zIndex = '10'
       }
     }
@@ -135,6 +200,53 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     }
     canvas.addEventListener('dblclick', onDblClick)
 
+    // Keyboard hotkeys
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing
+      const active = document.activeElement as HTMLElement | null
+      if (active && ((active.tagName === 'INPUT') || (active.tagName === 'TEXTAREA') || active.isContentEditable)) {
+        return
+      }
+      const key = e.key
+      const lower = key.toLowerCase()
+      if (lower === 'i' || lower === 'w') {
+        e.preventDefault()
+        rendererRef.current?.zoomIn()
+        return
+      }
+      if (lower === 'o' || lower === 's') {
+        e.preventDefault()
+        rendererRef.current?.zoomOut()
+        return
+      }
+      if (lower === 'x') {
+        e.preventDefault()
+        moveCursorByMs(30 * 60 * 1000)
+        return
+      }
+      if (lower === 'z') {
+        e.preventDefault()
+        moveCursorByMs(-30 * 60 * 1000)
+        return
+      }
+      if (lower === 'r') {
+        e.preventDefault()
+        rendererRef.current?.setViewFocus('now')
+        return
+      }
+      if (lower === 'd' || key === 'ArrowRight' || key === 'ArrowDown') {
+        e.preventDefault()
+        goToNextInstant()
+        return
+      }
+      if (lower === 'a' || key === 'ArrowLeft' || key === 'ArrowUp') {
+        e.preventDefault()
+        goToPreviousInstant()
+        return
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+
     // Start rendering loop
     let animationId: number
     // Cache of overlay DOM nodes to avoid recreating every frame
@@ -204,11 +316,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         if (listEl && renderer) {
           const version = renderer.getStateVersion?.() ?? 0
           const nowTs = Date.now()
-          if ((listEl as any)._lastVersion === version && (listEl as any)._lastRenderAt && nowTs - (listEl as any)._lastRenderAt < 1000) {
+          if (listEl._lastVersion === version && listEl._lastRenderAt && nowTs - listEl._lastRenderAt < 1000) {
             // skip frequent refresh to keep DOM stable for clicks/inspect
           } else {
-            ;(listEl as any)._lastVersion = version
-            ;(listEl as any)._lastRenderAt = nowTs
+            listEl._lastVersion = version
+            listEl._lastRenderAt = nowTs
+            // Keep list positioned below controls dynamically
+            const rect = canvas.getBoundingClientRect()
+            const controlsH = controlsRef.current?.getBoundingClientRect().height ?? 0
+            listEl.style.top = `${Math.round(rect.height + controlsH)}px`
             // Ensure tabs exist once
             let tabs = (listEl.querySelector('[data-role="instants-tabs"]') as HTMLElement) || null
             if (!tabs) {
@@ -239,7 +355,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             if (!scroller) {
               scroller = document.createElement('div')
               scroller.dataset.role = 'instants-scroller'
-              scroller.style.maxHeight = 'calc(100vh - 600px - 40px)'
               scroller.style.overflowY = 'scroll'
               scroller.style.scrollbarGutter = 'stable both-edges'
               scroller.style.width = '100%'
@@ -247,6 +362,13 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
               scroller.style.paddingRight = '8px'
               scroller.onwheel = (evt) => { evt.stopPropagation() }
               listEl.appendChild(scroller)
+            }
+            // Update scroller height dynamically each frame to account for canvas size and controls height
+            {
+              const rect2 = canvas.getBoundingClientRect()
+              const controlsH2 = controlsRef.current?.getBoundingClientRect().height ?? 0
+              const maxH = `calc(100vh - ${Math.round(rect2.height)}px - 40px - ${Math.round(controlsH2)}px)`
+              scroller.style.maxHeight = maxH
             }
 
             // Capture previous positions (FLIP)
@@ -296,7 +418,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
                 // children
                 const name = document.createElement('div'); name.dataset.role = 'name'; name.style.font = 'bold 16px Arial'
                 const dt = document.createElement('div'); dt.dataset.role = 'dt'; dt.style.font = 'bold 14px monospace'
-                const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.opacity = '0.9'
+                const dur = document.createElement('div'); dur.dataset.role = 'dur'; dur.style.font = 'bold 14px monospace'; dur.style.opacity = '0.9'; dur.style.whiteSpace = 'pre'
                 card.appendChild(name); card.appendChild(dt); card.appendChild(dur)
               }
               // Update content
@@ -327,13 +449,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
               card.style.border = `2px solid ${en.focused ? '#22d3ee' : '#ffffff'}`
               // Rebind click handler every update
               card.onclick = () => {
+                const r = rendererRef.current
+                if (!r) return
                 if (en.instantKind === 'now') {
-                  renderer.setViewFocus('now')
+                  r.setViewFocus('now')
                 } else if (en.instantKind === 'cursor') {
-                  renderer.setViewFocus('cursor')
+                  r.setViewFocus('cursor')
                 } else {
-                  renderer.setViewFocus('instant', en.id!)
-                  renderer.setTimeCenter(en.ts)
+                  r.setViewFocus('instant', en.id!)
+                  r.setTimeCenter(en.ts)
                 }
                 card!.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
               }
@@ -399,6 +523,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       canvas.removeEventListener('pointercancel', onPointerUp)
       canvas.removeEventListener('dblclick', onDblClick)
       canvas.removeEventListener('click', onClick)
+      window.removeEventListener('keydown', onKeyDown)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)
       }
@@ -408,6 +533,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       if (renderer) {
         renderer.destroy()
       }
+      rendererRef.current = null
     }
   }, [])
 
@@ -423,6 +549,69 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           minWidth: '100%'
         }}
       />
+      {/* Controls row between canvas and list */}
+      <div
+        ref={controlsRef}
+        style={{ position: 'absolute', top: 600, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 12, padding: '8px 16px' }}
+      >
+        <div style={{ display: 'flex', gap: 12, background: 'rgba(0,0,0,0.4)', padding: 8, border: '2px solid #ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
+          <button
+            aria-label="Zoom out"
+            onClick={(e) => { e.stopPropagation(); rendererRef.current?.zoomOut() }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            Zoom out
+          </button>
+          <button
+            aria-label="Previous instant"
+            onClick={(e) => { e.stopPropagation(); goToPreviousInstant() }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            Previous instant
+          </button>
+          {/* Middle controls: -30m, NOW, +30m */}
+          <button
+            aria-label="Minus 30 minutes"
+            onClick={(e) => { e.stopPropagation(); moveCursorByMs(-30 * 60 * 1000) }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            -30 minutes
+          </button>
+          <button
+            aria-label="Now"
+            onClick={(e) => {
+              e.stopPropagation()
+              const r = rendererRef.current
+              if (!r) return
+              r.setViewFocus('now')
+            }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            NOW
+          </button>
+          <button
+            aria-label="Plus 30 minutes"
+            onClick={(e) => { e.stopPropagation(); moveCursorByMs(30 * 60 * 1000) }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            +30 minutes
+          </button>
+          <button
+            aria-label="Next instant"
+            onClick={(e) => { e.stopPropagation(); goToNextInstant() }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            Next instant
+          </button>
+          <button
+            aria-label="Zoom in"
+            onClick={(e) => { e.stopPropagation(); rendererRef.current?.zoomIn() }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            Zoom in
+          </button>
+        </div>
+      </div>
       {/* HTML overlays (no pointer events except on children we enable) */}
       <div ref={overlaysRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} />
       {/* Saved instants list */}

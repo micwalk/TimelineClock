@@ -8,3 +8,4 @@ Next ideas to implement:
 * refactor existing code into multiple files.
 * multi level duration lines
 * create and save spans
+* focus history
