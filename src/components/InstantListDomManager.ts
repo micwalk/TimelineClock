@@ -206,7 +206,7 @@ export class InstantListDomManager {
 				visEl.textContent = '👁'
 				// if not editing, ensure visible label
 				const existingInput = nameEl.querySelector('input[data-role="edit-input"]') as HTMLInputElement | null
-				if (!existingInput && nameTextEl) nameTextEl.textContent = s.label
+				if (!existingInput && nameTextEl) nameTextEl.textContent = s.label.length > 0 ? s.label : '?'
 				snameEl.textContent = s.start.name
 				stimeEl.textContent = new Date(s.start.tsEpochMs).toLocaleString()
 				{
@@ -221,7 +221,7 @@ export class InstantListDomManager {
 					durEl.textContent = `${hh}:${mm}:${ss}`
 				}
 				etimeEl.textContent = new Date(s.end.tsEpochMs).toLocaleString()
-				enameEl.textContent = s.end.name
+				enameEl.textContent = s.end.name.length > 0 ? s.end.name : '?'
 				card.style.border = `2px solid ${isFocused ? '#22d3ee' : '#ffffff'}`
 				if (saved && s.id) {
 					visEl.style.cursor = 'pointer'
@@ -337,7 +337,7 @@ export class InstantListDomManager {
 			// saved instant
 			const isFav = it.kind === 'saved' ? !!it.favorite : false
 			if (!showOnlyFavorites || isFav) {
-				entries.push({ key: `i:${it.id!}`, ts: it.tsEpochMs, name: it.label || '(unnamed)', focused: focus.mode === 'instant' && focus.focusedInstantId === it.id, instantKind: 'instant', id: it.id, favorite: isFav })
+				entries.push({ key: `i:${it.id!}`, ts: it.tsEpochMs, name: it.label && it.label.length > 0 ? it.label : '?', focused: focus.mode === 'instant' && focus.focusedInstantId === it.id, instantKind: 'instant', id: it.id, favorite: isFav })
 			}
 		}
 

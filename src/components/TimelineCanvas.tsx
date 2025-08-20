@@ -282,6 +282,13 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         const overlays = overlaysRef.current
         if (overlays) {
           const rect = canvas.getBoundingClientRect()
+          const measureCtx = canvas.getContext('2d')
+          const computeWidth = (text: string) => {
+            if (!measureCtx) return 0
+            measureCtx.font = 'bold 16px Arial'
+            const w = measureCtx.measureText(text).width
+            return Math.ceil(w) + 10 // match canvas label padding
+          }
           const list = renderer.getOverlayElements()
           const desiredKeys = new Set<string>()
           for (const o of list) {
@@ -313,6 +320,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
                   if (ev.key === 'Enter') { (ev.target as HTMLInputElement).blur() }
                   if (ev.key === 'Escape') { (ev.target as HTMLInputElement).blur() }
                 }
+                // Initialize min width to the overlay rect width
+                const minW = Math.round(o.rect.w)
+                input.style.minWidth = `${minW}px`
+                // Grow width as user types
+                input.oninput = () => {
+                  const desired = computeWidth(input!.value)
+                  const finalW = Math.max(minW, desired)
+                  input!.style.width = `${finalW}px`
+                }
                 overlays.appendChild(input)
                 overlayNodes.set(key, input)
                 if (o.focused) {
@@ -322,7 +338,12 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
               // Update position/size only; do not overwrite value during typing
               input.style.left = `${Math.round(o.rect.x + rect.left)}px`
               input.style.top = `${Math.round(o.rect.y + rect.top - 1)}px`
-              input.style.width = `${Math.round(o.rect.w)}px`
+              {
+                const minW = parseInt(input.style.minWidth || `${Math.round(o.rect.w)}`, 10) || Math.round(o.rect.w)
+                const desired = computeWidth(input.value)
+                const finalW = Math.max(minW, desired)
+                input.style.width = `${finalW}px`
+              }
               input.style.height = `${Math.round(o.rect.h)}px`
             }
           }

@@ -3,6 +3,8 @@
 ## Project Overview
 This is a timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
 
+* The app is already started with HMR hot module reload enabled in a spearate terminal window, so you do not need to launch it yourself.
+
 ## Core Architecture
 - **Frontend**: React 18 + TypeScript + Vite
 - **Timeline**: Native Canvas 2D API with optimized rendering pipeline
@@ -16,38 +18,14 @@ This is a timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World
 - **Testing**: Vitest + React Testing Library + Playwright
 - **Optional**: Capacitor wrapper for precise alarms
 
-## Data Model
-```typescript
-interface Instant { 
-  id: string; 
-  tsEpochMs: number; 
-  label?: string; 
-  tz?: string; 
-  favorite?: boolean; 
-  notify?: NotificationSpec[] 
-}
 
-interface Duration { 
-  id: string; 
-  ms: number; 
-  label?: string 
-}
+## Core ConceptsC
+* Instant -- A point in time. Rendered on the timeline as a vertical line with label. An instant can be saved, or it can represent a concept like "Now" or the current cursor position.
+* Span -- A pair of Instants with a duration between them. One of the instants could be Now or the Cursor. A span can be saved, or it can be implied. Implied spans are automatically generated temporarily based on context.
 
-interface TimeRange { 
-  id: string; 
-  startInstantId: string; 
-  endInstantId: string; 
-  label?: string; 
-  favorite?: boolean 
-}
-
-interface NotificationSpec { 
-  id: string; 
-  fireAtTs: number; 
-  repeat?: 'none'|'daily'|'weekly'; 
-  sound?: string; 
-}
-```
+## Main UI Components
+1. Timeline view -- a canvas rendered horizontally scrolling timeline
+2. List View -- HTML rendered list with tabs below horizontally scrolling timeline
 
 ## Key Principles
 1. **Single Timeline View**: All time entities (instants, durations, ranges) on one scrollable/zoomable timeline
@@ -95,48 +73,3 @@ interface NotificationSpec {
 - `/src/canvas/` - Canvas rendering utilities
 - `/src/parsers/` - Natural language parsing logic
 - `/public/` - Static assets and PWA files
-
-## Development Priorities
-1. **M0 (Prototype)**: Basic timeline render, Now animation, tap/drag creation
-2. **M1 (MVP)**: Natural language quick-add, favorites, local storage, PWA
-3. **M2 (Reliable)**: Push notifications, cross-device sync
-4. **M3 (Polish)**: Accessibility, themes, calendar overlay
-
-## Important Constraints
-- PWA limitations for wake-up alarms (need Capacitor for precise alarms)
-- Handle device sleep, timezone changes, app backgrounding
-- Support offline functionality
-- Ensure cross-browser compatibility
-- Implement proper error handling for storage failures
-- Canvas performance on low-end devices
-- Memory management for long-running timeline views
-
-## Testing Strategy
-- Unit tests for utility functions and hooks (Vitest)
-- Integration tests for timeline interactions (React Testing Library)
-- E2E tests for critical user flows (Playwright)
-- Performance testing for timeline rendering
-- Accessibility testing with screen readers
-- Canvas rendering tests with jsdom
-
-## Key Dependencies
-```json
-{
-  "react": "^18.2.0",
-  "react-dom": "^18.2.0",
-  "typescript": "^5.0.0",
-  "vite": "^5.0.0",
-  "zustand": "^4.4.0",
-  "tailwindcss": "^3.3.0",
-  "date-fns": "^2.30.0",
-  "date-fns-tz": "^2.0.0",
-  "react-hook-form": "^7.45.0",
-  "zod": "^3.22.0",
-  "framer-motion": "^10.16.0",
-  "idb": "^7.1.0",
-  "vite-plugin-pwa": "^0.17.0",
-  "vitest": "^1.0.0",
-  "@testing-library/react": "^14.0.0",
-  "playwright": "^1.40.0"
-}
-```

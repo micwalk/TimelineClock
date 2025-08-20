@@ -42,7 +42,7 @@ export class TimelineRenderer {
   // Saved instants and hit targets for interactions
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant' }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant' }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
   private editingSpanId: string | null = null
@@ -168,8 +168,8 @@ export class TimelineRenderer {
           // Only draw the selected saved span
           const aRec = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)
           const bRec = sp.endIsNow ? undefined : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)
-          const startName = aRec?.label || '(unnamed)'
-          const endName = sp.endIsNow ? 'Now' : (bRec?.label || '(unnamed)')
+          const startName = aRec?.label || '?'
+          const endName = sp.endIsNow ? 'Now' : (bRec?.label || '?')
           const header = sp.label && sp.label.length > 0 ? sp.label : undefined
           this.drawSpanBetween(a, b, this.TimelineCenterY() + this.spanRows.focusedSaved, '#34d399', { showPin: false, spanId: sp.id, startName, endName, headerLabel: header })
           return
@@ -188,8 +188,8 @@ export class TimelineRenderer {
         if (typeof a !== 'number' || typeof b !== 'number') continue
         const aRec = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)
         const bRec = sp.endIsNow ? undefined : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)
-        const startName = aRec?.label || '(unnamed)'
-        const endName = sp.endIsNow ? 'Now' : (bRec?.label || '(unnamed)')
+        const startName = aRec?.label || '?'
+        const endName = sp.endIsNow ? 'Now' : (bRec?.label || '?')
         const header = sp.label && sp.label.length > 0 ? sp.label : undefined
         const y = centerY + this.spanRows.instantNow + 60 + rowOffset * 30
         this.drawSpanVisual(a, b, { y, color: '#34d399', spanId: sp.id, startName, endName, headerLabel: header, startFocus: { kind: 'instant', id: aRec?.id }, endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id } })
@@ -202,7 +202,7 @@ export class TimelineRenderer {
     const prev = this.previousSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.previousSelectedInstantId) : null
     if (selected && this.showImpliedSelectedNow) {
       const y = this.TimelineCenterY() + this.spanRows.instantNow
-      const color = (selected.tsEpochMs - Date.now()) >= 0 ? '#22d3ee' : '#ef4444'
+      const color = '#2563eb' // selected → Now uses deeper blue
       this.drawSpanVisual(selected.tsEpochMs, Date.now(), {
         y,
         color,
@@ -210,7 +210,7 @@ export class TimelineRenderer {
           const diffMs = Math.abs(selected.tsEpochMs - Date.now())
           const dur = this.formatDurationHMS(diffMs)
           const sinceOrUntil = (selected.tsEpochMs - Date.now()) <= 0 ? 'since' : 'until'
-          const name = selected.label && selected.label.trim().length > 0 ? selected.label : '(unnamed)'
+          const name = selected.label && selected.label.trim().length > 0 ? selected.label : '?'
           return `Now ${dur} ${sinceOrUntil} ${name}.`
         })(),
         showPin: true,
@@ -221,9 +221,9 @@ export class TimelineRenderer {
       })
     }
     if (selected && prev && this.showImpliedSelectedPrev) {
-      const startName = prev.label && prev.label.length > 0 ? prev.label : 'Previous'
+      const startName = prev.label && prev.label.length > 0 ? prev.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
-      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { y: this.TimelineCenterY() + this.spanRows.prevToSelected, color: '#a78bfa', startName, endName, headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id } })
+      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { y: this.TimelineCenterY() + this.spanRows.prevToSelected, color: '#8b5cf6', startName, endName, headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id } })
     }
   }
 
@@ -585,10 +585,27 @@ export class TimelineRenderer {
       labelBorderColor: '#ef4444',
       labelTextColor: '#ef4444',
     })
-    this.drawSaveIconAt(Date.now(), 'save-now')
     // Add double-click target on NOW time box to focus now
     const rect = this.computeTimeBoxRect(Date.now())
     this.hitTargets.push({ type: 'instant-time', rect })
+    // Add double-click target on NOW label to create and edit a new instant
+    {
+      const centerY = this.TimelineCenterY()
+      const x = this.timeToPosition(Date.now())
+      const font = 'bold 16px Arial'
+      const label = 'Now'
+      const w = this.measureTextWidth(font, label) + 10
+      const h = 30
+      const r = { x: x - w / 2, y: centerY + 50, w, h }
+      this.hitTargets.push({ type: 'now-label', rect: r })
+      // Add unfilled star next to Now
+      const starSize = 20
+      const starRect = { x: r.x + r.w + 6, y: r.y + (r.h - starSize) / 2, w: starSize, h: starSize }
+      const starCx = starRect.x + starRect.w / 2
+      const starCy = starRect.y + starRect.h / 2
+      this.drawStarIcon(starCx, starCy, false)
+      this.hitTargets.push({ type: 'now-star', rect: starRect })
+    }
   }
 
   // Render all saved instants with label editing and delete icon
@@ -596,17 +613,45 @@ export class TimelineRenderer {
     const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label, favorite: !!rec.favorite }))
     for (const s of saved) {
       const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
-      const label = s.label && s.label.length > 0 ? s.label : '(unnamed)'
+      const isSelected = this.currentSelectedInstantId === s.id
+      const isPrevSelected = this.previousSelectedInstantId === s.id
+      const label = s.label && s.label.length > 0 ? s.label : '?'
+      let lineColor = '#ffffff'
+      let borderColor = '#ffffff'
+      let glowColor: string | undefined = undefined
+      let glowBlur = 0
+      let lineWidth = 2
+      if (isFocused) {
+        lineColor = '#22d3ee' // focused: light blue
+        borderColor = '#22d3ee'
+        glowColor = '#22d3ee'
+        glowBlur = 8
+        lineWidth = 3
+      } else if (isSelected) {
+        lineColor = '#2563eb' // selected: deeper blue
+        borderColor = '#2563eb'
+        glowColor = '#2563eb'
+        glowBlur = 8
+        lineWidth = 3
+      } else if (isPrevSelected) {
+        lineColor = '#8b5cf6' // previously selected: purple
+        borderColor = '#8b5cf6'
+        glowColor = '#8b5cf6'
+        glowBlur = 6
+        lineWidth = 3
+      }
       this.drawInstant(s.ts, label, {
-        lineColor: isFocused ? '#22d3ee' : '#ffffff',
-        glowColor: isFocused ? '#22d3ee' : undefined,
-        glowBlur: isFocused ? 8 : 0,
-        lineWidth: isFocused ? 3 : 2,
+        lineColor,
+        glowColor,
+        glowBlur,
+        lineWidth,
         labelBackgroundColor: 'rgba(0,0,0,0.8)',
-        labelBorderColor: isFocused ? '#22d3ee' : '#ffffff',
+        labelBorderColor: borderColor,
         labelTextColor: '#ffffff',
       })
-      this.drawTrashIconAt(s.ts, s.id)
+      if (this.currentSelectedInstantId === s.id) {
+        this.drawTrashIconAt(s.ts, s.id)
+      }
       // Record label hit target roughly using current font and box metrics similar to drawInstant
       const centerY = this.TimelineCenterY()
       const x = this.timeToPosition(s.ts)
@@ -617,19 +662,22 @@ export class TimelineRenderer {
       this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
       // Favorite star next to label with hit target
       {
-        const starSize = 20
-        const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
-        const starCx = starRect.x + starRect.w / 2
-        const starCy = starRect.y + starRect.h / 2
-        this.drawStarIcon(starCx, starCy, !!s.favorite)
-        this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
+        const shouldShowStar = !!s.favorite || this.currentSelectedInstantId === s.id
+        if (shouldShowStar) {
+          const starSize = 20
+          const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
+          const starCx = starRect.x + starRect.w / 2
+          const starCy = starRect.y + starRect.h / 2
+          this.drawStarIcon(starCx, starCy, !!s.favorite)
+          this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
+        }
       }
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
-      // Only include overlay input for the one being edited; ensure we use the saved label, not the time string
+      // Only include overlay input for the one being edited; ensure we use the raw saved label (no fallback)
       if (this.editingInstantId === s.id) {
-        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: label, focused: true })
+        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
       }
     }
   }
@@ -645,12 +693,29 @@ export class TimelineRenderer {
       labelBorderColor: '#22d3ee',
       labelTextColor: '#22d3ee',
     })
-    // Draw save icon box below
-    this.drawSaveIconAt(this.timeCenter, 'save-cursor')
+    // (Removed cursor save icon; double-click on label saves a new instant)
     // (Removed cursor trash icon; double-click handles snap-to-now)
     // Double-click target on cursor time box
     const rect = this.computeTimeBoxRect(this.timeCenter)
     this.hitTargets.push({ type: 'instant-time', id: undefined, rect })
+    // Add double-click target for the cursor label to save a new instant
+    {
+      const centerY = this.TimelineCenterY()
+      const x = this.timeToPosition(this.timeCenter)
+      const font = 'bold 16px Arial'
+      const label = 'Cursor'
+      const w = this.measureTextWidth(font, label) + 10
+      const h = 30
+      const r = { x: x - w / 2, y: centerY + 50, w, h }
+      this.hitTargets.push({ type: 'cursor-label', rect: r })
+      // Add unfilled star next to Cursor
+      const starSize = 20
+      const starRect = { x: r.x + r.w + 6, y: r.y + (r.h - starSize) / 2, w: starSize, h: starSize }
+      const starCx = starRect.x + starRect.w / 2
+      const starCy = starRect.y + starRect.h / 2
+      this.drawStarIcon(starCx, starCy, false)
+      this.hitTargets.push({ type: 'cursor-star', rect: starRect })
+    }
   }
 
   private drawSpanBetween(
@@ -1001,8 +1066,31 @@ export class TimelineRenderer {
           }
           return
         }
-        if (target.type === 'span-label' && target.id) {
-          this.editingSpanId = target.id
+        if (target.type === 'cursor-star') {
+          const newId = this.createInstantAt(this.timeCenter, '')
+          this.savedStore.setFavorite(newId, true)
+          this.setViewFocus('instant', newId)
+          this.editingInstantId = newId
+          return
+        }
+        if (target.type === 'now-star') {
+          const nowTs = Date.now()
+          const newId = this.createInstantAt(nowTs, '')
+          this.savedStore.setFavorite(newId, true)
+          this.setViewFocus('instant', newId)
+          this.timeCenter = nowTs
+          this.editingInstantId = newId
+          return
+        }
+        // span-label editing moved to double-click
+        if (target.type === 'instant-label' && target.id) {
+          // Single-click selects (but does not focus) the instant
+          this.setSelectedInstant(target.id)
+          return
+        }
+        if (target.type === 'instant-time' && target.id) {
+          // Single-click selects (but does not focus) the instant
+          this.setSelectedInstant(target.id)
           return
         }
         if (target.type === 'instant-trash') {
@@ -1025,13 +1113,7 @@ export class TimelineRenderer {
           }
           return
         }
-        if (target.type === 'instant-label' && target.id) {
-          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
-          if (inst) {
-            this.editingInstantId = target.id
-          }
-          return
-        }
+        // instant-label editing moved to double-click
       }
     }
   }
@@ -1080,6 +1162,55 @@ export class TimelineRenderer {
               // Double-click Now keeps Now
               this.setViewFocus('now')
             }
+          }
+          return
+        }
+        if (target.type === 'instant-label' && target.id) {
+          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
+          if (inst) {
+            this.editingInstantId = target.id
+          }
+          return
+        }
+        if (target.type === 'span-label' && target.id) {
+          this.editingSpanId = target.id
+          return
+        }
+        if (target.type === 'cursor-label') {
+          const newId = this.createInstantAt(this.timeCenter, '')
+          if (newId) {
+            this.setViewFocus('instant', newId)
+            this.editingInstantId = newId
+          }
+          return
+        }
+        if (target.type === 'now-label') {
+          const nowTs = Date.now()
+          const newId = this.createInstantAt(nowTs, '')
+          if (newId) {
+            this.setViewFocus('instant', newId)
+            this.timeCenter = nowTs
+            this.editingInstantId = newId
+          }
+          return
+        }
+        if (target.type === 'cursor-star') {
+          const newId = this.createInstantAt(this.timeCenter, '')
+          if (newId) {
+            this.savedStore.setFavorite(newId, true)
+            this.setViewFocus('instant', newId)
+            this.editingInstantId = newId
+          }
+          return
+        }
+        if (target.type === 'now-star') {
+          const nowTs = Date.now()
+          const newId = this.createInstantAt(nowTs, '')
+          if (newId) {
+            this.savedStore.setFavorite(newId, true)
+            this.setViewFocus('instant', newId)
+            this.timeCenter = nowTs
+            this.editingInstantId = newId
           }
           return
         }
@@ -1401,6 +1532,16 @@ export class TimelineRenderer {
     this.persistState()
   }
 
+  // Select an instant without changing focus mode
+  private setSelectedInstant(instantId: string) {
+    if (this.currentSelectedInstantId && this.currentSelectedInstantId !== instantId) {
+      this.previousSelectedInstantId = this.currentSelectedInstantId
+    }
+    this.currentSelectedInstantId = instantId
+    // Do not change viewFocusMode or focusedInstantId here
+    this.persistState()
+  }
+
   public getViewFocus(): { mode: 'now' | 'cursor' | 'instant' | 'span'; focusedInstantId: string | null; focusedSpanId?: string | null } {
     return { mode: this.viewFocusMode, focusedInstantId: this.focusedInstantId, focusedSpanId: this.focusedSpanId }
   }
@@ -1550,16 +1691,16 @@ export class TimelineRenderer {
       const a = savedMap.get(s.startInstantId)
       const bRec = s.endIsNow ? null : savedMap.get(s.endInstantId)
       if (!a || (!s.endIsNow && !bRec)) continue
-      const start = { id: a.id, name: a.label || '(unnamed)', tsEpochMs: a.tsEpochMs }
-      const end = s.endIsNow ? { name: 'Now', tsEpochMs: Date.now() } : { id: bRec!.id, name: bRec!.label || '(unnamed)', tsEpochMs: bRec!.tsEpochMs }
-      spans.push({ kind: 'saved', id: s.id, label: s.label || '(unnamed)', start, end, durationMs: end.tsEpochMs - start.tsEpochMs, visible: !!s.visible })
+      const start = { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }
+      const end = s.endIsNow ? { name: 'Now', tsEpochMs: Date.now() } : { id: bRec!.id, name: bRec!.label || '?', tsEpochMs: bRec!.tsEpochMs }
+      spans.push({ kind: 'saved', id: s.id, label: s.label || '?', start, end, durationMs: end.tsEpochMs - start.tsEpochMs, visible: !!s.visible })
     }
     // Implied: selected → now (always listed; visibility reflected in flag)
     if (this.currentSelectedInstantId) {
       const a = savedMap.get(this.currentSelectedInstantId)
       if (a) {
         const now = Date.now()
-        spans.push({ kind: 'implied', label: 'Selected to Now', start: { id: a.id, name: a.label || '(unnamed)', tsEpochMs: a.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - a.tsEpochMs, visible: this.showImpliedSelectedNow })
+        spans.push({ kind: 'implied', label: 'Selected to Now', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - a.tsEpochMs, visible: this.showImpliedSelectedNow })
       }
     }
     // Removed: favorites implied spans are now saved spans managed by spans store
@@ -1568,7 +1709,7 @@ export class TimelineRenderer {
       const a = savedMap.get(this.previousSelectedInstantId)
       const b = savedMap.get(this.currentSelectedInstantId)
       if (a && b) {
-        spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '(unnamed)', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '(unnamed)', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.showImpliedSelectedPrev })
+        spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.showImpliedSelectedPrev })
       }
     }
     // Sort by midpoint time
