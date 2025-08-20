@@ -63,9 +63,41 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       }
     }
 
+    // Drag to pan
+    let isPointerDown = false
+    let lastX = 0
+    const onPointerDown = (e: PointerEvent) => {
+      isPointerDown = true
+      lastX = e.clientX
+      canvas.setPointerCapture(e.pointerId)
+      if (renderer) renderer.setViewMode('current')
+    }
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isPointerDown || !renderer) return
+      const dx = e.clientX - lastX
+      lastX = e.clientX
+      renderer.panByPixels(dx)
+    }
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isPointerDown) return
+      isPointerDown = false
+      canvas.releasePointerCapture(e.pointerId)
+      if (renderer) {
+        // If center is near now, snap back to now mode
+        const snapped = renderer.snapToNowIfClose(12)
+        if (!snapped) {
+          renderer.setViewMode('current')
+        }
+      }
+    }
+
     resizeCanvas()
     window.addEventListener('resize', handleResize)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
+    canvas.addEventListener('pointerdown', onPointerDown)
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerup', onPointerUp)
+    canvas.addEventListener('pointercancel', onPointerUp)
 
     // Start rendering loop
     let animationId: number
@@ -81,6 +113,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     return () => {
       window.removeEventListener('resize', handleResize)
       canvas.removeEventListener('wheel', handleWheel)
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('pointercancel', onPointerUp)
       if (resizeTimeout) {
         clearTimeout(resizeTimeout)
       }

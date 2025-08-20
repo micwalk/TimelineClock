@@ -29,6 +29,9 @@ export class TimelineRenderer {
   private timeStart: number = 0 // Start of visible timeline
   private timeEnd: number = 0 // End of visible timeline
 
+  // View behavior
+  private viewMode: 'now' | 'current' = 'now'
+
   // Zoom configuration
   private zoomPercent: number = 0.1 // 10% per step
   private readonly minTimeWidthMs: number = 1000 // 1s
@@ -42,6 +45,7 @@ export class TimelineRenderer {
     }
     this.ctx = context
     this.setupCanvas()
+    this.loadPersistedState()
     this.updateTimelineState()
     this.lastUpdateTime = Date.now()
   }
@@ -62,8 +66,10 @@ export class TimelineRenderer {
     const dpr = window.devicePixelRatio || 1
     this.screenWidth = this.canvas.width / dpr
     
-    // Update time center to current time
-    this.timeCenter = Date.now()
+    // Update time center depending on view mode
+    if (this.viewMode === 'now') {
+      this.timeCenter = Date.now()
+    }
     
     // Calculate time range based on timeWidth and center
     const halfTimeWidth = this.timeWidth / 2
@@ -81,9 +87,34 @@ export class TimelineRenderer {
     this.clear()
     this.drawTimeline()
     this.drawTimeTicks()
-    this.drawNowLabel() // This now draws the line, label, and time string
+    this.drawNowInstant() // This now draws the line, label, and time string
+    if (this.viewMode === 'current') {
+      this.drawCurrentCenter()
+    }
 
     this.lastUpdateTime = Date.now()
+  }
+
+  private persistState() {
+    try {
+      const payload = {
+        timeWidth: this.timeWidth,
+        timeCenter: this.timeCenter,
+        viewMode: this.viewMode,
+      }
+      localStorage.setItem('timeline.state', JSON.stringify(payload))
+    } catch {}
+  }
+
+  private loadPersistedState() {
+    try {
+      const raw = localStorage.getItem('timeline.state')
+      if (!raw) return
+      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewMode: 'now'|'current' }>
+      if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
+      if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
+      if (data.viewMode === 'now' || data.viewMode === 'current') this.viewMode = data.viewMode
+    } catch {}
   }
 
   private clear() {
@@ -406,9 +437,9 @@ export class TimelineRenderer {
     return d.getTime()
   }
 
-  private drawNowLabel() {
+  private drawNowInstant() {
     // Draw the NOW label using the drawInstant helper
-    this.drawInstant(Date.now(), 'NOW', {
+    this.drawInstant(Date.now(), 'Now', {
       lineColor: '#ef4444',
       lineWidth: 4,
       lineHeight: (this.canvas.height / (window.devicePixelRatio || 1)) * 0.6,
@@ -417,7 +448,19 @@ export class TimelineRenderer {
       labelBackgroundColor: 'rgba(0, 0, 0, 0.8)',
       labelBorderColor: '#ef4444',
       labelTextColor: '#ef4444',
-      labelFont: 'bold 16px Arial'
+    })
+  }
+  
+  private drawCurrentCenter() {
+    // Draw the CURRENT center line and label at the timeCenter
+    this.drawInstant(this.timeCenter, 'Cursor', {
+      lineColor: '#22d3ee',
+      glowColor: '#22d3ee',
+      glowBlur: 8,
+      lineWidth: 3,
+      labelBackgroundColor: 'rgba(0,0,0,0.8)',
+      labelBorderColor: '#22d3ee',
+      labelTextColor: '#22d3ee',
     })
   }
 
@@ -455,6 +498,14 @@ export class TimelineRenderer {
     return this.timeStart + (progress * (this.timeEnd - this.timeStart))
   }
 
+  private measureTextWidth(font: string, text: string): number {
+    this.ctx.save()
+    this.ctx.font = font
+    const metrics = this.ctx.measureText(text)
+    this.ctx.restore()
+    return metrics.width
+  }
+
   // Zoom API (percent-based around current center)
   public setZoomPercent(zoomPercent: number): void {
     const clamped = Math.max(0.001, Math.min(0.9, zoomPercent))
@@ -464,11 +515,13 @@ export class TimelineRenderer {
   public zoomIn(): void {
     const factor = 1 - this.zoomPercent
     this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
+    this.persistState()
   }
 
   public zoomOut(): void {
     const factor = 1 + this.zoomPercent
     this.timeWidth = this.clampTimeWidth(this.timeWidth * factor)
+    this.persistState()
   }
 
   private clampTimeWidth(width: number): number {
@@ -502,7 +555,7 @@ export class TimelineRenderer {
       labelTextColor: '#ffffff',
       labelFont: 'bold 16px Arial',
       timeStringFont: 'bold 20px monospace',
-      labelStringOffset: 40,
+      labelStringOffset: 50,
       timeStringOffset: 80
     }
     
@@ -542,7 +595,7 @@ export class TimelineRenderer {
       this.ctx.strokeStyle = format.labelBorderColor!
       this.ctx.lineWidth = 2
       
-      const labelWidth = this.ctx.measureText(label).width + 20 // Add padding
+      const labelWidth = this.measureTextWidth(format.labelFont!, label) + 10 // Add padding
       const labelHeight = 30
       const labelX = timelinePosition - labelWidth / 2
       const labelY = centerY + format.labelStringOffset
@@ -571,7 +624,7 @@ export class TimelineRenderer {
     this.ctx.strokeStyle = '#ffffff'
     this.ctx.lineWidth = 2
     
-    const timeBoxWidth = this.ctx.measureText(timeString).width + 80 // Lots of padding needed for some reason
+    const timeBoxWidth = this.measureTextWidth(format.timeStringFont!, timeString) + 20
     const timeBoxHeight = 40
     const timeX = timelinePosition - timeBoxWidth / 2
     const timeY = centerY + format.timeStringOffset
@@ -594,6 +647,33 @@ export class TimelineRenderer {
     // TODO: Implement zoom logic that affects timeWidth
   }
 
+  // View/pan API
+  public setViewMode(mode: 'now' | 'current') {
+    this.viewMode = mode
+    this.persistState()
+  }
+
+  public getViewMode(): 'now' | 'current' {
+    return this.viewMode
+  }
+
+  public panByPixels(deltaX: number) {
+    const msPerPx = this.timeWidth / Math.max(1, this.screenWidth)
+    // Drag right should move timeline with the finger: shift center earlier
+    this.timeCenter -= deltaX * msPerPx
+    this.persistState()
+  }
+
+  public snapToNowIfClose(tolerancePx: number): boolean {
+    const xNow = this.timeToPosition(Date.now())
+    const xCenter = this.screenWidth / 2
+    if (Math.abs(xNow - xCenter) <= tolerancePx) {
+      this.setViewMode('now')
+      return true
+    }
+    return false
+  }
+
   public setPan(offset: number) {
     this.panOffset = offset
     // TODO: Implement pan logic that affects timeCenter
@@ -606,8 +686,6 @@ export class TimelineRenderer {
   public setTimeCenter(centerMs: number) {
     this.timeCenter = centerMs
   }
-
-
 
   public destroy() {
     if (this.animationId) {
