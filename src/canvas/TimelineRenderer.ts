@@ -30,7 +30,7 @@ export class TimelineRenderer {
   private timeEnd: number = 0 // End of visible timeline
 
   // View behavior
-  private viewMode: 'now' | 'current' = 'now'
+  private viewMode: 'now' | 'cursor' = 'now'
 
   // Zoom configuration
   private zoomPercent: number = 0.1 // 10% per step
@@ -88,8 +88,9 @@ export class TimelineRenderer {
     this.drawTimeline()
     this.drawTimeTicks()
     this.drawNowInstant() // This now draws the line, label, and time string
-    if (this.viewMode === 'current') {
-      this.drawCurrentCenter()
+    if (this.viewMode === 'cursor') {
+      this.drawCursorInstant()
+      this.drawCursorNowSpan()
     }
 
     this.lastUpdateTime = Date.now()
@@ -110,10 +111,10 @@ export class TimelineRenderer {
     try {
       const raw = localStorage.getItem('timeline.state')
       if (!raw) return
-      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewMode: 'now'|'current' }>
+      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewMode: 'now'|'cursor' }>
       if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
       if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
-      if (data.viewMode === 'now' || data.viewMode === 'current') this.viewMode = data.viewMode
+      if (data.viewMode === 'now' || data.viewMode === 'cursor') this.viewMode = data.viewMode
     } catch {}
   }
 
@@ -222,7 +223,7 @@ export class TimelineRenderer {
     this.ctx.save()
     this.ctx.strokeStyle = '#ffffff'
     this.ctx.lineWidth = 1
-
+    
     if (unit.kind === 'duration') {
       const unitMs = unit.ms
       // Special alignment for 6-hour grid: snap to 00/06/12/18
@@ -254,18 +255,18 @@ export class TimelineRenderer {
       const startAligned = Math.floor(this.timeStart / unitMs) * unitMs
       for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
         const x = this.timeToPosition(t)
-        this.ctx.beginPath()
+      this.ctx.beginPath()
         this.ctx.moveTo(x, centerY - style.halfHeight)
         this.ctx.lineTo(x, centerY + style.halfHeight)
-        this.ctx.stroke()
-
+      this.ctx.stroke()
+      
         if (style.labelAlpha > 0) {
           const label = this.formatTickLabel(t, unitMs, unit)
           this.ctx.save()
           this.ctx.globalAlpha = style.labelAlpha
-          this.ctx.fillStyle = '#ffffff'
+      this.ctx.fillStyle = '#ffffff'
           this.ctx.font = `${style.bold ? 'bold ' : ''}${Math.round(style.fontSizePx)}px monospace`
-          this.ctx.textAlign = 'center'
+      this.ctx.textAlign = 'center'
           this.ctx.textBaseline = 'alphabetic'
           const labelYOffset = style.halfHeight + (style.bold ? 26 : 20)
           this.ctx.fillText(label, x, centerY + labelYOffset)
@@ -451,8 +452,8 @@ export class TimelineRenderer {
     })
   }
   
-  private drawCurrentCenter() {
-    // Draw the CURRENT center line and label at the timeCenter
+  private drawCursorInstant() {
+    // Draw the CURSOR center line and label at the timeCenter
     this.drawInstant(this.timeCenter, 'Cursor', {
       lineColor: '#22d3ee',
       glowColor: '#22d3ee',
@@ -538,6 +539,98 @@ export class TimelineRenderer {
     return `${displayHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} ${ampm}`
   }
 
+  private formatDurationHuman(fromTs: number, toTs: number): { text: string; sign: 1 | -1 } {
+    const diffMs = toTs - fromTs
+    const sign: 1 | -1 = diffMs >= 0 ? 1 : -1
+    let remaining = Math.abs(diffMs)
+    const msPer = {
+      year: 365 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      day: 24 * 60 * 60 * 1000,
+      hour: 60 * 60 * 1000,
+      minute: 60 * 1000,
+      second: 1000,
+    }
+    const parts: string[] = []
+    const pushPart = (n: number, label: string) => {
+      if (n > 0) parts.push(`${n} ${label}${n !== 1 ? 's' : ''}`)
+    }
+    const years = Math.floor(remaining / msPer.year); remaining -= years * msPer.year; pushPart(years, 'year')
+    const days = Math.floor(remaining / msPer.day); remaining -= days * msPer.day; pushPart(days, 'day')
+    const hours = Math.floor(remaining / msPer.hour); remaining -= hours * msPer.hour; pushPart(hours, 'hour')
+    const minutes = Math.floor(remaining / msPer.minute); remaining -= minutes * msPer.minute; pushPart(minutes, 'minute')
+    const seconds = Math.floor(remaining / msPer.second); pushPart(seconds, 'second')
+
+    const summary = parts.length > 0 ? parts[0] : '0 seconds'
+    const suffix = sign < 0 ? 'ago' : 'from now'
+    return { text: `${summary} ${suffix}`, sign }
+  }
+
+  private drawCursorNowSpan() {
+    const now = Date.now()
+    const cursor = this.timeCenter
+    const { text, sign } = this.formatDurationHuman(now, cursor)
+    const color = sign > 0 ? '#22d3ee' : '#ef4444' // future → blue, past → red
+
+    const xNow = this.timeToPosition(now)
+    const xCursor = this.timeToPosition(cursor)
+    const dpr = window.devicePixelRatio || 1
+    const centerY = (this.canvas.height / dpr) / 2
+    const spanY = centerY + 150
+
+    // Compute visible endpoints; arrows if off-screen
+    const leftX = Math.min(xNow, xCursor)
+    const rightX = Math.max(xNow, xCursor)
+    const leftVisible = leftX >= 0
+    const rightVisible = rightX <= this.screenWidth
+    const clampedLeft = Math.max(0, leftX)
+    const clampedRight = Math.min(this.screenWidth, rightX)
+
+    this.ctx.save()
+    this.ctx.strokeStyle = color
+    this.ctx.lineWidth = 3
+    this.ctx.beginPath()
+    this.ctx.moveTo(clampedLeft, spanY)
+    this.ctx.lineTo(clampedRight, spanY)
+    this.ctx.stroke()
+
+    // Arrows for off-screen ends
+    const drawArrow = (x: number, dir: 1 | -1) => {
+      const size = 8
+      this.ctx.beginPath()
+      this.ctx.moveTo(x, spanY)
+      this.ctx.lineTo(x - dir * size, spanY - size)
+      this.ctx.lineTo(x - dir * size, spanY + size)
+      this.ctx.closePath()
+      this.ctx.fillStyle = color
+      this.ctx.fill()
+    }
+    if (!leftVisible) drawArrow(0, -1)
+    if (!rightVisible) drawArrow(this.screenWidth, 1)
+
+    // Label at midpoint of visible segment
+    const midX = (Math.max(0, Math.min(this.screenWidth, xNow)) + Math.max(0, Math.min(this.screenWidth, xCursor))) / 2
+    const label = `(${text})`
+    const font = 'bold 14px monospace'
+    const labelWidth = this.measureTextWidth(font, label) + 16
+    const labelHeight = 28
+    const labelX = midX - labelWidth / 2
+    const labelY = spanY + 20
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    this.ctx.strokeStyle = color
+    this.ctx.lineWidth = 2
+    this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
+    this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.font = font
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillText(label, midX, labelY + labelHeight / 2)
+
+    this.ctx.restore()
+  }
+
   // Draw an instant (timestamp) on the timeline with optional label
   public drawInstant(timestamp: number, label?: string, formatInfo?: Partial<InstantFormatInfo>): void {
     const dpr = window.devicePixelRatio || 1
@@ -565,7 +658,7 @@ export class TimelineRenderer {
     const timelinePosition = this.timeToPosition(timestamp)
     const startY = centerY - format.lineHeight / 2
     const endY = centerY + format.lineHeight / 2
-
+    
     this.ctx.save()
     
     // Draw line with optional glow effect
@@ -593,26 +686,26 @@ export class TimelineRenderer {
       // Draw background rectangle for label
       this.ctx.fillStyle = format.labelBackgroundColor!
       this.ctx.strokeStyle = format.labelBorderColor!
-      this.ctx.lineWidth = 2
-      
+    this.ctx.lineWidth = 2
+    
       const labelWidth = this.measureTextWidth(format.labelFont!, label) + 10 // Add padding
-      const labelHeight = 30
-      const labelX = timelinePosition - labelWidth / 2
+    const labelHeight = 30
+    const labelX = timelinePosition - labelWidth / 2
       const labelY = centerY + format.labelStringOffset
-      
-      this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
-      this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
-      
+    
+    this.ctx.fillRect(labelX, labelY, labelWidth, labelHeight)
+    this.ctx.strokeRect(labelX, labelY, labelWidth, labelHeight)
+    
       // Draw label text
       this.ctx.fillStyle = format.labelTextColor!
       this.ctx.font = format.labelFont!
-      this.ctx.textAlign = 'center'
-      this.ctx.textBaseline = 'middle'
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
       this.ctx.fillText(label, timelinePosition, labelY + labelHeight / 2)
-      
-      this.ctx.restore()
-    }
     
+    this.ctx.restore()
+  }
+
     // Draw the time string (intrinsic part of an instant)
     this.ctx.save()
     
@@ -648,12 +741,12 @@ export class TimelineRenderer {
   }
 
   // View/pan API
-  public setViewMode(mode: 'now' | 'current') {
+  public setViewMode(mode: 'now' | 'cursor') {
     this.viewMode = mode
     this.persistState()
   }
 
-  public getViewMode(): 'now' | 'current' {
+  public getViewMode(): 'now' | 'cursor' {
     return this.viewMode
   }
 

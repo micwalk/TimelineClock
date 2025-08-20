@@ -70,7 +70,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       isPointerDown = true
       lastX = e.clientX
       canvas.setPointerCapture(e.pointerId)
-      if (renderer) renderer.setViewMode('current')
+      if (renderer) renderer.setViewMode('cursor')
     }
     const onPointerMove = (e: PointerEvent) => {
       if (!isPointerDown || !renderer) return
@@ -86,7 +86,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         // If center is near now, snap back to now mode
         const snapped = renderer.snapToNowIfClose(12)
         if (!snapped) {
-          renderer.setViewMode('current')
+          renderer.setViewMode('cursor')
         }
       }
     }
