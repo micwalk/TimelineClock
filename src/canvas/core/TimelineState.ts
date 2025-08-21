@@ -110,19 +110,19 @@ export class TimelineState {
     }
     
     // Handle focus history for instant transitions
-    const prevMode = this.viewFocusMode
-    const leavingInstantToCursor = (prevMode === 'instant' && mode === 'cursor' && this.focusedInstantId !== none)
     
     this.viewFocusMode = mode
     this.focusedInstantId = fromStringOrNull(instantId)
     this.focusedSpanId = fromStringOrNull(spanId)
     
-    // Update focus history
-    if (leavingInstantToCursor && !this.suppressHistoryPush) {
-      const focusedId = toStringOrNull(this.focusedInstantId)
-      if (focusedId) {
-        this.pushToFocusHistory(focusedId)
-      }
+    // Update focus history when focusing an instant
+    if (mode === 'instant' && instantId && !this.suppressHistoryPush) {
+      this.pushToFocusHistory(instantId)
+    }
+    // When leaving instant mode, position index just after the end so that
+    // pressing "q" (back) jumps to the last focused instant
+    else if (mode !== 'instant' && !this.suppressHistoryPush) {
+      this.focusHistoryIndex = this.focusHistory.length
     }
     
     this.stateVersion++
@@ -141,10 +141,10 @@ export class TimelineState {
   private pushToFocusHistory(instantId: string): void {
     if (this.suppressHistoryPush) return
     
-    // Remove any existing occurrence
-    const existingIndex = this.focusHistory.indexOf(instantId)
-    if (existingIndex !== -1) {
-      this.focusHistory.splice(existingIndex, 1)
+    // Remove any existing occurrence from the top of the stack only
+    if (this.focusHistory.length > 0 && this.focusHistory[this.focusHistory.length - 1] === instantId) {
+      // Don't add if it's already at the top
+      return
     }
     
     // Add to end
@@ -181,7 +181,17 @@ export class TimelineState {
   
   public getPrevFocusedInstantId(): string | null {
     if (this.focusHistory.length === 0) return null
+    // When navigating through history, return the previous item in the history sequence
+    if (this.focusHistoryIndex > 0) {
+      return this.focusHistory[this.focusHistoryIndex - 1]
+    }
+    // When not navigating through history, return the most recent item that's not the current one
     const currentId = toStringOrNull(this.focusedInstantId)
+    // If we're not focused on any instant (cursor/now mode), return the most recent one
+    if (!currentId) {
+      return this.focusHistory[this.focusHistory.length - 1] || null
+    }
+    // If we are focused on an instant, return the most recent one that's not the current one
     for (let i = this.focusHistory.length - 1; i >= 0; i--) {
       const id = this.focusHistory[i]
       if (id !== currentId) return id
