@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react'
-import type { TimeIncrement, TimeIncrementOption } from '../canvas/core/TimelineState'
+import React, { useRef, useEffect } from 'react'
+import type { TimeIncrement } from '../canvas/core/TimelineState'
 import { TIME_INCREMENT_OPTIONS } from '../canvas/core/TimelineState'
 
 interface TimeIncrementDropdownProps {

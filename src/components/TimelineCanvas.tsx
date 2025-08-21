@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
 import { InstantListDomManager } from './InstantListDomManager.ts'
 import { TimeIncrementDropdown } from './TimeIncrementDropdown.tsx'
@@ -24,21 +24,25 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const plusButtonRef = useRef<HTMLButtonElement>(null)
   const minusButtonRef = useRef<HTMLButtonElement>(null)
 
+  // Time input overlay DOM node (managed like label overlays)
+  const timeInputRef = useRef<HTMLDivElement | null>(null)
+  const timeInputModeRef = useRef<'cursor-now' | 'selected-cursor' | null>(null)
+
   // Helpers for navigation and cursor movement
-  const moveCursorByMs = (deltaMs: number) => {
+  const moveCursorByMs = useCallback((deltaMs: number) => {
     const r = rendererRef.current
     if (!r) return
     const center = r.getTimeCenter?.() ?? Date.now()
     r.setTimeCenter(center + deltaMs)
     r.setViewFocus('cursor')
-  }
+  }, [])
 
-  const moveCursorByIncrement = (direction: 1 | -1) => {
+  const moveCursorByIncrement = useCallback((direction: 1 | -1) => {
     const r = rendererRef.current
     if (!r) return
     const incrementMs = r.getTimeIncrementMs?.() ?? 30 * 60 * 1000
     moveCursorByMs(direction * incrementMs)
-  }
+  }, [moveCursorByMs])
 
   const getCurrentIncrementLabel = (): string => {
     const r = rendererRef.current
@@ -81,6 +85,49 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
 
   const plusLongPress = useLongPress(() => handleLongPress('plus'))
   const minusLongPress = useLongPress(() => handleLongPress('minus'))
+
+  // Time input helpers
+  const handleTimeInput = (timeString: string) => {
+    const r = rendererRef.current
+    const mode = timeInputModeRef.current
+    if (!r || !mode) return
+
+    try {
+      if (mode === 'cursor-now') {
+        // Move cursor relative to now
+        r.moveCursorToTime(timeString, Date.now())
+      } else if (mode === 'selected-cursor') {
+        // Move cursor relative to selected instant
+        const selectedId = r.getViewFocus().focusedInstantId || r.getCurrentSelectedInstantId?.()
+        if (selectedId) {
+          const selectedInstant = r.getSavedInstantsSnapshot?.().find(i => i.id === selectedId)
+          if (selectedInstant) {
+            r.moveCursorToTime(timeString, selectedInstant.ts)
+          }
+        }
+      }
+      // Close overlay if open
+      if (timeInputRef.current) {
+        timeInputRef.current.remove()
+        timeInputRef.current = null
+      }
+      timeInputModeRef.current = null
+    } catch (error) {
+      console.error('Invalid time format:', error)
+    }
+  }
+
+  const formatDurationForInput = (ms: number): string => {
+    const isNegative = ms < 0
+    const absDuration = Math.abs(ms)
+    
+    const hours = Math.floor(absDuration / (60 * 60 * 1000))
+    const minutes = Math.floor((absDuration % (60 * 60 * 1000)) / (60 * 1000))
+    const seconds = Math.floor((absDuration % (60 * 1000)) / 1000)
+    
+    const sign = isNegative ? '-' : ''
+    return `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
 
   const goToPreviousInstant = () => {
     const r = rendererRef.current
@@ -280,6 +327,330 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     }
     canvas.addEventListener('dblclick', onDblClick)
 
+    // Custom event listener for span time input
+    const onSpanTimeInput = (e: CustomEvent) => {
+      console.log('span-time-input event received:', e.detail)
+      const { type, position } = e.detail
+      const r = rendererRef.current
+      if (!r) return
+
+      // Convert canvas coordinates to page coordinates (match label overlays)
+      const rect = canvas.getBoundingClientRect()
+      const pagePosition = {
+        x: Math.round(position.x + rect.left),
+        y: Math.round(position.y + rect.top - 1)
+      }
+
+      let initialValue = ''
+      if (type === 'cursor-now') {
+        const now = Date.now()
+        const cursorTime = r.getTimeCenter()
+        const diff = cursorTime - now
+        initialValue = formatDurationForInput(diff)
+      } else if (type === 'selected-cursor') {
+        const selectedId = r.getViewFocus().focusedInstantId || r.getCurrentSelectedInstantId?.()
+        if (selectedId) {
+          const selectedInstant = r.getSavedInstantsSnapshot?.().find(i => i.id === selectedId)
+          if (selectedInstant) {
+            const cursorTime = r.getTimeCenter()
+            const diff = cursorTime - selectedInstant.ts
+            initialValue = formatDurationForInput(diff)
+          }
+        }
+      }
+
+      // Create DOM overlay like label overlays
+      // Clean up existing instance
+      if (timeInputRef.current) {
+        timeInputRef.current.remove()
+        timeInputRef.current = null
+      }
+
+      timeInputModeRef.current = type
+
+      const overlays = overlaysRef.current
+      if (!overlays) return
+
+      const container = document.createElement('div')
+      container.style.position = 'absolute'
+      container.style.left = `${pagePosition.x}px`
+      container.style.top = `${pagePosition.y}px`
+      container.style.transform = 'translateX(-50%)'
+      container.style.background = 'rgba(0,0,0,0.9)'
+      container.style.color = '#ffffff'
+      container.style.border = '2px solid #ffffff'
+      container.style.borderRadius = '6px'
+      container.style.padding = '8px'
+      container.style.boxShadow = '0 6px 16px rgba(0,0,0,0.5)'
+      container.style.pointerEvents = 'none'
+      container.style.zIndex = '10000'
+
+      // Stop canvas interactions when using inputs
+      container.onpointerdown = (ev) => { ev.stopPropagation() }
+      container.onmousedown = (ev) => { ev.stopPropagation() }
+      container.onwheel = (ev) => { ev.stopPropagation() }
+
+      const row = document.createElement('div')
+      row.style.display = 'flex'
+      row.style.alignItems = 'center'
+      row.style.gap = '4px'
+
+      const signBtn = document.createElement('button')
+      signBtn.textContent = initialValue.startsWith('-') ? '-' : '+'
+      signBtn.style.padding = '2px 6px'
+      signBtn.style.fontFamily = 'monospace'
+      signBtn.style.background = initialValue.startsWith('-') ? '#dc2626' : '#4b5563'
+      signBtn.style.color = '#ffffff'
+      signBtn.style.border = 'none'
+      signBtn.style.borderRadius = '4px'
+      ;(signBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+      let isNegative = initialValue.startsWith('-')
+      signBtn.onclick = (ev) => {
+        ev.stopPropagation()
+        isNegative = !isNegative
+        signBtn.textContent = isNegative ? '-' : '+'
+        signBtn.style.background = isNegative ? '#dc2626' : '#4b5563'
+      }
+
+      const buildInput = (val: string, max: number) => {
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.value = val
+        input.maxLength = 2
+        input.style.width = '48px'
+        input.style.height = '32px'
+        input.style.textAlign = 'center'
+        input.style.background = 'transparent'
+        input.style.border = '2px solid #ffffff'
+        input.style.color = '#ffffff'
+        input.style.fontFamily = 'monospace'
+        input.style.fontSize = '18px'
+        input.style.borderRadius = '4px'
+        ;(input.style as CSSStyleDeclaration).pointerEvents = 'auto'
+        input.onpointerdown = (ev) => { ev.stopPropagation() }
+        input.onmousedown = (ev) => { ev.stopPropagation() }
+        input.onwheel = (ev) => { ev.stopPropagation() }
+        input.oninput = () => {
+          const clean = input.value.replace(/\D/g, '')
+          const num = clean === '' ? '' : Math.min(parseInt(clean, 10), max).toString()
+          input.value = (num as string).padStart(Math.min(2, (num as string).length || 0), '0')
+        }
+        input.onkeydown = (ev) => {
+          if (ev.key === 'Escape') { closeOverlay(); return }
+          if (ev.key === 'Enter' || ev.key === 'Tab') {
+            ev.preventDefault()
+            if (ev.target === secondsInput) {
+              confirm()
+            } else if (ev.target === hoursInput) {
+              minutesInput.focus(); minutesInput.select()
+            } else if (ev.target === minutesInput) {
+              secondsInput.focus(); secondsInput.select()
+            }
+          }
+          if (ev.key === 'ArrowLeft') {
+            if (ev.target === minutesInput) { hoursInput.focus(); hoursInput.select() }
+            if (ev.target === secondsInput) { minutesInput.focus(); minutesInput.select() }
+          }
+          if (ev.key === 'ArrowRight') {
+            if (ev.target === hoursInput) { minutesInput.focus(); minutesInput.select() }
+            if (ev.target === minutesInput) { secondsInput.focus(); secondsInput.select() }
+          }
+        }
+        return input
+      }
+
+      const parts = initialValue.replace(/^[+-]/, '').split(':')
+      const hoursInput = buildInput(parts[0] || '00', 99)
+      const minutesInput = buildInput(parts[1] || '00', 59)
+      const secondsInput = buildInput(parts[2] || '00', 59)
+
+      const colon1 = document.createElement('span')
+      colon1.textContent = ':'
+      colon1.style.color = '#ffffff'
+      colon1.style.fontFamily = 'monospace'
+      colon1.style.fontSize = '18px'
+      const colon2 = colon1.cloneNode(true) as HTMLSpanElement
+
+      row.appendChild(signBtn)
+      row.appendChild(hoursInput)
+      row.appendChild(colon1)
+      row.appendChild(minutesInput)
+      row.appendChild(colon2)
+      row.appendChild(secondsInput)
+
+      const actions = document.createElement('div')
+      actions.style.display = 'flex'
+      actions.style.justifyContent = 'space-between'
+      actions.style.marginTop = '8px'
+
+      const cancelBtn = document.createElement('button')
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.style.padding = '4px 8px'
+      cancelBtn.style.background = '#4b5563'
+      cancelBtn.style.color = '#ffffff'
+      cancelBtn.style.border = 'none'
+      cancelBtn.style.borderRadius = '4px'
+      ;(cancelBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+      cancelBtn.onclick = (ev) => { ev.stopPropagation(); closeOverlay() }
+
+      const okBtn = document.createElement('button')
+      okBtn.textContent = 'OK'
+      okBtn.style.padding = '4px 8px'
+      okBtn.style.background = '#2563eb'
+      okBtn.style.color = '#ffffff'
+      okBtn.style.border = 'none'
+      okBtn.style.borderRadius = '4px'
+      ;(okBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+      okBtn.onclick = (ev) => { ev.stopPropagation(); confirm() }
+
+      actions.appendChild(cancelBtn)
+      actions.appendChild(okBtn)
+
+      container.appendChild(row)
+      container.appendChild(actions)
+      overlays.appendChild(container)
+      timeInputRef.current = container
+
+      const closeOnOutside = (ev: MouseEvent) => {
+        if (!timeInputRef.current) return
+        if (!timeInputRef.current.contains(ev.target as Node)) {
+          closeOverlay()
+        }
+      }
+      document.addEventListener('mousedown', closeOnOutside, { capture: true } as AddEventListenerOptions)
+
+      const closeOnEscape = (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape') closeOverlay()
+      }
+      document.addEventListener('keydown', closeOnEscape)
+
+      function closeOverlay() {
+        document.removeEventListener('mousedown', closeOnOutside, { capture: true } as EventListenerOptions)
+        document.removeEventListener('keydown', closeOnEscape)
+        if (timeInputRef.current) {
+          timeInputRef.current.remove()
+          timeInputRef.current = null
+        }
+        timeInputModeRef.current = null
+      }
+
+      function confirm() {
+        const hh = hoursInput.value.padStart(2, '0')
+        const mm = minutesInput.value.padStart(2, '0')
+        const ss = secondsInput.value.padStart(2, '0')
+        const sign = isNegative ? '-' : ''
+        const str = `${sign}${hh}:${mm}:${ss}`
+        handleTimeInput(str)
+        closeOverlay()
+      }
+
+      // Focus first
+      setTimeout(() => { hoursInput.focus(); hoursInput.select() }, 0)
+    }
+    canvas.addEventListener('span-time-input', onSpanTimeInput as EventListener)
+
+    // Instant time input for Now/Cursor
+    const onInstantTimeInput = (e: CustomEvent) => {
+      const { type, position, initial } = e.detail as { type: 'now' | 'cursor'; position: { x: number; y: number }; initial: string }
+      const r = rendererRef.current
+      if (!r) return
+
+      // Convert to page coords
+      const rect = canvas.getBoundingClientRect()
+      const pagePosition = { x: Math.round(position.x + rect.left), y: Math.round(position.y + rect.top - 1) }
+
+      // Build overlay like labels
+      if (timeInputRef.current) { timeInputRef.current.remove(); timeInputRef.current = null }
+      timeInputModeRef.current = type === 'now' ? 'cursor-now' : 'cursor-now'
+
+      const overlays = overlaysRef.current
+      if (!overlays) return
+      const container = document.createElement('div')
+      container.style.position = 'absolute'
+      container.style.left = `${pagePosition.x}px`
+      container.style.top = `${pagePosition.y}px`
+      container.style.transform = 'translateX(-50%)'
+      container.style.background = 'rgba(0,0,0,0.9)'
+      container.style.color = '#ffffff'
+      container.style.border = '2px solid #ffffff'
+      container.style.borderRadius = '6px'
+      container.style.padding = '8px'
+      container.style.boxShadow = '0 6px 16px rgba(0,0,0,0.5)'
+      container.style.pointerEvents = 'none'
+      container.style.zIndex = '10000'
+
+      const row = document.createElement('div')
+      row.style.display = 'flex'
+      row.style.alignItems = 'center'
+      row.style.gap = '4px'
+
+      const parts = initial.split(':')
+      const buildInput = (val: string, max: number) => {
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.value = val
+        input.maxLength = 2
+        input.style.width = '48px'
+        input.style.height = '32px'
+        input.style.textAlign = 'center'
+        input.style.background = 'transparent'
+        input.style.border = '2px solid #ffffff'
+        input.style.color = '#ffffff'
+        input.style.fontFamily = 'monospace'
+        input.style.fontSize = '18px'
+        input.style.borderRadius = '4px'
+        ;(input.style as CSSStyleDeclaration).pointerEvents = 'auto'
+        input.oninput = () => {
+          const clean = input.value.replace(/\D/g, '')
+          const num = clean === '' ? '' : Math.min(parseInt(clean, 10), max).toString()
+          input.value = (num as string).padStart(Math.min(2, (num as string).length || 0), '0')
+        }
+        return input
+      }
+
+      const hoursInput = buildInput(parts[0] || '00', 23)
+      const minutesInput = buildInput(parts[1] || '00', 59)
+      const secondsInput = buildInput(parts[2] || '00', 59)
+
+      const colon1 = document.createElement('span'); colon1.textContent = ':'; colon1.style.color = '#ffffff'; colon1.style.fontFamily = 'monospace'; colon1.style.fontSize = '18px'
+      const colon2 = colon1.cloneNode(true) as HTMLSpanElement
+
+      row.appendChild(hoursInput); row.appendChild(colon1); row.appendChild(minutesInput); row.appendChild(colon2); row.appendChild(secondsInput)
+
+      const actions = document.createElement('div')
+      actions.style.display = 'flex'; actions.style.justifyContent = 'space-between'; actions.style.marginTop = '8px'
+      const cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel'; cancelBtn.style.padding = '4px 8px'; cancelBtn.style.background = '#4b5563'; cancelBtn.style.color = '#ffffff'; cancelBtn.style.border = 'none'; cancelBtn.style.borderRadius = '4px'; (cancelBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+      const okBtn = document.createElement('button'); okBtn.textContent = 'OK'; okBtn.style.padding = '4px 8px'; okBtn.style.background = '#2563eb'; okBtn.style.color = '#ffffff'; okBtn.style.border = 'none'; okBtn.style.borderRadius = '4px'; (okBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+
+      const close = () => { if (timeInputRef.current) { timeInputRef.current.remove(); timeInputRef.current = null } }
+      cancelBtn.onclick = (ev) => { ev.stopPropagation(); close() }
+      okBtn.onclick = (ev) => {
+        ev.stopPropagation()
+        const hh = hoursInput.value.padStart(2, '0')
+        const mm = minutesInput.value.padStart(2, '0')
+        const ss = secondsInput.value.padStart(2, '0')
+        // Always forward in time from now
+        const now = new Date()
+        const target = new Date(now)
+        target.setHours(parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), 0)
+        let targetTs = target.getTime()
+        if (targetTs <= now.getTime()) {
+          // if past, push to next day
+          target.setDate(target.getDate() + 1)
+          targetTs = target.getTime()
+        }
+        const r2 = rendererRef.current
+        if (r2) { r2.setViewFocus('cursor'); r2.setTimeCenter(targetTs) }
+        close()
+      }
+
+      actions.appendChild(cancelBtn); actions.appendChild(okBtn)
+      container.appendChild(row); container.appendChild(actions)
+      overlays.appendChild(container); timeInputRef.current = container
+      setTimeout(() => { hoursInput.focus(); hoursInput.select() }, 0)
+    }
+    canvas.addEventListener('instant-time-input', onInstantTimeInput as EventListener)
+
     // Keyboard hotkeys
     const onKeyDown = (e: KeyboardEvent) => {
       // Ignore when typing
@@ -456,6 +827,8 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       canvas.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('pointercancel', onPointerUp)
       canvas.removeEventListener('dblclick', onDblClick)
+      canvas.removeEventListener('span-time-input', onSpanTimeInput as EventListener)
+      canvas.removeEventListener('instant-time-input', onInstantTimeInput as EventListener)
       canvas.removeEventListener('click', onClick)
       window.removeEventListener('keydown', onKeyDown)
       if (resizeTimeout) {
@@ -473,7 +846,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         listManagerRef.current = null
       }
     }
-  }, [])
+  }, [moveCursorByIncrement])
 
   return (
     <div ref={containerRef} className={`relative w-full h-full ${className}`}>
@@ -618,6 +991,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       </div>
       {/* HTML overlays (no pointer events except on children we enable) */}
       <div ref={overlaysRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} />
+      {/* Time input overlay is now managed as DOM overlay like label editors */}
       {/* Saved instants list */}
       <div ref={listRef} className="w-full" style={{ position: 'absolute', top: 600, left: 0, right: 0, padding: 16, display: 'flex', justifyContent: 'center' }} />
     </div>

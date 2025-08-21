@@ -18,6 +18,7 @@ export type HitTargetType =
   | 'span-delete' 
   | 'instant-fav' 
   | 'span-end-focus'
+  | 'span-time-input'
 
 export interface HitTargetRect {
   x: number
@@ -94,6 +95,14 @@ export class HitTargetManager {
       rect: { x, y, w, h },
       focus,
       id
+    })
+  }
+
+  addSpanTimeInput(x: number, y: number, w: number, h: number, spanType: 'cursor-now' | 'selected-cursor'): void {
+    this.targets.push({
+      type: 'span-time-input',
+      rect: { x, y, w, h },
+      id: spanType
     })
   }
 

@@ -118,6 +118,45 @@ export class TimelineRenderer {
     return `${mm}:${ss}.${mmm}`
   }
 
+  // Parse time string in format "hh:mm:ss" or "-hh:mm:ss" and return milliseconds
+  private parseTimeString(timeString: string): number {
+    const isNegative = timeString.startsWith('-')
+    const cleanTime = timeString.replace(/^[+-]/, '')
+    const parts = cleanTime.split(':')
+    
+    if (parts.length !== 3) {
+      throw new Error('Invalid time format. Expected hh:mm:ss')
+    }
+    
+    const hours = parseInt(parts[0], 10)
+    const minutes = parseInt(parts[1], 10)
+    const seconds = parseInt(parts[2], 10)
+    
+    if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+      throw new Error('Invalid time values')
+    }
+    
+    if (hours > 23 || minutes > 59 || seconds > 59) {
+      throw new Error('Time values out of range')
+    }
+    
+    const totalMs = (hours * 60 * 60 + minutes * 60 + seconds) * 1000
+    return isNegative ? -totalMs : totalMs
+  }
+
+  // Move cursor to a specific time relative to a reference point
+  public moveCursorToTime(timeString: string, referenceTime: number = Date.now()): void {
+    try {
+      const deltaMs = this.parseTimeString(timeString)
+      const targetTime = referenceTime + deltaMs
+      this.state.setTimeCenter(targetTime)
+      this.state.setViewFocus('cursor')
+      this.persistState()
+    } catch (error) {
+      console.error('Failed to parse time string:', error)
+    }
+  }
+
   private setupCanvas() {
     // Enable high DPI support
     const dpr = window.devicePixelRatio || 1
@@ -749,7 +788,7 @@ export class TimelineRenderer {
     })
     // Add double-click target on NOW time box to focus now
     const rect = this.computeTimeBoxRect(Date.now())
-    this.hitTargets.addInstantTime(undefined, rect.x, rect.y, rect.w, rect.h)
+    this.hitTargets.addInstantTime('now', rect.x, rect.y, rect.w, rect.h)
     // Add double-click target on NOW label to create and edit a new instant
     {
       const centerY = this.TimelineCenterY()
@@ -860,7 +899,7 @@ export class TimelineRenderer {
     // (Removed cursor trash icon; double-click handles snap-to-now)
     // Double-click target on cursor time box
     const rect = this.computeTimeBoxRect(this.state.getTimeCenter())
-    this.hitTargets.addInstantTime(undefined, rect.x, rect.y, rect.w, rect.h)
+    this.hitTargets.addInstantTime('cursor', rect.x, rect.y, rect.w, rect.h)
     // Add double-click target for the cursor label to save a new instant
     {
       const centerY = this.TimelineCenterY()
@@ -1019,6 +1058,11 @@ export class TimelineRenderer {
         const initialText = (typeof opts.headerLabel === 'string' && opts.headerLabel.length > 0) ? opts.headerLabel : labelText
         this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: initialText, focused: true })
       }
+    }
+
+    // Special hit target for selected-cursor span time input
+    if (opts.saveLabel === 'Selected to Cursor') {
+      this.hitTargets.addSpanTimeInput(labelX, labelY, labelWidth, labelHeight, 'selected-cursor')
     }
 
     // Optional pin icon to save span
@@ -1314,6 +1358,59 @@ export class TimelineRenderer {
           return
         }
         // instant-label editing moved to double-click
+        if (target.type === 'span-label' && target.id) {
+          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+          if (sp) {
+            const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
+            if (isFocused) {
+              // Already focused → enter rename
+              this.state.setEditingSpan(target.id)
+              return
+            }
+            // Not focused → focus and zoom-to-fit
+            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+            if (typeof a === 'number' && typeof b === 'number') {
+              this.setViewFocus('span', undefined, sp.id)
+              this.adjustZoomToRange(a, b)
+              return
+            }
+          }
+          return
+        }
+        if (target.type === 'span-time-input' && target.id) {
+          console.log('span-time-input hit target found:', target.id)
+          // Handle time input for special spans (cursor-now, selected-cursor)
+          if (target.id === 'cursor-now') {
+            console.log('Dispatching cursor-now span-time-input event')
+            // Emit event for cursor-now span time input
+            this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+              detail: {
+                type: 'cursor-now',
+                position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+              }
+            }))
+            return
+          }
+          if (target.id === 'selected-cursor') {
+            console.log('Dispatching selected-cursor span-time-input event')
+            // Emit event for selected-cursor span time input
+            this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+              detail: {
+                type: 'selected-cursor',
+                position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+              }
+            }))
+            return
+          }
+          return
+        }
+        if (target.type === 'instant-time') {
+          if (target.id) {
+            this.setSelectedInstant(target.id)
+          }
+          return
+        }
     }
   }
 
@@ -1340,7 +1437,9 @@ export class TimelineRenderer {
   }
 
   public handleDoubleClick(x: number, y: number) {
+    console.log('handleDoubleClick called at:', x, y)
     const target = this.hitTargets.findTargetAt(x, y)
+    console.log('Hit target found:', target)
     if (target) {
       if (target.type === 'span-label' && target.id) {
         const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
@@ -1360,6 +1459,7 @@ export class TimelineRenderer {
             return
           }
         }
+        return
       }
       if (target.type === 'span-body' && target.id) {
         // Focus span and zoom-to-fit
@@ -1374,15 +1474,83 @@ export class TimelineRenderer {
         }
         return
       }
+      if (target.type === 'span-label' && target.id) {
+        const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+        if (sp) {
+          const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
+          if (isFocused) {
+            // Already focused → enter rename
+            this.state.setEditingSpan(target.id)
+            return
+          }
+          // Not focused → focus and zoom-to-fit
+          const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+          const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+          if (typeof a === 'number' && typeof b === 'number') {
+            this.setViewFocus('span', undefined, sp.id)
+            this.adjustZoomToRange(a, b)
+            return
+          }
+        }
+        return
+      }
+      if (target.type === 'span-time-input' && target.id) {
+        console.log('span-time-input hit target found:', target.id)
+        // Handle time input for special spans (cursor-now, selected-cursor)
+        if (target.id === 'cursor-now') {
+          console.log('Dispatching cursor-now span-time-input event')
+          // Emit event for cursor-now span time input
+          this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+            detail: {
+              type: 'cursor-now',
+              position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+            }
+          }))
+          return
+        }
+        if (target.id === 'selected-cursor') {
+          console.log('Dispatching selected-cursor span-time-input event')
+          // Emit event for selected-cursor span time input
+          this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+            detail: {
+              type: 'selected-cursor',
+              position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+            }
+          }))
+          return
+        }
+        return
+      }
       if (target.type === 'instant-time') {
-        if (target.id) {
+        if (target.id === 'now') {
+          // Open time input for NOW → move cursor forward to typed time (today, future-only)
+          const r = this.computeTimeBoxRect(Date.now())
+          this.canvas.dispatchEvent(new CustomEvent('instant-time-input', {
+            detail: {
+              type: 'now',
+              position: { x: r.x + r.w / 2, y: r.y },
+              initial: new Date().toLocaleTimeString([], { hour12: false })
+            }
+          }))
+        } else if (target.id === 'cursor') {
+          const r = this.computeTimeBoxRect(this.state.getTimeCenter())
+          const current = new Date()
+          const hh = current.getHours().toString().padStart(2, '0')
+          const mm = current.getMinutes().toString().padStart(2, '0')
+          const ss = current.getSeconds().toString().padStart(2, '0')
+          this.canvas.dispatchEvent(new CustomEvent('instant-time-input', {
+            detail: {
+              type: 'cursor',
+              position: { x: r.x + r.w / 2, y: r.y },
+              initial: `${hh}:${mm}:${ss}`
+            }
+          }))
+        } else if (target.id) {
           const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
           if (typeof ts === 'number') {
             this.focusInstantAnimated(target.id, ts)
           }
         } else {
-          // Cursor/Now time box
-          // Double-click Now: animate to Now
           this.focusNowAnimated()
         }
         return
@@ -1421,19 +1589,43 @@ export class TimelineRenderer {
         }
         return
       }
-      if (target.type === 'now-star') {
-        const nowTs = Date.now()
-        const newId = this.createInstantAt(nowTs, '')
-        if (newId) {
-          this.savedStore.setFavorite(newId, true)
-          this.setViewFocus('instant', newId)
-          this.state.setTimeCenter(nowTs)
-          this.state.setEditingInstant(newId)
-        }
-        return
-      }
-    }
-  }
+             if (target.type === 'now-star') {
+         const nowTs = Date.now()
+         const newId = this.createInstantAt(nowTs, '')
+         if (newId) {
+           this.savedStore.setFavorite(newId, true)
+           this.setViewFocus('instant', newId)
+           this.state.setTimeCenter(nowTs)
+           this.state.setEditingInstant(newId)
+         }
+         return
+       }
+       if (target.type === 'span-time-input' && target.id) {
+         // Handle time input for special spans (cursor-now, selected-cursor)
+         if (target.id === 'cursor-now') {
+           // Emit event for cursor-now span time input
+           this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+             detail: {
+               type: 'cursor-now',
+               position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+             }
+           }))
+           return
+         }
+         if (target.id === 'selected-cursor') {
+           // Emit event for selected-cursor span time input
+           this.canvas.dispatchEvent(new CustomEvent('span-time-input', {
+             detail: {
+               type: 'selected-cursor',
+               position: { x: target.rect.x + target.rect.w / 2, y: target.rect.y }
+             }
+           }))
+           return
+         }
+         return
+       }
+     }
+   }
 
   private measureTextWidth(font: string, text: string): number {
     return this.shapes.measureText(text, font).width
@@ -1537,6 +1729,9 @@ export class TimelineRenderer {
     this.ctx.fillText(label, midX, labelY + labelHeight / 2)
 
     this.ctx.restore()
+
+    // Add hit target for time input on the label
+    this.hitTargets.addSpanTimeInput(labelX, labelY, labelWidth, labelHeight, 'cursor-now')
 
     // Arrow square icon near the duration label to jump focus to Now
     const iconW = 24, iconH = 24
@@ -1784,6 +1979,10 @@ export class TimelineRenderer {
 
   public setTimeIncrement(increment: import('./core/TimelineState').TimeIncrement): void {
     this.state.setTimeIncrement(increment)
+  }
+
+  public getCurrentSelectedInstantId(): string | null {
+    return this.state.getCurrentSelectedInstantId()
   }
 
   // Smoothly focus an instant by id or timestamp; keeps current zoom

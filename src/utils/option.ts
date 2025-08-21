@@ -1,5 +1,5 @@
 import type { Option } from 'fp-ts/Option'
-import { some, none, fromNullable, fold } from 'fp-ts/Option'
+import { none, fromNullable, fold } from 'fp-ts/Option'
 import { pipe } from 'fp-ts/function'
 
 // Re-export commonly used Option functions
