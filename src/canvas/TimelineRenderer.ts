@@ -10,6 +10,8 @@ import { TimelineState } from './core/TimelineState.ts'
 import { TimelineViewport } from './core/TimelineViewport.ts'
 import { TimelineAnimations } from './core/TimelineAnimations.ts'
 import { HitTargetManager } from './core/HitTargetManager.ts'
+import { IconRenderer } from './core/IconRenderer.ts'
+import { ShapeRenderer } from './core/ShapeRenderer.ts'
 export interface InstantFormatInfo {
   lineColor: string
   lineWidth: number
@@ -35,6 +37,8 @@ export class TimelineRenderer {
   private viewport: TimelineViewport
   private animations: TimelineAnimations
   private hitTargets: HitTargetManager
+  private icons: IconRenderer
+  private shapes: ShapeRenderer
 
   // Data stores
   private savedStore: SavedInstantsStore
@@ -83,6 +87,8 @@ export class TimelineRenderer {
     this.viewport = new TimelineViewport(canvas, this.state)
     this.animations = new TimelineAnimations(this.state)
     this.hitTargets = new HitTargetManager()
+    this.icons = new IconRenderer(this.ctx)
+    this.shapes = new ShapeRenderer(this.ctx)
     
     this.loadPersistedState()
     this.updateTimelineState()
@@ -1021,21 +1027,7 @@ export class TimelineRenderer {
       const extraLeft = 22 + 8 // account for left focus arrow (width + gap)
       const iconX = labelX - iconW - 8 - extraLeft
       const iconY = labelY + (labelHeight - iconH) / 2
-      this.ctx.save()
-      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-      this.ctx.strokeStyle = '#22c55e'
-      this.ctx.lineWidth = 2
-      this.ctx.fillRect(iconX, iconY, iconW, iconH)
-      this.ctx.strokeRect(iconX, iconY, iconW, iconH)
-      this.ctx.strokeStyle = '#ffffff'
-      this.ctx.beginPath()
-      this.ctx.moveTo(iconX + 12, iconY + 5)
-      this.ctx.lineTo(iconX + 12, iconY + 16)
-      this.ctx.moveTo(iconX + 8, iconY + 12)
-      this.ctx.lineTo(iconX + 12, iconY + 18)
-      this.ctx.lineTo(iconX + 16, iconY + 12)
-      this.ctx.stroke()
-      this.ctx.restore()
+      this.icons.drawPin(iconX, iconY, iconW, iconH)
       const spanData = opts.recordImplied ? 
         { aTs: opts.recordImplied.aTs, bTs: opts.recordImplied.bTs, label: opts.recordImplied.label } :
         (typeof opts.saveLabel === 'string' ? { aTs, bTs, label: opts.saveLabel } : undefined)
@@ -1086,22 +1078,7 @@ export class TimelineRenderer {
       const rect = side === 'left'
         ? { x: xLeft, y: yTop, w, h }
         : { x: xRight, y: yTop, w, h }
-      this.ctx.save()
-      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-      this.ctx.strokeStyle = '#ffffff'
-      this.ctx.lineWidth = 2
-      this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-      this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h)
-      // Draw arrow glyph pointing outward
-      const dir = side === 'left' ? -1 : 1
-      this.ctx.beginPath()
-      const ax = rect.x + rect.w / 2
-      const ay = rect.y + rect.h / 2
-      this.ctx.moveTo(ax - 6 * dir, ay - 5)
-      this.ctx.lineTo(ax + 6 * dir, ay)
-      this.ctx.lineTo(ax - 6 * dir, ay + 5)
-      this.ctx.stroke()
-      this.ctx.restore()
+      this.icons.drawArrow(rect.x, rect.y, rect.w, rect.h, side === 'left' ? 'left' : 'right')
       this.hitTargets.addSpanEndFocus(rect.x, rect.y, rect.w, rect.h, target.kind === 'now' ? 'now' : 'instant', target.id)
     }
 
@@ -1125,57 +1102,16 @@ export class TimelineRenderer {
       const iconW = 20, iconH = 20
       const eyeX = labelX + (labelWidth - iconW) / 2
       const eyeY = labelY + labelHeight + 6
-      this.ctx.save()
-      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-      this.ctx.strokeStyle = '#ffffff'
-      this.ctx.lineWidth = 2
-      this.ctx.fillRect(eyeX, eyeY, iconW, iconH)
-      this.ctx.strokeRect(eyeX, eyeY, iconW, iconH)
-      // simple eye glyph
-      this.ctx.beginPath()
-      this.ctx.moveTo(eyeX + 4, eyeY + iconH / 2)
-      this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + iconH - 4, eyeX + iconW - 4, eyeY + iconH / 2)
-      this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + 4, eyeX + 4, eyeY + iconH / 2)
-      this.ctx.stroke()
-      this.ctx.beginPath()
-      this.ctx.arc(eyeX + iconW / 2, eyeY + iconH / 2, 3, 0, Math.PI * 2)
-      this.ctx.stroke()
-      // red X overlay if currently hidden (only when we know visibility)
-      if (typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false) {
-        this.ctx.strokeStyle = '#ef4444'
-        this.ctx.beginPath()
-        this.ctx.moveTo(eyeX + 3, eyeY + 3)
-        this.ctx.lineTo(eyeX + iconW - 3, eyeY + iconH - 3)
-        this.ctx.moveTo(eyeX + iconW - 3, eyeY + 3)
-        this.ctx.lineTo(eyeX + 3, eyeY + iconH - 3)
-        this.ctx.stroke()
-      }
-      this.ctx.restore()
+      this.icons.drawEye(eyeX, eyeY, iconW, iconH, { 
+        crossed: typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false 
+      })
       this.hitTargets.addSpanVisible(opts.spanId, eyeX, eyeY, iconW, iconH)
 
       // Red trashcan delete button to the right of eye
       const delW = 20, delH = 20
       const delX = eyeX + iconW + 8
       const delY = eyeY
-      this.ctx.save()
-      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-      this.ctx.strokeStyle = '#ef4444'
-      this.ctx.lineWidth = 2
-      this.ctx.fillRect(delX, delY, delW, delH)
-      this.ctx.strokeRect(delX, delY, delW, delH)
-      // simple trash glyph
-      this.ctx.strokeStyle = '#ffffff'
-      this.ctx.beginPath()
-      this.ctx.moveTo(delX + 4, delY + 7)
-      this.ctx.lineTo(delX + delW - 4, delY + 7)
-      this.ctx.moveTo(delX + 7, delY + 7)
-      this.ctx.lineTo(delX + 7, delY + delH - 4)
-      this.ctx.moveTo(delX + delW / 2, delY + 7)
-      this.ctx.lineTo(delX + delW / 2, delY + delH - 4)
-      this.ctx.moveTo(delX + delW - 7, delY + 7)
-      this.ctx.lineTo(delX + delW - 7, delY + delH - 4)
-      this.ctx.stroke()
-      this.ctx.restore()
+      this.icons.drawTrashcan(delX, delY, delW, delH)
       this.hitTargets.addSpanDelete(opts.spanId, delX, delY, delW, delH)
     }
     
@@ -1191,25 +1127,7 @@ export class TimelineRenderer {
   // removed legacy implied draw method after refactor
 
   private drawStarIcon(cx: number, cy: number, filled: boolean) {
-    const r = 8
-    this.ctx.save()
-    this.ctx.beginPath()
-    for (let i = 0; i < 10; i++) {
-      const angle = (Math.PI / 5) * i - Math.PI / 2
-      const radius = i % 2 === 0 ? r : r * 0.5
-      const x = cx + Math.cos(angle) * radius
-      const y = cy + Math.sin(angle) * radius
-      if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y)
-    }
-    this.ctx.closePath()
-    if (filled) {
-      this.ctx.fillStyle = '#facc15'
-      this.ctx.fill()
-    }
-    this.ctx.strokeStyle = '#facc15'
-    this.ctx.lineWidth = 2
-    this.ctx.stroke()
-    this.ctx.restore()
+    this.icons.drawStar(cx, cy, 8, filled, { fillColor: '#facc15', strokeColor: '#facc15' })
   }
 
   // removed unused drawCursorTrashIcon
@@ -1518,11 +1436,7 @@ export class TimelineRenderer {
   }
 
   private measureTextWidth(font: string, text: string): number {
-    this.ctx.save()
-    this.ctx.font = font
-    const metrics = this.ctx.measureText(text)
-    this.ctx.restore()
-    return metrics.width
+    return this.shapes.measureText(text, font).width
   }
 
   private drawTrashIconAt(ts: number, id: string) {
@@ -1531,25 +1445,7 @@ export class TimelineRenderer {
     const boxW = 28
     const boxH = 28
     const y = centerY + 120
-    this.ctx.save()
-    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-    this.ctx.strokeStyle = '#ef4444'
-    this.ctx.lineWidth = 2
-    this.ctx.fillRect(x - boxW / 2, y, boxW, boxH)
-    this.ctx.strokeRect(x - boxW / 2, y, boxW, boxH)
-    // trash lines
-    this.ctx.strokeStyle = '#ffffff'
-    this.ctx.beginPath()
-    this.ctx.moveTo(x - 6, y + 10)
-    this.ctx.lineTo(x + 6, y + 10)
-    this.ctx.moveTo(x - 4, y + 10)
-    this.ctx.lineTo(x - 3, y + 20)
-    this.ctx.moveTo(x, y + 10)
-    this.ctx.lineTo(x, y + 20)
-    this.ctx.moveTo(x + 4, y + 10)
-    this.ctx.lineTo(x + 3, y + 20)
-    this.ctx.stroke()
-    this.ctx.restore()
+    this.icons.drawTrashcan(x - boxW / 2, y, boxW, boxH)
     this.hitTargets.addInstantTrash(id, x - boxW / 2, y, boxW, boxH)
   }
 
@@ -1799,6 +1695,11 @@ export class TimelineRenderer {
 
   // View/pan API
   public setViewFocus(mode: 'now' | 'cursor' | 'instant' | 'span', instantId?: string, spanId?: string) {
+    // When focusing a span, clear any selected instant and previous
+    if (mode === 'span') {
+      this.state.setSelectedInstant(null)
+    }
+    
     this.state.setViewFocus(mode, instantId, spanId)
     this.persistState()
   }
