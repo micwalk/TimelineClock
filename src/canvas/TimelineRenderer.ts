@@ -9,6 +9,7 @@ import type { SpanView } from '../types/spans.ts'
 import { TimelineState } from './core/TimelineState.ts'
 import { TimelineViewport } from './core/TimelineViewport.ts'
 import { TimelineAnimations } from './core/TimelineAnimations.ts'
+import { HitTargetManager } from './core/HitTargetManager.ts'
 export interface InstantFormatInfo {
   lineColor: string
   lineWidth: number
@@ -33,11 +34,11 @@ export class TimelineRenderer {
   private state: TimelineState
   private viewport: TimelineViewport
   private animations: TimelineAnimations
+  private hitTargets: HitTargetManager
 
   // Data stores
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'span-body' | 'span-visible' | 'span-delete' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant'; spanData?: { aTs: number; bTs: number; label: string } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private lastImpliedSpan: { aTs: number; bTs: number; label: string } | null = null
 
@@ -81,6 +82,7 @@ export class TimelineRenderer {
     this.state = new TimelineState(this.savedStore, this.spansStore)
     this.viewport = new TimelineViewport(canvas, this.state)
     this.animations = new TimelineAnimations(this.state)
+    this.hitTargets = new HitTargetManager()
     
     this.loadPersistedState()
     this.updateTimelineState()
@@ -167,7 +169,7 @@ export class TimelineRenderer {
     this.clear()
     this.drawTimeline()
     this.drawTimeTicks()
-    this.hitTargets = []
+    this.hitTargets.clear()
     this.overlayElements = []
     this.drawNowInstant() // This now draws the line, label, and time string
     // Draw saved instants
@@ -741,7 +743,7 @@ export class TimelineRenderer {
     })
     // Add double-click target on NOW time box to focus now
     const rect = this.computeTimeBoxRect(Date.now())
-    this.hitTargets.push({ type: 'instant-time', rect })
+    this.hitTargets.addInstantTime(undefined, rect.x, rect.y, rect.w, rect.h)
     // Add double-click target on NOW label to create and edit a new instant
     {
       const centerY = this.TimelineCenterY()
@@ -751,14 +753,14 @@ export class TimelineRenderer {
       const w = this.measureTextWidth(font, label) + 10
       const h = 30
       const r = { x: x - w / 2, y: centerY + 50, w, h }
-      this.hitTargets.push({ type: 'now-label', rect: r })
+      this.hitTargets.addNowLabel(r.x, r.y, r.w, r.h)
       // Add unfilled star next to Now
       const starSize = 20
       const starRect = { x: r.x + r.w + 6, y: r.y + (r.h - starSize) / 2, w: starSize, h: starSize }
       const starCx = starRect.x + starRect.w / 2
       const starCy = starRect.y + starRect.h / 2
       this.drawStarIcon(starCx, starCy, false)
-      this.hitTargets.push({ type: 'now-star', rect: starRect })
+      this.hitTargets.addNowStar(starRect.x, starRect.y, starRect.w, starRect.h)
     }
   }
 
@@ -814,7 +816,7 @@ export class TimelineRenderer {
       const w = this.measureTextWidth(font, label) + 10
       const h = 30
       const rect = { x: x - w / 2, y: centerY + 50, w, h }
-      this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
+      this.hitTargets.addInstantLabel(s.id, rect.x, rect.y, rect.w, rect.h)
       // Favorite star next to label with hit target
       {
         const shouldShowStar = !!s.favorite || this.state.getCurrentSelectedInstantId() === s.id
@@ -824,12 +826,12 @@ export class TimelineRenderer {
         const starCx = starRect.x + starRect.w / 2
         const starCy = starRect.y + starRect.h / 2
         this.drawStarIcon(starCx, starCy, !!s.favorite)
-        this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
+        this.hitTargets.addInstantFavorite(s.id, starRect.x, starRect.y, starRect.w, starRect.h)
         }
       }
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
-      this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
+      this.hitTargets.addInstantTime(s.id, timeRect.x, timeRect.y, timeRect.w, timeRect.h)
       // Only include overlay input for the one being edited; ensure we use the raw saved label (no fallback)
       if (this.state.getEditingInstantId() === s.id) {
         this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
@@ -852,7 +854,7 @@ export class TimelineRenderer {
     // (Removed cursor trash icon; double-click handles snap-to-now)
     // Double-click target on cursor time box
     const rect = this.computeTimeBoxRect(this.state.getTimeCenter())
-    this.hitTargets.push({ type: 'instant-time', id: undefined, rect })
+    this.hitTargets.addInstantTime(undefined, rect.x, rect.y, rect.w, rect.h)
     // Add double-click target for the cursor label to save a new instant
     {
       const centerY = this.TimelineCenterY()
@@ -862,14 +864,14 @@ export class TimelineRenderer {
       const w = this.measureTextWidth(font, label) + 10
       const h = 30
       const r = { x: x - w / 2, y: centerY + 50, w, h }
-      this.hitTargets.push({ type: 'cursor-label', rect: r })
+      this.hitTargets.addCursorLabel(r.x, r.y, r.w, r.h)
       // Add unfilled star next to Cursor
       const starSize = 20
       const starRect = { x: r.x + r.w + 6, y: r.y + (r.h - starSize) / 2, w: starSize, h: starSize }
       const starCx = starRect.x + starRect.w / 2
       const starCy = starRect.y + starRect.h / 2
       this.drawStarIcon(starCx, starCy, false)
-      this.hitTargets.push({ type: 'cursor-star', rect: starRect })
+      this.hitTargets.addCursorStar(starRect.x, starRect.y, starRect.w, starRect.h)
     }
   }
 
@@ -1006,7 +1008,7 @@ export class TimelineRenderer {
 
     // Editable label for saved spans
     if (opts.spanId) {
-      this.hitTargets.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight } })
+      this.hitTargets.addSpanLabel(opts.spanId, labelX, labelY, labelWidth, labelHeight)
       if (this.state.getEditingSpanId() === opts.spanId) {
         const initialText = (typeof opts.headerLabel === 'string' && opts.headerLabel.length > 0) ? opts.headerLabel : labelText
         this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: initialText, focused: true })
@@ -1038,7 +1040,7 @@ export class TimelineRenderer {
         { aTs: opts.recordImplied.aTs, bTs: opts.recordImplied.bTs, label: opts.recordImplied.label } :
         (typeof opts.saveLabel === 'string' ? { aTs, bTs, label: opts.saveLabel } : undefined)
       
-      this.hitTargets.push({ type: 'span-pin', rect: { x: iconX, y: iconY, w: iconW, h: iconH }, spanData })
+      this.hitTargets.addSpanPin(iconX, iconY, iconW, iconH, spanData)
       
       // Still set lastImpliedSpan for backwards compatibility
       if (spanData) {
@@ -1069,7 +1071,7 @@ export class TimelineRenderer {
       this.ctx.lineTo(ax - 6 * towardNow, ay + 5)
       this.ctx.stroke()
       this.ctx.restore()
-      this.hitTargets.push({ type: 'save-now', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
+      this.hitTargets.addSaveNow(iconX, iconY, iconW, iconH)
     }
 
     // Endpoint focus arrows (both sides unless target is cursor)
@@ -1100,7 +1102,7 @@ export class TimelineRenderer {
       this.ctx.lineTo(ax - 6 * dir, ay + 5)
       this.ctx.stroke()
       this.ctx.restore()
-      this.hitTargets.push({ type: 'span-end-focus', rect, focus: target.kind === 'now' ? 'now' : 'instant', id: target.id })
+      this.hitTargets.addSpanEndFocus(rect.x, rect.y, rect.w, rect.h, target.kind === 'now' ? 'now' : 'instant', target.id)
     }
 
     // Place arrows based on time order: left arrow → older endpoint, right arrow → newer endpoint
@@ -1149,7 +1151,7 @@ export class TimelineRenderer {
         this.ctx.stroke()
       }
       this.ctx.restore()
-      this.hitTargets.push({ type: 'span-visible', id: opts.spanId, rect: { x: eyeX, y: eyeY, w: iconW, h: iconH } })
+      this.hitTargets.addSpanVisible(opts.spanId, eyeX, eyeY, iconW, iconH)
 
       // Red trashcan delete button to the right of eye
       const delW = 20, delH = 20
@@ -1174,13 +1176,13 @@ export class TimelineRenderer {
       this.ctx.lineTo(delX + delW - 7, delY + delH - 4)
       this.ctx.stroke()
       this.ctx.restore()
-      this.hitTargets.push({ type: 'span-delete', id: opts.spanId, rect: { x: delX, y: delY, w: delW, h: delH } })
+      this.hitTargets.addSpanDelete(opts.spanId, delX, delY, delW, delH)
     }
     
     // Push body hit-target last so label double-click takes priority
     if (opts.spanId) {
       const bodyRect = { x: clampedLeft, y: spanY - 8, w: Math.max(12, clampedRight - clampedLeft), h: 16 }
-      this.hitTargets.push({ type: 'span-body', id: opts.spanId, rect: bodyRect })
+      this.hitTargets.addSpanBody(opts.spanId, bodyRect.x, bodyRect.y, bodyRect.w, bodyRect.h)
     }
 
     this.ctx.restore()
@@ -1272,25 +1274,24 @@ export class TimelineRenderer {
 
   // Interaction hooks to be called by component
   public handleClick(x: number, y: number) {
-    // Scan hit targets recorded during render
-    for (const target of this.hitTargets) {
-      const { rect } = target
-      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        if (target.type === 'save-now') {
-          // If this came from the span arrow button, treat as focus-now
-          if (this.state.getViewFocus().mode !== 'now') {
-            this.setViewFocus('now')
-            return
-          }
-          this.createInstantAt(Date.now(), '')
-          // focus remains unchanged
+    // Find hit target at click position
+    const target = this.hitTargets.findTargetAt(x, y)
+    if (target) {
+      if (target.type === 'save-now') {
+        // If this came from the span arrow button, treat as focus-now
+        if (this.state.getViewFocus().mode !== 'now') {
+          this.setViewFocus('now')
           return
         }
-        if (target.type === 'span-pin') {
-          const imp = target.spanData ?? this.lastImpliedSpan ?? undefined
-          if (imp) {
-            // Ensure endpoints are saved instants (create instant at Now explicitly)
-            const ensureInstant = (ts: number): string => {
+        this.createInstantAt(Date.now(), '')
+        // focus remains unchanged
+        return
+      }
+      if (target.type === 'span-pin') {
+        const imp = target.spanData ?? this.lastImpliedSpan ?? undefined
+        if (imp) {
+          // Ensure endpoints are saved instants (create instant at Now explicitly)
+          const ensureInstant = (ts: number): string => {
               const found = this.savedStore.getSnapshot().find(i => i.tsEpochMs === ts)
               if (found) return found.id
               return this.createInstantAt(ts, '')
@@ -1395,7 +1396,6 @@ export class TimelineRenderer {
           return
         }
         // instant-label editing moved to double-click
-      }
     }
   }
 
@@ -1422,103 +1422,97 @@ export class TimelineRenderer {
   }
 
   public handleDoubleClick(x: number, y: number) {
-    for (const target of this.hitTargets) {
-      const { rect } = target
-      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        if (target.type === 'span-label' && target.id) {
-          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
-          if (sp) {
-            const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
-            if (isFocused) {
-              // Already focused → enter rename
-              this.state.setEditingSpan(target.id)
-              return
-            }
-            // Not focused → focus and zoom-to-fit
-            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-            if (typeof a === 'number' && typeof b === 'number') {
-              this.setViewFocus('span', undefined, sp.id)
-              this.adjustZoomToRange(a, b)
-              return
-            }
+    const target = this.hitTargets.findTargetAt(x, y)
+    if (target) {
+      if (target.type === 'span-label' && target.id) {
+        const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+        if (sp) {
+          const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
+          if (isFocused) {
+            // Already focused → enter rename
+            this.state.setEditingSpan(target.id)
+            return
+          }
+          // Not focused → focus and zoom-to-fit
+          const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+          const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+          if (typeof a === 'number' && typeof b === 'number') {
+            this.setViewFocus('span', undefined, sp.id)
+            this.adjustZoomToRange(a, b)
+            return
           }
         }
-        if (target.type === 'span-body' && target.id) {
-          // Focus span and zoom-to-fit
-          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
-          if (sp) {
-            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-            if (typeof a === 'number' && typeof b === 'number') {
-              this.setViewFocus('span', undefined, sp.id)
-              this.adjustZoomToRange(a, b)
-            }
+      }
+      if (target.type === 'span-body' && target.id) {
+        // Focus span and zoom-to-fit
+        const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+        if (sp) {
+          const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+          const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+          if (typeof a === 'number' && typeof b === 'number') {
+            this.setViewFocus('span', undefined, sp.id)
+            this.adjustZoomToRange(a, b)
           }
-          return
         }
-        if (target.type === 'instant-time') {
-          if (target.id) {
-            const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
-            if (typeof ts === 'number') {
-              this.focusInstantAnimated(target.id, ts)
-            }
-          } else {
-            // Cursor/Now time box
-            // Double-click Now: animate to Now
-            this.focusNowAnimated()
+        return
+      }
+      if (target.type === 'instant-time') {
+        if (target.id) {
+          const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
+          if (typeof ts === 'number') {
+            this.focusInstantAnimated(target.id, ts)
           }
-          return
+        } else {
+          // Cursor/Now time box
+          // Double-click Now: animate to Now
+          this.focusNowAnimated()
         }
-        if (target.type === 'instant-label' && target.id) {
-          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
-          if (inst) {
-            this.state.setEditingInstant(target.id)
-          }
-          return
+        return
+      }
+      if (target.type === 'instant-label' && target.id) {
+        const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
+        if (inst) {
+          this.state.setEditingInstant(target.id)
         }
-        if (target.type === 'span-label' && target.id) {
-          this.state.setEditingSpan(target.id)
-          return
+        return
+      }
+      if (target.type === 'cursor-label') {
+        const newId = this.createInstantAt(this.state.getTimeCenter(), '')
+        if (newId) {
+          this.setViewFocus('instant', newId)
+          this.state.setEditingInstant(newId)
         }
-        if (target.type === 'cursor-label') {
-          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
-          if (newId) {
-            this.setViewFocus('instant', newId)
-            this.state.setEditingInstant(newId)
-          }
-          return
+        return
+      }
+      if (target.type === 'now-label') {
+        const nowTs = Date.now()
+        const newId = this.createInstantAt(nowTs, '')
+        if (newId) {
+          this.setViewFocus('instant', newId)
+          this.state.setTimeCenter(nowTs)
+          this.state.setEditingInstant(newId)
         }
-        if (target.type === 'now-label') {
-          const nowTs = Date.now()
-          const newId = this.createInstantAt(nowTs, '')
-          if (newId) {
-            this.setViewFocus('instant', newId)
-            this.state.setTimeCenter(nowTs)
-            this.state.setEditingInstant(newId)
-          }
-          return
+        return
+      }
+      if (target.type === 'cursor-star') {
+        const newId = this.createInstantAt(this.state.getTimeCenter(), '')
+        if (newId) {
+          this.savedStore.setFavorite(newId, true)
+          this.setViewFocus('instant', newId)
+          this.state.setEditingInstant(newId)
         }
-        if (target.type === 'cursor-star') {
-          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
-          if (newId) {
-            this.savedStore.setFavorite(newId, true)
-            this.setViewFocus('instant', newId)
-            this.state.setEditingInstant(newId)
-          }
-          return
+        return
+      }
+      if (target.type === 'now-star') {
+        const nowTs = Date.now()
+        const newId = this.createInstantAt(nowTs, '')
+        if (newId) {
+          this.savedStore.setFavorite(newId, true)
+          this.setViewFocus('instant', newId)
+          this.state.setTimeCenter(nowTs)
+          this.state.setEditingInstant(newId)
         }
-        if (target.type === 'now-star') {
-          const nowTs = Date.now()
-          const newId = this.createInstantAt(nowTs, '')
-          if (newId) {
-            this.savedStore.setFavorite(newId, true)
-            this.setViewFocus('instant', newId)
-            this.state.setTimeCenter(nowTs)
-            this.state.setEditingInstant(newId)
-          }
-          return
-        }
+        return
       }
     }
   }
@@ -1556,7 +1550,7 @@ export class TimelineRenderer {
     this.ctx.lineTo(x + 3, y + 20)
     this.ctx.stroke()
     this.ctx.restore()
-    this.hitTargets.push({ type: 'instant-trash', id, rect: { x: x - boxW / 2, y, w: boxW, h: boxH } })
+    this.hitTargets.addInstantTrash(id, x - boxW / 2, y, boxW, boxH)
   }
 
   // Zoom API (percent-based around current center)
@@ -1670,7 +1664,7 @@ export class TimelineRenderer {
     this.ctx.lineTo(ax - 6 * towardNow, ay + 5)
     this.ctx.stroke()
     this.ctx.restore()
-    this.hitTargets.push({ type: 'save-now', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
+    this.hitTargets.addSaveNow(iconX, iconY, iconW, iconH)
 
     // Pin icon to save span (source ↔ now) placed opposite the arrow side
     const pinW = 24, pinH = 24
@@ -1694,7 +1688,7 @@ export class TimelineRenderer {
     this.ctx.stroke()
     this.ctx.restore()
     const spanData = { aTs: sourceTs, bTs: now, label: 'To Now' }
-    this.hitTargets.push({ type: 'span-pin', rect: { x: pinX, y: pinY, w: pinW, h: pinH }, spanData })
+    this.hitTargets.addSpanPin(pinX, pinY, pinW, pinH, spanData)
     this.lastImpliedSpan = spanData
   }
 
