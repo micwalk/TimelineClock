@@ -6,6 +6,9 @@ import type { InstantRecord } from '../types/instants.ts'
 import { SavedInstantsStore } from '../services/SavedInstantsStore.ts'
 import { SavedSpansStore } from '../services/SavedSpansStore.ts'
 import type { SpanView } from '../types/spans.ts'
+import { TimelineState } from './core/TimelineState.ts'
+import { TimelineViewport } from './core/TimelineViewport.ts'
+import { TimelineAnimations } from './core/TimelineAnimations.ts'
 export interface InstantFormatInfo {
   lineColor: string
   lineWidth: number
@@ -25,42 +28,18 @@ export class TimelineRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private animationId: number | null = null
-  private zoomPanAnim: { active: boolean; startTs: number; durationMs: number; fromCenter: number; toCenter: number; fromWidth: number; toWidth: number } | null = null
-  private pendingPersistAfterAnim: boolean = false
-  private zoomTargetWidth: number | null = null
-  private zoomTargetPersistPending: boolean = false
 
-  // Core timeline state variables
-  private screenWidth: number = 0
-  private timeWidth: number = 6 * 60 * 60 * 1000 // 6 hours in milliseconds
-  private timeCenter: number = Date.now() // Center of timeline as instant
-  private timeStart: number = 0 // Start of visible timeline
-  private timeEnd: number = 0 // End of visible timeline
+  // Core systems
+  private state: TimelineState
+  private viewport: TimelineViewport
+  private animations: TimelineAnimations
 
-  // View behavior
-  private viewFocusMode: 'now' | 'cursor' | 'instant' | 'span' = 'now'
-  private focusedInstantId: string | null = null
-  private focusedSpanId: string | null = null
-  private currentSelectedInstantId: string | null = null
-  private previousSelectedInstantId: string | null = null
-
-  // Saved instants and hit targets for interactions
+  // Data stores
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
   private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'span-body' | 'span-visible' | 'span-delete' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant'; spanData?: { aTs: number; bTs: number; label: string } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
-  private editingInstantId: string | null = null
-  private editingSpanId: string | null = null
-  private stateVersion: number = 0
   private lastImpliedSpan: { aTs: number; bTs: number; label: string } | null = null
-  // Visibility toggles for implied spans
-  private showImpliedSelectedNow: boolean = true
-  private showImpliedSelectedPrev: boolean = true
-  // Focus history (previous = previously focused instant)
-  private focusHistory: string[] = []
-  private focusHistoryIndex: number = -1
-  private suppressHistoryPush: boolean = false
-  private selectedSpanId: string | null = null
 
   
   // Recentered vertical baseline for the timeline: lesser of one-third of canvas CSS height or constant pixels
@@ -84,8 +63,6 @@ export class TimelineRenderer {
 
   // Zoom configuration
   private zoomPercent: number = 0.1 // 10% per step
-  private readonly minTimeWidthMs: number = 1000 // 1s
-  private readonly maxTimeWidthMs: number = 30 * 24 * 60 * 60 * 1000 // 30d
 
   constructor(canvas: HTMLCanvasElement, deps?: { saved?: SavedInstantsStore; spans?: SavedSpansStore }) {
     this.canvas = canvas
@@ -95,10 +72,16 @@ export class TimelineRenderer {
     }
     this.ctx = context
     this.setupCanvas()
+    
+    // Initialize data stores
     this.savedStore = deps?.saved ?? new SavedInstantsStore()
     this.spansStore = deps?.spans ?? new SavedSpansStore()
-    this.savedStore.subscribe(() => { this.stateVersion++ })
-    this.spansStore.subscribe(() => { this.stateVersion++ })
+    
+    // Initialize core systems
+    this.state = new TimelineState(this.savedStore, this.spansStore)
+    this.viewport = new TimelineViewport(canvas, this.state)
+    this.animations = new TimelineAnimations(this.state)
+    
     this.loadPersistedState()
     this.updateTimelineState()
   }
@@ -140,70 +123,41 @@ export class TimelineRenderer {
 
 
   private updateTimelineState() {
-    const dpr = window.devicePixelRatio || 1
-    this.screenWidth = this.canvas.width / dpr
+    // Update viewport dimensions
+    this.viewport.updateDimensions()
     
-    // Update time center depending on view mode (skip if animating)
-    const animating = !!(this.zoomPanAnim && this.zoomPanAnim.active)
-    if (!animating) {
-    if (this.viewFocusMode === 'now') {
-      this.timeCenter = Date.now()
-    } else if (this.viewFocusMode === 'span' && this.focusedSpanId) {
-      const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
-      if (span) {
-        const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
-        const b = span.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
-        if (typeof a === 'number' && typeof b === 'number') {
-          // For spans with NOW endpoint, continuously update center and zoom
-          if (span.endIsNow) {
-            this.updateContinuousZoomForNowSpan(a, b)
-          } else {
-            this.timeCenter = (a + b) / 2
+    // Update focus-based time center (skip if animating)
+    const focusState = this.state.getViewFocus()
+    if (!this.animations.isZoomPanAnimating()) {
+      if (focusState.mode === 'now') {
+        this.state.setTimeCenter(Date.now())
+      } else if (focusState.mode === 'span' && focusState.focusedSpanId) {
+        const span = this.spansStore.getSnapshot().find(s => s.id === focusState.focusedSpanId)
+        if (span) {
+          const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
+          const b = span.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
+          if (typeof a === 'number' && typeof b === 'number') {
+            // For spans with NOW endpoint, continuously update center and zoom
+            if (span.endIsNow) {
+              this.animations.updateContinuousZoomForNowSpan(a, b)
+            } else {
+              this.state.setTimeCenter((a + b) / 2)
+            }
           }
         }
-        }
       }
     }
-    // Apply zoom/pan animation if active
-    if (this.zoomPanAnim && this.zoomPanAnim.active) {
-      const nowTs = performance.now()
-      const tRaw = (nowTs - this.zoomPanAnim.startTs) / this.zoomPanAnim.durationMs
-      const t = Math.max(0, Math.min(1, tRaw))
-      // cubic ease-in-out
-      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-      this.timeCenter = this.zoomPanAnim.fromCenter + (this.zoomPanAnim.toCenter - this.zoomPanAnim.fromCenter) * ease
-      this.timeWidth = this.zoomPanAnim.fromWidth + (this.zoomPanAnim.toWidth - this.zoomPanAnim.fromWidth) * ease
-      if (t >= 1) {
-        this.zoomPanAnim.active = false
-        if (this.pendingPersistAfterAnim) {
-          this.persistState()
-          this.pendingPersistAfterAnim = false
-        }
-      }
-    }
-    // Smooth towards wheel-zoom target if present and no center animation is running
-    const centerAnimating = !!(this.zoomPanAnim && this.zoomPanAnim.active)
-    if (!centerAnimating && this.zoomTargetWidth !== null) {
-      const target = this.clampTimeWidth(this.zoomTargetWidth)
-      const diff = target - this.timeWidth
-      // Exponential smoothing
-      const step = diff * 0.25
-      if (Math.abs(diff) <= 0.5) {
-        this.timeWidth = target
-        this.zoomTargetWidth = null
-        if (this.zoomTargetPersistPending) {
-          this.persistState()
-          this.zoomTargetPersistPending = false
-        }
-      } else {
-        this.timeWidth += step
+    // Update animations
+    if (this.animations.updateAnimations()) {
+      // Check if we need to persist state after animation completion
+      const animState = this.animations.getAnimationState()
+      if (animState.pendingPersist && !animState.zoomPanActive && !animState.zoomTargetActive) {
+        this.persistState()
       }
     }
     
-    // Calculate time range based on timeWidth and center
-    const halfTimeWidth = this.timeWidth / 2
-    this.timeStart = this.timeCenter - halfTimeWidth
-    this.timeEnd = this.timeCenter + halfTimeWidth
+    // Update viewport time range
+    this.viewport.updateTimeRange()
   }
 
   public render() {
@@ -221,15 +175,15 @@ export class TimelineRenderer {
     // Track spans already drawn to avoid duplicates across bands
     const drawnSpanIds = new Set<string>()
     
-    if (this.viewFocusMode === 'cursor' || this.viewFocusMode === 'instant') {
-    if (this.viewFocusMode === 'cursor') {
+    if (this.state.getViewFocus().mode === 'cursor' || this.state.getViewFocus().mode === 'instant') {
+    if (this.state.getViewFocus().mode === 'cursor') {
       this.drawCursorInstant()
       }
       this.drawCursorNowSpan()
     }
     // Draw focused saved span if any (with emphasis)
-    if (this.viewFocusMode === 'span' && this.focusedSpanId) {
-      const sp = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
+    if (this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId) {
+      const sp = this.spansStore.getSnapshot().find(s => s.id === this.state.getViewFocus().focusedSpanId)
       if (sp) {
         const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
         const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
@@ -281,8 +235,8 @@ export class TimelineRenderer {
     // Draw all saved spans using one layout pass (including invisible ones related to focus history)
     {
       const centerY = this.TimelineCenterY()
-      const focusedId = this.focusedInstantId
-      const selectedId = this.currentSelectedInstantId
+      const focusedId = this.state.getViewFocus().focusedInstantId
+      const selectedId = this.state.getCurrentSelectedInstantId()
       const savedSpans = this.spansStore.getSnapshot()
 
       // De-duplication mechanism for multiple reasons to draw spans.
@@ -298,7 +252,7 @@ export class TimelineRenderer {
 
       // Loop through all saved spans and add them to the list if they should be drawn
       for (const sp of savedSpans) {
-        if (this.viewFocusMode === 'span' && this.focusedSpanId === sp.id) continue // focused span drawn elsewhere
+        if (this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === sp.id) continue // focused span drawn elsewhere
         const aRec = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)
         const bRec = sp.endIsNow ? undefined : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)
         const a = aRec?.tsEpochMs
@@ -310,7 +264,7 @@ export class TimelineRenderer {
                 
         // Priority: 0 focused (cyan), 1 selected (blue), 2 visible (green), -1 or otherwise (exclude)
         let includePrio: number = -1
-        if (this.viewFocusMode === 'instant' && focusedId) {
+        if (this.state.getViewFocus().mode === 'instant' && focusedId) {
             includePrio = involveFocused ? 0 : sp.visible ? 2 : -1;
         } else if (selectedId) {
             includePrio = involveSelected ? 1 : sp.visible ? 2 : -1;
@@ -363,7 +317,7 @@ export class TimelineRenderer {
     } // End Draw Visible Spans
 
     // Draw implied spans for selected/current instant
-    const selected = this.currentSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.currentSelectedInstantId) : null
+    const selected = this.state.getCurrentSelectedInstantId() ? this.savedStore.getSnapshot().find(si => si.id === this.state.getCurrentSelectedInstantId()) : null
     // Previously focused instant for the purple span
     const prev = (() => {
       const id = this.getPrevFocusedInstantId()
@@ -375,10 +329,10 @@ export class TimelineRenderer {
     if (selected) {
       const y = this.TimelineCenterY() + this.spanRows.selectedCursor
       const color = '#22d3ee' // light blue always for this row
-      if (this.viewFocusMode === 'cursor') {
+      if (this.state.getViewFocus().mode === 'cursor') {
         const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
         const endName = 'Cursor'
-        this.drawSpanVisual(selected.tsEpochMs, this.timeCenter, {
+        this.drawSpanVisual(selected.tsEpochMs, this.state.getTimeCenter(), {
           y,
           color,
           startName,
@@ -389,8 +343,8 @@ export class TimelineRenderer {
           endFocus: { kind: 'cursor' },
           showInlineControls: true,
         })
-      } else if (this.viewFocusMode === 'instant' && this.focusedInstantId && this.focusedInstantId !== selected.id) {
-        const f = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+      } else if (this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId && this.state.getViewFocus().focusedInstantId !== selected.id) {
+        const f = this.savedStore.getSnapshot().find(si => si.id === this.state.getViewFocus().focusedInstantId)
         if (f) {
           const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
           const endName = f.label && f.label.length > 0 ? f.label : '?'
@@ -429,7 +383,7 @@ export class TimelineRenderer {
     }
     
     // Implied Span: for selected → previous.
-    if (selected && prev && this.showImpliedSelectedPrev) { // && this.viewFocusMode !== 'instant'
+    if (selected && prev && this.state.getImpliedVisibility('selected-prev')) { // && this.state.getViewFocus().mode !== 'instant'
       const startName = prev.label && prev.label.length > 0 ? prev.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
       this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { 
@@ -444,19 +398,8 @@ export class TimelineRenderer {
 
   private persistState() {
     try {
-      const payload = {
-        timeWidth: this.timeWidth,
-        timeCenter: this.timeCenter,
-        viewFocusMode: this.viewFocusMode,
-        focusedInstantId: this.focusedInstantId,
-        focusedSpanId: this.focusedSpanId,
-        currentSelectedInstantId: this.currentSelectedInstantId,
-        previousSelectedInstantId: this.previousSelectedInstantId,
-        focusHistory: this.focusHistory,
-        focusHistoryIndex: this.focusHistoryIndex,
-      }
+      const payload = this.state.getSnapshot()
       localStorage.setItem('timeline.state', JSON.stringify(payload))
-      this.stateVersion++
     } catch (err) { void err }
   }
 
@@ -464,16 +407,8 @@ export class TimelineRenderer {
     try {
       const raw = localStorage.getItem('timeline.state')
       if (!raw) return
-      const data = JSON.parse(raw) as Partial<{ timeWidth: number; timeCenter: number; viewFocusMode: 'now'|'cursor'|'instant'|'span'; focusedInstantId: string|null; focusedSpanId: string|null; currentSelectedInstantId: string|null; previousSelectedInstantId: string|null; focusHistory: string[]; focusHistoryIndex: number }>
-      if (typeof data.timeWidth === 'number') this.timeWidth = this.clampTimeWidth(data.timeWidth)
-      if (typeof data.timeCenter === 'number') this.timeCenter = data.timeCenter
-      if (data.viewFocusMode === 'now' || data.viewFocusMode === 'cursor' || data.viewFocusMode === 'instant' || data.viewFocusMode === 'span') this.viewFocusMode = data.viewFocusMode
-      if (typeof data.focusedInstantId === 'string' || data.focusedInstantId === null) this.focusedInstantId = data.focusedInstantId ?? null
-      if (typeof data.focusedSpanId === 'string' || data.focusedSpanId === null) this.focusedSpanId = data.focusedSpanId ?? null
-      if (typeof data.currentSelectedInstantId === 'string' || data.currentSelectedInstantId === null) this.currentSelectedInstantId = data.currentSelectedInstantId ?? null
-      if (typeof data.previousSelectedInstantId === 'string' || data.previousSelectedInstantId === null) this.previousSelectedInstantId = data.previousSelectedInstantId ?? null
-      if (Array.isArray(data.focusHistory)) this.focusHistory = data.focusHistory
-      if (typeof data.focusHistoryIndex === 'number') this.focusHistoryIndex = data.focusHistoryIndex
+      const data = JSON.parse(raw)
+      this.state.loadSnapshot(data)
     } catch (err) { void err }
   }
 
@@ -486,7 +421,7 @@ export class TimelineRenderer {
   private drawTimeline() {
     const centerY = this.TimelineCenterY()
     const startX = 0
-    const endX = this.screenWidth
+    const endX = this.viewport.getScreenWidth()
 
     // Draw timeline with blue neon glow effect
     this.ctx.save()
@@ -522,7 +457,7 @@ export class TimelineRenderer {
     // Determine tiers
     const { tier0, tier1, tier2 } = this.pickTickTiers()
 
-    const pxPerMs = this.screenWidth / this.timeWidth
+    const pxPerMs = this.viewport.getScreenWidth() / this.state.getTimeWidth()
     const spacing0 = tier0.ms * pxPerMs
     const spacing1 = tier1.ms * pxPerMs
     const spacing2 = tier2.ms * pxPerMs
@@ -557,7 +492,7 @@ export class TimelineRenderer {
 
   private pickTickTiers(): { tier0: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }; tier1: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' }; tier2: { kind: 'duration' | 'calendar'; ms: number; calendarUnit?: 'day' | 'week' | 'month' | 'year' } } {
     const units = this.getTickUnits()
-    const pxPerMs = this.screenWidth / this.timeWidth
+    const pxPerMs = this.viewport.getScreenWidth() / this.state.getTimeWidth()
     const minLabelSpacingPx = 100
     let middleIdx = units.length - 1
     for (let i = 0; i < units.length; i++) {
@@ -582,8 +517,8 @@ export class TimelineRenderer {
       const unitMs = unit.ms
       // Special alignment for 6-hour grid: snap to 00/06/12/18
       if (unitMs === 6 * 60 * 60 * 1000) {
-        const first = this.getFirstSixHourBoundaryAtOrBefore(this.timeStart)
-        for (let t = first; t <= this.timeEnd; t += unitMs) {
+        const first = this.getFirstSixHourBoundaryAtOrBefore(this.viewport.getTimeStart())
+        for (let t = first; t <= this.viewport.getTimeEnd(); t += unitMs) {
           const x = this.timeToPosition(t)
           this.ctx.beginPath()
           this.ctx.moveTo(x, centerY - style.halfHeight)
@@ -606,8 +541,8 @@ export class TimelineRenderer {
         this.ctx.restore()
         return
       }
-      const startAligned = Math.floor(this.timeStart / unitMs) * unitMs
-      for (let t = startAligned; t <= this.timeEnd; t += unitMs) {
+      const startAligned = Math.floor(this.viewport.getTimeStart() / unitMs) * unitMs
+      for (let t = startAligned; t <= this.viewport.getTimeEnd(); t += unitMs) {
         const x = this.timeToPosition(t)
       this.ctx.beginPath()
         this.ctx.moveTo(x, centerY - style.halfHeight)
@@ -629,9 +564,9 @@ export class TimelineRenderer {
       }
     } else {
       // Calendar-aligned ticks (midnight boundaries)
-      const first = this.getFirstCalendarBoundaryAtOrBefore(this.timeStart, unit.calendarUnit!)
+      const first = this.getFirstCalendarBoundaryAtOrBefore(this.viewport.getTimeStart(), unit.calendarUnit!)
       let t = first
-      while (t <= this.timeEnd) {
+      while (t <= this.viewport.getTimeEnd()) {
         const x = this.timeToPosition(t)
         this.ctx.beginPath()
         this.ctx.moveTo(x, centerY - style.halfHeight)
@@ -831,8 +766,8 @@ export class TimelineRenderer {
   private drawSavedInstants() {
     const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label, favorite: !!rec.favorite }))
     for (const s of saved) {
-      const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === s.id
-      const isSelected = this.currentSelectedInstantId === s.id
+      const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === s.id
+      const isSelected = this.state.getCurrentSelectedInstantId() === s.id
       const prevId = this.getPrevFocusedInstantId()
       const isPrevFocused = !!prevId && prevId === s.id
       const label = s.label && s.label.length > 0 ? s.label : '?'
@@ -869,7 +804,7 @@ export class TimelineRenderer {
         labelBorderColor: borderColor,
         labelTextColor: '#ffffff',
       })
-      if (this.currentSelectedInstantId === s.id) {
+      if (this.state.getCurrentSelectedInstantId() === s.id) {
       this.drawTrashIconAt(s.ts, s.id)
       }
       // Record label hit target roughly using current font and box metrics similar to drawInstant
@@ -882,7 +817,7 @@ export class TimelineRenderer {
       this.hitTargets.push({ type: 'instant-label', id: s.id, rect })
       // Favorite star next to label with hit target
       {
-        const shouldShowStar = !!s.favorite || this.currentSelectedInstantId === s.id
+        const shouldShowStar = !!s.favorite || this.state.getCurrentSelectedInstantId() === s.id
         if (shouldShowStar) {
         const starSize = 20
         const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
@@ -896,7 +831,7 @@ export class TimelineRenderer {
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.push({ type: 'instant-time', id: s.id, rect: timeRect })
       // Only include overlay input for the one being edited; ensure we use the raw saved label (no fallback)
-      if (this.editingInstantId === s.id) {
+      if (this.state.getEditingInstantId() === s.id) {
         this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
       }
     }
@@ -904,7 +839,7 @@ export class TimelineRenderer {
   
   private drawCursorInstant() {
     // Draw the CURSOR center line and label at the timeCenter
-    this.drawInstant(this.timeCenter, 'Cursor', {
+    this.drawInstant(this.state.getTimeCenter(), 'Cursor', {
       lineColor: '#22d3ee',
       glowColor: '#22d3ee',
       glowBlur: 8,
@@ -916,12 +851,12 @@ export class TimelineRenderer {
     // (Removed cursor save icon; double-click on label saves a new instant)
     // (Removed cursor trash icon; double-click handles snap-to-now)
     // Double-click target on cursor time box
-    const rect = this.computeTimeBoxRect(this.timeCenter)
+    const rect = this.computeTimeBoxRect(this.state.getTimeCenter())
     this.hitTargets.push({ type: 'instant-time', id: undefined, rect })
     // Add double-click target for the cursor label to save a new instant
     {
       const centerY = this.TimelineCenterY()
-      const x = this.timeToPosition(this.timeCenter)
+      const x = this.timeToPosition(this.state.getTimeCenter())
       const font = 'bold 16px Arial'
       const label = 'Cursor'
       const w = this.measureTextWidth(font, label) + 10
@@ -938,33 +873,7 @@ export class TimelineRenderer {
     }
   }
 
-  private updateContinuousZoomForNowSpan(startTs: number, nowTs: number): void {
-    // Calculate current span duration and center
-    const spanDuration = Math.abs(nowTs - startTs)
-    const spanCenter = (startTs + nowTs) / 2
-    
-    // Check if we need to zoom out (when span is getting longer than visible range)
-    const currentTimeRange = this.timeWidth
-    const spanWithMargin = spanDuration * 1.2 // 20% margin
-    
-    // Only update if span is growing beyond current view or center needs adjustment
-    const needsZoomOut = spanWithMargin > currentTimeRange
-    const centerDrift = Math.abs(this.timeCenter - spanCenter)
-    const centerTolerance = currentTimeRange * 0.1 // 10% of current range
-    
-    if (needsZoomOut || centerDrift > centerTolerance) {
-      // Smoothly adjust center
-      this.timeCenter = spanCenter
-      
-      // Zoom out if needed, but only when span is significantly larger than current view
-      if (needsZoomOut) {
-        this.timeWidth = Math.max(this.timeWidth, spanWithMargin)
-      }
-    } else {
-      // Just update center for smaller adjustments
-      this.timeCenter = spanCenter
-    }
-  }
+
 
   private willShowSpanControls(opts: { spanId?: string; showInlineControls?: boolean }): boolean {
     // For spans without IDs (implied spans), only show arrows when explicitly requested
@@ -973,8 +882,8 @@ export class TimelineRenderer {
     }
     
     // For spans with IDs, show controls when focused, selected, or explicitly requested
-    const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId
-    const isSelected = this.selectedSpanId === opts.spanId
+    const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === opts.spanId
+    const isSelected = this.state.getSelectedSpanId() === opts.spanId
     return isFocused || isSelected || !!opts.showInlineControls
   }
 
@@ -1008,17 +917,17 @@ export class TimelineRenderer {
     const xB = this.timeToPosition(bTs)
     const leftX = Math.min(xA, xB)
     const rightX = Math.max(xA, xB)
-    const aVisible = xA >= 0 && xA <= this.screenWidth
-    const bVisible = xB >= 0 && xB <= this.screenWidth
+    const aVisible = xA >= 0 && xA <= this.viewport.getScreenWidth()
+    const bVisible = xB >= 0 && xB <= this.viewport.getScreenWidth()
     // If both endpoints are off-screen, skip drawing entirely
     // BUT if one is left and the other is right (spanning across), we still draw
-    const spansScreen = leftX < 0 && rightX > this.screenWidth
+    const spansScreen = leftX < 0 && rightX > this.viewport.getScreenWidth()
     if (!aVisible && !bVisible && !spansScreen) {
       return
     }
 
     const clampedLeft = Math.max(0, leftX)
-    const clampedRight = Math.min(this.screenWidth, rightX)
+    const clampedRight = Math.min(this.viewport.getScreenWidth(), rightX)
 
     this.ctx.save()
     this.ctx.strokeStyle = opts.color
@@ -1045,11 +954,11 @@ export class TimelineRenderer {
       this.ctx.fill()
     }
     const leftOffscreen = leftX < 0
-    const rightOffscreen = rightX > this.screenWidth
+    const rightOffscreen = rightX > this.viewport.getScreenWidth()
     if (leftOffscreen) drawArrow(0, -1)
-    if (rightOffscreen) drawArrow(this.screenWidth, 1)
+    if (rightOffscreen) drawArrow(this.viewport.getScreenWidth(), 1)
 
-    const midX = (Math.max(0, Math.min(this.screenWidth, xA)) + Math.max(0, Math.min(this.screenWidth, xB))) / 2
+    const midX = (Math.max(0, Math.min(this.viewport.getScreenWidth(), xA)) + Math.max(0, Math.min(this.viewport.getScreenWidth(), xB))) / 2
     const diff = bTs - aTs
     const durText = this.formatDurationHMS(Math.abs(diff))
     const dir = diff >= 0 ? 'AFTER' : 'BEFORE'
@@ -1098,7 +1007,7 @@ export class TimelineRenderer {
     // Editable label for saved spans
     if (opts.spanId) {
       this.hitTargets.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight } })
-      if (this.editingSpanId === opts.spanId) {
+      if (this.state.getEditingSpanId() === opts.spanId) {
         const initialText = (typeof opts.headerLabel === 'string' && opts.headerLabel.length > 0) ? opts.headerLabel : labelText
         this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: initialText, focused: true })
       }
@@ -1305,30 +1214,28 @@ export class TimelineRenderer {
 
   // Public getters for state variables
   public getScreenWidth(): number {
-    return this.screenWidth
+    return this.viewport.getScreenWidth()
   }
 
   public getTimeWidth(): number {
-    return this.timeWidth
+    return this.state.getTimeWidth()
   }
 
   public getTimeCenter(): number {
-    return this.timeCenter
+    return this.state.getTimeCenter()
   }
 
   public getTimeStart(): number {
-    return this.timeStart
+    return this.viewport.getTimeStart()
   }
 
   public getTimeEnd(): number {
-    return this.timeEnd
+    return this.viewport.getTimeEnd()
   }
 
   // Public helper functions
   public timeToPosition(instant: number): number {
-    // Convert a timestamp to x coordinate on the timeline
-    const progress = (instant - this.timeStart) / (this.timeEnd - this.timeStart)
-    return progress * this.screenWidth
+    return this.viewport.timeToPosition(instant)
   }
 
   // Decide whether a span should be drawn on the canvas based on current viewport
@@ -1338,9 +1245,9 @@ export class TimelineRenderer {
     const xB = this.timeToPosition(bTs)
     const leftX = Math.min(xA, xB)
     const rightX = Math.max(xA, xB)
-    const aVisible = xA >= 0 && xA <= this.screenWidth
-    const bVisible = xB >= 0 && xB <= this.screenWidth
-    const spansScreen = leftX < 0 && rightX > this.screenWidth
+    const aVisible = xA >= 0 && xA <= this.viewport.getScreenWidth()
+    const bVisible = xB >= 0 && xB <= this.viewport.getScreenWidth()
+    const spansScreen = leftX < 0 && rightX > this.viewport.getScreenWidth()
     return aVisible || bVisible || spansScreen
   }
 
@@ -1359,8 +1266,8 @@ export class TimelineRenderer {
 
   public positionToTime(x: number): number {
     // Convert x coordinate to timestamp
-    const progress = x / this.screenWidth
-    return this.timeStart + (progress * (this.timeEnd - this.timeStart))
+    const progress = x / this.viewport.getScreenWidth()
+    return this.viewport.getTimeStart() + (progress * (this.viewport.getTimeEnd() - this.viewport.getTimeStart()))
   }
 
   // Interaction hooks to be called by component
@@ -1371,7 +1278,7 @@ export class TimelineRenderer {
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
         if (target.type === 'save-now') {
           // If this came from the span arrow button, treat as focus-now
-          if (this.viewFocusMode !== 'now') {
+          if (this.state.getViewFocus().mode !== 'now') {
             this.setViewFocus('now')
             return
           }
@@ -1398,7 +1305,7 @@ export class TimelineRenderer {
           return
         }
         if (target.type === 'save-cursor') {
-          const newId = this.createInstantAt(this.timeCenter, '')
+          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
           if (newId) this.setViewFocus('instant', newId)
           return
         }
@@ -1426,8 +1333,7 @@ export class TimelineRenderer {
         }
         if (target.type === 'span-body' && target.id) {
           // Select a saved span (no zoom/pan)
-          this.selectedSpanId = target.id
-            this.stateVersion++
+          this.state.setSelectedSpan(target.id)
           return
           }
         if (target.type === 'span-visible' && target.id) {
@@ -1437,10 +1343,10 @@ export class TimelineRenderer {
           return
         }
         if (target.type === 'cursor-star') {
-          const newId = this.createInstantAt(this.timeCenter, '')
+          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
           this.savedStore.setFavorite(newId, true)
           this.setViewFocus('instant', newId)
-          this.editingInstantId = newId
+          this.state.setEditingInstant(newId)
           return
         }
         if (target.type === 'now-star') {
@@ -1448,8 +1354,8 @@ export class TimelineRenderer {
           const newId = this.createInstantAt(nowTs, '')
           this.savedStore.setFavorite(newId, true)
           this.setViewFocus('instant', newId)
-          this.timeCenter = nowTs
-          this.editingInstantId = newId
+          this.state.setTimeCenter(nowTs)
+          this.state.setEditingInstant(newId)
           return
         }
         // span-label editing moved to double-click
@@ -1471,13 +1377,13 @@ export class TimelineRenderer {
         if (target.type === 'instant-trash') {
           if (target.id) {
             const id = target.id
-            const isFocused = this.viewFocusMode === 'instant' && this.focusedInstantId === id
+            const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === id
             const ts = this.savedStore.getSnapshot().find(si => si.id === id)?.tsEpochMs
             this.deleteInstant(id)
             if (isFocused) {
               if (typeof ts === 'number') {
                 this.setViewFocus('cursor')
-                this.startZoomPanAnimation(ts, this.timeWidth)
+                this.startZoomPanAnimation(ts, this.state.getTimeWidth())
               } else {
                 this.setViewFocus('now')
               }
@@ -1504,18 +1410,15 @@ export class TimelineRenderer {
       const sp = this.spansStore.getSnapshot().find(s => s.startInstantId === id && s.endIsNow)
       if (sp) this.spansStore.setVisible(sp.id, false)
     }
-    this.stateVersion++
+
   }
 
   public setSpanVisible(spanId: string, value: boolean) {
     this.spansStore.setVisible(spanId, value)
-    this.stateVersion++
   }
 
   public setImpliedVisibility(which: 'selected-now'|'selected-prev', value: boolean) {
-    if (which === 'selected-now') this.showImpliedSelectedNow = value
-    if (which === 'selected-prev') this.showImpliedSelectedPrev = value
-    this.stateVersion++
+    this.state.setImpliedVisibility(which, value)
   }
 
   public handleDoubleClick(x: number, y: number) {
@@ -1525,10 +1428,10 @@ export class TimelineRenderer {
         if (target.type === 'span-label' && target.id) {
           const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
           if (sp) {
-            const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === target.id
+            const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
             if (isFocused) {
               // Already focused → enter rename
-              this.editingSpanId = target.id
+              this.state.setEditingSpan(target.id)
               return
             }
             // Not focused → focus and zoom-to-fit
@@ -1570,19 +1473,19 @@ export class TimelineRenderer {
         if (target.type === 'instant-label' && target.id) {
           const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
           if (inst) {
-            this.editingInstantId = target.id
+            this.state.setEditingInstant(target.id)
           }
           return
         }
         if (target.type === 'span-label' && target.id) {
-          this.editingSpanId = target.id
+          this.state.setEditingSpan(target.id)
           return
         }
         if (target.type === 'cursor-label') {
-          const newId = this.createInstantAt(this.timeCenter, '')
+          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
           if (newId) {
             this.setViewFocus('instant', newId)
-            this.editingInstantId = newId
+            this.state.setEditingInstant(newId)
           }
           return
         }
@@ -1591,17 +1494,17 @@ export class TimelineRenderer {
           const newId = this.createInstantAt(nowTs, '')
           if (newId) {
             this.setViewFocus('instant', newId)
-            this.timeCenter = nowTs
-            this.editingInstantId = newId
+            this.state.setTimeCenter(nowTs)
+            this.state.setEditingInstant(newId)
           }
           return
         }
         if (target.type === 'cursor-star') {
-          const newId = this.createInstantAt(this.timeCenter, '')
+          const newId = this.createInstantAt(this.state.getTimeCenter(), '')
           if (newId) {
             this.savedStore.setFavorite(newId, true)
             this.setViewFocus('instant', newId)
-            this.editingInstantId = newId
+            this.state.setEditingInstant(newId)
           }
           return
         }
@@ -1611,8 +1514,8 @@ export class TimelineRenderer {
           if (newId) {
             this.savedStore.setFavorite(newId, true)
             this.setViewFocus('instant', newId)
-            this.timeCenter = nowTs
-            this.editingInstantId = newId
+            this.state.setTimeCenter(nowTs)
+            this.state.setEditingInstant(newId)
           }
           return
         }
@@ -1671,23 +1574,19 @@ export class TimelineRenderer {
   }
 
   private setZoomTargetFactor(factor: number) {
-    const base = this.zoomTargetWidth !== null ? this.zoomTargetWidth : this.timeWidth
-    this.zoomTargetWidth = this.clampTimeWidth(base * factor)
-    this.zoomTargetPersistPending = true
+    this.animations.applyZoomFactor(factor, true)
   }
 
-  private clampTimeWidth(width: number): number {
-    return Math.max(this.minTimeWidthMs, Math.min(this.maxTimeWidthMs, width))
-  }
+
 
   // time formatting helpers moved to src/utils/timeFormat.ts
 
   private drawCursorNowSpan() {
     const now = Date.now()
     // Use focused instant when focus is on an instant; otherwise use cursor/timeCenter
-    let sourceTs = this.timeCenter
-    if (this.viewFocusMode === 'instant' && this.focusedInstantId) {
-      const s = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+    let sourceTs = this.state.getTimeCenter()
+    if (this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId) {
+      const s = this.savedStore.getSnapshot().find(si => si.id === this.state.getViewFocus().focusedInstantId)
       if (s) sourceTs = s.tsEpochMs
     }
     const diffMsSigned = sourceTs - now
@@ -1702,9 +1601,9 @@ export class TimelineRenderer {
     const leftX = Math.min(xNow, xSource)
     const rightX = Math.max(xNow, xSource)
     const leftVisible = leftX >= 0
-    const rightVisible = rightX <= this.screenWidth
+    const rightVisible = rightX <= this.viewport.getScreenWidth()
     const clampedLeft = Math.max(0, leftX)
-    const clampedRight = Math.min(this.screenWidth, rightX)
+    const clampedRight = Math.min(this.viewport.getScreenWidth(), rightX)
 
     this.ctx.save()
     this.ctx.strokeStyle = color
@@ -1726,10 +1625,10 @@ export class TimelineRenderer {
       this.ctx.fill()
     }
     if (!leftVisible) drawArrow(0, -1)
-    if (!rightVisible) drawArrow(this.screenWidth, 1)
+    if (!rightVisible) drawArrow(this.viewport.getScreenWidth(), 1)
 
     // Label at midpoint of visible segment
-    const midX = (Math.max(0, Math.min(this.screenWidth, xNow)) + Math.max(0, Math.min(this.screenWidth, xSource))) / 2
+    const midX = (Math.max(0, Math.min(this.viewport.getScreenWidth(), xNow)) + Math.max(0, Math.min(this.viewport.getScreenWidth(), xSource))) / 2
     const label = this.formatDurationHMS(Math.abs(diffMsSigned))
     const font = 'bold 14px monospace'
     const labelWidth = this.measureTextWidth(font, label) + 16
@@ -1777,7 +1676,7 @@ export class TimelineRenderer {
     const pinW = 24, pinH = 24
     let pinX = (placeRight ? (labelX - 8 - pinW) : (labelX + labelWidth + 8))
     if (pinX < 0) pinX = labelX + labelWidth + 8
-    if (pinX + pinW > this.screenWidth) pinX = labelX - 8 - pinW
+    if (pinX + pinW > this.viewport.getScreenWidth()) pinX = labelX - 8 - pinW
     const pinY = labelY + (labelHeight - pinH) / 2
     this.ctx.save()
     this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
@@ -1906,93 +1805,43 @@ export class TimelineRenderer {
 
   // View/pan API
   public setViewFocus(mode: 'now' | 'cursor' | 'instant' | 'span', instantId?: string, spanId?: string) {
-    if (mode === 'instant') {
-      if (this.currentSelectedInstantId && instantId && this.currentSelectedInstantId !== instantId) {
-        this.previousSelectedInstantId = this.currentSelectedInstantId
-      }
-      this.currentSelectedInstantId = instantId ?? null
-    }
-    // If leaving an instant focus to cursor, push current focused instant into history tail
-    const prevMode = this.viewFocusMode
-    const leavingInstantToCursor = (prevMode === 'instant' && mode === 'cursor' && this.focusedInstantId)
-    this.viewFocusMode = mode
-    // Update focused instant and push into history unless suppressed
-    if (mode === 'instant') {
-      const nextId = instantId ?? null
-      const prevId = this.focusedInstantId
-      this.focusedInstantId = nextId
-      if (!this.suppressHistoryPush && nextId && nextId !== prevId) {
-        // If navigating within history (index not at tail), drop forward history
-        if (this.focusHistoryIndex >= 0 && this.focusHistoryIndex < this.focusHistory.length - 1) {
-          this.focusHistory = this.focusHistory.slice(0, this.focusHistoryIndex + 1)
-        }
-        this.focusHistory.push(nextId)
-        this.focusHistoryIndex = this.focusHistory.length - 1
-      }
-    }
-    this.focusedSpanId = mode === 'span' ? (spanId ?? null) : this.focusedSpanId
-    if (mode === 'span') {
-      // Clear selection/previous UI instants when focusing a span
-      this.currentSelectedInstantId = null
-    }
-    if (leavingInstantToCursor) {
-      const id = this.focusedInstantId!
-      if (!this.suppressHistoryPush) {
-        if (this.focusHistoryIndex >= 0 && this.focusHistoryIndex < this.focusHistory.length - 1) {
-          this.focusHistory = this.focusHistory.slice(0, this.focusHistoryIndex + 1)
-        }
-        this.focusHistory.push(id)
-        this.focusHistoryIndex = this.focusHistory.length - 1
-      }
-    }
+    this.state.setViewFocus(mode, instantId, spanId)
     this.persistState()
   }
 
   private getPrevFocusedInstantId(): string | null {
-    if (this.focusHistoryIndex > 0) return this.focusHistory[this.focusHistoryIndex - 1] ?? null
-    return null
+    return this.state.getPrevFocusedInstantId()
   }
 
   public navigateFocusHistory(delta: -1 | 1) {
-    if (this.focusHistory.length === 0) return
-    let nextIndex = this.focusHistoryIndex + delta
-    nextIndex = Math.max(0, Math.min(this.focusHistory.length - 1, nextIndex))
-    if (nextIndex === this.focusHistoryIndex) return
-    const nextId = this.focusHistory[nextIndex]
-    if (!nextId) return
-    const ts = this.savedStore.getSnapshot().find(si => si.id === nextId)?.tsEpochMs
-    if (typeof ts !== 'number') return
-    this.suppressHistoryPush = true
-    this.focusInstantAnimated(nextId, ts)
-    this.suppressHistoryPush = false
-    this.focusHistoryIndex = nextIndex
+    this.state.navigateFocusHistory(delta)
   }
 
   // Select an instant without changing focus mode
   private setSelectedInstant(instantId: string) {
-    if (this.currentSelectedInstantId && this.currentSelectedInstantId !== instantId) {
-      this.previousSelectedInstantId = this.currentSelectedInstantId
+    if (this.state.getCurrentSelectedInstantId() && this.state.getCurrentSelectedInstantId() !== instantId) {
+      // Previous selection is handled automatically in TimelineState
     }
-    this.currentSelectedInstantId = instantId
+    this.state.setSelectedInstant(instantId)
     // Do not change viewFocusMode or focusedInstantId here
     this.persistState()
   }
 
   public getViewFocus(): { mode: 'now' | 'cursor' | 'instant' | 'span'; focusedInstantId: string | null; focusedSpanId?: string | null } {
-    return { mode: this.viewFocusMode, focusedInstantId: this.focusedInstantId, focusedSpanId: this.focusedSpanId }
+    return this.state.getViewFocus()
   }
 
   public panByPixels(deltaX: number) {
     this.cancelZoomPanAnimation()
-    const msPerPx = this.timeWidth / Math.max(1, this.screenWidth)
+    const msPerPx = this.state.getTimeWidth() / Math.max(1, this.viewport.getScreenWidth())
     // Drag right should move timeline with the finger: shift center earlier
-    this.timeCenter -= deltaX * msPerPx
+    this.state.setTimeCenter(this.state.getTimeCenter() - deltaX * msPerPx)
     this.persistState()
   }
 
   public snapToNowIfClose(tolerancePx: number): boolean {
     const xNow = this.timeToPosition(Date.now())
-    const xCenter = this.screenWidth / 2
+    const xCenter = this.viewport.getScreenWidth() / 2
     if (Math.abs(xNow - xCenter) <= tolerancePx) {
       this.setViewFocus('now')
       return true
@@ -2001,7 +1850,7 @@ export class TimelineRenderer {
   }
 
   public snapToInstantIfClose(tolerancePx: number): boolean {
-    const xCenter = this.screenWidth / 2
+    const xCenter = this.viewport.getScreenWidth() / 2
     let best: { id: string; dist: number } | null = null
     for (const s of this.savedStore.getSnapshot()) {
       const x = this.timeToPosition(s.tsEpochMs)
@@ -2010,19 +1859,19 @@ export class TimelineRenderer {
     }
     if (best) {
       this.setViewFocus('instant', best.id)
-      this.timeCenter = this.savedStore.getSnapshot().find(si => si.id === best!.id)!.tsEpochMs
+      this.state.setTimeCenter(this.savedStore.getSnapshot().find(si => si.id === best!.id)!.tsEpochMs)
       return true
     }
     return false
   }
 
   public setTimeWidth(widthMs: number) {
-    this.timeWidth = Math.max(1000, widthMs) // Minimum 1 second
+    this.state.setTimeWidth(Math.max(1000, widthMs)) // Minimum 1 second
   }
 
   public setTimeCenter(centerMs: number) {
-    this.cancelZoomPanAnimation()
-    this.timeCenter = centerMs
+    this.animations.cancelZoomPanAnimation()
+    this.state.setTimeCenter(centerMs)
   }
 
   // Smoothly focus an instant by id or timestamp; keeps current zoom
@@ -2037,34 +1886,20 @@ export class TimelineRenderer {
     } else {
       this.setViewFocus('instant')
     }
-    this.startZoomPanAnimation(targetTs, this.timeWidth)
+    this.startZoomPanAnimation(targetTs, this.state.getTimeWidth())
   }
 
   private startZoomPanAnimation(targetCenter: number, targetWidth: number, durationMs = 350): void {
-    const fromCenter = this.timeCenter
-    const fromWidth = this.timeWidth
-    this.zoomPanAnim = {
-      active: true,
-      startTs: performance.now(),
-      durationMs,
-      fromCenter,
-      toCenter: targetCenter,
-      fromWidth,
-      toWidth: this.clampTimeWidth(targetWidth),
-    }
-    this.pendingPersistAfterAnim = true
+    this.animations.startZoomPanAnimation(targetCenter, targetWidth, durationMs)
   }
 
   public focusNowAnimated(): void {
     this.setViewFocus('now')
-    this.startZoomPanAnimation(Date.now(), this.timeWidth)
+    this.animations.animateToNow()
   }
 
   private cancelZoomPanAnimation(): void {
-    if (this.zoomPanAnim && this.zoomPanAnim.active) {
-      this.zoomPanAnim.active = false
-      this.pendingPersistAfterAnim = false
-    }
+    this.animations.cancelZoomPanAnimation()
   }
 
   // Adjust zoom so a time range [aTs, bTs] fits with margins or is enlarged when too close
@@ -2073,14 +1908,14 @@ export class TimelineRenderer {
     const late = Math.max(aTs, bTs)
     const xEarly = this.timeToPosition(early)
     const xLate = this.timeToPosition(late)
-    const offscreen = (xEarly < 0) || (xLate > this.screenWidth)
+    const offscreen = (xEarly < 0) || (xLate > this.viewport.getScreenWidth())
     if (offscreen) {
       const desiredTimeWidth = (late - early) / 0.8 // leave 10% margins on each side
       this.startZoomPanAnimation((early + late) / 2, desiredTimeWidth)
       return
     }
     const distancePx = Math.max(0, xLate - xEarly)
-    if (distancePx < 0.2 * this.screenWidth) {
+    if (distancePx < 0.2 * this.viewport.getScreenWidth()) {
       const desiredTimeWidth = 2 * (late - early) // make distance 50% of width
       this.startZoomPanAnimation((early + late) / 2, desiredTimeWidth)
     }
@@ -2105,7 +1940,7 @@ export class TimelineRenderer {
 
   private deleteInstant(id: string) {
     this.savedStore.delete(id)
-    if (this.focusedInstantId === id) this.focusedInstantId = null
+    if (this.state.getViewFocus().focusedInstantId === id) this.state.getViewFocus().focusedInstantId = null
     this.persistState()
   }
 
@@ -2123,25 +1958,25 @@ export class TimelineRenderer {
   public updateInstantLabel(id: string, newLabel: string) {
     this.savedStore.updateLabel(id, newLabel)
     this.persistState()
-    this.editingInstantId = null
+    this.state.setEditingInstant(null)
   }
 
   public updateSpanLabel(id: string, newLabel: string) {
     this.spansStore.updateLabel(id, newLabel)
     this.persistState()
-    this.editingSpanId = null
+    this.state.setEditingSpan(null)
   }
 
   public deleteSpan(id: string) {
-    if (this.focusedSpanId === id) this.focusedSpanId = null
+    if (this.state.getViewFocus().focusedSpanId === id) this.state.getViewFocus().focusedSpanId = null
     this.spansStore.delete(id)
-    this.stateVersion++
+
     this.persistState()
   }
 
   public endEditing() {
-    this.editingInstantId = null
-    this.editingSpanId = null
+    this.state.setEditingInstant(null)
+    this.state.setEditingSpan(null)
   }
 
   // Public read APIs for HTML list
@@ -2150,26 +1985,26 @@ export class TimelineRenderer {
   }
 
   public getCenterTimestamp(): number {
-    if (this.viewFocusMode === 'now') return Date.now()
-    if (this.viewFocusMode === 'cursor') return this.timeCenter
-    if (this.viewFocusMode === 'instant') {
-      const s = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
+    if (this.state.getViewFocus().mode === 'now') return Date.now()
+    if (this.state.getViewFocus().mode === 'cursor') return this.state.getTimeCenter()
+    if (this.state.getViewFocus().mode === 'instant') {
+      const s = this.savedStore.getSnapshot().find(si => si.id === this.state.getViewFocus().focusedInstantId)
       return s ? s.tsEpochMs : Date.now()
     }
-    if (this.viewFocusMode === 'span') {
-      const sp = this.focusedSpanId ? this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId) : null
+    if (this.state.getViewFocus().mode === 'span') {
+      const sp = this.state.getViewFocus().focusedSpanId ? this.spansStore.getSnapshot().find(s => s.id === this.state.getViewFocus().focusedSpanId) : null
       if (sp) {
         const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
         const b = this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
         if (typeof a === 'number' && typeof b === 'number') return (a + b) / 2
       }
-      return this.timeCenter
+      return this.state.getTimeCenter()
     }
     return Date.now()
   }
 
   public getStateVersion(): number {
-    return this.stateVersion
+    return this.state.getStateVersion()
   }
 
   public getHumanDurationTo(ts: number): { text: string; sign: 1 | -1 } {
@@ -2205,21 +2040,23 @@ export class TimelineRenderer {
       spans.push({ kind: 'saved', id: s.id, label: s.label || '?', start, end, durationMs: end.tsEpochMs - start.tsEpochMs, visible: !!s.visible })
     }
     // Implied: selected → now (always listed; visibility reflected in flag)
-    if (this.currentSelectedInstantId) {
-      const a = savedMap.get(this.currentSelectedInstantId)
+    if (this.state.getCurrentSelectedInstantId()) {
+      const selectedId = this.state.getCurrentSelectedInstantId()
+      const a = selectedId ? savedMap.get(selectedId) : undefined
       if (a) {
         const now = Date.now()
-        spans.push({ kind: 'implied', label: 'Selected to Now', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - a.tsEpochMs, visible: this.showImpliedSelectedNow })
+        spans.push({ kind: 'implied', label: 'Selected to Now', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { name: 'Now', tsEpochMs: now }, durationMs: now - a.tsEpochMs, visible: this.state.getImpliedVisibility('selected-now') })
       }
     }
     // Removed: favorites implied spans are now saved spans managed by spans store
     // Implied: selected → previously focused
-    if (this.currentSelectedInstantId) {
+    if (this.state.getCurrentSelectedInstantId()) {
       const prevId = this.getPrevFocusedInstantId()
       const a = prevId ? savedMap.get(prevId) : undefined
-      const b = savedMap.get(this.currentSelectedInstantId)
+      const selectedId = this.state.getCurrentSelectedInstantId()
+      const b = selectedId ? savedMap.get(selectedId) : undefined
       if (a && b) {
-        spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.showImpliedSelectedPrev })
+        spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.state.getImpliedVisibility('selected-prev') })
       }
     }
     // Sort by midpoint time
