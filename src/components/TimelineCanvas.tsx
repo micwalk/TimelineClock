@@ -1,7 +1,9 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
 import { InstantListDomManager } from './InstantListDomManager.ts'
+import { TimeIncrementDropdown } from './TimeIncrementDropdown.tsx'
 import type { InstantView } from '../types/instants.ts'
+import type { TimeIncrement } from '../canvas/core/TimelineState.ts'
 
 interface TimelineCanvasProps {
   className?: string
@@ -15,6 +17,12 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const controlsRef = useRef<HTMLDivElement>(null)
   const listManagerRef = useRef<InstantListDomManager | null>(null)
   const rendererRef = useRef<TimelineRenderer | null>(null)
+  
+  // Time increment dropdown state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [dropdownTrigger, setDropdownTrigger] = useState<'plus' | 'minus' | null>(null)
+  const plusButtonRef = useRef<HTMLButtonElement>(null)
+  const minusButtonRef = useRef<HTMLButtonElement>(null)
 
   // Helpers for navigation and cursor movement
   const moveCursorByMs = (deltaMs: number) => {
@@ -24,6 +32,55 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     r.setTimeCenter(center + deltaMs)
     r.setViewFocus('cursor')
   }
+
+  const moveCursorByIncrement = (direction: 1 | -1) => {
+    const r = rendererRef.current
+    if (!r) return
+    const incrementMs = r.getTimeIncrementMs?.() ?? 30 * 60 * 1000
+    moveCursorByMs(direction * incrementMs)
+  }
+
+  const getCurrentIncrementLabel = (): string => {
+    const r = rendererRef.current
+    if (!r) return '30 minutes'
+    return r.getTimeIncrementLabel?.() ?? '30 minutes'
+  }
+
+  const handleIncrementChange = (increment: TimeIncrement) => {
+    const r = rendererRef.current
+    if (!r) return
+    r.setTimeIncrement?.(increment)
+  }
+
+  const handleLongPress = (trigger: 'plus' | 'minus') => {
+    setDropdownTrigger(trigger)
+    setIsDropdownOpen(true)
+  }
+
+  // Long press detection
+  const useLongPress = (callback: () => void, ms = 500) => {
+    const timeoutRef = useRef<number | undefined>(undefined)
+    const isLongPress = useRef(false)
+
+    const start = () => {
+      isLongPress.current = false
+      timeoutRef.current = window.setTimeout(() => {
+        isLongPress.current = true
+        callback()
+      }, ms)
+    }
+
+    const stop = () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+
+    return { start, stop, isLongPress }
+  }
+
+  const plusLongPress = useLongPress(() => handleLongPress('plus'))
+  const minusLongPress = useLongPress(() => handleLongPress('minus'))
 
   const goToPreviousInstant = () => {
     const r = rendererRef.current
@@ -244,12 +301,12 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       }
       if (lower === 'x') {
         e.preventDefault()
-        moveCursorByMs(30 * 60 * 1000)
+        moveCursorByIncrement(1)
         return
       }
       if (lower === 'z') {
         e.preventDefault()
-        moveCursorByMs(-30 * 60 * 1000)
+        moveCursorByIncrement(-1)
         return
       }
       if (lower === 'r') {
@@ -450,14 +507,47 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           >
             Previous instant
           </button>
-          {/* Middle controls: -30m, NOW, +30m */}
-          <button
-            aria-label="Minus 30 minutes"
-            onClick={(e) => { e.stopPropagation(); moveCursorByMs(-30 * 60 * 1000) }}
-            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
-          >
-            -30 minutes
-          </button>
+          {/* Middle controls: -increment, NOW, +increment */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={minusButtonRef}
+              aria-label={`Minus ${getCurrentIncrementLabel()}`}
+              onClick={(e) => { 
+                e.stopPropagation()
+                minusLongPress.stop()
+                moveCursorByIncrement(-1)
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                minusLongPress.start()
+              }}
+              onMouseUp={(e) => {
+                e.stopPropagation()
+                minusLongPress.stop()
+              }}
+              onMouseLeave={() => minusLongPress.stop()}
+              onTouchStart={(e) => {
+                e.stopPropagation()
+                minusLongPress.start()
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation()
+                minusLongPress.stop()
+              }}
+              style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+            >
+              -{getCurrentIncrementLabel()}
+            </button>
+            {isDropdownOpen && dropdownTrigger === 'minus' && (
+              <TimeIncrementDropdown
+                currentIncrement={rendererRef.current?.getTimeIncrement?.() ?? '30m'}
+                onIncrementChange={handleIncrementChange}
+                isOpen={isDropdownOpen}
+                onToggle={() => setIsDropdownOpen(false)}
+                triggerRef={minusButtonRef}
+              />
+            )}
+          </div>
           <button
             aria-label="Now"
             onClick={(e) => {
@@ -470,13 +560,46 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           >
             NOW
           </button>
-          <button
-            aria-label="Plus 30 minutes"
-            onClick={(e) => { e.stopPropagation(); moveCursorByMs(30 * 60 * 1000) }}
-            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
-          >
-            +30 minutes
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={plusButtonRef}
+              aria-label={`Plus ${getCurrentIncrementLabel()}`}
+              onClick={(e) => { 
+                e.stopPropagation()
+                plusLongPress.stop()
+                moveCursorByIncrement(1)
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                plusLongPress.start()
+              }}
+              onMouseUp={(e) => {
+                e.stopPropagation()
+                plusLongPress.stop()
+              }}
+              onMouseLeave={() => plusLongPress.stop()}
+              onTouchStart={(e) => {
+                e.stopPropagation()
+                plusLongPress.start()
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation()
+                plusLongPress.stop()
+              }}
+              style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+            >
+              +{getCurrentIncrementLabel()}
+            </button>
+            {isDropdownOpen && dropdownTrigger === 'plus' && (
+              <TimeIncrementDropdown
+                currentIncrement={rendererRef.current?.getTimeIncrement?.() ?? '30m'}
+                onIncrementChange={handleIncrementChange}
+                isOpen={isDropdownOpen}
+                onToggle={() => setIsDropdownOpen(false)}
+                triggerRef={plusButtonRef}
+              />
+            )}
+          </div>
           <button
             aria-label="Next instant"
             onClick={(e) => { e.stopPropagation(); goToNextInstant() }}

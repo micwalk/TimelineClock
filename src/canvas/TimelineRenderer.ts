@@ -1769,6 +1769,23 @@ export class TimelineRenderer {
     this.state.setTimeCenter(centerMs)
   }
 
+  // Time increment management
+  public getTimeIncrementMs(): number {
+    return this.state.getTimeIncrementMs()
+  }
+
+  public getTimeIncrementLabel(): string {
+    return this.state.getTimeIncrementLabel()
+  }
+
+  public getTimeIncrement(): import('./core/TimelineState').TimeIncrement {
+    return this.state.getTimeIncrement()
+  }
+
+  public setTimeIncrement(increment: import('./core/TimelineState').TimeIncrement): void {
+    this.state.setTimeIncrement(increment)
+  }
+
   // Smoothly focus an instant by id or timestamp; keeps current zoom
   public focusInstantAnimated(instantId?: string, tsEpochMs?: number): void {
     let targetTs: number | undefined = tsEpochMs

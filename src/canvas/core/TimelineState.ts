@@ -5,6 +5,31 @@ import { none, toStringOrNull, fromStringOrNull } from '../../utils/option'
 
 export type ViewFocusMode = 'now' | 'cursor' | 'instant' | 'span'
 
+export type TimeIncrement = 
+  | '1s' | '5s' | '30s' 
+  | '1m' | '5m' | '15m' | '30m' 
+  | '1h' | '2h' | '6h' | '24h'
+
+export interface TimeIncrementOption {
+  value: TimeIncrement
+  label: string
+  milliseconds: number
+}
+
+export const TIME_INCREMENT_OPTIONS: TimeIncrementOption[] = [
+  { value: '1s', label: '1 second', milliseconds: 1000 },
+  { value: '5s', label: '5 seconds', milliseconds: 5 * 1000 },
+  { value: '30s', label: '30 seconds', milliseconds: 30 * 1000 },
+  { value: '1m', label: '1 minute', milliseconds: 60 * 1000 },
+  { value: '5m', label: '5 minutes', milliseconds: 5 * 60 * 1000 },
+  { value: '15m', label: '15 minutes', milliseconds: 15 * 60 * 1000 },
+  { value: '30m', label: '30 minutes', milliseconds: 30 * 60 * 1000 },
+  { value: '1h', label: '1 hour', milliseconds: 60 * 60 * 1000 },
+  { value: '2h', label: '2 hours', milliseconds: 2 * 60 * 60 * 1000 },
+  { value: '6h', label: '6 hours', milliseconds: 6 * 60 * 60 * 1000 },
+  { value: '24h', label: '24 hours', milliseconds: 24 * 60 * 60 * 1000 }
+]
+
 export interface TimelineStateSnapshot {
   timeWidth: number
   timeCenter: number
@@ -18,6 +43,7 @@ export interface TimelineStateSnapshot {
   selectedSpanId: string | null
   showImpliedSelectedNow: boolean
   showImpliedSelectedPrev: boolean
+  timeIncrement: TimeIncrement
 }
 
 /**
@@ -50,6 +76,9 @@ export class TimelineState {
   // Editing state
   private editingInstantId: Option<string> = none
   private editingSpanId: Option<string> = none
+  
+  // Time increment state
+  private timeIncrement: TimeIncrement = '30m'
   
   // State version for change tracking
   private stateVersion: number = 0
@@ -196,6 +225,27 @@ export class TimelineState {
     this.stateVersion++
   }
   
+  // === Time Increment Management ===
+  
+  public getTimeIncrement(): TimeIncrement {
+    return this.timeIncrement
+  }
+  
+  public setTimeIncrement(increment: TimeIncrement): void {
+    this.timeIncrement = increment
+    this.stateVersion++
+  }
+  
+  public getTimeIncrementMs(): number {
+    const option = TIME_INCREMENT_OPTIONS.find(opt => opt.value === this.timeIncrement)
+    return option?.milliseconds ?? 30 * 60 * 1000 // fallback to 30 minutes
+  }
+  
+  public getTimeIncrementLabel(): string {
+    const option = TIME_INCREMENT_OPTIONS.find(opt => opt.value === this.timeIncrement)
+    return option?.label ?? '30 minutes'
+  }
+  
   // === Implied Span Visibility ===
   
   public setImpliedVisibility(which: 'selected-now' | 'selected-prev', value: boolean): void {
@@ -270,7 +320,8 @@ export class TimelineState {
       focusHistoryIndex: this.focusHistoryIndex,
       selectedSpanId: toStringOrNull(this.selectedSpanId),
       showImpliedSelectedNow: this.showImpliedSelectedNow,
-      showImpliedSelectedPrev: this.showImpliedSelectedPrev
+      showImpliedSelectedPrev: this.showImpliedSelectedPrev,
+      timeIncrement: this.timeIncrement
     }
   }
   
@@ -287,6 +338,7 @@ export class TimelineState {
     if (snapshot.selectedSpanId !== undefined) this.selectedSpanId = fromStringOrNull(snapshot.selectedSpanId)
     if (snapshot.showImpliedSelectedNow !== undefined) this.showImpliedSelectedNow = snapshot.showImpliedSelectedNow
     if (snapshot.showImpliedSelectedPrev !== undefined) this.showImpliedSelectedPrev = snapshot.showImpliedSelectedPrev
+    if (snapshot.timeIncrement !== undefined) this.timeIncrement = snapshot.timeIncrement
     
     this.stateVersion++
   }
