@@ -58,9 +58,9 @@ export class TimelineRenderer {
 
   // Centralized vertical offsets for span rows
   private readonly spanRows = {
-    cursorNow: -100, // Aka Row 0
-    selectedNow: -70, // FKA Row 2
-    selectedCursor: 160, // Aka Row 1
+    cursorNow: -110, // Aka Row 0
+    selectedNow: 160, // FKA Row 2
+    selectedCursor: -75, // Aka Row 1
     selectedPrev: 190, // Aka Row 3
     spanList: 190, // Aka Row 4
     focusedSpanTop: -80, // Focused saved span drawn above the timeline
@@ -377,13 +377,14 @@ export class TimelineRenderer {
       const y = this.TimelineCenterY() + this.spanRows.selectedCursor
       const color = '#22d3ee' // light blue always for this row
       if (this.state.getViewFocus().mode === 'cursor') {
-        const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
-        const endName = 'Cursor'
+        const diffMs = this.state.getTimeCenter() - selected.tsEpochMs
+        const sign = diffMs >= 0 ? '+' : '-'
+        const durOnly = `${sign}${this.formatDurationHMS(Math.abs(diffMs))}`
         this.drawSpanVisual(selected.tsEpochMs, this.state.getTimeCenter(), {
           y,
           color,
-          startName,
-          endName,
+          // Render like cursor:now – duration only with sign
+          labelText: durOnly,
           showPin: true,
           saveLabel: 'Selected to Cursor',
           startFocus: { kind: 'instant', id: selected.id! },
@@ -1068,8 +1069,27 @@ export class TimelineRenderer {
     // Optional pin icon to save span
     if (opts.showPin) {
       const iconW = 24, iconH = 24
-      const extraLeft = 22 + 8 // account for left focus arrow (width + gap)
-      const iconX = labelX - iconW - 8 - extraLeft
+      const screenW = this.viewport.getScreenWidth()
+      const midX = (Math.max(0, Math.min(screenW, this.timeToPosition(aTs))) + Math.max(0, Math.min(screenW, this.timeToPosition(bTs)))) / 2
+
+      let iconX: number
+      if (opts.endFocus?.kind === 'cursor' || opts.startFocus?.kind === 'cursor') {
+        // Mirror cursor-now logic: pin goes opposite the cursor side of the label
+        const cursorX = opts.endFocus?.kind === 'cursor' ? this.timeToPosition(bTs) : this.timeToPosition(aTs)
+        const placeRight = cursorX < midX
+        iconX = placeRight ? (labelX - 8 - iconW) : (labelX + labelWidth + 8)
+        if (iconX < 0) iconX = labelX + labelWidth + 8
+        if (iconX + iconW > screenW) iconX = labelX - 8 - iconW
+      }  else {
+        // Normal spans will have 2 arrows, so try to place consistently on left
+        const iconPadding = 7
+        const extraSpace = iconW + 2 * iconPadding // padding of 5, *2
+        //Position on left
+        iconX = labelX - iconW - extraSpace
+        // If left is off-screen, place on right
+        if (iconX < 0) iconX = labelX + labelWidth + extraSpace
+      }
+
       const iconY = labelY + (labelHeight - iconH) / 2
       this.icons.drawPin(iconX, iconY, iconW, iconH)
       const spanData = opts.recordImplied ? 
@@ -1711,7 +1731,8 @@ export class TimelineRenderer {
 
     // Label at midpoint of visible segment
     const midX = (Math.max(0, Math.min(this.viewport.getScreenWidth(), xNow)) + Math.max(0, Math.min(this.viewport.getScreenWidth(), xSource))) / 2
-    const label = this.formatDurationHMS(Math.abs(diffMsSigned))
+    const sign = diffMsSigned >= 0 ? '+' : '-'
+    const label = `${sign}${this.formatDurationHMS(Math.abs(diffMsSigned))}`
     const font = 'bold 14px monospace'
     const labelWidth = this.measureTextWidth(font, label) + 16
     const labelHeight = 28
