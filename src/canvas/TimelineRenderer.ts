@@ -47,7 +47,7 @@ export class TimelineRenderer {
   // Saved instants and hit targets for interactions
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'span-body' | 'span-visible' | 'span-delete' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant' }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'span-body' | 'span-visible' | 'span-delete' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant'; spanData?: { aTs: number; bTs: number; label: string } }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
   private editingSpanId: string | null = null
@@ -152,9 +152,14 @@ export class TimelineRenderer {
       const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
       if (span) {
         const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
-        const b = this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
+        const b = span.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
         if (typeof a === 'number' && typeof b === 'number') {
-          this.timeCenter = (a + b) / 2
+          // For spans with NOW endpoint, continuously update center and zoom
+          if (span.endIsNow) {
+            this.updateContinuousZoomForNowSpan(a, b)
+          } else {
+            this.timeCenter = (a + b) / 2
+          }
         }
         }
       }
@@ -345,7 +350,8 @@ export class TimelineRenderer {
         const color = prio === 0 ? '#22d3ee' : prio === 1 ? '#2563eb' : '#34d399'
         rowOffset += header ? rowHeights.labeled : rowHeights.short
         const drawControls = prio <= 1
-        if(drawControls) rowOffset +=rowHeights.controlExtra
+        const willActuallyShowControls = this.willShowSpanControls({ spanId: sp.id, showInlineControls: drawControls })
+        if(willActuallyShowControls) rowOffset +=rowHeights.controlExtra
         this.drawSpanVisual(a, b, { y:rowOffset, color, spanId: sp.id, startName, endName, headerLabel: header, 
             startFocus: { kind: 'instant', id: aRec?.id }, 
             endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id }, 
@@ -932,6 +938,46 @@ export class TimelineRenderer {
     }
   }
 
+  private updateContinuousZoomForNowSpan(startTs: number, nowTs: number): void {
+    // Calculate current span duration and center
+    const spanDuration = Math.abs(nowTs - startTs)
+    const spanCenter = (startTs + nowTs) / 2
+    
+    // Check if we need to zoom out (when span is getting longer than visible range)
+    const currentTimeRange = this.timeWidth
+    const spanWithMargin = spanDuration * 1.2 // 20% margin
+    
+    // Only update if span is growing beyond current view or center needs adjustment
+    const needsZoomOut = spanWithMargin > currentTimeRange
+    const centerDrift = Math.abs(this.timeCenter - spanCenter)
+    const centerTolerance = currentTimeRange * 0.1 // 10% of current range
+    
+    if (needsZoomOut || centerDrift > centerTolerance) {
+      // Smoothly adjust center
+      this.timeCenter = spanCenter
+      
+      // Zoom out if needed, but only when span is significantly larger than current view
+      if (needsZoomOut) {
+        this.timeWidth = Math.max(this.timeWidth, spanWithMargin)
+      }
+    } else {
+      // Just update center for smaller adjustments
+      this.timeCenter = spanCenter
+    }
+  }
+
+  private willShowSpanControls(opts: { spanId?: string; showInlineControls?: boolean }): boolean {
+    // For spans without IDs (implied spans), only show arrows when explicitly requested
+    if (!opts.spanId) {
+      return !!opts.showInlineControls
+    }
+    
+    // For spans with IDs, show controls when focused, selected, or explicitly requested
+    const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId
+    const isSelected = this.selectedSpanId === opts.spanId
+    return isFocused || isSelected || !!opts.showInlineControls
+  }
+
   private drawSpanVisual(aTs: number, bTs: number, opts: {
     y: number
     color: string
@@ -1079,11 +1125,15 @@ export class TimelineRenderer {
       this.ctx.lineTo(iconX + 16, iconY + 12)
       this.ctx.stroke()
       this.ctx.restore()
-      this.hitTargets.push({ type: 'span-pin', rect: { x: iconX, y: iconY, w: iconW, h: iconH } })
-      if (opts.recordImplied) {
-        this.lastImpliedSpan = { aTs: opts.recordImplied.aTs, bTs: opts.recordImplied.bTs, label: opts.recordImplied.label }
-      } else if (typeof opts.saveLabel === 'string') {
-        this.lastImpliedSpan = { aTs, bTs, label: opts.saveLabel }
+      const spanData = opts.recordImplied ? 
+        { aTs: opts.recordImplied.aTs, bTs: opts.recordImplied.bTs, label: opts.recordImplied.label } :
+        (typeof opts.saveLabel === 'string' ? { aTs, bTs, label: opts.saveLabel } : undefined)
+      
+      this.hitTargets.push({ type: 'span-pin', rect: { x: iconX, y: iconY, w: iconW, h: iconH }, spanData })
+      
+      // Still set lastImpliedSpan for backwards compatibility
+      if (spanData) {
+        this.lastImpliedSpan = spanData
       }
     }
 
@@ -1149,86 +1199,79 @@ export class TimelineRenderer {
     const leftTarget = aIsOlder ? opts.startFocus : opts.endFocus
     const rightTarget = aIsOlder ? opts.endFocus : opts.startFocus
     
-    // Show arrows for spans with IDs (when focused/selected) or when explicitly requested via showInlineControls
-    const shouldShowArrows = opts.spanId ? 
-      (this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId) ||
-      (this.selectedSpanId === opts.spanId) ||
-      opts.showInlineControls :
-      opts.showInlineControls
+    // Use the same logic for determining if controls should be shown
+    const shouldShowControls = this.willShowSpanControls(opts)
       
-    if (shouldShowArrows) {
+    if (shouldShowControls) {
       if (leftTarget) makeFocusArrow('left', leftTarget)
       if (rightTarget) makeFocusArrow('right', rightTarget)
     }
     
     // Show eye/trash controls only for actual spans with IDs
-    if (opts.spanId) {
-      const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId
-      const isSelected = this.selectedSpanId === opts.spanId
+    if (opts.spanId && shouldShowControls) {
       const spVisibleForEyeHint = opts.visibleHint
-      if (isFocused || isSelected || opts.showInlineControls) {
-        // Inline visibility toggle near the label (eye icon)
-        const iconW = 20, iconH = 20
-        const eyeX = labelX + (labelWidth - iconW) / 2
-        const eyeY = labelY + labelHeight + 6
-        this.ctx.save()
-        this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-        this.ctx.strokeStyle = '#ffffff'
-        this.ctx.lineWidth = 2
-        this.ctx.fillRect(eyeX, eyeY, iconW, iconH)
-        this.ctx.strokeRect(eyeX, eyeY, iconW, iconH)
-        // simple eye glyph
-        this.ctx.beginPath()
-        this.ctx.moveTo(eyeX + 4, eyeY + iconH / 2)
-        this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + iconH - 4, eyeX + iconW - 4, eyeY + iconH / 2)
-        this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + 4, eyeX + 4, eyeY + iconH / 2)
-        this.ctx.stroke()
-        this.ctx.beginPath()
-        this.ctx.arc(eyeX + iconW / 2, eyeY + iconH / 2, 3, 0, Math.PI * 2)
-        this.ctx.stroke()
-        // red X overlay if currently hidden (only when we know visibility)
-        if (typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false) {
-          this.ctx.strokeStyle = '#ef4444'
-          this.ctx.beginPath()
-          this.ctx.moveTo(eyeX + 3, eyeY + 3)
-          this.ctx.lineTo(eyeX + iconW - 3, eyeY + iconH - 3)
-          this.ctx.moveTo(eyeX + iconW - 3, eyeY + 3)
-          this.ctx.lineTo(eyeX + 3, eyeY + iconH - 3)
-          this.ctx.stroke()
-        }
-        this.ctx.restore()
-        this.hitTargets.push({ type: 'span-visible', id: opts.spanId, rect: { x: eyeX, y: eyeY, w: iconW, h: iconH } })
-
-        // Red trashcan delete button to the right of eye
-        const delW = 20, delH = 20
-        const delX = eyeX + iconW + 8
-        const delY = eyeY
-        this.ctx.save()
-        this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+      // Inline visibility toggle near the label (eye icon)
+      const iconW = 20, iconH = 20
+      const eyeX = labelX + (labelWidth - iconW) / 2
+      const eyeY = labelY + labelHeight + 6
+      this.ctx.save()
+      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+      this.ctx.strokeStyle = '#ffffff'
+      this.ctx.lineWidth = 2
+      this.ctx.fillRect(eyeX, eyeY, iconW, iconH)
+      this.ctx.strokeRect(eyeX, eyeY, iconW, iconH)
+      // simple eye glyph
+      this.ctx.beginPath()
+      this.ctx.moveTo(eyeX + 4, eyeY + iconH / 2)
+      this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + iconH - 4, eyeX + iconW - 4, eyeY + iconH / 2)
+      this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + 4, eyeX + 4, eyeY + iconH / 2)
+      this.ctx.stroke()
+      this.ctx.beginPath()
+      this.ctx.arc(eyeX + iconW / 2, eyeY + iconH / 2, 3, 0, Math.PI * 2)
+      this.ctx.stroke()
+      // red X overlay if currently hidden (only when we know visibility)
+      if (typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false) {
         this.ctx.strokeStyle = '#ef4444'
-        this.ctx.lineWidth = 2
-        this.ctx.fillRect(delX, delY, delW, delH)
-        this.ctx.strokeRect(delX, delY, delW, delH)
-        // simple trash glyph
-        this.ctx.strokeStyle = '#ffffff'
         this.ctx.beginPath()
-        this.ctx.moveTo(delX + 4, delY + 7)
-        this.ctx.lineTo(delX + delW - 4, delY + 7)
-        this.ctx.moveTo(delX + 7, delY + 7)
-        this.ctx.lineTo(delX + 7, delY + delH - 4)
-        this.ctx.moveTo(delX + delW / 2, delY + 7)
-        this.ctx.lineTo(delX + delW / 2, delY + delH - 4)
-        this.ctx.moveTo(delX + delW - 7, delY + 7)
-        this.ctx.lineTo(delX + delW - 7, delY + delH - 4)
+        this.ctx.moveTo(eyeX + 3, eyeY + 3)
+        this.ctx.lineTo(eyeX + iconW - 3, eyeY + iconH - 3)
+        this.ctx.moveTo(eyeX + iconW - 3, eyeY + 3)
+        this.ctx.lineTo(eyeX + 3, eyeY + iconH - 3)
         this.ctx.stroke()
-        this.ctx.restore()
-        this.hitTargets.push({ type: 'span-delete', id: opts.spanId, rect: { x: delX, y: delY, w: delW, h: delH } })
       }
-      // Push body hit-target last so label double-click takes priority
-      if (opts.spanId) {
-        const bodyRect = { x: clampedLeft, y: spanY - 8, w: Math.max(12, clampedRight - clampedLeft), h: 16 }
-        this.hitTargets.push({ type: 'span-body', id: opts.spanId, rect: bodyRect })
-      }
+      this.ctx.restore()
+      this.hitTargets.push({ type: 'span-visible', id: opts.spanId, rect: { x: eyeX, y: eyeY, w: iconW, h: iconH } })
+
+      // Red trashcan delete button to the right of eye
+      const delW = 20, delH = 20
+      const delX = eyeX + iconW + 8
+      const delY = eyeY
+      this.ctx.save()
+      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+      this.ctx.strokeStyle = '#ef4444'
+      this.ctx.lineWidth = 2
+      this.ctx.fillRect(delX, delY, delW, delH)
+      this.ctx.strokeRect(delX, delY, delW, delH)
+      // simple trash glyph
+      this.ctx.strokeStyle = '#ffffff'
+      this.ctx.beginPath()
+      this.ctx.moveTo(delX + 4, delY + 7)
+      this.ctx.lineTo(delX + delW - 4, delY + 7)
+      this.ctx.moveTo(delX + 7, delY + 7)
+      this.ctx.lineTo(delX + 7, delY + delH - 4)
+      this.ctx.moveTo(delX + delW / 2, delY + 7)
+      this.ctx.lineTo(delX + delW / 2, delY + delH - 4)
+      this.ctx.moveTo(delX + delW - 7, delY + 7)
+      this.ctx.lineTo(delX + delW - 7, delY + delH - 4)
+      this.ctx.stroke()
+      this.ctx.restore()
+      this.hitTargets.push({ type: 'span-delete', id: opts.spanId, rect: { x: delX, y: delY, w: delW, h: delH } })
+    }
+    
+    // Push body hit-target last so label double-click takes priority
+    if (opts.spanId) {
+      const bodyRect = { x: clampedLeft, y: spanY - 8, w: Math.max(12, clampedRight - clampedLeft), h: 16 }
+      this.hitTargets.push({ type: 'span-body', id: opts.spanId, rect: bodyRect })
     }
 
     this.ctx.restore()
@@ -1337,7 +1380,7 @@ export class TimelineRenderer {
           return
         }
         if (target.type === 'span-pin') {
-          const imp = this.lastImpliedSpan ?? undefined
+          const imp = target.spanData ?? this.lastImpliedSpan ?? undefined
           if (imp) {
             // Ensure endpoints are saved instants (create instant at Now explicitly)
             const ensureInstant = (ts: number): string => {
@@ -1751,8 +1794,9 @@ export class TimelineRenderer {
     this.ctx.lineTo(pinX + 16, pinY + 12)
     this.ctx.stroke()
     this.ctx.restore()
-    this.hitTargets.push({ type: 'span-pin', rect: { x: pinX, y: pinY, w: pinW, h: pinH } })
-    this.lastImpliedSpan = { aTs: sourceTs, bTs: now, label: 'To Now' }
+    const spanData = { aTs: sourceTs, bTs: now, label: 'To Now' }
+    this.hitTargets.push({ type: 'span-pin', rect: { x: pinX, y: pinY, w: pinW, h: pinH }, spanData })
+    this.lastImpliedSpan = spanData
   }
 
 
