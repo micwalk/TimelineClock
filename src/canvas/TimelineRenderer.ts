@@ -2,6 +2,7 @@
 import { formatTimeString12h, formatDurationHuman } from '../utils/timeFormat.ts'
 import type { SavedInstantCompat } from '../types/instants.ts'
 import type { InstantView } from '../types/instants.ts'
+import type { InstantRecord } from '../types/instants.ts'
 import { SavedInstantsStore } from '../services/SavedInstantsStore.ts'
 import { SavedSpansStore } from '../services/SavedSpansStore.ts'
 import type { SpanView } from '../types/spans.ts'
@@ -46,7 +47,7 @@ export class TimelineRenderer {
   // Saved instants and hit targets for interactions
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
-  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant' }[] = []
+  private hitTargets: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'cursor-label' | 'now-label' | 'cursor-star' | 'now-star' | 'instant-trash' | 'instant-time' | 'span-pin' | 'span-label' | 'span-body' | 'span-visible' | 'span-delete' | 'instant-fav' | 'span-end-focus'; id?: string; rect: { x: number; y: number; w: number; h: number }; focus?: 'now'|'cursor'|'instant' }[] = []
   private overlayElements: { type: 'save-now' | 'save-cursor' | 'instant-label' | 'instant-trash' | 'span-label'; id?: string; rect: { x: number; y: number; w: number; h: number }; text?: string; focused?: boolean }[] = []
   private editingInstantId: string | null = null
   private editingSpanId: string | null = null
@@ -59,6 +60,7 @@ export class TimelineRenderer {
   private focusHistory: string[] = []
   private focusHistoryIndex: number = -1
   private suppressHistoryPush: boolean = false
+  private selectedSpanId: string | null = null
 
   
   // Recentered vertical baseline for the timeline: lesser of one-third of canvas CSS height or constant pixels
@@ -74,9 +76,10 @@ export class TimelineRenderer {
   private readonly spanRows = {
     cursorNow: -100, // Aka Row 0
     selectedNow: -70, // FKA Row 2
-    selectedCursor: 170, // Aka Row 1
-    selectedPrev: 200, // Aka Row 3
-    focusedSaved: 230, // Aka Row 4
+    selectedCursor: 160, // Aka Row 1
+    selectedPrev: 190, // Aka Row 3
+    spanList: 190, // Aka Row 4
+    focusedSpanTop: -80, // Focused saved span drawn above the timeline
   } as const
 
   // Zoom configuration
@@ -143,16 +146,16 @@ export class TimelineRenderer {
     // Update time center depending on view mode (skip if animating)
     const animating = !!(this.zoomPanAnim && this.zoomPanAnim.active)
     if (!animating) {
-      if (this.viewFocusMode === 'now') {
-        this.timeCenter = Date.now()
-      } else if (this.viewFocusMode === 'span' && this.focusedSpanId) {
-        const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
-        if (span) {
-          const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
-          const b = this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
-          if (typeof a === 'number' && typeof b === 'number') {
-            this.timeCenter = (a + b) / 2
-          }
+    if (this.viewFocusMode === 'now') {
+      this.timeCenter = Date.now()
+    } else if (this.viewFocusMode === 'span' && this.focusedSpanId) {
+      const span = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
+      if (span) {
+        const a = this.savedStore.getSnapshot().find(i => i.id === span.startInstantId)?.tsEpochMs
+        const b = this.savedStore.getSnapshot().find(i => i.id === span.endInstantId)?.tsEpochMs
+        if (typeof a === 'number' && typeof b === 'number') {
+          this.timeCenter = (a + b) / 2
+        }
         }
       }
     }
@@ -210,51 +213,148 @@ export class TimelineRenderer {
     this.drawNowInstant() // This now draws the line, label, and time string
     // Draw saved instants
     this.drawSavedInstants()
-    // Removed: favorite implied spans are now represented as saved spans with endIsNow and visible
+    // Track spans already drawn to avoid duplicates across bands
+    const drawnSpanIds = new Set<string>()
+    
     if (this.viewFocusMode === 'cursor' || this.viewFocusMode === 'instant') {
-      if (this.viewFocusMode === 'cursor') {
-        this.drawCursorInstant()
+    if (this.viewFocusMode === 'cursor') {
+      this.drawCursorInstant()
       }
       this.drawCursorNowSpan()
     }
-    // Draw focused saved span if any (and suppress implied spans)
+    // Draw focused saved span if any (with emphasis)
     if (this.viewFocusMode === 'span' && this.focusedSpanId) {
       const sp = this.spansStore.getSnapshot().find(s => s.id === this.focusedSpanId)
       if (sp) {
         const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
         const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
         if (typeof a === 'number' && typeof b === 'number') {
-          // Only draw the selected saved span
+          // Draw the selected saved span with a glow and thicker line
           const aRec = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)
           const bRec = sp.endIsNow ? undefined : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)
           const startName = aRec?.label || '?'
           const endName = sp.endIsNow ? 'Now' : (bRec?.label || '?')
-          const header = sp.label && sp.label.length > 0 ? sp.label : undefined
-          this.drawSpanBetween(a, b, this.TimelineCenterY() + this.spanRows.focusedSaved, '#34d399', { showPin: false, spanId: sp.id, startName, endName, headerLabel: header })
-          return
+          // For favorite-now spans, suppress the 'Favorite' label and show a star next to the start name
+          const isFavNow = !!sp.endIsNow && typeof aRec?.favorite === 'boolean' && aRec.favorite
+          const header = (() => {
+            if (isFavNow) return undefined
+            return sp.label && sp.label.length > 0 ? sp.label : undefined
+          })()
+          this.drawSpanVisual(a, b, {
+            y: this.TimelineCenterY() + this.spanRows.focusedSpanTop,
+            color: '#34d399',
+            spanId: sp.id,
+            startName,
+            endName,
+            headerLabel: header,
+            startFocus: { kind: 'instant', id: aRec?.id },
+            endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id },
+            lineWidth: 5,
+            glowColor: '#34d399',
+            glowBlur: 12,
+            showInlineControls: true,
+            startStar: isFavNow,
+          })
+          drawnSpanIds.add(sp.id)
+          // Highlight endpoints in green glow when span is focused
+          if (aRec) {
+            this.drawInstant(aRec.tsEpochMs, aRec.label || '?', {
+              lineColor: '#34d399', glowColor: '#34d399', glowBlur: 10, lineWidth: 4,
+              labelBorderColor: '#34d399', labelTextColor: '#ffffff'
+            })
+          }
+          if (bRec && !sp.endIsNow) {
+            this.drawInstant(bRec.tsEpochMs, bRec.label || '?', {
+              lineColor: '#34d399', glowColor: '#34d399', glowBlur: 10, lineWidth: 4,
+              labelBorderColor: '#34d399', labelTextColor: '#ffffff'
+            })
+          }
         }
       }
     }
 
-    // Draw all visible saved spans (including ones ending at Now)
+    // Draw all saved spans using one layout pass (including invisible ones related to focus history)
     {
       const centerY = this.TimelineCenterY()
-      let rowOffset = 0
-      for (const sp of this.spansStore.getSnapshot()) {
-        if (!sp.visible) continue
-        const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-        const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-        if (typeof a !== 'number' || typeof b !== 'number') continue
+      const focusedId = this.focusedInstantId
+      const selectedId = this.currentSelectedInstantId
+      const savedSpans = this.spansStore.getSnapshot()
+
+      // De-duplication mechanism for multiple reasons to draw spans.
+      type Drawable = { sp: typeof savedSpans[number]; a: number; b: number; aRec?: InstantRecord; bRec?: InstantRecord | undefined; prio: number }
+      const byId: Map<string, Drawable> = new Map()
+      const pushCandidate = (cand: Drawable): void => {
+        const id = cand.sp.id
+        const prev = byId.get(id)
+        if (!prev || cand.prio < prev.prio) {
+          byId.set(id, cand)
+        }
+      }
+
+      // Loop through all saved spans and add them to the list if they should be drawn
+      for (const sp of savedSpans) {
+        if (this.viewFocusMode === 'span' && this.focusedSpanId === sp.id) continue // focused span drawn elsewhere
         const aRec = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)
         const bRec = sp.endIsNow ? undefined : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)
+        const a = aRec?.tsEpochMs
+        const b = sp.endIsNow ? Date.now() : bRec?.tsEpochMs
+        if (typeof a !== 'number' || typeof b !== 'number') continue
+        if (!this.shouldDrawSpan(a, b)) continue
+        const involveFocused = !!focusedId && (sp.startInstantId === focusedId || sp.endInstantId === focusedId)
+        const involveSelected = !!selectedId && (sp.startInstantId === selectedId || sp.endInstantId === selectedId)
+                
+        // Priority: 0 focused (cyan), 1 selected (blue), 2 visible (green), -1 or otherwise (exclude)
+        let includePrio: number = -1
+        if (this.viewFocusMode === 'instant' && focusedId) {
+            includePrio = involveFocused ? 0 : sp.visible ? 2 : -1;
+        } else if (selectedId) {
+            includePrio = involveSelected ? 1 : sp.visible ? 2 : -1;
+        } else if (sp.visible) {
+            includePrio = 2;
+        }
+        if (includePrio < 0) continue
+        pushCandidate({ sp, a, b, aRec, bRec, prio: includePrio })
+      }
+      // Build final list from map and order by priority then midpoint
+      const spanDrawList = Array.from(byId.values())
+      spanDrawList.sort((x, y) => {
+        const dp = x.prio - y.prio
+        if (dp !== 0) return dp
+        // fallback by midpoint time
+        const xm = (x.a + x.b) / 2
+        const ym = (y.a + y.b) / 2
+        return xm - ym
+      })
+      
+      // Actually draw all spans into "rows"
+      let rowOffset : number = centerY + this.spanRows.spanList
+      const rowHeights = {
+        "short": 30,
+        "labeled": 50,
+        "controlExtra": 20,
+      }
+      for (const d of spanDrawList) {
+        const { sp, a, b, aRec, bRec, prio } = d
         const startName = aRec?.label || '?'
         const endName = sp.endIsNow ? 'Now' : (bRec?.label || '?')
-        const header = sp.label && sp.label.length > 0 ? sp.label : undefined
-        const y = centerY + this.spanRows.focusedSaved + rowOffset * 30
-        this.drawSpanVisual(a, b, { y, color: '#34d399', spanId: sp.id, startName, endName, headerLabel: header, startFocus: { kind: 'instant', id: aRec?.id }, endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id } })
-        rowOffset++
+        const isFavNow = !!sp.endIsNow && typeof aRec?.favorite === 'boolean' && aRec.favorite
+        const header = (() => {
+          if (isFavNow) return undefined
+          return sp.label && sp.label.length > 0 ? sp.label : undefined
+        })()
+        const color = prio === 0 ? '#22d3ee' : prio === 1 ? '#2563eb' : '#34d399'
+        rowOffset += header ? rowHeights.labeled : rowHeights.short
+        const drawControls = prio <= 1
+        if(drawControls) rowOffset +=rowHeights.controlExtra
+        this.drawSpanVisual(a, b, { y:rowOffset, color, spanId: sp.id, startName, endName, headerLabel: header, 
+            startFocus: { kind: 'instant', id: aRec?.id }, 
+            endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id }, 
+            startStar: isFavNow, 
+            showInlineControls: drawControls, 
+            visibleHint: sp.visible !== false })
+        drawnSpanIds.add(sp.id)
       }
-    }
+    } // End Draw Visible Spans
 
     // Draw implied spans for selected/current instant
     const selected = this.currentSelectedInstantId ? this.savedStore.getSnapshot().find(si => si.id === this.currentSelectedInstantId) : null
@@ -264,7 +364,8 @@ export class TimelineRenderer {
       if (!id) return null
       return this.savedStore.getSnapshot().find(si => si.id === id) || null
     })()
-    // Row 1: Selected ↔ Cursor (when focusing cursor), or Selected ↔ Focused Instant (when focusing a different instant)
+
+    // Row 1: Selected ↔ Cursor (when focusing cursor), OR Selected ↔ Focused Instant (when focusing a different instant)
     if (selected) {
       const y = this.TimelineCenterY() + this.spanRows.selectedCursor
       const color = '#22d3ee' // light blue always for this row
@@ -280,6 +381,7 @@ export class TimelineRenderer {
           saveLabel: 'Selected to Cursor',
           startFocus: { kind: 'instant', id: selected.id! },
           endFocus: { kind: 'cursor' },
+          showInlineControls: true,
         })
       } else if (this.viewFocusMode === 'instant' && this.focusedInstantId && this.focusedInstantId !== selected.id) {
         const f = this.savedStore.getSnapshot().find(si => si.id === this.focusedInstantId)
@@ -295,11 +397,13 @@ export class TimelineRenderer {
             saveLabel: 'Selected to Focus',
             startFocus: { kind: 'instant', id: selected.id! },
             endFocus: { kind: 'instant', id: f.id },
+            showInlineControls: true,
           })
         }
       }
     }
-    // Row 3: Selected → Now (always shown)
+
+    // Implied Span: Selected → Now (always shown, at top)
     if (selected) {
       const y = this.TimelineCenterY() + this.spanRows.selectedNow
       const color = '#2563eb'
@@ -314,13 +418,22 @@ export class TimelineRenderer {
         saveLabel: 'Selected to Now',
         startFocus: { kind: 'instant', id: selected.id! },
         endFocus: { kind: 'now' },
+        showInlineControls: true,
       })
     }
-    if (selected && prev && this.showImpliedSelectedPrev) {
+    
+    // Implied Span: for selected → previous.
+    if (selected && prev && this.showImpliedSelectedPrev) { // && this.viewFocusMode !== 'instant'
       const startName = prev.label && prev.label.length > 0 ? prev.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
-      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { y: this.TimelineCenterY() + this.spanRows.selectedPrev, color: '#8b5cf6', startName, endName, headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id } })
+      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { 
+        y: this.TimelineCenterY() + this.spanRows.selectedPrev, color: '#8b5cf6', startName, endName, 
+        headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', 
+        startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id },
+        showInlineControls: true,
+    })
     }
+
   }
 
   private persistState() {
@@ -751,7 +864,7 @@ export class TimelineRenderer {
         labelTextColor: '#ffffff',
       })
       if (this.currentSelectedInstantId === s.id) {
-        this.drawTrashIconAt(s.ts, s.id)
+      this.drawTrashIconAt(s.ts, s.id)
       }
       // Record label hit target roughly using current font and box metrics similar to drawInstant
       const centerY = this.TimelineCenterY()
@@ -765,12 +878,12 @@ export class TimelineRenderer {
       {
         const shouldShowStar = !!s.favorite || this.currentSelectedInstantId === s.id
         if (shouldShowStar) {
-          const starSize = 20
-          const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
-          const starCx = starRect.x + starRect.w / 2
-          const starCy = starRect.y + starRect.h / 2
-          this.drawStarIcon(starCx, starCy, !!s.favorite)
-          this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
+        const starSize = 20
+        const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
+        const starCx = starRect.x + starRect.w / 2
+        const starCy = starRect.y + starRect.h / 2
+        this.drawStarIcon(starCx, starCy, !!s.favorite)
+        this.hitTargets.push({ type: 'instant-fav', id: s.id, rect: starRect })
         }
       }
       // Add a double-click target for the time box
@@ -819,34 +932,6 @@ export class TimelineRenderer {
     }
   }
 
-  private drawSpanBetween(
-    aTs: number,
-    bTs: number,
-    y: number,
-    color: string,
-    labelOrOpts: string | { showPin: boolean; spanId?: string; startName: string; endName: string; saveLabel?: string; headerLabel?: string }
-  ) {
-    // Delegate to unified span renderer
-    if (typeof labelOrOpts === 'string') {
-      this.drawSpanVisual(aTs, bTs, {
-        y,
-        color,
-        labelText: labelOrOpts,
-      })
-      return
-    }
-    this.drawSpanVisual(aTs, bTs, {
-      y,
-      color,
-      startName: labelOrOpts.startName,
-      endName: labelOrOpts.endName,
-      headerLabel: labelOrOpts.headerLabel,
-      showPin: labelOrOpts.showPin,
-      spanId: labelOrOpts.spanId,
-      saveLabel: labelOrOpts.saveLabel,
-    })
-  }
-
   private drawSpanVisual(aTs: number, bTs: number, opts: {
     y: number
     color: string
@@ -861,6 +946,13 @@ export class TimelineRenderer {
     recordImplied?: { aTs: number; bTs: number; label: string }
     startFocus?: { kind: 'instant'|'cursor'|'now'; id?: string }
     endFocus?: { kind: 'instant'|'cursor'|'now'; id?: string }
+    lineWidth?: number
+    glowColor?: string
+    glowBlur?: number
+    spanKeyRect?: { x: number; y: number; w: number; h: number }
+    showInlineControls?: boolean
+    startStar?: boolean
+    visibleHint?: boolean
   }) {
     if(aTs === bTs) {
       return
@@ -884,11 +976,18 @@ export class TimelineRenderer {
 
     this.ctx.save()
     this.ctx.strokeStyle = opts.color
-    this.ctx.lineWidth = 3
+    this.ctx.lineWidth = opts.lineWidth ?? 3
+    if (opts.glowColor && opts.glowBlur && opts.glowBlur > 0) {
+      this.ctx.shadowColor = opts.glowColor
+      this.ctx.shadowBlur = opts.glowBlur
+      this.ctx.shadowOffsetX = 0
+      this.ctx.shadowOffsetY = 0
+    }
     this.ctx.beginPath()
     this.ctx.moveTo(clampedLeft, spanY)
     this.ctx.lineTo(clampedRight, spanY)
     this.ctx.stroke()
+    // (body selection hit-target will be pushed later to ensure label edits take precedence)
     const drawArrow = (x: number, dir: 1 | -1) => {
       const size = 8
       this.ctx.beginPath()
@@ -918,10 +1017,11 @@ export class TimelineRenderer {
     }
     const font = 'bold 14px monospace'
     const headerFont = 'bold 14px Arial'
+    const starExtraSpace = opts.startStar ? 35 : 0 // Extra space for star icon
     const labelWidth = Math.max(
       this.measureTextWidth(font, labelText),
       opts.headerLabel ? this.measureTextWidth(headerFont, opts.headerLabel) : 0,
-    ) + 16
+    ) + 16 + starExtraSpace
     const labelHeight = opts.headerLabel ? 28 + 20 : 28
     const labelX = midX - labelWidth / 2
     const labelY = spanY - labelHeight / 2
@@ -941,6 +1041,12 @@ export class TimelineRenderer {
     } else {
       this.ctx.font = font
       this.ctx.fillText(labelText, midX, labelY + labelHeight / 2)
+    }
+    // Favorite-now star at right side (inside box) when requested
+    if (opts.startStar) {
+      const starCx = labelX + labelWidth - 12
+      const starCy = labelY + labelHeight / 2
+      this.drawStarIcon(starCx, starCy, true)
     }
 
     // Editable label for saved spans
@@ -1042,8 +1148,88 @@ export class TimelineRenderer {
     const aIsOlder = aTs <= bTs
     const leftTarget = aIsOlder ? opts.startFocus : opts.endFocus
     const rightTarget = aIsOlder ? opts.endFocus : opts.startFocus
-    if (leftTarget) makeFocusArrow('left', leftTarget)
-    if (rightTarget) makeFocusArrow('right', rightTarget)
+    
+    // Show arrows for spans with IDs (when focused/selected) or when explicitly requested via showInlineControls
+    const shouldShowArrows = opts.spanId ? 
+      (this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId) ||
+      (this.selectedSpanId === opts.spanId) ||
+      opts.showInlineControls :
+      opts.showInlineControls
+      
+    if (shouldShowArrows) {
+      if (leftTarget) makeFocusArrow('left', leftTarget)
+      if (rightTarget) makeFocusArrow('right', rightTarget)
+    }
+    
+    // Show eye/trash controls only for actual spans with IDs
+    if (opts.spanId) {
+      const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === opts.spanId
+      const isSelected = this.selectedSpanId === opts.spanId
+      const spVisibleForEyeHint = opts.visibleHint
+      if (isFocused || isSelected || opts.showInlineControls) {
+        // Inline visibility toggle near the label (eye icon)
+        const iconW = 20, iconH = 20
+        const eyeX = labelX + (labelWidth - iconW) / 2
+        const eyeY = labelY + labelHeight + 6
+        this.ctx.save()
+        this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+        this.ctx.strokeStyle = '#ffffff'
+        this.ctx.lineWidth = 2
+        this.ctx.fillRect(eyeX, eyeY, iconW, iconH)
+        this.ctx.strokeRect(eyeX, eyeY, iconW, iconH)
+        // simple eye glyph
+        this.ctx.beginPath()
+        this.ctx.moveTo(eyeX + 4, eyeY + iconH / 2)
+        this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + iconH - 4, eyeX + iconW - 4, eyeY + iconH / 2)
+        this.ctx.quadraticCurveTo(eyeX + iconW / 2, eyeY + 4, eyeX + 4, eyeY + iconH / 2)
+        this.ctx.stroke()
+        this.ctx.beginPath()
+        this.ctx.arc(eyeX + iconW / 2, eyeY + iconH / 2, 3, 0, Math.PI * 2)
+        this.ctx.stroke()
+        // red X overlay if currently hidden (only when we know visibility)
+        if (typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false) {
+          this.ctx.strokeStyle = '#ef4444'
+          this.ctx.beginPath()
+          this.ctx.moveTo(eyeX + 3, eyeY + 3)
+          this.ctx.lineTo(eyeX + iconW - 3, eyeY + iconH - 3)
+          this.ctx.moveTo(eyeX + iconW - 3, eyeY + 3)
+          this.ctx.lineTo(eyeX + 3, eyeY + iconH - 3)
+          this.ctx.stroke()
+        }
+        this.ctx.restore()
+        this.hitTargets.push({ type: 'span-visible', id: opts.spanId, rect: { x: eyeX, y: eyeY, w: iconW, h: iconH } })
+
+        // Red trashcan delete button to the right of eye
+        const delW = 20, delH = 20
+        const delX = eyeX + iconW + 8
+        const delY = eyeY
+        this.ctx.save()
+        this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+        this.ctx.strokeStyle = '#ef4444'
+        this.ctx.lineWidth = 2
+        this.ctx.fillRect(delX, delY, delW, delH)
+        this.ctx.strokeRect(delX, delY, delW, delH)
+        // simple trash glyph
+        this.ctx.strokeStyle = '#ffffff'
+        this.ctx.beginPath()
+        this.ctx.moveTo(delX + 4, delY + 7)
+        this.ctx.lineTo(delX + delW - 4, delY + 7)
+        this.ctx.moveTo(delX + 7, delY + 7)
+        this.ctx.lineTo(delX + 7, delY + delH - 4)
+        this.ctx.moveTo(delX + delW / 2, delY + 7)
+        this.ctx.lineTo(delX + delW / 2, delY + delH - 4)
+        this.ctx.moveTo(delX + delW - 7, delY + 7)
+        this.ctx.lineTo(delX + delW - 7, delY + delH - 4)
+        this.ctx.stroke()
+        this.ctx.restore()
+        this.hitTargets.push({ type: 'span-delete', id: opts.spanId, rect: { x: delX, y: delY, w: delW, h: delH } })
+      }
+      // Push body hit-target last so label double-click takes priority
+      if (opts.spanId) {
+        const bodyRect = { x: clampedLeft, y: spanY - 8, w: Math.max(12, clampedRight - clampedLeft), h: 16 }
+        this.hitTargets.push({ type: 'span-body', id: opts.spanId, rect: bodyRect })
+      }
+    }
 
     this.ctx.restore()
   }
@@ -1102,6 +1288,19 @@ export class TimelineRenderer {
     return progress * this.screenWidth
   }
 
+  // Decide whether a span should be drawn on the canvas based on current viewport
+  private shouldDrawSpan(aTs: number, bTs: number): boolean {
+    if (aTs === bTs) return false
+    const xA = this.timeToPosition(aTs)
+    const xB = this.timeToPosition(bTs)
+    const leftX = Math.min(xA, xB)
+    const rightX = Math.max(xA, xB)
+    const aVisible = xA >= 0 && xA <= this.screenWidth
+    const bVisible = xB >= 0 && xB <= this.screenWidth
+    const spansScreen = leftX < 0 && rightX > this.screenWidth
+    return aVisible || bVisible || spansScreen
+  }
+
 
   private computeTimeBoxRect(timestamp: number): { x: number; y: number; w: number; h: number } {
     const centerY = this.TimelineCenterY()
@@ -1140,7 +1339,7 @@ export class TimelineRenderer {
         if (target.type === 'span-pin') {
           const imp = this.lastImpliedSpan ?? undefined
           if (imp) {
-            // Ensure endpoints are saved instants
+            // Ensure endpoints are saved instants (create instant at Now explicitly)
             const ensureInstant = (ts: number): string => {
               const found = this.savedStore.getSnapshot().find(i => i.tsEpochMs === ts)
               if (found) return found.id
@@ -1148,7 +1347,9 @@ export class TimelineRenderer {
             }
             const aId = ensureInstant(imp.aTs)
             const bId = ensureInstant(imp.bTs)
-            const newId = this.spansStore.create(aId, bId, imp.label)
+            // Create span with blank label and set visible true
+            const newId = this.spansStore.create(aId, bId, '', { visible: true, endIsNow: false })
+            // Focus newly created span
             this.setViewFocus('span', undefined, newId)
           }
           return
@@ -1174,6 +1375,22 @@ export class TimelineRenderer {
           if (inst) {
             this.toggleFavorite(target.id, !inst.favorite)
           }
+          return
+        }
+        if (target.type === 'span-delete' && target.id) {
+          this.deleteSpan(target.id)
+          return
+        }
+        if (target.type === 'span-body' && target.id) {
+          // Select a saved span (no zoom/pan)
+          this.selectedSpanId = target.id
+            this.stateVersion++
+          return
+          }
+        if (target.type === 'span-visible' && target.id) {
+          // Toggle visibility of saved span
+          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+          if (sp) this.setSpanVisible(sp.id, !sp.visible)
           return
         }
         if (target.type === 'cursor-star') {
@@ -1262,6 +1479,38 @@ export class TimelineRenderer {
     for (const target of this.hitTargets) {
       const { rect } = target
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+        if (target.type === 'span-label' && target.id) {
+          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+          if (sp) {
+            const isFocused = this.viewFocusMode === 'span' && this.focusedSpanId === target.id
+            if (isFocused) {
+              // Already focused → enter rename
+              this.editingSpanId = target.id
+              return
+            }
+            // Not focused → focus and zoom-to-fit
+            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+            if (typeof a === 'number' && typeof b === 'number') {
+              this.setViewFocus('span', undefined, sp.id)
+              this.adjustZoomToRange(a, b)
+              return
+            }
+          }
+        }
+        if (target.type === 'span-body' && target.id) {
+          // Focus span and zoom-to-fit
+          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
+          if (sp) {
+            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
+            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
+            if (typeof a === 'number' && typeof b === 'number') {
+              this.setViewFocus('span', undefined, sp.id)
+              this.adjustZoomToRange(a, b)
+            }
+          }
+          return
+        }
         if (target.type === 'instant-time') {
           if (target.id) {
             const ts = this.savedStore.getSnapshot().find(si => si.id === target.id)?.tsEpochMs
@@ -1334,31 +1583,6 @@ export class TimelineRenderer {
     const metrics = this.ctx.measureText(text)
     this.ctx.restore()
     return metrics.width
-  }
-
-  private drawSaveIconAt(ts: number, type: 'save-now' | 'save-cursor') {
-    const centerY = this.TimelineCenterY()
-    const x = this.timeToPosition(ts)
-    const boxW = 28
-    const boxH = 28
-    const y = centerY + 120
-    this.ctx.save()
-    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-    this.ctx.strokeStyle = '#22c55e'
-    this.ctx.lineWidth = 2
-    this.ctx.fillRect(x - boxW / 2, y, boxW, boxH)
-    this.ctx.strokeRect(x - boxW / 2, y, boxW, boxH)
-    // simple save icon (arrow)
-    this.ctx.strokeStyle = '#ffffff'
-    this.ctx.beginPath()
-    this.ctx.moveTo(x, y + 6)
-    this.ctx.lineTo(x, y + 16)
-    this.ctx.moveTo(x - 5, y + 12)
-    this.ctx.lineTo(x, y + 18)
-    this.ctx.lineTo(x + 5, y + 12)
-    this.ctx.stroke()
-    this.ctx.restore()
-    this.hitTargets.push({ type, rect: { x: x - boxW / 2, y, w: boxW, h: boxH } })
   }
 
   private drawTrashIconAt(ts: number, id: string) {
@@ -1663,6 +1887,10 @@ export class TimelineRenderer {
       }
     }
     this.focusedSpanId = mode === 'span' ? (spanId ?? null) : this.focusedSpanId
+    if (mode === 'span') {
+      // Clear selection/previous UI instants when focusing a span
+      this.currentSelectedInstantId = null
+    }
     if (leavingInstantToCursor) {
       const id = this.focusedInstantId!
       if (!this.suppressHistoryPush) {

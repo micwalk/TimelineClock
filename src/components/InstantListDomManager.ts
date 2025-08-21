@@ -91,8 +91,6 @@ export class InstantListDomManager {
 				t.style.borderBottom = isActive ? '3px solid #22d3ee' : '3px solid transparent'
 				t.style.color = isActive ? '#ffffff' : '#94a3b8'
 			})
-			// debug: show active tab
-			try { console.log('[InstantList] activeTab', active) } catch { /* noop */ }
 		}
 
 		// Persistent scroller

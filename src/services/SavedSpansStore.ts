@@ -48,12 +48,13 @@ export class SavedSpansStore {
     const found = this.items.find(x => x.startInstantId === startInstantId && x.endIsNow)
     if (found) {
       found.visible = visible
-      found.label = 'Favorite'
+      // suppress explicit label; UI will show star next to start name
+      found.label = ''
       this.persist()
       return found.id
     }
     const id = `s_${Math.random().toString(36).slice(2, 9)}`
-    this.items.push({ id, startInstantId, endInstantId: '__NOW__', label: 'Favorite', visible, endIsNow: true })
+    this.items.push({ id, startInstantId, endInstantId: '__NOW__', label: '', visible, endIsNow: true })
     this.persist()
     return id
   }
