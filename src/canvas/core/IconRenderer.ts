@@ -157,6 +157,86 @@ export class IconRenderer {
     this.ctx.restore()
   }
 
+  // Draw a pencil icon (for rename)
+  drawPencil(x: number, y: number, w: number, h: number, options?: {
+    fillColor?: string
+    strokeColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      fillColor: 'rgba(0,0,0,0.8)',
+      strokeColor: '#ffffff',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    this.ctx.fillStyle = opts.fillColor
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+    this.ctx.fillRect(x, y, w, h)
+    this.ctx.strokeRect(x, y, w, h)
+
+    // Pencil glyph at 45° with double-line body, V tip, and square cap
+    const pad = Math.min(w, h) * 0.2
+    const x1 = x + pad
+    const y1 = y + h - pad
+    const x2 = x + w - pad
+    const y2 = y + pad
+
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const len = Math.hypot(dx, dy) || 1
+    const ux = dx / len
+    const uy = dy / len
+    const nx = -uy
+    const ny = ux
+    const halfWidth = Math.min(w, h) * 0.08
+    const tipLen = Math.min(w, h) * .2
+    const capSize = Math.min(w, h) * 0.2
+
+    // Adjust body endpoints to reserve space for tip and cap
+    const bodyStartX = x1 + ux * tipLen
+    const bodyStartY = y1 + uy * tipLen
+    const bodyEndX = x2 - ux * capSize * 0.5
+    const bodyEndY = y2 - uy * capSize * 0.5
+
+    // Two parallel body lines
+    this.ctx.beginPath()
+    this.ctx.moveTo(bodyStartX + nx * halfWidth, bodyStartY + ny * halfWidth)
+    this.ctx.lineTo(bodyEndX + nx * halfWidth, bodyEndY + ny * halfWidth)
+    this.ctx.moveTo(bodyStartX - nx * halfWidth, bodyStartY - ny * halfWidth)
+    this.ctx.lineTo(bodyEndX - nx * halfWidth, bodyEndY - ny * halfWidth)
+    this.ctx.stroke()
+
+    // V-shaped tip at bottom-left
+    this.ctx.beginPath()
+    this.ctx.moveTo(x1, y1)
+    this.ctx.lineTo(bodyStartX + nx * halfWidth * 1.2, bodyStartY + ny * halfWidth * 1.2)
+    this.ctx.moveTo(x1, y1)
+    this.ctx.lineTo(bodyStartX - nx * halfWidth * 1.2, bodyStartY - ny * halfWidth * 1.2)
+    this.ctx.stroke()
+
+    // Square cap at top-right aligned to the shaft
+    const capCenterOffset = capSize * 0.25
+    const cx0 = x2 - ux * capCenterOffset
+    const cy0 = y2 - uy * capCenterOffset
+    const hx = (ux * capSize) / 2
+    const hy = (uy * capSize) / 2
+    const px = (nx * capSize) / 2
+    const py = (ny * capSize) / 2
+
+    this.ctx.beginPath()
+    this.ctx.moveTo(cx0 + hx + px, cy0 + hy + py)
+    this.ctx.lineTo(cx0 - hx + px, cy0 - hy + py)
+    this.ctx.lineTo(cx0 - hx - px, cy0 - hy - py)
+    this.ctx.lineTo(cx0 + hx - px, cy0 + hy - py)
+    this.ctx.closePath()
+    this.ctx.stroke()
+
+    this.ctx.restore()
+  }
+
   // Draw an arrow icon (for navigation/focus)
   drawArrow(x: number, y: number, w: number, h: number, direction: 'left' | 'right' | 'up' | 'down', options?: {
     fillColor?: string

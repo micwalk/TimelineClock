@@ -12,13 +12,13 @@ export type HitTargetType =
   | 'instant-trash' 
   | 'instant-time' 
   | 'span-pin' 
-  | 'span-label' 
-  | 'span-body' 
+  | 'span-box' 
   | 'span-visible' 
   | 'span-delete' 
   | 'instant-fav' 
   | 'span-end-focus'
   | 'span-time-input'
+  | 'span-rename'
 
 export interface HitTargetRect {
   x: number
@@ -49,17 +49,9 @@ export class HitTargetManager {
   }
 
   // Convenience methods for common target types
-  addSpanLabel(spanId: string, x: number, y: number, w: number, h: number): void {
+  addSpanBox(spanId: string, x: number, y: number, w: number, h: number): void {
     this.targets.push({
-      type: 'span-label',
-      id: spanId,
-      rect: { x, y, w, h }
-    })
-  }
-
-  addSpanBody(spanId: string, x: number, y: number, w: number, h: number): void {
-    this.targets.push({
-      type: 'span-body',
+      type: 'span-box',
       id: spanId,
       rect: { x, y, w, h }
     })
@@ -76,6 +68,14 @@ export class HitTargetManager {
   addSpanDelete(spanId: string, x: number, y: number, w: number, h: number): void {
     this.targets.push({
       type: 'span-delete',
+      id: spanId,
+      rect: { x, y, w, h }
+    })
+  }
+
+  addSpanRename(spanId: string, x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'span-rename',
       id: spanId,
       rect: { x, y, w, h }
     })

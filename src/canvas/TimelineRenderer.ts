@@ -1054,9 +1054,12 @@ export class TimelineRenderer {
 
     // Editable label for saved spans
     if (opts.spanId) {
-      this.hitTargets.addSpanLabel(opts.spanId, labelX, labelY, labelWidth, labelHeight)
+      // Single consolidated hitbox for the entire span box
+      this.hitTargets.addSpanBox(opts.spanId, labelX, labelY, labelWidth, labelHeight)
       if (this.state.getEditingSpanId() === opts.spanId) {
-        const initialText = (typeof opts.headerLabel === 'string' && opts.headerLabel.length > 0) ? opts.headerLabel : labelText
+        // Use the actual saved label text (which may be empty) rather than synthesized label text
+        const spLabel = this.spansStore.getSnapshot().find(s => s.id === opts.spanId)?.label ?? ''
+        const initialText = spLabel
         this.overlayElements.push({ type: 'span-label', id: opts.spanId, rect: { x: labelX, y: labelY, w: labelWidth, h: labelHeight }, text: initialText, focused: true })
       }
     }
@@ -1159,13 +1162,25 @@ export class TimelineRenderer {
       if (rightTarget) makeFocusArrow('right', rightTarget)
     }
     
-    // Show eye/trash controls only for actual spans with IDs
+    // Show rename/eye/trash controls only for actual spans with IDs
     if (opts.spanId && shouldShowControls) {
       const spVisibleForEyeHint = opts.visibleHint
       // Inline visibility toggle near the label (eye icon)
       const iconW = 20, iconH = 20
-      const eyeX = labelX + (labelWidth - iconW) / 2
-      const eyeY = labelY + labelHeight + 6
+      // Three icons centered horizontally under the label: rename, eye, delete
+      const iconsGap = 8
+      const totalW = iconW * 3 + iconsGap * 2
+      const startX = labelX + (labelWidth - totalW) / 2
+      const iconY = labelY + labelHeight + 6
+
+      // Rename (pencil)
+      const renameX = startX
+      this.icons.drawPencil(renameX, iconY, iconW, iconH)
+      this.hitTargets.addSpanRename(opts.spanId, renameX, iconY, iconW, iconH)
+
+      // Eye (visibility)
+      const eyeX = renameX + iconW + iconsGap
+      const eyeY = iconY
       this.icons.drawEye(eyeX, eyeY, iconW, iconH, { 
         crossed: typeof spVisibleForEyeHint !== 'undefined' && spVisibleForEyeHint === false 
       })
@@ -1173,17 +1188,13 @@ export class TimelineRenderer {
 
       // Red trashcan delete button to the right of eye
       const delW = 20, delH = 20
-      const delX = eyeX + iconW + 8
+      const delX = eyeX + iconW + iconsGap
       const delY = eyeY
       this.icons.drawTrashcan(delX, delY, delW, delH)
       this.hitTargets.addSpanDelete(opts.spanId, delX, delY, delW, delH)
     }
     
-    // Push body hit-target last so label double-click takes priority
-    if (opts.spanId) {
-      const bodyRect = { x: clampedLeft, y: spanY - 8, w: Math.max(12, clampedRight - clampedLeft), h: 16 }
-      this.hitTargets.addSpanBody(opts.spanId, bodyRect.x, bodyRect.y, bodyRect.w, bodyRect.h)
-    }
+    // Unified span-box hit target already added above for the label/time box.
 
     this.ctx.restore()
   }
@@ -1284,6 +1295,8 @@ export class TimelineRenderer {
             const newId = this.spansStore.create(aId, bId, '', { visible: true, endIsNow: false })
             // Focus newly created span
             this.setViewFocus('span', undefined, newId)
+            // Immediately enter editing label for the new span
+            this.state.setEditingSpan(newId)
           }
           return
         }
@@ -1314,11 +1327,16 @@ export class TimelineRenderer {
           this.deleteSpan(target.id)
           return
         }
-        if (target.type === 'span-body' && target.id) {
-          // Select a saved span (no zoom/pan)
+        if (target.type === 'span-box' && target.id) {
+          // Single click on span box: only select; do not focus or edit
           this.state.setSelectedSpan(target.id)
           return
-          }
+        }
+        if (target.type === 'span-rename' && target.id) {
+          // Enter rename for span via pencil icon
+          this.state.setEditingSpan(target.id)
+          return
+        }
         if (target.type === 'span-visible' && target.id) {
           // Toggle visibility of saved span
           const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
@@ -1377,27 +1395,7 @@ export class TimelineRenderer {
           }
           return
         }
-        // instant-label editing moved to double-click
-        if (target.type === 'span-label' && target.id) {
-          const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
-          if (sp) {
-            const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
-            if (isFocused) {
-              // Already focused → enter rename
-              this.state.setEditingSpan(target.id)
-              return
-            }
-            // Not focused → focus and zoom-to-fit
-            const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-            const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-            if (typeof a === 'number' && typeof b === 'number') {
-              this.setViewFocus('span', undefined, sp.id)
-              this.adjustZoomToRange(a, b)
-              return
-            }
-          }
-          return
-        }
+        // removed span-label single click handling (consolidated into span-box)
         if (target.type === 'span-time-input' && target.id) {
           console.log('span-time-input hit target found:', target.id)
           // Handle time input for special spans (cursor-now, selected-cursor)
@@ -1461,30 +1459,18 @@ export class TimelineRenderer {
     const target = this.hitTargets.findTargetAt(x, y)
     console.log('Hit target found:', target)
     if (target) {
-      if (target.type === 'span-label' && target.id) {
+      // Removed: span-label single/double click handling; now unified under span-box
+      if (target.type === 'span-box' && target.id) {
+        // Double-click on span box
         const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
         if (sp) {
           const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
           if (isFocused) {
-            // Already focused → enter rename
+            // Mirror pencil behavior: enter rename immediately
             this.state.setEditingSpan(target.id)
             return
           }
-          // Not focused → focus and zoom-to-fit
-          const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-          const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-          if (typeof a === 'number' && typeof b === 'number') {
-            this.setViewFocus('span', undefined, sp.id)
-            this.adjustZoomToRange(a, b)
-            return
-          }
-        }
-        return
-      }
-      if (target.type === 'span-body' && target.id) {
-        // Focus span and zoom-to-fit
-        const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
-        if (sp) {
+          // Not focused yet → focus and zoom-to-fit
           const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
           const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
           if (typeof a === 'number' && typeof b === 'number') {
@@ -1494,26 +1480,7 @@ export class TimelineRenderer {
         }
         return
       }
-      if (target.type === 'span-label' && target.id) {
-        const sp = this.spansStore.getSnapshot().find(s => s.id === target.id)
-        if (sp) {
-          const isFocused = this.state.getViewFocus().mode === 'span' && this.state.getViewFocus().focusedSpanId === target.id
-          if (isFocused) {
-            // Already focused → enter rename
-            this.state.setEditingSpan(target.id)
-            return
-          }
-          // Not focused → focus and zoom-to-fit
-          const a = this.savedStore.getSnapshot().find(i => i.id === sp.startInstantId)?.tsEpochMs
-          const b = sp.endIsNow ? Date.now() : this.savedStore.getSnapshot().find(i => i.id === sp.endInstantId)?.tsEpochMs
-          if (typeof a === 'number' && typeof b === 'number') {
-            this.setViewFocus('span', undefined, sp.id)
-            this.adjustZoomToRange(a, b)
-            return
-          }
-        }
-        return
-      }
+      // Remove special handling for span-label double-click; span-box handles both
       if (target.type === 'span-time-input' && target.id) {
         console.log('span-time-input hit target found:', target.id)
         // Handle time input for special spans (cursor-now, selected-cursor)
