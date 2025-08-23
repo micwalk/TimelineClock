@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    allowedHosts: ['compy.internal']
+  },
   plugins: [
     react(),
     VitePWA({
@@ -43,9 +48,6 @@ export default defineConfig({
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheKeyWillBeUsed: async ({ request }) => {
-                return `${request.url}?${Date.now()}`
               }
             }
           }
@@ -53,11 +55,6 @@ export default defineConfig({
       }
     })
   ],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-  },
   build: {
     target: 'esnext',
     rollupOptions: {
