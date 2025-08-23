@@ -407,6 +407,8 @@ export class InstantListDomManager {
 			if (en.instantKind === 'now') {
 				durEl.textContent = ' 00:00:00'
 				durEl.style.color = '#ffffff'
+				card.style.border = '2px solid #ef4444'
+				nameEl.style.color = '#ef4444'
 			} else {
 				const diffMs = en.ts - Date.now()
 				const sign = diffMs >= 0 ? 1 : -1
@@ -437,7 +439,12 @@ export class InstantListDomManager {
 				durEl.textContent = text
 				durEl.style.color = sign > 0 ? '#93c5fd' : '#fca5a5'
 			}
-			card.style.border = `2px solid ${en.focused ? '#22d3ee' : '#ffffff'}`
+			// Set border color - NOW gets red border, others get focused/white
+			if (en.instantKind === 'now') {
+				card.style.border = `2px solid #ef4444`
+			} else {
+				card.style.border = `2px solid ${en.focused ? '#22d3ee' : '#ffffff'}`
+			}
 			card.onclick = () => {
 				const r = renderer
 				if (!r) return

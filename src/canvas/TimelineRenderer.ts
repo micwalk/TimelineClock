@@ -225,7 +225,13 @@ export class TimelineRenderer {
     this.drawTimeTicks()
     this.hitTargets.clear()
     this.overlayElements = []
-    this.drawNowInstant() // This now draws the line, label, and time string
+    
+    // Draw NOW early if not focused, or at the end if focused (to be on top)
+    const isNowFocused = this.state.getViewFocus().mode === 'now'
+    if (!isNowFocused) {
+      this.drawNowInstant() // Draw NOW early when not focused
+    }
+    
     // Draw saved instants
     this.drawSavedInstants()
     // Track spans already drawn to avoid duplicates across bands
@@ -289,14 +295,15 @@ export class TimelineRenderer {
     }
 
     // Draw all saved spans using one layout pass (including invisible ones related to focus history)
+    // TODO: extract this into a function
+    const focusedId = this.state.getViewFocus().focusedInstantId
+    const selectedId = this.state.getCurrentSelectedInstantId()
+    const savedSpans = this.spansStore.getSnapshot()
+    type Drawable = { sp: typeof savedSpans[number]; a: number; b: number; aRec?: InstantRecord; bRec?: InstantRecord | undefined; prio: number }
+    let spanDrawList: Drawable[] = [] // Essentially a "return" from the block below
     {
       const centerY = this.TimelineCenterY()
-      const focusedId = this.state.getViewFocus().focusedInstantId
-      const selectedId = this.state.getCurrentSelectedInstantId()
-      const savedSpans = this.spansStore.getSnapshot()
-
       // De-duplication mechanism for multiple reasons to draw spans.
-      type Drawable = { sp: typeof savedSpans[number]; a: number; b: number; aRec?: InstantRecord; bRec?: InstantRecord | undefined; prio: number }
       const byId: Map<string, Drawable> = new Map()
       const pushCandidate = (cand: Drawable): void => {
         const id = cand.sp.id
@@ -331,7 +338,8 @@ export class TimelineRenderer {
         pushCandidate({ sp, a, b, aRec, bRec, prio: includePrio })
       }
       // Build final list from map and order by priority then midpoint
-      const spanDrawList = Array.from(byId.values())
+      
+      spanDrawList = Array.from(byId.values())
       spanDrawList.sort((x, y) => {
         const dp = x.prio - y.prio
         if (dp !== 0) return dp
@@ -344,9 +352,9 @@ export class TimelineRenderer {
       // Actually draw all spans into "rows"
       let rowOffset : number = centerY + this.spanRows.spanList
       const rowHeights = {
-        "short": 30,
-        "labeled": 50,
-        "controlExtra": 20,
+        "short": 35,
+        "labeled": 70,
+        "controlExtra": 25,
       }
       for (const d of spanDrawList) {
         const { sp, a, b, aRec, bRec, prio } = d
@@ -357,12 +365,22 @@ export class TimelineRenderer {
           if (isFavNow) return undefined
           return sp.label && sp.label.length > 0 ? sp.label : undefined
         })()
-        const color = prio === 0 ? '#22d3ee' : prio === 1 ? '#2563eb' : '#34d399'
-        rowOffset += header ? rowHeights.labeled : rowHeights.short
-        const drawControls = prio <= 1
-        const willActuallyShowControls = this.willShowSpanControls({ spanId: sp.id, showInlineControls: drawControls })
-        if(willActuallyShowControls) rowOffset +=rowHeights.controlExtra
-        this.drawSpanVisual(a, b, { y:rowOffset, color, spanId: sp.id, startName, endName, headerLabel: header, 
+               const color = prio === 0 ? '#22d3ee' : prio === 1 ? '#2563eb' : '#34d399'
+       const drawControls = prio <= 1
+       const willActuallyShowControls = this.willShowSpanControls({ spanId: sp.id, showInlineControls: drawControls })
+       
+        // Calculate the y position for this span before updating rowOffset
+        // drawSpanVisual treats y as the center of the span line, so we need to offset by half the row height
+        const rowHeight = header ? rowHeights.labeled : rowHeights.short
+        const spanY = rowOffset + rowHeight / 2
+        
+        // Update rowOffset for the next span
+        rowOffset += rowHeight
+        if(willActuallyShowControls) rowOffset += rowHeights.controlExtra
+        
+        this.drawSpanVisual(a, b, { 
+            y: spanY,
+            color, spanId: sp.id, startName, endName, headerLabel: header, 
             startFocus: { kind: 'instant', id: aRec?.id }, 
             endFocus: sp.endIsNow ? { kind: 'now' } : { kind: 'instant', id: bRec?.id }, 
             startStar: isFavNow, 
@@ -381,7 +399,8 @@ export class TimelineRenderer {
       return this.savedStore.getSnapshot().find(si => si.id === id) || null
     })()
 
-    // Row 1: Selected ↔ Cursor (when focusing cursor), OR Selected ↔ Focused Instant (when focusing a different instant)
+    // Topmost Row: Now to Cursor or Focused Instant
+    // AKA Interaction Span, because its both always shown and you can double-click to change cursor offset to now.
     if (selected) {
       const y = this.TimelineCenterY() + this.spanRows.selectedCursor
       const color = '#22d3ee' // light blue always for this row
@@ -420,8 +439,10 @@ export class TimelineRenderer {
       }
     }
 
-    // Implied Span: Selected → Now (always shown, at top)
-    if (selected) {
+    // Implied Span: Selected → Now (if there is a primary selection, below instant labels)
+    // See if the selected instant already has a Now span visible (in spanDrawList), and if so, don't draw another one.
+    const selectedNowSpan = spanDrawList.find(sp => sp.sp.startInstantId === selected?.id && sp.sp.endIsNow)
+    if (selected && !selectedNowSpan) {
       const y = this.TimelineCenterY() + this.spanRows.selectedNow
       const color = '#2563eb'
       const startName = selected.label && selected.label.length > 0 ? selected.label : '?'
@@ -440,7 +461,11 @@ export class TimelineRenderer {
     }
     
     // Implied Span: for selected → secondary.
-    if (selected && secondary && this.state.getImpliedVisibility('selected-prev')) { // && this.state.getViewFocus().mode !== 'instant'
+    // See if the selected instant already has a Secondary span visible (in spanDrawList), and if so, don't draw another one.
+    // Also check for the reversed version (secondary → selected) to avoid duplicates.
+    const selectedSecondarySpan = spanDrawList.find(sp => sp.sp.startInstantId === secondary?.id && sp.sp.endInstantId === selected?.id)
+    const reversedSecondarySpan = spanDrawList.find(sp => sp.sp.startInstantId === selected?.id && sp.sp.endInstantId === secondary?.id)
+    if (selected && secondary && this.state.getImpliedVisibility('selected-prev') && !selectedSecondarySpan && !reversedSecondarySpan) {
       const startName = secondary.label && secondary.label.length > 0 ? secondary.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
       this.drawSpanVisual(secondary.tsEpochMs, selected.tsEpochMs, { 
@@ -448,7 +473,12 @@ export class TimelineRenderer {
         headerLabel: undefined, showPin: true, saveLabel: 'Selected to Secondary', 
         startFocus: { kind: 'instant', id: secondary.id }, endFocus: { kind: 'instant', id: selected.id },
         showInlineControls: true,
-    })
+        })
+    }
+
+    // Draw NOW at the end if focused (to be on top of everything)
+    if (isNowFocused) {
+      this.drawNowInstant()
     }
 
   }
@@ -785,13 +815,16 @@ export class TimelineRenderer {
   }
 
   private drawNowInstant() {
+    // Check if NOW is focused to adjust glow intensity
+    const isNowFocused = this.state.getViewFocus().mode === 'now'
+    
     // Draw the NOW label using the drawInstant helper
     this.drawInstant(Date.now(), 'Now', {
       lineColor: '#ef4444',
-      lineWidth: 4,
+      lineWidth: isNowFocused ? 5 : 4,
       lineHeight: (this.canvas.height / (window.devicePixelRatio || 1)) * 0.6,
       glowColor: '#ef4444',
-      glowBlur: 10,
+      glowBlur: isNowFocused ? 15 : 10,
       labelBackgroundColor: 'rgba(0, 0, 0, 0.8)',
       labelBorderColor: '#ef4444',
       labelTextColor: '#ef4444',
@@ -1018,7 +1051,11 @@ export class TimelineRenderer {
     const midX = (Math.max(0, Math.min(this.viewport.getScreenWidth(), xA)) + Math.max(0, Math.min(this.viewport.getScreenWidth(), xB))) / 2
     const diff = bTs - aTs
     const durText = this.formatDurationHMS(Math.abs(diff))
-    const dir = diff >= 0 ? 'AFTER' : 'BEFORE'
+
+//    const isNowEnded = opts.endFocus?.kind === 'now' && opts.endFocus.id === 'now'
+    const isNowEnded = opts.endName === 'Now'
+    const dir = diff >= 0 ? 'AFTER' : (isNowEnded ? 'until' : 'BEFORE')
+
     let labelText: string
     if (opts.labelText) {
       labelText = opts.labelText
@@ -1519,15 +1556,21 @@ export class TimelineRenderer {
       }
       if (target.type === 'instant-time') {
         if (target.id === 'now') {
-          // Open time input for NOW → move cursor forward to typed time (today, future-only)
-          const r = this.computeTimeBoxRect(Date.now())
-          this.canvas.dispatchEvent(new CustomEvent('instant-time-input', {
-            detail: {
-              type: 'now',
-              position: { x: r.x + r.w / 2, y: r.y },
-              initial: new Date().toLocaleTimeString([], { hour12: false })
-            }
-          }))
+          // Check if NOW is already focused
+          if (this.state.getViewFocus().mode === 'now') {
+            // NOW is focused → open time picker
+            const r = this.computeTimeBoxRect(Date.now())
+            this.canvas.dispatchEvent(new CustomEvent('instant-time-input', {
+              detail: {
+                type: 'now',
+                position: { x: r.x + r.w / 2, y: r.y },
+                initial: new Date().toLocaleTimeString([], { hour12: false })
+              }
+            }))
+          } else {
+            // NOW is not focused → focus it
+            this.focusNowAnimated()
+          }
         } else if (target.id === 'cursor') {
           const r = this.computeTimeBoxRect(this.state.getTimeCenter())
           const current = new Date()

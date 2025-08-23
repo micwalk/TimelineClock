@@ -934,7 +934,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
               if (!r) return
               r.setViewFocus('now')
             }}
-            style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+            style={{ background: 'rgba(0,0,0,0.8)', color: '#ef4444', border: '2px solid #ef4444', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
           >
             NOW
           </button>
