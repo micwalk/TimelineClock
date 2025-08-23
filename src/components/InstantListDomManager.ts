@@ -212,14 +212,28 @@ export class InstantListDomManager {
 				stimeEl.textContent = new Date(s.start.tsEpochMs).toLocaleString()
 				{
 					const abs = Math.abs(s.durationMs)
-					const totalSeconds = Math.floor(abs / 1000)
-					const hours = Math.floor(totalSeconds / 3600)
-					const minutes = Math.floor((totalSeconds % 3600) / 60)
-					const seconds = totalSeconds % 60
-					const hh = hours.toString().padStart(2, '0')
-					const mm = minutes.toString().padStart(2, '0')
-					const ss = seconds.toString().padStart(2, '0')
-					durEl.textContent = `${hh}:${mm}:${ss}`
+					const days = Math.floor(abs / (24 * 60 * 60 * 1000))
+					const remainingMs = abs - (days * 24 * 60 * 60 * 1000)
+					const hours = Math.floor(remainingMs / (60 * 60 * 1000))
+					const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000))
+					const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000)
+					
+					if (days > 0) {
+						const dd = days.toString()
+						const hh = hours.toString().padStart(2, '0')
+						const mm = minutes.toString().padStart(2, '0')
+						const ss = seconds.toString().padStart(2, '0')
+						durEl.textContent = `${dd} day${days !== 1 ? 's' : ''}, ${hh}:${mm}:${ss}`
+					} else if (hours > 0) {
+						const hh = hours.toString().padStart(2, '0')
+						const mm = minutes.toString().padStart(2, '0')
+						const ss = seconds.toString().padStart(2, '0')
+						durEl.textContent = `${hh}:${mm}:${ss}`
+					} else {
+						const mm = minutes.toString().padStart(2, '0')
+						const ss = seconds.toString().padStart(2, '0')
+						durEl.textContent = `${mm}:${ss}`
+					}
 				}
 				etimeEl.textContent = new Date(s.end.tsEpochMs).toLocaleString()
 				enameEl.textContent = s.end.name.length > 0 ? s.end.name : '?'
@@ -397,14 +411,29 @@ export class InstantListDomManager {
 				const diffMs = en.ts - Date.now()
 				const sign = diffMs >= 0 ? 1 : -1
 				const abs = Math.abs(diffMs)
-				const totalSeconds = Math.floor(abs / 1000)
-				const hours = Math.floor(totalSeconds / 3600)
-				const minutes = Math.floor((totalSeconds % 3600) / 60)
-				const seconds = totalSeconds % 60
-				const hh = hours.toString().padStart(2, '0')
-				const mm = minutes.toString().padStart(2, '0')
-				const ss = seconds.toString().padStart(2, '0')
-				const text = `${sign > 0 ? '+' : '-'}${hh}:${mm}:${ss}`
+				const days = Math.floor(abs / (24 * 60 * 60 * 1000))
+				const remainingMs = abs - (days * 24 * 60 * 60 * 1000)
+				const hours = Math.floor(remainingMs / (60 * 60 * 1000))
+				const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000))
+				const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000)
+				
+				let text: string
+				if (days > 0) {
+					const dd = days.toString()
+					const hh = hours.toString().padStart(2, '0')
+					const mm = minutes.toString().padStart(2, '0')
+					const ss = seconds.toString().padStart(2, '0')
+					text = `${sign > 0 ? '+' : '-'}${dd} day${days !== 1 ? 's' : ''}, ${hh}:${mm}:${ss}`
+				} else if (hours > 0) {
+					const hh = hours.toString().padStart(2, '0')
+					const mm = minutes.toString().padStart(2, '0')
+					const ss = seconds.toString().padStart(2, '0')
+					text = `${sign > 0 ? '+' : '-'}${hh}:${mm}:${ss}`
+				} else {
+					const mm = minutes.toString().padStart(2, '0')
+					const ss = seconds.toString().padStart(2, '0')
+					text = `${sign > 0 ? '+' : '-'}${mm}:${ss}`
+				}
 				durEl.textContent = text
 				durEl.style.color = sign > 0 ? '#93c5fd' : '#fca5a5'
 			}

@@ -706,6 +706,11 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         rendererRef.current?.navigateFocusHistory(1)
         return
       }
+      if (key === 'Escape') {
+        e.preventDefault()
+        rendererRef.current?.deselectInstants()
+        return
+      }
     }
     window.addEventListener('keydown', onKeyDown)
 

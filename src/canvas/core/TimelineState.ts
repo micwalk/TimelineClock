@@ -37,7 +37,7 @@ export interface TimelineStateSnapshot {
   focusedInstantId: string | null
   focusedSpanId: string | null
   currentSelectedInstantId: string | null
-  previousSelectedInstantId: string | null
+  secondarySelectedInstantId: string | null
   focusHistory: string[]
   focusHistoryIndex: number
   selectedSpanId: string | null
@@ -59,7 +59,7 @@ export class TimelineState {
   private focusedInstantId: Option<string> = none
   private focusedSpanId: Option<string> = none
   private currentSelectedInstantId: Option<string> = none
-  private previousSelectedInstantId: Option<string> = none
+  private secondarySelectedInstantId: Option<string> = none
   
   // Focus history management
   private focusHistory: string[] = []
@@ -104,7 +104,7 @@ export class TimelineState {
     if (mode === 'instant') {
       const currentSelected = toStringOrNull(this.currentSelectedInstantId)
       if (currentSelected && instantId && currentSelected !== instantId) {
-        this.previousSelectedInstantId = this.currentSelectedInstantId
+        this.secondarySelectedInstantId = this.currentSelectedInstantId
       }
       this.currentSelectedInstantId = fromStringOrNull(instantId)
     }
@@ -204,7 +204,7 @@ export class TimelineState {
   public setSelectedInstant(instantId: string | null): void {
     const newOption = fromStringOrNull(instantId)
     if (this.currentSelectedInstantId !== newOption) {
-      this.previousSelectedInstantId = this.currentSelectedInstantId
+      this.secondarySelectedInstantId = this.currentSelectedInstantId
     }
     this.currentSelectedInstantId = newOption
     this.stateVersion++
@@ -213,6 +213,21 @@ export class TimelineState {
   public setSelectedSpan(spanId: string | null): void {
     this.selectedSpanId = fromStringOrNull(spanId)
     this.stateVersion++
+  }
+  
+  public deselectInstants(): void {
+    // First clear the secondary selected instant if it exists
+    if (this.secondarySelectedInstantId !== none) {
+      this.secondarySelectedInstantId = none
+      this.stateVersion++
+      return
+    }
+    
+    // If no secondary selected instant, clear the current selected instant
+    if (this.currentSelectedInstantId !== none) {
+      this.currentSelectedInstantId = none
+      this.stateVersion++
+    }
   }
   
   // === Time/Zoom State ===
@@ -307,8 +322,8 @@ export class TimelineState {
     return toStringOrNull(this.currentSelectedInstantId)
   }
   
-  public getPreviousSelectedInstantId(): string | null {
-    return toStringOrNull(this.previousSelectedInstantId)
+  public getSecondarySelectedInstantId(): string | null {
+    return toStringOrNull(this.secondarySelectedInstantId)
   }
   
   public getSelectedSpanId(): string | null {
@@ -325,7 +340,7 @@ export class TimelineState {
       focusedInstantId: toStringOrNull(this.focusedInstantId),
       focusedSpanId: toStringOrNull(this.focusedSpanId),
       currentSelectedInstantId: toStringOrNull(this.currentSelectedInstantId),
-      previousSelectedInstantId: toStringOrNull(this.previousSelectedInstantId),
+      secondarySelectedInstantId: toStringOrNull(this.secondarySelectedInstantId),
       focusHistory: [...this.focusHistory],
       focusHistoryIndex: this.focusHistoryIndex,
       selectedSpanId: toStringOrNull(this.selectedSpanId),
@@ -342,7 +357,7 @@ export class TimelineState {
     if (snapshot.focusedInstantId !== undefined) this.focusedInstantId = fromStringOrNull(snapshot.focusedInstantId)
     if (snapshot.focusedSpanId !== undefined) this.focusedSpanId = fromStringOrNull(snapshot.focusedSpanId)
     if (snapshot.currentSelectedInstantId !== undefined) this.currentSelectedInstantId = fromStringOrNull(snapshot.currentSelectedInstantId)
-    if (snapshot.previousSelectedInstantId !== undefined) this.previousSelectedInstantId = fromStringOrNull(snapshot.previousSelectedInstantId)
+    if (snapshot.secondarySelectedInstantId !== undefined) this.secondarySelectedInstantId = fromStringOrNull(snapshot.secondarySelectedInstantId)
     if (snapshot.focusHistory !== undefined) this.focusHistory = [...snapshot.focusHistory]
     if (snapshot.focusHistoryIndex !== undefined) this.focusHistoryIndex = snapshot.focusHistoryIndex
     if (snapshot.selectedSpanId !== undefined) this.selectedSpanId = fromStringOrNull(snapshot.selectedSpanId)

@@ -96,10 +96,19 @@ export class TimelineRenderer {
 
   private formatDurationHMS(ms: number): string {
     let remaining = Math.max(0, Math.floor(ms))
+    const days = Math.floor(remaining / (24 * 60 * 60 * 1000)); remaining -= days * 24 * 60 * 60 * 1000
     const hours = Math.floor(remaining / (60 * 60 * 1000)); remaining -= hours * 60 * 60 * 1000
     const minutes = Math.floor(remaining / (60 * 1000)); remaining -= minutes * 60 * 1000
     const seconds = Math.floor(remaining / 1000); remaining -= seconds * 1000
     const millis = remaining
+    
+    if (days > 0) {
+      const dd = days.toString()
+      const hh = hours.toString().padStart(2, '0')
+      const mm = minutes.toString().padStart(2, '0')
+      const ss = seconds.toString().padStart(2, '0')
+      return `${dd} day${days !== 1 ? 's' : ''}, ${hh}:${mm}:${ss}`
+    }
     if (hours > 0) {
       const hh = hours.toString().padStart(2, '0')
       const mm = minutes.toString().padStart(2, '0')
@@ -365,9 +374,9 @@ export class TimelineRenderer {
 
     // Draw implied spans for selected/current instant
     const selected = this.state.getCurrentSelectedInstantId() ? this.savedStore.getSnapshot().find(si => si.id === this.state.getCurrentSelectedInstantId()) : null
-    // Previously focused instant for the purple span
-    const prev = (() => {
-      const id = this.getPrevFocusedInstantId()
+    // Secondary selected instant for the purple span
+    const secondary = (() => {
+      const id = this.state.getSecondarySelectedInstantId()
       if (!id) return null
       return this.savedStore.getSnapshot().find(si => si.id === id) || null
     })()
@@ -430,14 +439,14 @@ export class TimelineRenderer {
       })
     }
     
-    // Implied Span: for selected → previous.
-    if (selected && prev && this.state.getImpliedVisibility('selected-prev')) { // && this.state.getViewFocus().mode !== 'instant'
-      const startName = prev.label && prev.label.length > 0 ? prev.label : '?'
+    // Implied Span: for selected → secondary.
+    if (selected && secondary && this.state.getImpliedVisibility('selected-prev')) { // && this.state.getViewFocus().mode !== 'instant'
+      const startName = secondary.label && secondary.label.length > 0 ? secondary.label : '?'
       const endName = selected.label && selected.label.length > 0 ? selected.label : 'selected'
-      this.drawSpanVisual(prev.tsEpochMs, selected.tsEpochMs, { 
+      this.drawSpanVisual(secondary.tsEpochMs, selected.tsEpochMs, { 
         y: this.TimelineCenterY() + this.spanRows.selectedPrev, color: '#8b5cf6', startName, endName, 
-        headerLabel: undefined, showPin: true, saveLabel: 'Selected to Previous', 
-        startFocus: { kind: 'instant', id: prev.id }, endFocus: { kind: 'instant', id: selected.id },
+        headerLabel: undefined, showPin: true, saveLabel: 'Selected to Secondary', 
+        startFocus: { kind: 'instant', id: secondary.id }, endFocus: { kind: 'instant', id: selected.id },
         showInlineControls: true,
     })
     }
@@ -816,8 +825,8 @@ export class TimelineRenderer {
     for (const s of saved) {
       const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === s.id
       const isSelected = this.state.getCurrentSelectedInstantId() === s.id
-      const prevId = this.getPrevFocusedInstantId()
-      const isPrevFocused = !!prevId && prevId === s.id
+      const secondaryId = this.state.getSecondarySelectedInstantId()
+      const isSecondarySelected = !!secondaryId && secondaryId === s.id
       const label = s.label && s.label.length > 0 ? s.label : '?'
       let lineColor = '#ffffff'
       let borderColor = '#ffffff'
@@ -836,8 +845,8 @@ export class TimelineRenderer {
         glowColor = '#2563eb'
         glowBlur = 8
         lineWidth = 3
-      } else if (isPrevFocused) {
-        lineColor = '#8b5cf6' // previously selected: purple
+      } else if (isSecondarySelected) {
+        lineColor = '#8b5cf6' // secondary selected: purple
         borderColor = '#8b5cf6'
         glowColor = '#8b5cf6'
         glowBlur = 6
@@ -1973,6 +1982,10 @@ export class TimelineRenderer {
     return this.state.getCurrentSelectedInstantId()
   }
 
+  public deselectInstants(): void {
+    this.state.deselectInstants()
+  }
+
   // Smoothly focus an instant by id or timestamp; keeps current zoom
   public focusInstantAnimated(instantId?: string, tsEpochMs?: number): void {
     let targetTs: number | undefined = tsEpochMs
@@ -2148,14 +2161,14 @@ export class TimelineRenderer {
       }
     }
     // Removed: favorites implied spans are now saved spans managed by spans store
-    // Implied: selected → previously focused
+    // Implied: selected → secondary
     if (this.state.getCurrentSelectedInstantId()) {
-      const prevId = this.getPrevFocusedInstantId()
-      const a = prevId ? savedMap.get(prevId) : undefined
+      const secondaryId = this.state.getSecondarySelectedInstantId()
+      const a = secondaryId ? savedMap.get(secondaryId) : undefined
       const selectedId = this.state.getCurrentSelectedInstantId()
       const b = selectedId ? savedMap.get(selectedId) : undefined
       if (a && b) {
-        spans.push({ kind: 'implied', label: 'Selected to Previous', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.state.getImpliedVisibility('selected-prev') })
+        spans.push({ kind: 'implied', label: 'Selected to Secondary', start: { id: a.id, name: a.label || '?', tsEpochMs: a.tsEpochMs }, end: { id: b.id, name: b.label || '?', tsEpochMs: b.tsEpochMs }, durationMs: b.tsEpochMs - a.tsEpochMs, visible: this.state.getImpliedVisibility('selected-prev') })
       }
     }
     // Sort by midpoint time
