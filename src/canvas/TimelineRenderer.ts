@@ -1592,6 +1592,12 @@ export class TimelineRenderer {
     this.state.primeAudioContext()
   }
 
+  // New: prime notifications permission from UI interactions
+  public async primeNotifications(): Promise<void> {
+    console.log('[Notif] renderer primeNotifications called')
+    await this.state.primeNotifications()
+  }
+
   /**
    * Set the auto-dismiss duration for ringing alarms (in milliseconds)
    */

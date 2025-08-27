@@ -918,7 +918,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             onClick={(e) => { 
               e.stopPropagation(); 
               const r = rendererRef.current;
-              if (r) r.primeAudioContext();
+              if (r) { r.primeAudioContext(); r.primeNotifications?.(); }
               r?.zoomOut() 
             }}
             style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
@@ -930,7 +930,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             onClick={(e) => { 
               e.stopPropagation(); 
               const r = rendererRef.current;
-              if (r) r.primeAudioContext();
+              if (r) { r.primeAudioContext(); r.primeNotifications?.(); }
               goToPreviousInstant() 
             }}
             style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
@@ -946,7 +946,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
                 e.stopPropagation()
                 minusLongPress.stop()
                 const r = rendererRef.current;
-                if (r) r.primeAudioContext();
+                if (r) { r.primeAudioContext(); r.primeNotifications?.(); }
                 moveCursorByIncrement(-1)
               }}
               onMouseDown={(e) => {
@@ -986,7 +986,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
                 e.stopPropagation()
                 const r = rendererRef.current
                 if (!r) return
-                r.primeAudioContext()
+                r.primeAudioContext(); r.primeNotifications?.()
                 r.setViewFocus('now')
               }}
               style={{ background: 'rgba(0,0,0,0.8)', color: '#ef4444', border: '2px solid #ef4444', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
@@ -1038,7 +1038,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             onClick={(e) => { 
               e.stopPropagation(); 
               const r = rendererRef.current;
-              if (r) r.primeAudioContext();
+              if (r) { r.primeAudioContext(); r.primeNotifications?.(); }
               goToNextInstant() 
             }}
             style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
@@ -1050,7 +1050,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             onClick={(e) => { 
               e.stopPropagation(); 
               const r = rendererRef.current;
-              if (r) r.primeAudioContext();
+              if (r) { r.primeAudioContext(); r.primeNotifications?.(); }
               r?.zoomIn() 
             }}
             style={{ background: 'rgba(0,0,0,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
@@ -1064,7 +1064,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
             const r = rendererRef.current;
             if (r) {
               // Prime audio context on user interaction
-              r.primeAudioContext();
+              r.primeAudioContext(); r.primeNotifications?.();
               // Create an alarm that will trigger in 3 seconds
               const alarmTime = Date.now() + 3000;
               r.createInstantWithAlarm(alarmTime, 'Test Alarm');

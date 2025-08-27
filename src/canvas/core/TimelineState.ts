@@ -3,6 +3,7 @@ import type { SavedSpansStore } from '../../services/SavedSpansStore'
 import type { Option } from '../../utils/option'
 import { none, toStringOrNull, fromStringOrNull } from '../../utils/option'
 import { AlarmAudioManager } from '../../services/AlarmAudioManager'
+import { NotificationService } from '../../services/NotificationService'
 
 export type ViewFocusMode = 'now' | 'cursor' | 'instant' | 'span'
 
@@ -99,6 +100,8 @@ export class TimelineState {
   
   // New: Sound management
   private alarmAudioManager: AlarmAudioManager
+  // New: Notifications
+  private notificationService: NotificationService
   
   // State version for change tracking
   private stateVersion: number = 0
@@ -112,7 +115,13 @@ export class TimelineState {
   ) {
     this.savedStore = savedStore
     this.spansStore = spansStore
-    this.alarmAudioManager = new AlarmAudioManager()
+    // Reuse audio manager across HMR to keep audio uninterrupted
+    const g = globalThis as unknown as { __TC_HMR__?: { audioManager?: AlarmAudioManager; ringingAlarms?: RingingAlarm[] }; __TC_currentTimelineState__?: TimelineState }
+    g.__TC_HMR__ = g.__TC_HMR__ || {}
+    const hmrStore = (g.__TC_HMR__ ||= {})
+    this.alarmAudioManager = (hmrStore.audioManager as AlarmAudioManager) || new AlarmAudioManager()
+    hmrStore.audioManager = this.alarmAudioManager
+    this.notificationService = new NotificationService()
     
     // Subscribe to store changes to increment state version and reschedule checks
     this.savedStore.subscribe(() => { 
@@ -121,11 +130,28 @@ export class TimelineState {
     })
     this.spansStore.subscribe(() => { this.stateVersion++ })
     
+    // Restore ringing alarms across HMR if present
+    if (Array.isArray(hmrStore.ringingAlarms) && hmrStore.ringingAlarms.length > 0) {
+      try {
+        this.ringingAlarms = hmrStore.ringingAlarms as RingingAlarm[]
+        // Ensure sound continues if needed
+        if (!this.alarmAudioManager.isPlaying() && this.ringingAlarms.length > 0) {
+          this.startAlarmSound()
+        }
+        this.stateVersion++
+      } catch (err) {
+        console.warn('[HMR] Failed to restore ringing alarms', err)
+      }
+    }
+
     // Initialize alarm checking
     this.scheduleNextAlarmCheck()
     
     // Initialize audio context on first user interaction
     this.initializeAudioOnUserInteraction()
+
+    // Expose current state instance for HMR dispose to snapshot
+    g.__TC_currentTimelineState__ = this
   }
 
   // New: Dynamic alarm scheduling and checking
@@ -142,6 +168,7 @@ export class TimelineState {
     
     const now = Date.now()
     const nextAlarmTime = this.savedStore.getNextAlarmTime()
+    console.log('[Notif] scheduleNextAlarmCheck', { now, nextAlarmTime })
     
     if (nextAlarmTime === null) {
       // No future alarms, check again in 1 minute
@@ -173,6 +200,7 @@ export class TimelineState {
     const now = Date.now()
     const alarmedInstants = this.savedStore.getAlarmedInstants()
     const newlyTriggered: RingingAlarm[] = []
+    console.log('[Notif] checkAlarms', { now, alarmedInstants: alarmedInstants.length })
     
     // First, remove alarms that have been ringing for too long (auto-dismiss after configured time)
     const stillCurrentAlarms = this.ringingAlarms.filter(ra => {
@@ -210,6 +238,11 @@ export class TimelineState {
     if (newlyTriggered.length > 0) {
       this.ringingAlarms.push(...newlyTriggered)
       this.startAlarmSound()
+      // Fire browser notifications for each newly triggered alarm
+      for (const ra of newlyTriggered) {
+        console.log('[Notif] triggering notification for', ra.label)
+        this.notificationService.notifyAlarm(ra.label)
+      }
       this.stateVersion++
     }
     
@@ -276,12 +309,12 @@ export class TimelineState {
      const originalLabel = originalAlarm?.label || ringingAlarm.label
      
      // Extract the base alarm name (remove any existing "Snooze: " prefix)
-     const baseAlarmName = originalLabel.replace(/^Snooze: /, '')
+     const baseAlarmName = originalLabel.replace(/^(?:Snooze\s+\d+:\s+)+/, '')
      const snoozeLabel = `Snooze ${snoozeCount}: ${baseAlarmName}`
      const newInstantId = this.savedStore.create(snoozeTime, snoozeLabel, true, originalAlarmId)
     
     // Create a hidden span between the original alarm and the snoozed alarm
-    const spanLabel = `snooze ${snoozeCount}:${originalLabel}`
+    const spanLabel = `snooze ${snoozeCount}:${baseAlarmName}`
     this.spansStore.create(instantId, newInstantId, spanLabel, { visible: false })
     
     // Dismiss the original alarm when creating a snooze
@@ -345,9 +378,19 @@ export class TimelineState {
    * Initialize audio context on first user interaction
    */
   private initializeAudioOnUserInteraction(): void {
-    const initAudio = () => {
+    const initAudio = async () => {
       this.alarmAudioManager.initializeAudioContext()
       this.alarmAudioManager.primeAudioContext()
+      // Proactively request notification permission on first user interaction
+      try {
+        if ('Notification' in window && Notification.permission !== 'granted') {
+          console.log('[Notif] prime on interaction: requesting permission; current:', Notification.permission)
+          await Notification.requestPermission()
+          console.log('[Notif] prime on interaction: permission now:', Notification.permission)
+        }
+      } catch (err) {
+        console.warn('Notification permission request failed', err)
+      }
       
       // Remove listeners after initialization
       document.removeEventListener('click', initAudio)
@@ -366,6 +409,19 @@ export class TimelineState {
    */
   public primeAudioContext(): void {
     this.alarmAudioManager.primeAudioContext()
+  }
+
+  /**
+   * Prime notifications (can be called from UI on user gesture)
+   */
+  public async primeNotifications(): Promise<void> {
+    try {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        await Notification.requestPermission()
+      }
+    } catch (err) {
+      console.warn('primeNotifications failed', err)
+    }
   }
 
   /**
