@@ -1,12 +1,19 @@
 Next ideas to implement:
 
+Bugs:
+* favorite -> span not always working
+* Snooze name: Snooze 2: Snooze 1: Test Alarm
 
-* multi select
-* redo instant render ui (move btn up, name cursor to create). type time to jump
-* create and save spans
-* saved span list 
-* multi level duration lines
-* focus history
+Feature Level (Ready to Imlement)
+* Settings Screen, alarm auto snooze, show debug buttons (test alarm). Bottom left gear icon?
+* Alarm: fix off screen (what?!)
+* editing
+* Better infinite zoom (heights of bars)
+* SVG rendering of icons
+* reduce usage of date.now, instead refer to global nowInstant. Pave for future testing.
 
-add days to span duraiton 
-lets make it possible to delete instances and spans using a new icon on the rightmost side of the all instants and all spans views.
+
+Not sure yet, but needs improvement
+* rendering of spans as just rectangles
+* first class spans
+

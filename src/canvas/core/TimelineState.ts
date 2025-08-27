@@ -95,6 +95,7 @@ export class TimelineState {
   private nextAlarmCheckTime: number = 0
   private alarmCheckTimeoutId: number | null = null
   private readonly minCheckInterval: number = 100 // Minimum 100ms between checks for precision
+  private autoDismissAfterMs: number = 5 * 60 * 1000 // Auto-dismiss after 5 minutes
   
   // New: Sound management
   private alarmAudioManager: AlarmAudioManager
@@ -122,6 +123,9 @@ export class TimelineState {
     
     // Initialize alarm checking
     this.scheduleNextAlarmCheck()
+    
+    // Initialize audio context on first user interaction
+    this.initializeAudioOnUserInteraction()
   }
 
   // New: Dynamic alarm scheduling and checking
@@ -169,6 +173,21 @@ export class TimelineState {
     const now = Date.now()
     const alarmedInstants = this.savedStore.getAlarmedInstants()
     const newlyTriggered: RingingAlarm[] = []
+    
+    // First, remove alarms that have been ringing for too long (auto-dismiss after configured time)
+    const stillCurrentAlarms = this.ringingAlarms.filter(ra => {
+      const timeSinceTrigger = now - ra.triggeredAt
+      return timeSinceTrigger <= this.autoDismissAfterMs // Keep alarms for configured time
+    })
+    
+    // If we removed any alarms, update the array and stop sound if no alarms remain
+    if (stillCurrentAlarms.length !== this.ringingAlarms.length) {
+      this.ringingAlarms = stillCurrentAlarms
+      if (this.ringingAlarms.length === 0) {
+        this.stopAlarmSound()
+      }
+      this.stateVersion++
+    }
     
     // Check for newly triggered alarms with sub-second precision
     for (const instant of alarmedInstants) {
@@ -220,7 +239,7 @@ export class TimelineState {
   }
   
   /**
-   * Dismiss a ringing alarm
+   * Dismiss a ringing alarm (permanently turn off)
    */
   public dismissAlarm(instantId: string): void {
     this.ringingAlarms = this.ringingAlarms.filter(ra => ra.instantId !== instantId)
@@ -235,6 +254,8 @@ export class TimelineState {
     
     this.stateVersion++
   }
+
+
   
   /**
    * Snooze a ringing alarm (creates new instant with alarm)
@@ -243,12 +264,27 @@ export class TimelineState {
     const ringingAlarm = this.ringingAlarms.find(ra => ra.instantId === instantId)
     if (!ringingAlarm) return null
     
-    // Create new instant with alarm at Now + snooze duration
-    const snoozeTime = Date.now() + (snoozeMinutes * 60 * 1000)
-    const snoozeLabel = `Snooze: ${ringingAlarm.label}`
-    const newInstantId = this.savedStore.create(snoozeTime, snoozeLabel, true)
+    // Get the original alarm record to determine if this is a snooze of a snooze
+    const originalAlarm = this.savedStore.getSnapshot().find(i => i.id === instantId)
+    const originalAlarmId = originalAlarm?.snoozeOriginalId || instantId // Use original alarm ID or current ID if it's the first alarm
     
-    // Dismiss the original alarm
+    // Count existing snoozes for this original alarm
+    const snoozeCount = this.savedStore.getSnoozeCount(originalAlarmId) + 1
+    
+         // Create new instant with alarm at Now + snooze duration
+     const snoozeTime = Date.now() + (snoozeMinutes * 60 * 1000)
+     const originalLabel = originalAlarm?.label || ringingAlarm.label
+     
+     // Extract the base alarm name (remove any existing "Snooze: " prefix)
+     const baseAlarmName = originalLabel.replace(/^Snooze: /, '')
+     const snoozeLabel = `Snooze ${snoozeCount}: ${baseAlarmName}`
+     const newInstantId = this.savedStore.create(snoozeTime, snoozeLabel, true, originalAlarmId)
+    
+    // Create a hidden span between the original alarm and the snoozed alarm
+    const spanLabel = `snooze ${snoozeCount}:${originalLabel}`
+    this.spansStore.create(instantId, newInstantId, spanLabel, { visible: false })
+    
+    // Dismiss the original alarm when creating a snooze
     this.dismissAlarm(instantId)
     
     return newInstantId
@@ -289,6 +325,47 @@ export class TimelineState {
    */
   public getTimeUntilNextAlarmCheck(): number {
     return Math.max(0, this.nextAlarmCheckTime - Date.now())
+  }
+
+  /**
+   * Set the auto-dismiss duration for ringing alarms (in milliseconds)
+   */
+  public setAutoDismissDuration(ms: number): void {
+    this.autoDismissAfterMs = Math.max(1000, ms) // Minimum 1 second
+  }
+
+  /**
+   * Get the current auto-dismiss duration (in milliseconds)
+   */
+  public getAutoDismissDuration(): number {
+    return this.autoDismissAfterMs
+  }
+
+  /**
+   * Initialize audio context on first user interaction
+   */
+  private initializeAudioOnUserInteraction(): void {
+    const initAudio = () => {
+      this.alarmAudioManager.initializeAudioContext()
+      this.alarmAudioManager.primeAudioContext()
+      
+      // Remove listeners after initialization
+      document.removeEventListener('click', initAudio)
+      document.removeEventListener('keydown', initAudio)
+      document.removeEventListener('touchstart', initAudio)
+    }
+    
+    // Add listeners for user interaction
+    document.addEventListener('click', initAudio, { once: true })
+    document.addEventListener('keydown', initAudio, { once: true })
+    document.addEventListener('touchstart', initAudio, { once: true })
+  }
+
+  /**
+   * Prime audio context (call on any user interaction)
+   */
+  public primeAudioContext(): void {
+    this.alarmAudioManager.primeAudioContext()
   }
 
   /**

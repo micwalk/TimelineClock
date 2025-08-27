@@ -860,7 +860,8 @@ export class TimelineRenderer {
       ts: rec.tsEpochMs, 
       label: rec.label, 
       favorite: !!rec.favorite,
-      alarm: !!rec.alarm 
+      alarm: !!rec.alarm,
+      snoozeOriginalId: rec.snoozeOriginalId
     }))
     for (const s of saved) {
       const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === s.id
@@ -939,11 +940,16 @@ export class TimelineRenderer {
       // Alarm bell next to label with hit target
       {
         const isSelected = this.state.getCurrentSelectedInstantId() === s.id
+        const isInPast = s.ts < Date.now()
+        const isCurrentlyRinging = this.state.getRingingAlarms().some(ra => ra.instantId === s.id)
         
         // Show bell if:
-        // 1. Instant has alarm set (regardless of past/future), OR
-        // 2. Instant is selected (for UI feedback, regardless of past/future)
-        const shouldShowBell = !!s.alarm || isSelected
+        // 1. Instant has alarm set AND is in the future, OR
+        // 2. Instant is selected AND either:
+        //    - Is in the future (can set alarm), OR
+        //    - Is in the past but alarm is currently ringing
+        const shouldShowBell = (!!s.alarm && !isInPast) || 
+                              (isSelected && (!isInPast || (isInPast && isCurrentlyRinging)))
         
         if (shouldShowBell) {
         const bellRect = { 
@@ -1561,25 +1567,43 @@ export class TimelineRenderer {
     return this.createInstantAt(ts, label, true)
   }
   
-  // Alarm management methods
+    // Alarm management methods
   public dismissAlarm(instantId: string): void {
     this.state.dismissAlarm(instantId)
   }
-  
+
   public snoozeAlarm(instantId: string, minutes: number = 5): string | null {
     return this.state.snoozeAlarm(instantId, minutes)
   }
-  
+
   public silenceAlarm(): void {
     this.state.silenceAlarm()
   }
-  
+
   public getRingingAlarms(): RingingAlarm[] {
     return this.state.getRingingAlarms()
   }
-  
+
   public hasRingingAlarms(): boolean {
     return this.state.hasRingingAlarms()
+  }
+
+  public primeAudioContext(): void {
+    this.state.primeAudioContext()
+  }
+
+  /**
+   * Set the auto-dismiss duration for ringing alarms (in milliseconds)
+   */
+  public setAutoDismissDuration(ms: number): void {
+    this.state.setAutoDismissDuration(ms)
+  }
+
+  /**
+   * Get the current auto-dismiss duration (in milliseconds)
+   */
+  public getAutoDismissDuration(): number {
+    return this.state.getAutoDismissDuration()
   }
 
   public setSpanVisible(spanId: string, value: boolean) {
@@ -2265,7 +2289,7 @@ export class TimelineRenderer {
     const list: InstantView[] = [
       { kind: 'now', tsEpochMs: nowTs },
       { kind: 'cursor', tsEpochMs: centerTs, visible: focus.mode === 'cursor' },
-      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label, favorite: !!s.favorite, alarm: !!s.alarm }))
+      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label, favorite: !!s.favorite, alarm: !!s.alarm, snoozeOriginalId: s.snoozeOriginalId }))
     ]
     list.sort((a, b) => a.tsEpochMs - b.tsEpochMs)
     return list

@@ -7,6 +7,7 @@ export interface InstantRecord {
 	label: string
 	favorite?: boolean
 	alarm?: boolean // New: indicates if this instant should trigger an alarm
+	snoozeOriginalId?: string // New: ID of the original alarm this snooze was created from
 }
 
 // View-only kinds
@@ -30,6 +31,7 @@ export interface SavedInstantView {
 	label: string
 	favorite: boolean
 	alarm: boolean // New: indicates if this instant should trigger an alarm
+	snoozeOriginalId?: string // New: ID of the original alarm this snooze was created from
 }
 
 export type InstantView = NowInstant | CursorInstant | SavedInstantView
@@ -60,7 +62,8 @@ export function toViewSaved(r: InstantRecord): SavedInstantView {
 		tsEpochMs: r.tsEpochMs, 
 		label: r.label, 
 		favorite: !!r.favorite,
-		alarm: !!r.alarm // New: convert to boolean
+		alarm: !!r.alarm, // New: convert to boolean
+		snoozeOriginalId: r.snoozeOriginalId // New: add snoozeOriginalId
 	}
 }
 

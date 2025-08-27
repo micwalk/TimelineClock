@@ -18,13 +18,14 @@ export class SavedInstantsStore {
 	getSnapshot(): InstantRecord[] { return this.items.slice() }
 	getSorted(): InstantRecord[] { return this.items.slice().sort((a, b) => a.tsEpochMs - b.tsEpochMs) }
 
-	create(tsEpochMs: number, label = '', alarm = false): string {
+	create(tsEpochMs: number, label = '', alarm = false, snoozeOriginalId?: string): string {
 		const instant: InstantRecord = {
 			id: `i_${Math.random().toString(36).slice(2, 9)}`,
 			tsEpochMs,
 			label,
 			favorite: alarm, // Auto-favorite alarmed instants per PRD
-			alarm
+			alarm,
+			snoozeOriginalId
 		}
 		this.items.push(instant)
 		this.persist()
@@ -95,6 +96,11 @@ export class SavedInstantsStore {
 	hasAlarm(id: string): boolean {
 		const it = this.items.find(x => x.id === id)
 		return it?.alarm ?? false
+	}
+
+	// New: Count snoozes for a given original alarm ID
+	getSnoozeCount(originalAlarmId: string): number {
+		return this.items.filter(x => x.snoozeOriginalId === originalAlarmId).length
 	}
 
 	// New: Get instant by ID
