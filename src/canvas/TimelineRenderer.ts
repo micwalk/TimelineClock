@@ -7,6 +7,7 @@ import { SavedInstantsStore } from '../services/SavedInstantsStore.ts'
 import { SavedSpansStore } from '../services/SavedSpansStore.ts'
 import type { SpanView } from '../types/spans.ts'
 import { TimelineState } from './core/TimelineState.ts'
+import type { RingingAlarm } from './core/TimelineState.ts'
 import { TimelineViewport } from './core/TimelineViewport.ts'
 import { TimelineAnimations } from './core/TimelineAnimations.ts'
 import { HitTargetManager } from './core/HitTargetManager.ts'
@@ -854,7 +855,13 @@ export class TimelineRenderer {
 
   // Render all saved instants with label editing and delete icon
   private drawSavedInstants() {
-    const saved = this.savedStore.getSnapshot().map(rec => ({ id: rec.id, ts: rec.tsEpochMs, label: rec.label, favorite: !!rec.favorite }))
+    const saved = this.savedStore.getSnapshot().map(rec => ({ 
+      id: rec.id, 
+      ts: rec.tsEpochMs, 
+      label: rec.label, 
+      favorite: !!rec.favorite,
+      alarm: !!rec.alarm 
+    }))
     for (const s of saved) {
       const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === s.id
       const isSelected = this.state.getCurrentSelectedInstantId() === s.id
@@ -905,18 +912,54 @@ export class TimelineRenderer {
       const h = 30
       const rect = { x: x - w / 2, y: centerY + 50, w, h }
       this.hitTargets.addInstantLabel(s.id, rect.x, rect.y, rect.w, rect.h)
+      
+      // Calculate icon positions
+      let iconOffset = 0
+      const iconSize = 20
+      const iconSpacing = 6
+      
       // Favorite star next to label with hit target
       {
         const shouldShowStar = !!s.favorite || this.state.getCurrentSelectedInstantId() === s.id
         if (shouldShowStar) {
-        const starSize = 20
-        const starRect = { x: rect.x + rect.w + 6, y: rect.y + (rect.h - starSize) / 2, w: starSize, h: starSize }
+        const starRect = { 
+          x: rect.x + rect.w + iconSpacing + iconOffset, 
+          y: rect.y + (rect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
         const starCx = starRect.x + starRect.w / 2
         const starCy = starRect.y + starRect.h / 2
         this.drawStarIcon(starCx, starCy, !!s.favorite)
         this.hitTargets.addInstantFavorite(s.id, starRect.x, starRect.y, starRect.w, starRect.h)
+        iconOffset += iconSize + iconSpacing
         }
       }
+      
+      // Alarm bell next to label with hit target
+      {
+        const isSelected = this.state.getCurrentSelectedInstantId() === s.id
+        
+        // Show bell if:
+        // 1. Instant has alarm set (regardless of past/future), OR
+        // 2. Instant is selected (for UI feedback, regardless of past/future)
+        const shouldShowBell = !!s.alarm || isSelected
+        
+        if (shouldShowBell) {
+        const bellRect = { 
+          x: rect.x + rect.w + iconSpacing + iconOffset, 
+          y: rect.y + (rect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
+        const bellCx = bellRect.x + bellRect.w / 2
+        const bellCy = bellRect.y + bellRect.h / 2
+        this.drawBellIcon(bellCx, bellCy, !!s.alarm)
+        this.hitTargets.addInstantAlarm(s.id, bellRect.x, bellRect.y, bellRect.w, bellRect.h)
+        iconOffset += iconSize + iconSpacing
+        }
+      }
+      
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.addInstantTime(s.id, timeRect.x, timeRect.y, timeRect.w, timeRect.h)
@@ -1251,6 +1294,10 @@ export class TimelineRenderer {
     this.icons.drawStar(cx, cy, 8, filled, { fillColor: '#facc15', strokeColor: '#facc15' })
   }
 
+  private drawBellIcon(cx: number, cy: number, filled: boolean) {
+    this.icons.drawBell(cx, cy, 8, filled, { fillColor: '#f59e0b', strokeColor: '#ffffff' })
+  }
+
   // removed unused drawCursorTrashIcon
 
   // Public getters for state variables
@@ -1362,13 +1409,20 @@ export class TimelineRenderer {
           }
           return
         }
-        if (target.type === 'instant-fav' && target.id) {
-          const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
-          if (inst) {
-            this.toggleFavorite(target.id, !inst.favorite)
-          }
-          return
-        }
+                 if (target.type === 'instant-fav' && target.id) {
+           const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
+           if (inst) {
+             this.toggleFavorite(target.id, !inst.favorite)
+           }
+           return
+         }
+         if (target.type === 'instant-alarm' && target.id) {
+           const inst = this.savedStore.getSnapshot().find(si => si.id === target.id)
+           if (inst) {
+             this.toggleAlarm(target.id, !inst.alarm)
+           }
+           return
+         }
         if (target.type === 'span-delete' && target.id) {
           this.deleteSpan(target.id)
           return
@@ -1490,6 +1544,42 @@ export class TimelineRenderer {
       if (sp) this.spansStore.setVisible(sp.id, false)
     }
 
+  }
+
+  // Exposed for list UI to toggle alarm status
+  public toggleAlarm(id: string, value: boolean) {
+    this.savedStore.setAlarm(id, value)
+    // Automatically favorite alarmed instants as per PRD
+    if (value) {
+      this.savedStore.setFavorite(id, true)
+      this.spansStore.createOrUpdateFavoriteNowSpan(id, true)
+    }
+  }
+
+  // Public method to create an instant with alarm for testing
+  public createInstantWithAlarm(ts: number, label: string): string {
+    return this.createInstantAt(ts, label, true)
+  }
+  
+  // Alarm management methods
+  public dismissAlarm(instantId: string): void {
+    this.state.dismissAlarm(instantId)
+  }
+  
+  public snoozeAlarm(instantId: string, minutes: number = 5): string | null {
+    return this.state.snoozeAlarm(instantId, minutes)
+  }
+  
+  public silenceAlarm(): void {
+    this.state.silenceAlarm()
+  }
+  
+  public getRingingAlarms(): RingingAlarm[] {
+    return this.state.getRingingAlarms()
+  }
+  
+  public hasRingingAlarms(): boolean {
+    return this.state.hasRingingAlarms()
   }
 
   public setSpanVisible(spanId: string, value: boolean) {
@@ -2087,8 +2177,8 @@ export class TimelineRenderer {
   }
 
   // Instant storage helpers
-  private createInstantAt(ts: number, label: string): string {
-    const id = this.savedStore.create(ts, label)
+  private createInstantAt(ts: number, label: string, alarm = false): string {
+    const id = this.savedStore.create(ts, label, alarm)
     this.persistState()
     return id
   }
@@ -2175,7 +2265,7 @@ export class TimelineRenderer {
     const list: InstantView[] = [
       { kind: 'now', tsEpochMs: nowTs },
       { kind: 'cursor', tsEpochMs: centerTs, visible: focus.mode === 'cursor' },
-      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label, favorite: !!s.favorite }))
+      ...this.savedStore.getSnapshot().map<InstantView>(s => ({ kind: 'saved' as const, id: s.id, tsEpochMs: s.tsEpochMs, label: s.label, favorite: !!s.favorite, alarm: !!s.alarm }))
     ]
     list.sort((a, b) => a.tsEpochMs - b.tsEpochMs)
     return list

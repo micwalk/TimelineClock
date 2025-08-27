@@ -2,6 +2,7 @@ import type { SavedInstantsStore } from '../../services/SavedInstantsStore'
 import type { SavedSpansStore } from '../../services/SavedSpansStore'
 import type { Option } from '../../utils/option'
 import { none, toStringOrNull, fromStringOrNull } from '../../utils/option'
+import { AlarmAudioManager } from '../../services/AlarmAudioManager'
 
 export type ViewFocusMode = 'now' | 'cursor' | 'instant' | 'span'
 
@@ -30,6 +31,14 @@ export const TIME_INCREMENT_OPTIONS: TimeIncrementOption[] = [
   { value: '24h', label: '24 hours', milliseconds: 24 * 60 * 60 * 1000 }
 ]
 
+// New: Alarm state interfaces
+export interface RingingAlarm {
+  instantId: string
+  label: string
+  tsEpochMs: number
+  triggeredAt: number
+}
+
 export interface TimelineStateSnapshot {
   timeWidth: number
   timeCenter: number
@@ -44,6 +53,7 @@ export interface TimelineStateSnapshot {
   showImpliedSelectedNow: boolean
   showImpliedSelectedPrev: boolean
   timeIncrement: TimeIncrement
+  ringingAlarms: RingingAlarm[] // New: track currently ringing alarms
 }
 
 /**
@@ -80,6 +90,15 @@ export class TimelineState {
   // Time increment state
   private timeIncrement: TimeIncrement = '30m'
   
+  // New: Alarm state management with dynamic scheduling
+  private ringingAlarms: RingingAlarm[] = []
+  private nextAlarmCheckTime: number = 0
+  private alarmCheckTimeoutId: number | null = null
+  private readonly minCheckInterval: number = 100 // Minimum 100ms between checks for precision
+  
+  // New: Sound management
+  private alarmAudioManager: AlarmAudioManager
+  
   // State version for change tracking
   private stateVersion: number = 0
   
@@ -92,10 +111,195 @@ export class TimelineState {
   ) {
     this.savedStore = savedStore
     this.spansStore = spansStore
+    this.alarmAudioManager = new AlarmAudioManager()
     
-    // Subscribe to store changes to increment state version
-    this.savedStore.subscribe(() => { this.stateVersion++ })
+    // Subscribe to store changes to increment state version and reschedule checks
+    this.savedStore.subscribe(() => { 
+      this.stateVersion++
+      this.scheduleNextAlarmCheck()
+    })
     this.spansStore.subscribe(() => { this.stateVersion++ })
+    
+    // Initialize alarm checking
+    this.scheduleNextAlarmCheck()
+  }
+
+  // New: Dynamic alarm scheduling and checking
+  
+  /**
+   * Schedule the next alarm check based on upcoming alarms
+   */
+  private scheduleNextAlarmCheck(): void {
+    // Clear existing timeout
+    if (this.alarmCheckTimeoutId !== null) {
+      clearTimeout(this.alarmCheckTimeoutId)
+      this.alarmCheckTimeoutId = null
+    }
+    
+    const now = Date.now()
+    const nextAlarmTime = this.savedStore.getNextAlarmTime()
+    
+    if (nextAlarmTime === null) {
+      // No future alarms, check again in 1 minute
+      this.nextAlarmCheckTime = now + 60000
+      this.alarmCheckTimeoutId = window.setTimeout(() => this.checkAlarms(), 60000)
+      return
+    }
+    
+    // Calculate time until next alarm
+    const timeUntilAlarm = nextAlarmTime - now
+    
+    if (timeUntilAlarm <= 0) {
+      // Alarm is due now, check immediately
+      this.checkAlarms()
+      return
+    }
+    
+    // Schedule check slightly before the alarm time for precision
+    const checkOffset = Math.max(this.minCheckInterval, Math.min(timeUntilAlarm - 50, 1000))
+    this.nextAlarmCheckTime = now + checkOffset
+    
+    this.alarmCheckTimeoutId = window.setTimeout(() => this.checkAlarms(), checkOffset)
+  }
+  
+  /**
+   * Check for triggered alarms with precise timing
+   */
+  public checkAlarms(): void {
+    const now = Date.now()
+    const alarmedInstants = this.savedStore.getAlarmedInstants()
+    const newlyTriggered: RingingAlarm[] = []
+    
+    // Check for newly triggered alarms with sub-second precision
+    for (const instant of alarmedInstants) {
+      // Alarm triggers when Now intersects the instant (within 100ms tolerance for precision)
+      if (Math.abs(now - instant.tsEpochMs) <= 100) {
+        // Check if this alarm is already ringing
+        const alreadyRinging = this.ringingAlarms.some(ra => ra.instantId === instant.id)
+        if (!alreadyRinging) {
+          newlyTriggered.push({
+            instantId: instant.id,
+            label: instant.label,
+            tsEpochMs: instant.tsEpochMs,
+            triggeredAt: now
+          })
+        }
+      }
+    }
+    
+    // Add newly triggered alarms to ringing list and start sound
+    if (newlyTriggered.length > 0) {
+      this.ringingAlarms.push(...newlyTriggered)
+      this.startAlarmSound()
+      this.stateVersion++
+    }
+    
+    // Schedule next check
+    this.scheduleNextAlarmCheck()
+  }
+  
+  /**
+   * Start repeating alarm sound when alarms trigger
+   */
+  private startAlarmSound(): void {
+    this.alarmAudioManager.startAlarmSound(() => this.hasRingingAlarms())
+  }
+  
+  /**
+   * Stop the repeating alarm sound
+   */
+  private stopAlarmSound(): void {
+    this.alarmAudioManager.stopAlarmSound()
+  }
+  
+  /**
+   * Play a single alarm sound
+   */
+  private playAlarmSound(): void {
+    this.alarmAudioManager.playAlarmSound()
+  }
+  
+  /**
+   * Dismiss a ringing alarm
+   */
+  public dismissAlarm(instantId: string): void {
+    this.ringingAlarms = this.ringingAlarms.filter(ra => ra.instantId !== instantId)
+    
+    // Clear the alarm state from the instant when dismissed
+    this.savedStore.setAlarm(instantId, false)
+    
+    // Stop sound if no more ringing alarms
+    if (this.ringingAlarms.length === 0) {
+      this.stopAlarmSound()
+    }
+    
+    this.stateVersion++
+  }
+  
+  /**
+   * Snooze a ringing alarm (creates new instant with alarm)
+   */
+  public snoozeAlarm(instantId: string, snoozeMinutes: number = 5): string | null {
+    const ringingAlarm = this.ringingAlarms.find(ra => ra.instantId === instantId)
+    if (!ringingAlarm) return null
+    
+    // Create new instant with alarm at Now + snooze duration
+    const snoozeTime = Date.now() + (snoozeMinutes * 60 * 1000)
+    const snoozeLabel = `Snooze: ${ringingAlarm.label}`
+    const newInstantId = this.savedStore.create(snoozeTime, snoozeLabel, true)
+    
+    // Dismiss the original alarm
+    this.dismissAlarm(instantId)
+    
+    return newInstantId
+  }
+  
+  /**
+   * Get currently ringing alarms
+   */
+  public getRingingAlarms(): RingingAlarm[] {
+    return [...this.ringingAlarms]
+  }
+  
+  /**
+   * Check if any alarms are currently ringing
+   */
+  public hasRingingAlarms(): boolean {
+    return this.ringingAlarms.length > 0
+  }
+  
+  /**
+   * Silence the alarm sound without dismissing alarms
+   */
+  public silenceAlarm(): void {
+    this.alarmAudioManager.stopAlarmSound()
+  }
+  
+  /**
+   * Clear all ringing alarms (useful for testing or reset)
+   */
+  public clearAllRingingAlarms(): void {
+    this.ringingAlarms = []
+    this.stopAlarmSound()
+    this.stateVersion++
+  }
+  
+  /**
+   * Get time until next alarm check (for debugging/monitoring)
+   */
+  public getTimeUntilNextAlarmCheck(): number {
+    return Math.max(0, this.nextAlarmCheckTime - Date.now())
+  }
+
+  /**
+   * Clean up resources
+   */
+  public dispose(): void {
+    if (this.alarmCheckTimeoutId !== null) {
+      clearTimeout(this.alarmCheckTimeoutId)
+      this.alarmCheckTimeoutId = null
+    }
+    this.alarmAudioManager.dispose()
   }
   
   // === View Focus Management ===
@@ -346,7 +550,8 @@ export class TimelineState {
       selectedSpanId: toStringOrNull(this.selectedSpanId),
       showImpliedSelectedNow: this.showImpliedSelectedNow,
       showImpliedSelectedPrev: this.showImpliedSelectedPrev,
-      timeIncrement: this.timeIncrement
+      timeIncrement: this.timeIncrement,
+      ringingAlarms: [...this.ringingAlarms] // New: include ringing alarms in snapshot
     }
   }
   
@@ -364,6 +569,7 @@ export class TimelineState {
     if (snapshot.showImpliedSelectedNow !== undefined) this.showImpliedSelectedNow = snapshot.showImpliedSelectedNow
     if (snapshot.showImpliedSelectedPrev !== undefined) this.showImpliedSelectedPrev = snapshot.showImpliedSelectedPrev
     if (snapshot.timeIncrement !== undefined) this.timeIncrement = snapshot.timeIncrement
+    if (snapshot.ringingAlarms !== undefined) this.ringingAlarms = [...snapshot.ringingAlarms] // New: load ringing alarms from snapshot
     
     this.stateVersion++
   }

@@ -2,8 +2,9 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { TimelineRenderer } from '../canvas/TimelineRenderer.ts'
 import { InstantListDomManager } from './InstantListDomManager.ts'
 import { TimeIncrementDropdown } from './TimeIncrementDropdown.tsx'
+import { RingingAlarmUI } from './RingingAlarmUI.tsx'
 import type { InstantView } from '../types/instants.ts'
-import type { TimeIncrement } from '../canvas/core/TimelineState.ts'
+import type { TimeIncrement, RingingAlarm } from '../canvas/core/TimelineState.ts'
 
 interface TimelineCanvasProps {
   className?: string
@@ -23,6 +24,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const [dropdownTrigger, setDropdownTrigger] = useState<'plus' | 'minus' | null>(null)
   const plusButtonRef = useRef<HTMLButtonElement>(null)
   const minusButtonRef = useRef<HTMLButtonElement>(null)
+  
+  // Alarm state
+  const [ringingAlarms, setRingingAlarms] = useState<RingingAlarm[]>([])
 
   // Time input overlay DOM node (managed like label overlays)
   const timeInputRef = useRef<HTMLDivElement | null>(null)
@@ -55,6 +59,25 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
     if (!r) return
     r.setTimeIncrement?.(increment)
   }
+  
+  // Alarm handlers
+  const handleDismissAlarm = (instantId: string) => {
+    const r = rendererRef.current
+    if (!r) return
+    r.dismissAlarm?.(instantId)
+  }
+  
+  const handleSnoozeAlarm = (instantId: string, minutes: number = 5) => {
+    const r = rendererRef.current
+    if (!r) return
+    r.snoozeAlarm?.(instantId, minutes)
+  }
+  
+  const handleSilenceAlarm = () => {
+    const r = rendererRef.current
+    if (!r) return
+    r.silenceAlarm?.()
+  }
 
   const handleLongPress = (trigger: 'plus' | 'minus') => {
     setDropdownTrigger(trigger)
@@ -86,6 +109,25 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
   const plusLongPress = useLongPress(() => handleLongPress('plus'))
   const minusLongPress = useLongPress(() => handleLongPress('minus'))
 
+  // Monitor alarm state
+  useEffect(() => {
+    const checkAlarms = () => {
+      const r = rendererRef.current
+      if (!r) return
+      
+      const alarms = r.getRingingAlarms?.() || []
+      setRingingAlarms(alarms)
+    }
+    
+    // Check immediately
+    checkAlarms()
+    
+    // Set up interval to check for alarm state changes
+    const interval = setInterval(checkAlarms, 100)
+    
+    return () => clearInterval(interval)
+  }, [])
+  
   // Time input helpers
   const handleTimeInput = (timeString: string) => {
     const r = rendererRef.current
@@ -992,6 +1034,21 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
           >
             Zoom in
           </button>
+          <button
+            aria-label="Test Alarm"
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              const r = rendererRef.current;
+              if (r) {
+                // Create an alarm that will trigger in 3 seconds
+                const alarmTime = Date.now() + 3000;
+                r.createInstantWithAlarm(alarmTime, 'Test Alarm');
+              }
+            }}
+            style={{ background: 'rgba(239,68,68,0.8)', color: '#ffffff', border: '2px solid #ffffff', padding: '8px 12px', font: 'bold 16px Arial', cursor: 'pointer' }}
+          >
+            Test Alarm (3s)
+          </button>
         </div>
       </div>
       {/* HTML overlays (no pointer events except on children we enable) */}
@@ -999,6 +1056,14 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       {/* Time input overlay is now managed as DOM overlay like label editors */}
       {/* Saved instants list */}
       <div ref={listRef} className="w-full" style={{ position: 'absolute', top: 600, left: 0, right: 0, padding: 16, display: 'flex', justifyContent: 'center' }} />
+      
+      {/* Ringing Alarm UI */}
+      <RingingAlarmUI
+        ringingAlarms={ringingAlarms}
+        onDismiss={handleDismissAlarm}
+        onSnooze={handleSnoozeAlarm}
+        onSilence={handleSilenceAlarm}
+      />
     </div>
   )
 }

@@ -23,8 +23,7 @@ A single‑view, timeline‑centric clock that unifies Stopwatch, Timer, Alarm, 
 ### Entities
 
 - **Instant** `{ id, tsEpochMs, label?, tz?, favorite?: boolean, notify?: NotificationSpec[] }`
-- **Duration** `{ id, ms, label? }`
-- **TimeRange** `{ id, startInstantId, endInstantId, label?, favorite?: boolean }`
+- **TimeSpan** `{ id, startInstantId, endInstantId, label?, favorite?: boolean }`
   - Derived props: `durationMs`, `isPast`, `isActive`, `timeLeftMs`.
 - **Track** (optional grouping beneath the timeline) `{ id, title, entityIds[] }` for organizing favorites.
 

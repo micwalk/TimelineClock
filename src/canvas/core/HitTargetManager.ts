@@ -16,6 +16,7 @@ export type HitTargetType =
   | 'span-visible' 
   | 'span-delete' 
   | 'instant-fav' 
+  | 'instant-alarm'
   | 'span-end-focus'
   | 'span-time-input'
   | 'span-rename'
@@ -124,6 +125,14 @@ export class HitTargetManager {
   addInstantFavorite(instantId: string, x: number, y: number, w: number, h: number): void {
     this.targets.push({
       type: 'instant-fav',
+      id: instantId,
+      rect: { x, y, w, h }
+    })
+  }
+
+  addInstantAlarm(instantId: string, x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'instant-alarm',
       id: instantId,
       rect: { x, y, w, h }
     })

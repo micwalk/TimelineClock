@@ -105,6 +105,82 @@ export class IconRenderer {
     this.ctx.restore()
   }
 
+  // Draw a bell icon (for alarms)
+  drawBell(cx: number, cy: number, radius: number, filled: boolean, options?: {
+    fillColor?: string
+    strokeColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      fillColor: '#f59e0b', // Amber color for alarm bells
+      strokeColor: '#ffffff',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+    
+    if (filled) {
+      this.ctx.fillStyle = opts.fillColor
+    }
+
+    // Draw bell shape
+    this.ctx.beginPath()
+    
+    // Bell body (curved bottom)
+    const bellWidth = radius * 1.2
+    const bellHeight = radius * 1.4
+    const bellTop = cy - bellHeight / 2
+    const bellBottom = cy + bellHeight / 2
+    
+    // Top of bell (flat)
+    this.ctx.moveTo(cx - bellWidth / 2, bellTop)
+    this.ctx.lineTo(cx + bellWidth / 2, bellTop)
+    
+    // Right side (curved)
+    this.ctx.quadraticCurveTo(
+      cx + bellWidth / 2 + radius * 0.1, 
+      cy, 
+      cx + bellWidth / 2, 
+      bellBottom
+    )
+    
+    // Bottom curve
+    this.ctx.quadraticCurveTo(
+      cx, 
+      bellBottom + radius * 0.2, 
+      cx - bellWidth / 2, 
+      bellBottom
+    )
+    
+    // Left side (curved)
+    this.ctx.quadraticCurveTo(
+      cx - bellWidth / 2 - radius * 0.1, 
+      cy, 
+      cx - bellWidth / 2, 
+      bellTop
+    )
+    
+    this.ctx.closePath()
+    
+    if (filled) {
+      this.ctx.fill()
+    }
+    this.ctx.stroke()
+    
+    // Draw bell clapper (small circle at bottom)
+    this.ctx.beginPath()
+    this.ctx.arc(cx, bellBottom - radius * 0.2, radius * 0.15, 0, Math.PI * 2)
+    if (filled) {
+      this.ctx.fill()
+    }
+    this.ctx.stroke()
+    
+    this.ctx.restore()
+  }
+
   // Draw an eye icon (for visibility toggle)
   drawEye(x: number, y: number, w: number, h: number, options?: {
     fillColor?: string
