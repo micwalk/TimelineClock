@@ -353,7 +353,7 @@ export class TimelineRenderer {
       let rowOffset : number = centerY + this.spanRows.spanList
       const rowHeights = {
         "short": 35,
-        "labeled": 70,
+        "labeled": 65,
         "controlExtra": 25,
       }
       for (const d of spanDrawList) {
