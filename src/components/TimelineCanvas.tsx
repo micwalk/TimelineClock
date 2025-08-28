@@ -627,6 +627,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       row.style.gap = '4px'
 
       const parts = initial.split(':')
+      // Convert 24-hour to 12-hour format for display
+      let displayHour = parseInt(parts[0] || '0', 10)
+      if (displayHour === 0) {
+        displayHour = 12
+      } else if (displayHour > 12) {
+        displayHour -= 12
+      }
+      const displayParts = [displayHour.toString().padStart(2, '0'), parts[1] || '00', parts[2] || '00']
+      
       const buildInput = (val: string, max: number) => {
         const input = document.createElement('input')
         input.type = 'text'
@@ -650,14 +659,35 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
         return input
       }
 
-      const hoursInput = buildInput(parts[0] || '00', 23)
-      const minutesInput = buildInput(parts[1] || '00', 59)
-      const secondsInput = buildInput(parts[2] || '00', 59)
+      const hoursInput = buildInput(displayParts[0], 12)
+      const minutesInput = buildInput(displayParts[1], 59)
+      const secondsInput = buildInput(displayParts[2], 59)
 
       const colon1 = document.createElement('span'); colon1.textContent = ':'; colon1.style.color = '#ffffff'; colon1.style.fontFamily = 'monospace'; colon1.style.fontSize = '18px'
       const colon2 = colon1.cloneNode(true) as HTMLSpanElement
 
-      row.appendChild(hoursInput); row.appendChild(colon1); row.appendChild(minutesInput); row.appendChild(colon2); row.appendChild(secondsInput)
+      // AM/PM selector
+      const ampmBtn = document.createElement('button')
+      const initialHour = parseInt(parts[0] || '0', 10)
+      const isPM = initialHour >= 12
+      ampmBtn.textContent = isPM ? 'PM' : 'AM'
+      ampmBtn.style.padding = '2px 6px'
+      ampmBtn.style.fontFamily = 'monospace'
+      ampmBtn.style.background = isPM ? '#dc2626' : '#4b5563'
+      ampmBtn.style.color = '#ffffff'
+      ampmBtn.style.border = 'none'
+      ampmBtn.style.borderRadius = '4px'
+      ampmBtn.style.fontSize = '14px'
+      ;(ampmBtn.style as CSSStyleDeclaration).pointerEvents = 'auto'
+      let isPMSelected = isPM
+      ampmBtn.onclick = (ev) => {
+        ev.stopPropagation()
+        isPMSelected = !isPMSelected
+        ampmBtn.textContent = isPMSelected ? 'PM' : 'AM'
+        ampmBtn.style.background = isPMSelected ? '#dc2626' : '#4b5563'
+      }
+
+      row.appendChild(hoursInput); row.appendChild(colon1); row.appendChild(minutesInput); row.appendChild(colon2); row.appendChild(secondsInput); row.appendChild(ampmBtn)
 
       const actions = document.createElement('div')
       actions.style.display = 'flex'; actions.style.justifyContent = 'space-between'; actions.style.marginTop = '8px'
@@ -668,19 +698,23 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({ className = '' }
       cancelBtn.onclick = (ev) => { ev.stopPropagation(); close() }
       okBtn.onclick = (ev) => {
         ev.stopPropagation()
-        const hh = hoursInput.value.padStart(2, '0')
-        const mm = minutesInput.value.padStart(2, '0')
-        const ss = secondsInput.value.padStart(2, '0')
-        // Always forward in time from now
-        const now = new Date()
-        const target = new Date(now)
-        target.setHours(parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), 0)
-        let targetTs = target.getTime()
-        if (targetTs <= now.getTime()) {
-          // if past, push to next day
-          target.setDate(target.getDate() + 1)
-          targetTs = target.getTime()
+        let hh = parseInt(hoursInput.value, 10)
+        const mm = parseInt(minutesInput.value, 10)
+        const ss = parseInt(secondsInput.value, 10)
+        
+        // Convert 12-hour to 24-hour format
+        if (isPMSelected && hh !== 12) {
+          hh += 12
+        } else if (!isPMSelected && hh === 12) {
+          hh = 0
         }
+        
+        // Keep the same day as the cursor's current time
+        const cursorTime = new Date(r.getTimeCenter())
+        const target = new Date(cursorTime)
+        target.setHours(hh, mm, ss, 0)
+        const targetTs = target.getTime()
+        
         const r2 = rendererRef.current
         if (r2) { r2.setViewFocus('cursor'); r2.setTimeCenter(targetTs) }
         close()

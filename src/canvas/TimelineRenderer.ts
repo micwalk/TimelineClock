@@ -484,6 +484,9 @@ export class TimelineRenderer {
         })
     }
 
+    // Draw selected instants at the end for z-depth (to be on top)
+    this.drawSelectedInstants()
+    
     // Draw NOW at the end if focused (to be on top of everything)
     if (isNowFocused) {
       this.drawNowInstant()
@@ -862,6 +865,11 @@ export class TimelineRenderer {
 
   // Render all saved instants with label editing and delete icon
   private drawSavedInstants() {
+    this.drawNonSelectedInstants()
+  }
+
+  // Draw non-selected instants (called early in render for background)
+  private drawNonSelectedInstants() {
     const saved = this.savedStore.getSnapshot().map(rec => ({ 
       id: rec.id, 
       ts: rec.tsEpochMs, 
@@ -875,31 +883,27 @@ export class TimelineRenderer {
       const isSelected = this.state.getCurrentSelectedInstantId() === s.id
       const secondaryId = this.state.getSecondarySelectedInstantId()
       const isSecondarySelected = !!secondaryId && secondaryId === s.id
+      
+      // Skip selected instants - they will be drawn later for z-depth
+      if (isSelected || isFocused) {
+        continue
+      }
+      
       const label = s.label && s.label.length > 0 ? s.label : '?'
       let lineColor = '#ffffff'
       let borderColor = '#ffffff'
       let glowColor: string | undefined = undefined
       let glowBlur = 0
       let lineWidth = 2
-      if (isFocused) {
-        lineColor = '#22d3ee' // focused: light blue
-        borderColor = '#22d3ee'
-        glowColor = '#22d3ee'
-        glowBlur = 8
-        lineWidth = 3
-      } else if (isSelected) {
-        lineColor = '#2563eb' // selected: deeper blue
-        borderColor = '#2563eb'
-        glowColor = '#2563eb'
-        glowBlur = 8
-        lineWidth = 3
-      } else if (isSecondarySelected) {
+      
+      if (isSecondarySelected) {
         lineColor = '#8b5cf6' // secondary selected: purple
         borderColor = '#8b5cf6'
         glowColor = '#8b5cf6'
         glowBlur = 6
         lineWidth = 3
       }
+      
       this.drawInstant(s.ts, label, {
         lineColor,
         glowColor,
@@ -909,9 +913,7 @@ export class TimelineRenderer {
         labelBorderColor: borderColor,
         labelTextColor: '#ffffff',
       })
-      if (this.state.getCurrentSelectedInstantId() === s.id) {
-      this.drawTrashIconAt(s.ts, s.id)
-      }
+      
       // Record label hit target roughly using current font and box metrics similar to drawInstant
       const centerY = this.TimelineCenterY()
       const x = this.timeToPosition(s.ts)
@@ -928,7 +930,7 @@ export class TimelineRenderer {
       
       // Favorite star next to label with hit target
       {
-        const shouldShowStar = !!s.favorite || this.state.getCurrentSelectedInstantId() === s.id
+        const shouldShowStar = !!s.favorite
         if (shouldShowStar) {
         const starRect = { 
           x: rect.x + rect.w + iconSpacing + iconOffset, 
@@ -946,7 +948,130 @@ export class TimelineRenderer {
       
       // Alarm bell next to label with hit target
       {
-        const isSelected = this.state.getCurrentSelectedInstantId() === s.id
+        const isInPast = s.ts < Date.now()
+        const isCurrentlyRinging = this.state.getRingingAlarms().some(ra => ra.instantId === s.id)
+        
+        // Show bell if:
+        // 1. Instant has alarm set AND is in the future, OR
+        // 2. Instant is selected AND either:
+        //    - Is in the future (can set alarm), OR
+        //    - Is in the past but alarm is currently ringing
+        const shouldShowBell = (!!s.alarm && !isInPast) || 
+                              (isSelected && (!isInPast || (isInPast && isCurrentlyRinging)))
+        
+        if (shouldShowBell) {
+        const bellRect = { 
+          x: rect.x + rect.w + iconSpacing + iconOffset, 
+          y: rect.y + (rect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
+        const bellCx = bellRect.x + bellRect.w / 2
+        const bellCy = bellRect.y + bellRect.h / 2
+        this.drawBellIcon(bellCx, bellCy, !!s.alarm)
+        this.hitTargets.addInstantAlarm(s.id, bellRect.x, bellRect.y, bellRect.w, bellRect.h)
+        iconOffset += iconSize + iconSpacing
+        }
+      }
+      
+      // Add a double-click target for the time box
+      const timeRect = this.computeTimeBoxRect(s.ts)
+      this.hitTargets.addInstantTime(s.id, timeRect.x, timeRect.y, timeRect.w, timeRect.h)
+      // Only include overlay input for the one being edited; ensure we use the raw saved label (no fallback)
+      if (this.state.getEditingInstantId() === s.id) {
+        this.overlayElements.push({ type: 'instant-label', id: s.id, rect, text: s.label, focused: true })
+      }
+    }
+  }
+  
+  private drawSelectedInstants() {
+    const saved = this.savedStore.getSnapshot().map(rec => ({ 
+      id: rec.id, 
+      ts: rec.tsEpochMs, 
+      label: rec.label, 
+      favorite: !!rec.favorite,
+      alarm: !!rec.alarm,
+      snoozeOriginalId: rec.snoozeOriginalId
+    }))
+    for (const s of saved) {
+      const isFocused = this.state.getViewFocus().mode === 'instant' && this.state.getViewFocus().focusedInstantId === s.id
+      const isSelected = this.state.getCurrentSelectedInstantId() === s.id
+      
+      // Only draw selected or focused instants
+      if (!isSelected && !isFocused) {
+        continue
+      }
+      
+      const label = s.label && s.label.length > 0 ? s.label : '?'
+      let lineColor = '#ffffff'
+      let borderColor = '#ffffff'
+      let glowColor: string | undefined = undefined
+      let glowBlur = 0
+      let lineWidth = 2
+      
+      if (isFocused) {
+        lineColor = '#22d3ee' // focused: light blue
+        borderColor = '#22d3ee'
+        glowColor = '#22d3ee'
+        glowBlur = 8
+        lineWidth = 3
+      } else if (isSelected) {
+        lineColor = '#2563eb' // selected: deeper blue
+        borderColor = '#2563eb'
+        glowColor = '#2563eb'
+        glowBlur = 8
+        lineWidth = 3
+      }
+      
+      this.drawInstant(s.ts, label, {
+        lineColor,
+        glowColor,
+        glowBlur,
+        lineWidth,
+        labelBackgroundColor: 'rgba(0,0,0,0.8)',
+        labelBorderColor: borderColor,
+        labelTextColor: '#ffffff',
+      })
+      
+      // Draw trash icon for selected instants
+      if (isSelected) {
+        this.drawTrashIconAt(s.ts, s.id)
+      }
+      
+      // Record label hit target roughly using current font and box metrics similar to drawInstant
+      const centerY = this.TimelineCenterY()
+      const x = this.timeToPosition(s.ts)
+      const font = 'bold 16px Arial'
+      const w = this.measureTextWidth(font, label) + 10
+      const h = 30
+      const rect = { x: x - w / 2, y: centerY + 50, w, h }
+      this.hitTargets.addInstantLabel(s.id, rect.x, rect.y, rect.w, rect.h)
+      
+      // Calculate icon positions
+      let iconOffset = 0
+      const iconSize = 20
+      const iconSpacing = 6
+      
+      // Favorite star next to label with hit target (show for selected even if not favorite)
+      {
+        const shouldShowStar = !!s.favorite || isSelected
+        if (shouldShowStar) {
+        const starRect = { 
+          x: rect.x + rect.w + iconSpacing + iconOffset, 
+          y: rect.y + (rect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
+        const starCx = starRect.x + starRect.w / 2
+        const starCy = starRect.y + starRect.h / 2
+        this.drawStarIcon(starCx, starCy, !!s.favorite)
+        this.hitTargets.addInstantFavorite(s.id, starRect.x, starRect.y, starRect.w, starRect.h)
+        iconOffset += iconSize + iconSpacing
+        }
+      }
+      
+      // Alarm bell next to label with hit target
+      {
         const isInPast = s.ts < Date.now()
         const isCurrentlyRinging = this.state.getRingingAlarms().some(ra => ra.instantId === s.id)
         
@@ -1710,10 +1835,10 @@ export class TimelineRenderer {
           }
         } else if (target.id === 'cursor') {
           const r = this.computeTimeBoxRect(this.state.getTimeCenter())
-          const current = new Date()
-          const hh = current.getHours().toString().padStart(2, '0')
-          const mm = current.getMinutes().toString().padStart(2, '0')
-          const ss = current.getSeconds().toString().padStart(2, '0')
+          const cursorTime = new Date(this.state.getTimeCenter())
+          const hh = cursorTime.getHours().toString().padStart(2, '0')
+          const mm = cursorTime.getMinutes().toString().padStart(2, '0')
+          const ss = cursorTime.getSeconds().toString().padStart(2, '0')
           this.canvas.dispatchEvent(new CustomEvent('instant-time-input', {
             detail: {
               type: 'cursor',
