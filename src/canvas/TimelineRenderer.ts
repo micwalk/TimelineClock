@@ -161,6 +161,10 @@ export class TimelineRenderer {
       const targetTime = referenceTime + deltaMs
       this.state.setTimeCenter(targetTime)
       this.state.setViewFocus('cursor')
+      // If locked, recompute lock offset against NOW to preserve lock while allowing edits
+      if (this.state.isCursorLocked()) {
+        this.state.setCursorLocked(true, Date.now())
+      }
       this.persistState()
     } catch (error) {
       console.error('Failed to parse time string:', error)
@@ -202,6 +206,9 @@ export class TimelineRenderer {
             }
           }
         }
+      } else if (focusState.mode === 'cursor' && this.state.isCursorLocked()) {
+        // When cursor is locked to NOW offset, update center accordingly
+        this.state.updateLockedCursor(Date.now())
       }
     }
     // Update animations
@@ -1399,6 +1406,16 @@ export class TimelineRenderer {
           }
           return
         }
+        if (target.type === 'span-lock') {
+          // Toggle cursor lock state. If locking, capture offset; if unlocking, release.
+          const nowTs = Date.now()
+          const willLock = !this.state.isCursorLocked()
+          this.state.setCursorLocked(willLock, nowTs)
+          // Ensure we're in cursor focus mode to see effect immediately
+          this.setViewFocus('cursor')
+          this.persistState()
+          return
+        }
         if (target.type === 'save-cursor') {
           const newId = this.createInstantAt(this.state.getTimeCenter(), '')
           if (newId) this.setViewFocus('instant', newId)
@@ -1923,24 +1940,21 @@ export class TimelineRenderer {
     if (pinX < 0) pinX = labelX + labelWidth + 8
     if (pinX + pinW > this.viewport.getScreenWidth()) pinX = labelX - 8 - pinW
     const pinY = labelY + (labelHeight - pinH) / 2
-    this.ctx.save()
-    this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
-    this.ctx.strokeStyle = '#22c55e'
-    this.ctx.lineWidth = 2
-    this.ctx.fillRect(pinX, pinY, pinW, pinH)
-    this.ctx.strokeRect(pinX, pinY, pinW, pinH)
-    this.ctx.strokeStyle = '#ffffff'
-    this.ctx.beginPath()
-    this.ctx.moveTo(pinX + 12, pinY + 5)
-    this.ctx.lineTo(pinX + 12, pinY + 16)
-    this.ctx.moveTo(pinX + 8, pinY + 12)
-    this.ctx.lineTo(pinX + 12, pinY + 18)
-    this.ctx.lineTo(pinX + 16, pinY + 12)
-    this.ctx.stroke()
-    this.ctx.restore()
+    this.icons.drawPin(pinX, pinY, pinW, pinH)
     const spanData = { aTs: sourceTs, bTs: now, label: 'To Now' }
     this.hitTargets.addSpanPin(pinX, pinY, pinW, pinH, spanData)
     this.lastImpliedSpan = spanData
+
+    // Lock icon next to pin, on the same side as the pin
+    const lockGap = 6
+    const lockW = 24, lockH = 24
+    let lockX = pinX + (placeRight ? -(pinW + lockGap) : (lockGap + lockW))
+    // Ensure lock stays within screen; if overflow, place on the other side of pin inside label bounds
+    if (lockX < 0) lockX = pinX + pinW + lockGap
+    if (lockX + lockW > this.viewport.getScreenWidth()) lockX = pinX - lockGap - lockW
+    const lockY = labelY + (labelHeight - lockH) / 2
+    this.icons.drawLock(lockX, lockY, lockW, lockH, { locked: this.state.isCursorLocked() })
+    this.hitTargets.addSpanLock(lockX, lockY, lockW, lockH)
   }
 
 
@@ -2086,6 +2100,10 @@ export class TimelineRenderer {
     const msPerPx = this.state.getTimeWidth() / Math.max(1, this.viewport.getScreenWidth())
     // Drag right should move timeline with the finger: shift center earlier
     this.state.setTimeCenter(this.state.getTimeCenter() - deltaX * msPerPx)
+    // If locked, update the lock offset to reflect manual adjustment
+    if (this.state.isCursorLocked()) {
+      this.state.setCursorLocked(true, Date.now())
+    }
     this.persistState()
   }
 

@@ -55,6 +55,9 @@ export interface TimelineStateSnapshot {
   showImpliedSelectedPrev: boolean
   timeIncrement: TimeIncrement
   ringingAlarms: RingingAlarm[] // New: track currently ringing alarms
+  // Cursor lock state for implied now:cursor span
+  cursorLocked?: boolean
+  cursorLockOffsetMs?: number
 }
 
 /**
@@ -108,6 +111,10 @@ export class TimelineState {
   
   private savedStore: SavedInstantsStore
   private spansStore: SavedSpansStore
+
+  // Cursor lock state (implied now:cursor behavior)
+  private cursorLocked: boolean = false
+  private cursorLockOffsetMs: number = 0
   
   constructor(
     savedStore: SavedInstantsStore,
@@ -586,6 +593,33 @@ export class TimelineState {
     this.timeCenter = center
     this.stateVersion++
   }
+
+  // === Cursor Lock State (for now:cursor implied span) ===
+  public isCursorLocked(): boolean {
+    return this.cursorLocked
+  }
+
+  public getCursorLockOffsetMs(): number {
+    return this.cursorLockOffsetMs
+  }
+
+  public setCursorLocked(locked: boolean, nowTs: number = Date.now()): void {
+    if (locked) {
+      // Capture current offset between cursor center and NOW
+      this.cursorLockOffsetMs = this.timeCenter - nowTs
+      this.cursorLocked = true
+    } else {
+      this.cursorLocked = false
+    }
+    this.stateVersion++
+  }
+
+  public updateLockedCursor(nowTs: number = Date.now()): void {
+    if (this.cursorLocked) {
+      this.timeCenter = nowTs + this.cursorLockOffsetMs
+      this.stateVersion++
+    }
+  }
   
   // === Time Increment Management ===
   
@@ -684,7 +718,9 @@ export class TimelineState {
       showImpliedSelectedNow: this.showImpliedSelectedNow,
       showImpliedSelectedPrev: this.showImpliedSelectedPrev,
       timeIncrement: this.timeIncrement,
-      ringingAlarms: [...this.ringingAlarms] // New: include ringing alarms in snapshot
+      ringingAlarms: [...this.ringingAlarms], // New: include ringing alarms in snapshot
+      cursorLocked: this.cursorLocked,
+      cursorLockOffsetMs: this.cursorLockOffsetMs
     }
   }
   
@@ -703,6 +739,8 @@ export class TimelineState {
     if (snapshot.showImpliedSelectedPrev !== undefined) this.showImpliedSelectedPrev = snapshot.showImpliedSelectedPrev
     if (snapshot.timeIncrement !== undefined) this.timeIncrement = snapshot.timeIncrement
     if (snapshot.ringingAlarms !== undefined) this.ringingAlarms = [...snapshot.ringingAlarms] // New: load ringing alarms from snapshot
+    if (snapshot.cursorLocked !== undefined) this.cursorLocked = !!snapshot.cursorLocked
+    if (snapshot.cursorLockOffsetMs !== undefined) this.cursorLockOffsetMs = snapshot.cursorLockOffsetMs
     
     this.stateVersion++
   }

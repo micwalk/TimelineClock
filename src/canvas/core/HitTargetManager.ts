@@ -12,6 +12,7 @@ export type HitTargetType =
   | 'instant-trash' 
   | 'instant-time' 
   | 'span-pin' 
+  | 'span-lock' 
   | 'span-box' 
   | 'span-visible' 
   | 'span-delete' 
@@ -63,6 +64,13 @@ export class HitTargetManager {
       type: 'span-pin',
       rect: { x, y, w, h },
       spanData
+    })
+  }
+
+  addSpanLock(x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'span-lock',
+      rect: { x, y, w, h }
     })
   }
 

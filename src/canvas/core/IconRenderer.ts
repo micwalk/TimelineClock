@@ -420,4 +420,73 @@ export class IconRenderer {
     this.ctx.stroke()
     this.ctx.restore()
   }
+
+  // Draw a lock icon (closed or open)
+  drawLock(x: number, y: number, w: number, h: number, options?: {
+    locked?: boolean
+    fillColor?: string
+    strokeColor?: string
+    lineColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      locked: true,
+      fillColor: 'rgba(0,0,0,0.8)',
+      strokeColor: '#ffffff',
+      lineColor: '#ffffff',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    // Outer box
+    this.ctx.fillStyle = opts.fillColor
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+    this.ctx.fillRect(x, y, w, h)
+    this.ctx.strokeRect(x, y, w, h)
+
+    // Draw lock body and shackle
+    this.ctx.strokeStyle = opts.lineColor
+    this.ctx.lineWidth = opts.lineWidth
+
+    const paddingX = w * 0.22
+    const bodyTop = y + h * 0.45
+    const bodyLeft = x + paddingX
+    const bodyRight = x + w - paddingX
+    const bodyBottom = y + h - h * 0.18
+
+    // Body rectangle
+    this.ctx.strokeRect(bodyLeft, bodyTop, bodyRight - bodyLeft, bodyBottom - bodyTop)
+
+    // Shackle
+    const cx = x + w / 2
+    const shackleRadius = Math.min(w, h) * 0.22
+    const shackleTop = y + h * 0.3
+
+    this.ctx.beginPath()
+    if (opts.locked) {
+      // Closed shackle: semi-circle
+      this.ctx.arc(cx, shackleTop + shackleRadius, shackleRadius, Math.PI, 0, false)
+    } else {
+      // Open shackle: draw a rotated, broken arc
+      const openOffset = w * 0.12
+      this.ctx.moveTo(cx - shackleRadius, shackleTop + shackleRadius)
+      this.ctx.arc(cx, shackleTop + shackleRadius, shackleRadius, Math.PI, Math.PI * 0.2, false)
+      // break
+      this.ctx.moveTo(cx + shackleRadius * 0.9, shackleTop + shackleRadius * 0.5)
+      this.ctx.lineTo(cx + shackleRadius * 0.9 + openOffset, shackleTop + shackleRadius * 0.2)
+    }
+    this.ctx.stroke()
+
+    // Keyhole
+    const keyholeY = (bodyTop + bodyBottom) / 2
+    this.ctx.beginPath()
+    this.ctx.arc(cx, keyholeY - h * 0.04, h * 0.03, 0, Math.PI * 2)
+    this.ctx.moveTo(cx, keyholeY - h * 0.01)
+    this.ctx.lineTo(cx, keyholeY + h * 0.08)
+    this.ctx.stroke()
+
+    this.ctx.restore()
+  }
 }
