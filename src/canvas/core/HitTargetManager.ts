@@ -21,6 +21,9 @@ export type HitTargetType =
   | 'span-end-focus'
   | 'span-time-input'
   | 'span-rename'
+  | 'instant-move-enter'
+  | 'instant-move-confirm'
+  | 'instant-move-cancel'
 
 export interface HitTargetRect {
   x: number
@@ -186,6 +189,30 @@ export class HitTargetManager {
   addNowStar(x: number, y: number, w: number, h: number): void {
     this.targets.push({
       type: 'now-star',
+      rect: { x, y, w, h }
+    })
+  }
+
+  addInstantMoveEnter(instantId: string, x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'instant-move-enter',
+      id: instantId,
+      rect: { x, y, w, h }
+    })
+  }
+
+  addInstantMoveConfirm(instantId: string, x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'instant-move-confirm',
+      id: instantId,
+      rect: { x, y, w, h }
+    })
+  }
+
+  addInstantMoveCancel(instantId: string, x: number, y: number, w: number, h: number): void {
+    this.targets.push({
+      type: 'instant-move-cancel',
+      id: instantId,
       rect: { x, y, w, h }
     })
   }

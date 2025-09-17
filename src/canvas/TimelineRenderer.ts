@@ -159,7 +159,7 @@ export class TimelineRenderer {
     try {
       const deltaMs = this.parseTimeString(timeString)
       const targetTime = referenceTime + deltaMs
-      this.state.setTimeCenter(targetTime)
+      this.setTimeCenter(targetTime)
       this.state.setViewFocus('cursor')
       // If locked, recompute lock offset against NOW to preserve lock while allowing edits
       if (this.state.isCursorLocked()) {
@@ -1098,6 +1098,27 @@ export class TimelineRenderer {
         }
       }
       
+      // Add move mode buttons for focused instants
+      if (isFocused) {
+        const moveButtonSize = 20
+        const moveButtonSpacing = 6
+        
+        // Move Enter button (only show if not in move mode)
+        if (!this.state.isInMoveMode()) {
+          const moveEnterRect = { 
+            x: rect.x + rect.w + iconSpacing + iconOffset, 
+            y: rect.y + (rect.h - moveButtonSize) / 2, 
+            w: moveButtonSize, 
+            h: moveButtonSize 
+          }
+          const moveEnterCx = moveEnterRect.x + moveEnterRect.w / 2
+          const moveEnterCy = moveEnterRect.y + moveEnterRect.h / 2
+          this.drawMoveEnterIcon(moveEnterCx, moveEnterCy)
+          this.hitTargets.addInstantMoveEnter(s.id, moveEnterRect.x, moveEnterRect.y, moveEnterRect.w, moveEnterRect.h)
+          iconOffset += moveButtonSize + moveButtonSpacing
+        }
+      }
+      
       // Add a double-click target for the time box
       const timeRect = this.computeTimeBoxRect(s.ts)
       this.hitTargets.addInstantTime(s.id, timeRect.x, timeRect.y, timeRect.w, timeRect.h)
@@ -1141,6 +1162,79 @@ export class TimelineRenderer {
       const starCy = starRect.y + starRect.h / 2
       this.drawStarIcon(starCx, starCy, false)
       this.hitTargets.addCursorStar(starRect.x, starRect.y, starRect.w, starRect.h)
+    }
+    
+    // Draw "Moving" text below cursor when in move mode
+    if (this.state.isInMoveMode()) {
+      const centerY = this.TimelineCenterY()
+      const x = this.timeToPosition(this.state.getTimeCenter())
+      const font = 'bold 14px Arial'
+      const label = 'Moving'
+      const w = this.measureTextWidth(font, label)
+      const h = 20
+      const r = { x: x - w / 2, y: centerY + 125, w, h }
+      
+      // Draw background
+      this.ctx.save()
+      this.ctx.fillStyle = 'rgba(0,0,0,0.8)'
+      this.ctx.strokeStyle = '#22d3ee'
+      this.ctx.lineWidth = 2
+      this.ctx.fillRect(r.x - 5, r.y - 2, r.w + 10, r.h + 4)
+      //this.ctx.strokeRect(r.x - 5, r.y - 2, r.w + 10, r.h + 4) // No Outline
+      
+      // Draw text
+      this.ctx.fillStyle = '#22d3ee'
+      this.ctx.font = font
+      this.ctx.textAlign = 'center'
+      this.ctx.textBaseline = 'middle'
+      this.ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2)
+      this.ctx.restore()
+      
+      // Draw confirm and cancel icons on cursor when in move mode
+      const targetInstantId = this.state.getMoveModeTargetInstantId()
+      if (targetInstantId) {
+        const iconSize = 20
+        const iconSpacing = 6
+        
+        // Use the same positioning as the cursor label above
+        const centerY = this.TimelineCenterY()
+        const x = this.timeToPosition(this.state.getTimeCenter())
+        const font = 'bold 16px Arial'
+        const label = 'Cursor'
+        const w = this.measureTextWidth(font, label) + 10
+        const h = 30
+        const cursorLabelRect = { x: x - w / 2, y: centerY + 50, w, h }
+        
+        // Position icons to the right of the cursor label, after the star
+        const starSize = 20
+        const starSpacing = 6
+        let iconOffset = starSize + starSpacing + iconSpacing
+        
+        // Confirm button
+        const moveConfirmRect = { 
+          x: cursorLabelRect.x + cursorLabelRect.w + iconOffset, 
+          y: cursorLabelRect.y + (cursorLabelRect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
+        const moveConfirmCx = moveConfirmRect.x + moveConfirmRect.w / 2
+        const moveConfirmCy = moveConfirmRect.y + moveConfirmRect.h / 2
+        this.drawMoveConfirmIcon(moveConfirmCx, moveConfirmCy)
+        this.hitTargets.addInstantMoveConfirm(targetInstantId, moveConfirmRect.x, moveConfirmRect.y, moveConfirmRect.w, moveConfirmRect.h)
+        iconOffset += iconSize + iconSpacing
+        
+        // Cancel button
+        const moveCancelRect = { 
+          x: cursorLabelRect.x + cursorLabelRect.w + iconOffset, 
+          y: cursorLabelRect.y + (cursorLabelRect.h - iconSize) / 2, 
+          w: iconSize, 
+          h: iconSize 
+        }
+        const moveCancelCx = moveCancelRect.x + moveCancelRect.w / 2
+        const moveCancelCy = moveCancelRect.y + moveCancelRect.h / 2
+        this.drawMoveCancelIcon(moveCancelCx, moveCancelCy)
+        this.hitTargets.addInstantMoveCancel(targetInstantId, moveCancelRect.x, moveCancelRect.y, moveCancelRect.w, moveCancelRect.h)
+      }
     }
   }
 
@@ -1436,6 +1530,18 @@ export class TimelineRenderer {
     this.icons.drawBell(cx, cy, 8, filled, { fillColor: '#f59e0b', strokeColor: '#ffffff' })
   }
 
+  private drawMoveEnterIcon(cx: number, cy: number) {
+    this.icons.drawMove(cx, cy, 8, { fillColor: '#22d3ee', strokeColor: '#22d3ee' })
+  }
+
+  private drawMoveConfirmIcon(cx: number, cy: number) {
+    this.icons.drawCheck(cx, cy, 8, { fillColor: '#10b981', strokeColor: '#10b981' })
+  }
+
+  private drawMoveCancelIcon(cx: number, cy: number) {
+    this.icons.drawX(cx, cy, 8, { fillColor: '#ef4444', strokeColor: '#ef4444' })
+  }
+
   // removed unused drawCursorTrashIcon
 
   // Public getters for state variables
@@ -1603,7 +1709,7 @@ export class TimelineRenderer {
           const newId = this.createInstantAt(nowTs, '')
           this.savedStore.setFavorite(newId, true)
           this.setViewFocus('instant', newId)
-          this.state.setTimeCenter(nowTs)
+          this.setTimeCenter(nowTs)
           this.state.setEditingInstant(newId)
           return
         }
@@ -1621,6 +1727,23 @@ export class TimelineRenderer {
         if (target.type === 'instant-time' && !target.id) {
           // Clicked cursor/now time box — snap/animate to now
           this.focusNowAnimated()
+          return
+        }
+        if (target.type === 'instant-move-enter' && target.id) {
+          // Enter move mode for the instant
+          this.state.enterMoveMode(target.id)
+          return
+        }
+        if (target.type === 'instant-move-confirm' && target.id) {
+          // Update the target instant's position to match current cursor position
+          this.updateTargetInstantPosition()
+          // Confirm the move and exit move mode
+          this.state.confirmMoveMode()
+          return
+        }
+        if (target.type === 'instant-move-cancel' && target.id) {
+          // Cancel the move and exit move mode
+          this.state.exitMoveMode()
           return
         }
         if (target.type === 'instant-trash') {
@@ -1876,7 +1999,7 @@ export class TimelineRenderer {
         const newId = this.createInstantAt(nowTs, '')
         if (newId) {
           this.setViewFocus('instant', newId)
-          this.state.setTimeCenter(nowTs)
+          this.setTimeCenter(nowTs)
           this.state.setEditingInstant(newId)
         }
         return
@@ -1896,7 +2019,7 @@ export class TimelineRenderer {
          if (newId) {
            this.savedStore.setFavorite(newId, true)
            this.setViewFocus('instant', newId)
-           this.state.setTimeCenter(nowTs)
+           this.setTimeCenter(nowTs)
            this.state.setEditingInstant(newId)
          }
          return
@@ -2224,7 +2347,7 @@ export class TimelineRenderer {
     this.cancelZoomPanAnimation()
     const msPerPx = this.state.getTimeWidth() / Math.max(1, this.viewport.getScreenWidth())
     // Drag right should move timeline with the finger: shift center earlier
-    this.state.setTimeCenter(this.state.getTimeCenter() - deltaX * msPerPx)
+    this.setTimeCenter(this.state.getTimeCenter() - deltaX * msPerPx)
     // If locked, update the lock offset to reflect manual adjustment
     if (this.state.isCursorLocked()) {
       this.state.setCursorLocked(true, Date.now())
@@ -2252,7 +2375,7 @@ export class TimelineRenderer {
     }
     if (best) {
       this.setViewFocus('instant', best.id)
-      this.state.setTimeCenter(this.savedStore.getSnapshot().find(si => si.id === best!.id)!.tsEpochMs)
+      this.setTimeCenter(this.savedStore.getSnapshot().find(si => si.id === best!.id)!.tsEpochMs)
       return true
     }
     return false
@@ -2265,6 +2388,17 @@ export class TimelineRenderer {
   public setTimeCenter(centerMs: number) {
     this.animations.cancelZoomPanAnimation()
     this.state.setTimeCenter(centerMs)
+  }
+
+  // Update the target instant's position to match the current cursor position
+  // This is called when confirming move mode
+  public updateTargetInstantPosition(): void {
+    if (this.state.isInMoveMode()) {
+      const targetInstantId = this.state.getMoveModeTargetInstantId()
+      if (targetInstantId) {
+        this.savedStore.updateInstant(targetInstantId, { tsEpochMs: this.state.getTimeCenter() })
+      }
+    }
   }
 
   // Time increment management

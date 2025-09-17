@@ -489,4 +489,111 @@ export class IconRenderer {
 
     this.ctx.restore()
   }
+
+  // Draw a move icon (for entering move mode)
+  drawMove(cx: number, cy: number, radius: number, options?: {
+    fillColor?: string
+    strokeColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      fillColor: '#22d3ee',
+      strokeColor: '#22d3ee',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+
+    // Draw a simple move icon (four arrows pointing outward)
+    this.ctx.beginPath()
+    
+    // Top arrow
+    this.ctx.moveTo(cx, cy - radius * 0.3)
+    this.ctx.lineTo(cx, cy - radius * 0.8)
+    this.ctx.moveTo(cx - radius * 0.2, cy - radius * 0.6)
+    this.ctx.lineTo(cx, cy - radius * 0.8)
+    this.ctx.lineTo(cx + radius * 0.2, cy - radius * 0.6)
+    
+    // Bottom arrow
+    this.ctx.moveTo(cx, cy + radius * 0.3)
+    this.ctx.lineTo(cx, cy + radius * 0.8)
+    this.ctx.moveTo(cx - radius * 0.2, cy + radius * 0.6)
+    this.ctx.lineTo(cx, cy + radius * 0.8)
+    this.ctx.lineTo(cx + radius * 0.2, cy + radius * 0.6)
+    
+    // Left arrow
+    this.ctx.moveTo(cx - radius * 0.3, cy)
+    this.ctx.lineTo(cx - radius * 0.8, cy)
+    this.ctx.moveTo(cx - radius * 0.6, cy - radius * 0.2)
+    this.ctx.lineTo(cx - radius * 0.8, cy)
+    this.ctx.lineTo(cx - radius * 0.6, cy + radius * 0.2)
+    
+    // Right arrow
+    this.ctx.moveTo(cx + radius * 0.3, cy)
+    this.ctx.lineTo(cx + radius * 0.8, cy)
+    this.ctx.moveTo(cx + radius * 0.6, cy - radius * 0.2)
+    this.ctx.lineTo(cx + radius * 0.8, cy)
+    this.ctx.lineTo(cx + radius * 0.6, cy + radius * 0.2)
+    
+    this.ctx.stroke()
+    this.ctx.restore()
+  }
+
+  // Draw a check mark icon (for confirming move)
+  drawCheck(cx: number, cy: number, radius: number, options?: {
+    fillColor?: string
+    strokeColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      fillColor: '#10b981',
+      strokeColor: '#10b981',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+
+    // Draw a check mark
+    this.ctx.beginPath()
+    this.ctx.moveTo(cx - radius * 0.4, cy)
+    this.ctx.lineTo(cx - radius * 0.1, cy + radius * 0.3)
+    this.ctx.lineTo(cx + radius * 0.4, cy - radius * 0.3)
+    
+    this.ctx.stroke()
+    this.ctx.restore()
+  }
+
+  // Draw an X icon (for canceling move)
+  drawX(cx: number, cy: number, radius: number, options?: {
+    fillColor?: string
+    strokeColor?: string
+    lineWidth?: number
+  }): void {
+    const opts = {
+      fillColor: '#ef4444',
+      strokeColor: '#ef4444',
+      lineWidth: 2,
+      ...options
+    }
+
+    this.ctx.save()
+    this.ctx.strokeStyle = opts.strokeColor
+    this.ctx.lineWidth = opts.lineWidth
+
+    // Draw an X
+    this.ctx.beginPath()
+    this.ctx.moveTo(cx - radius * 0.3, cy - radius * 0.3)
+    this.ctx.lineTo(cx + radius * 0.3, cy + radius * 0.3)
+    this.ctx.moveTo(cx + radius * 0.3, cy - radius * 0.3)
+    this.ctx.lineTo(cx - radius * 0.3, cy + radius * 0.3)
+    
+    this.ctx.stroke()
+    this.ctx.restore()
+  }
 }

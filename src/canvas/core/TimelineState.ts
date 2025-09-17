@@ -58,6 +58,12 @@ export interface TimelineStateSnapshot {
   // Cursor lock state for implied now:cursor span
   cursorLocked?: boolean
   cursorLockOffsetMs?: number
+  // Move mode state for instant editing
+  moveMode?: {
+    active: boolean
+    originalCursorTime: number
+    targetInstantId: string
+  } | null
 }
 
 /**
@@ -115,6 +121,13 @@ export class TimelineState {
   // Cursor lock state (implied now:cursor behavior)
   private cursorLocked: boolean = false
   private cursorLockOffsetMs: number = 0
+  
+  // Move mode state for instant editing
+  private moveMode: {
+    active: boolean
+    originalCursorTime: number
+    targetInstantId: string
+  } | null = null
   
   constructor(
     savedStore: SavedInstantsStore,
@@ -621,6 +634,52 @@ export class TimelineState {
     }
   }
   
+  // === Move Mode State (for instant editing) ===
+  
+  public enterMoveMode(instantId: string): void {
+    if (this.moveMode?.active) {
+      // Already in move mode, exit first
+      this.exitMoveMode()
+    }
+    
+    this.moveMode = {
+      active: true,
+      originalCursorTime: this.timeCenter,
+      targetInstantId: instantId
+    }
+    this.stateVersion++
+  }
+  
+  public exitMoveMode(): void {
+    if (this.moveMode?.active) {
+      // Restore original cursor position
+      this.timeCenter = this.moveMode.originalCursorTime
+      this.moveMode = null
+      this.stateVersion++
+    }
+  }
+  
+  public confirmMoveMode(): void {
+    if (!this.moveMode?.active) return
+    
+    // Keep the current cursor position (which represents the new instant position)
+    // and clear the move mode
+    this.moveMode = null
+    this.stateVersion++
+  }
+  
+  public isInMoveMode(): boolean {
+    return this.moveMode?.active ?? false
+  }
+  
+  public getMoveModeTargetInstantId(): string | null {
+    return this.moveMode?.targetInstantId ?? null
+  }
+  
+  public getMoveModeOriginalCursorTime(): number | null {
+    return this.moveMode?.originalCursorTime ?? null
+  }
+  
   // === Time Increment Management ===
   
   public getTimeIncrement(): TimeIncrement {
@@ -720,7 +779,8 @@ export class TimelineState {
       timeIncrement: this.timeIncrement,
       ringingAlarms: [...this.ringingAlarms], // New: include ringing alarms in snapshot
       cursorLocked: this.cursorLocked,
-      cursorLockOffsetMs: this.cursorLockOffsetMs
+      cursorLockOffsetMs: this.cursorLockOffsetMs,
+      moveMode: this.moveMode
     }
   }
   
@@ -741,6 +801,7 @@ export class TimelineState {
     if (snapshot.ringingAlarms !== undefined) this.ringingAlarms = [...snapshot.ringingAlarms] // New: load ringing alarms from snapshot
     if (snapshot.cursorLocked !== undefined) this.cursorLocked = !!snapshot.cursorLocked
     if (snapshot.cursorLockOffsetMs !== undefined) this.cursorLockOffsetMs = snapshot.cursorLockOffsetMs
+    if (snapshot.moveMode !== undefined) this.moveMode = snapshot.moveMode
     
     this.stateVersion++
   }
