@@ -8,8 +8,8 @@ import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry, spanHeader } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
+import { lanesTop } from './geometry.ts'
 
-export const LANES_TOP = 312
 const LANE_SHORT = 40
 const LANE_LABELED = 56
 const LANES_BOTTOM_PAD = 18
@@ -96,7 +96,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
 
   return useMemo(() => {
     const keys = new Set(onScreenKeys)
-    let y = LANES_TOP
+    let y = lanesTop()
     const lanes: BottomLane[] = []
     for (const c of candidates) {
       if (!keys.has(c.key)) continue

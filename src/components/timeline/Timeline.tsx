@@ -8,6 +8,7 @@ import { TickLayer } from './TickLayer.tsx'
 import { CursorColumn, NowColumn, SavedInstantColumns } from './InstantColumns.tsx'
 import { BottomLanes, TopLanes } from './Lanes.tsx'
 import { useBottomLanes } from './useBottomLanes.ts'
+import { geometryStyle } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateRange } from '../../domain/format.ts'
 
@@ -32,7 +33,7 @@ export function Timeline() {
     <section
       ref={ref}
       className={`timeline${popoverOpen ? ' has-popover' : ''}`}
-      style={{ height }}
+      style={{ ...geometryStyle, height }}
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
     >
       <TickLayer />

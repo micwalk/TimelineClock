@@ -43,13 +43,8 @@
   --radius-chip: 7px;
   --radius-card: 12px;
 
-  /* Timeline rows, in px from the top of the timeline */
-  --tl-lane-a: 26px;
-  --tl-lane-b: 70px;
-  --tl-axis: 146px;
-  --tl-label: 180px;
-  --tl-time: 214px;
-  --tl-actions: 260px;
+  /* Timeline rows (--tl-axis, --tl-lane-a, …) are set on .timeline by
+     components/timeline/geometry.ts so CSS and lane math share one source. */
 
   color-scheme: dark;
 }
