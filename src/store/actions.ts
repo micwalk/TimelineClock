@@ -283,6 +283,15 @@ export function createInstantAndEdit(ts: number, opts: { favorite?: boolean } = 
   return id
 }
 
+/** Saves an instant at the free cursor and opens its name box in place: the cursor stays (no focus change), so its tag and readout remain. */
+export function saveInstantAtCursor(opts: { favorite?: boolean } = {}) {
+  const id = entities.createInstant(cursorTime(), '')
+  if (opts.favorite) setFavorite(id, true)
+  view.selectInstant(id)
+  view.editInstant(id)
+  return id
+}
+
 export function setFavorite(id: string, favorite: boolean) {
   entities.setFavoriteFlag(id, favorite)
   // Favorites carry a visible span to Now; unfavoriting just hides it.

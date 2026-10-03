@@ -94,7 +94,7 @@ export function CursorTag() {
     { label: 'Type a time…', icon: ClockIcon, onSelect: () => ui.openTimeInput({ kind: 'clock', anchor: 'cursor' }) },
     { label: 'Offset from Now…', icon: PlusSmallIcon, onSelect: () => ui.openTimeInput({ kind: 'duration', reference: 'now' }) },
     ...(selected ? [{ label: `Offset from ${name}…`, icon: PlusSmallIcon, onSelect: () => ui.openTimeInput({ kind: 'duration', reference: 'selected' }) }] : []),
-    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.createInstantAndEdit(act.cursorTime(), { favorite: true }) },
+    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.saveInstantAtCursor({ favorite: true }) },
   ]
 
   let popover = null
@@ -118,7 +118,7 @@ export function CursorTag() {
         hint="Tap for tools; double-tap to save an instant here"
         slot={slot}
         onClick={() => ui.toggleTagMenu('cursor')}
-        onDoubleClick={() => { ui.closeTagMenu(); act.createInstantAndEdit(act.cursorTime()) }}
+        onDoubleClick={() => { ui.closeTagMenu(); act.saveInstantAtCursor() }}
         menuOpen={menuOpen}
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Cursor tools" items={items} onClose={ui.closeTagMenu} />}

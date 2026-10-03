@@ -91,6 +91,20 @@ describe('CursorTag', () => {
     render(<CursorTag />)
     fireEvent.doubleClick(screen.getByRole('button', { name: /^Cursor/ }))
     expect(useEntities.getState().instants).toHaveLength(1)
+    const id = useEntities.getState().instants[0].id
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: id, currentSelectedInstantId: id })
+    expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
+  })
+
+  it('Save as favorite from the cursor menu keeps the cursor and opens the name box', () => {
+    cursorMode()
+    render(<CursorTag />)
+    fireEvent.click(screen.getByRole('button', { name: /^Cursor/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save as favorite' }))
+    const [inst] = useEntities.getState().instants
+    expect(inst.favorite).toBe(true)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: inst.id, currentSelectedInstantId: inst.id })
+    expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
   })
 })
 
