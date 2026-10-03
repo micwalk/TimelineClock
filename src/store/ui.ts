@@ -25,6 +25,8 @@ export interface UiState {
   agendaOpen: boolean
   /** The instant just dropped; its chip pulses once, then this clears. */
   droppedId: string | null
+  /** The Help / About dialog. */
+  helpOpen: boolean
 }
 
 export const useUi = create<UiState>(() => ({
@@ -34,6 +36,7 @@ export const useUi = create<UiState>(() => ({
   laneTools: null,
   agendaOpen: false,
   droppedId: null,
+  helpOpen: false,
 }))
 
 export const DROP_HIGHLIGHT_MS = 900
@@ -46,6 +49,9 @@ export const ui = {
   toggleTagMenu: (which: TagMenu) => useUi.setState(s => ({ tagMenu: s.tagMenu === which ? null : which, timeInput: null })),
   openAgenda: () => useUi.setState({ agendaOpen: true }),
   closeAgenda: () => useUi.setState({ agendaOpen: false }),
+  openHelp: () => useUi.setState({ helpOpen: true }),
+  closeHelp: () => useUi.setState({ helpOpen: false }),
+  toggleHelp: () => useUi.setState(s => ({ helpOpen: !s.helpOpen })),
   markDropped(id: string) {
     if (dropTimer) clearTimeout(dropTimer)
     useUi.setState({ droppedId: id })
