@@ -94,7 +94,7 @@ src/
 - [docs/handoffs/](./docs/handoffs/): what's next. Layout v2 (vertical layout, gestures and momentum, label overlap, Agenda dock or drawer, cursor arrow) and everything else
 - [PRD_english.md](./PRD_english.md), [docs/prd_alarms.md](./docs/prd_alarms.md): product requirements
 - [Ideas.md](./Ideas.md): running idea and bug list
-- [AGENTS.md](./AGENTS.md) / `.cursorrules`: instructions for AI coding agents (same content)
+- [AGENTS.md](./AGENTS.md): instructions for AI coding agents
 - [docs/archive/](./docs/archive/): the original implementation plan
 
 ## Roadmap (from the PRD)
