@@ -12,10 +12,10 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 - **Branches:** `main` and `html-timeline` point at the same commit as of this handoff
   (fast-forwarded locally; nothing pushed). Netlify deploys `main`.
 - **No git remote yet.** The owner will create the GitHub repo and push.
-- **README says "MIT License – see LICENSE file", but there is no LICENSE file.** Add one
-  or change the line before publishing.
-- `vite.config.ts` lists dev-server `allowedHosts` (`compy.internal`).
-  These are harmless, but they'll be public once pushed.
+- License: MIT (`LICENSE`).
+- Private dev-server hostnames don't belong in the repo: put them in `.env.local`
+  (gitignored) as `DEV_ALLOWED_HOSTS=host1,host2`; `vite.config.ts` reads it.
+- Agent instructions live in both `.cursorrules` and `AGENTS.md` (same content; keep them in sync).
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 

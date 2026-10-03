@@ -1,0 +1,84 @@
+# Timeline Clock - Agent Rules
+
+> Same content as `.cursorrules` (for agents that read AGENTS.md). Keep the two in sync.
+
+## Project Overview
+This is a timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
+
+* The app is already started with HMR hot module reload enabled in a spearate terminal window, so you do not need to launch it yourself.
+
+## Core Architecture
+See docs/ARCHITECTURE.md before changing the timeline.
+- **Frontend**: React 19 + TypeScript + Vite
+- **Timeline**: DOM, not canvas. React renders structure; the viewport engine (src/engine) moves elements with CSS transforms and updates time-dependent text. No render loop: frames run only when something changes.
+- **Styling**: CSS custom-property theme in src/styles/theme.css. Components set --accent / --halo; .glow-box / .glow-text add the glow; --glow scales all glow. Everything glows.
+- **State Management**: Zustand stores in src/store; every user operation lives in src/store/actions.ts
+- **Storage**: localStorage (same keys/format as before); IndexedDB via idb is planned
+- **PWA**: Vite PWA plugin with Workbox, installable manifest
+- **Icons**: @heroicons/react
+- **Testing**: Vitest (jsdom) + React Testing Library
+- **Optional**: Capacitor wrapper for precise alarms
+
+## Timeline Rendering Rules
+- Never put per-frame values (pan position, zoom, the current time) in React state.
+- Horizontal position: usePositionX(ref, f => f.x(ts)). Time-dependent text: <LiveText compute={f => ...} />.
+- Coarse viewport-derived facts (what's on screen, is it past): useFrameValue(selector), which re-renders only on change.
+- Use frame.now when drawing; use engine.sample() inside actions. Avoid Date.now() in render.
+- Call engine.beginTransition() before changing focus/zoom state to animate the change.
+- Put pure logic in src/domain with unit tests.
+
+## Core Concepts
+* Instant -- A point in time. Rendered on the timeline as a vertical line with label. An instant can be saved, or it can represent a concept like "Now" or the current cursor position.
+* Span -- A pair of Instants with a duration between them. One of the instants could be Now or the Cursor. A span can be saved, or it can be implied. Implied spans are automatically generated temporarily based on context.
+
+## Main UI Components
+1. Timeline view -- DOM-rendered horizontally scrolling timeline (src/components/timeline)
+2. Controls + List View -- control bar and tabbed list below the timeline (src/components/panels)
+
+## Key Principles
+1. **Single Timeline View**: All time entities (instants, durations, ranges) on one scrollable/zoomable timeline
+2. **Fast Creation**: Tap/drag/type to create timers/alarms/stopwatches quickly
+3. **Accuracy**: Monotonic timing for running items, handle DST/timezone changes
+4. **PWA First**: Works offline, installable, cross-platform
+5. **Local-First**: Data stays on device unless user opts into sync
+6. **Performance First**: Optimize for 60fps timeline rendering and smooth interactions
+7. **History is core**: never fade, dim or hide past instants/spans to reduce clutter; fix clutter with layout
+8. **Capture, then relate**: one tap records an instant (e.g. rice goes on); label it later; create timers/alarms relative to it (+13m); look back at elapsed time. Judge UX by how few taps this takes
+9. **Everything glows**: style through theme tokens (--accent/--halo, .glow-box/.glow-text, --glow) so a future style editor can change it
+10. **Propose UX changes before building them**: the owner has rejected some unrequested interaction changes
+
+## UX Patterns (current)
+- **Timeline**: horizontal; Now line follows the clock; a vertical orientation is planned (docs/handoffs)
+- **Gestures**: one-finger/mouse drag moves through time (free cursor at the center); pinch or wheel zooms; double-tap/double-click a label to create or rename; tap selects
+- **Cursor landing**: a drag that ends near Now or an instant snaps onto it (20px touch, 12px mouse); ± steps and typed times land on an instant only on an exact hit
+- **Agenda**: the tabbed list under the timeline (All Instants / Favorites / All Spans); the Settings gear sits in its tab bar
+- **Planned** (see docs/handoffs): vertical layout, momentum, label-overlap layout, Agenda as dock or drawer, arrow-shaped cursor, stopwatch/timer/alarm quick-create, natural-language quick add
+
+## Technical Requirements
+- **Performance**: 60fps timeline, <2s cold start, <500ms warm start
+- **Accuracy**: Use `performance.now()` for monotonic timing
+- **Notifications**: Local when app open, Web Push when backgrounded
+- **Accessibility**: Full keyboard support, screen reader friendly, prefers-reduced-motion
+- **Internationalization**: 12/24-hour, locale-aware formats, RTL support
+- **Bundle Size**: <500KB initial load, <1MB total with code splitting
+
+## Code Style
+- Use TypeScript strictly - no `any` types
+- Prefer functional components with hooks
+- Use semantic HTML and ARIA attributes
+- Follow React best practices for performance
+- Implement proper error boundaries
+- Use proper TypeScript interfaces for all data structures
+- Use React.memo() for expensive timeline components
+- Keep components small; logic goes in domain/ or store/actions.ts
+
+## File Organization
+- `/src/domain/` - Pure logic: time math, ticks, spans, navigation, alarms (with tests)
+- `/src/store/` - Zustand stores and actions.ts
+- `/src/engine/` - Viewport engine and hooks
+- `/src/components/timeline/` - Timeline pieces (columns, lanes, ticks, popovers)
+- `/src/components/panels/` - Control bar, list, alarms, settings
+- `/src/hooks/` - Gestures, hotkeys, animation helpers
+- `/src/services/` - Alarm scheduler, audio, notifications
+- `/src/styles/` - Theme tokens and component CSS
+- `/public/` - Static assets and PWA files
