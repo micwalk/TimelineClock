@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { shallowArrayEqual, useFrameValue, usePositionX } from '../../engine/hooks.ts'
+import { shallowArrayEqual, useFrameValue, usePositionMain } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import { formatClock12h } from '../../domain/format.ts'
@@ -27,7 +27,7 @@ const CULL_MARGIN_PX = 400
 
 interface ColumnProps {
   className: string
-  getX: (f: Frame) => number
+  getPos: (f: Frame) => number
   label: ReactNode
   icons?: ReactNode
   time: ReactNode
@@ -36,9 +36,9 @@ interface ColumnProps {
   ariaLabel: string
 }
 
-function Column({ className, getX, label, icons, time, actions, badge, ariaLabel }: ColumnProps) {
+function Column({ className, getPos, label, icons, time, actions, badge, ariaLabel }: ColumnProps) {
   const ref = useRef<HTMLDivElement>(null)
-  usePositionX(ref, getX)
+  usePositionMain(ref, getPos)
   return (
     <div ref={ref} className={`tl-col ${className}`} role="group" aria-label={ariaLabel}>
       <div className="tl-col__line" />
@@ -65,7 +65,7 @@ export function NowColumn() {
     <Column
       className={`is-now${focused ? ' is-focused' : ''}${clockOpen ? ' has-popover' : ''}`}
       ariaLabel="Now"
-      getX={f => f.x(f.now)}
+      getPos={f => f.pos(f.now)}
       label={
         <button
           type="button"
@@ -111,7 +111,7 @@ export function CursorColumn() {
     <Column
       className={`is-cursor${clockOpen ? ' has-popover' : ''}`}
       ariaLabel="Cursor"
-      getX={f => f.screenW / 2}
+      getPos={f => f.mainSize / 2}
       label={
         <button
           type="button"
@@ -217,7 +217,7 @@ const SavedInstantColumn = memo(function SavedInstantColumn({ inst, selected, fo
     <Column
       className={stateClass}
       ariaLabel={`Instant ${name}`}
-      getX={moving ? f => f.screenW / 2 : f => f.x(ts)}
+      getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}
       label={label}
       icons={icons}
       time={
@@ -244,7 +244,7 @@ const SavedInstantColumn = memo(function SavedInstantColumn({ inst, selected, fo
 /** Faint marker at the original position of an instant being moved. */
 function GhostColumn({ ts }: { ts: number }) {
   const ref = useRef<HTMLDivElement>(null)
-  usePositionX(ref, f => f.x(ts))
+  usePositionMain(ref, f => f.pos(ts))
   return (
     <div ref={ref} className="tl-col is-ghost" aria-hidden>
       <div className="tl-col__line" />

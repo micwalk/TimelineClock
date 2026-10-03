@@ -19,7 +19,7 @@ time-dependent text, without re-rendering React.
 | Changes…                                | Handled by                     | Mechanism                                    |
 |-----------------------------------------|--------------------------------|----------------------------------------------|
 | What exists (instants, spans, selection) | React                          | Zustand selectors → re-render                |
-| Horizontal position (pan, zoom, Now)    | `usePositionX`, `useFrameListener` | engine writes `transform: translate3d()`  |
+| Position along the time axis (pan, zoom, Now) | `usePositionMain`, `useFrameListener` | engine writes `transform: translate3d()` |
 | Text that depends on time or the cursor | `<LiveText compute={f => …} />` | engine writes `textContent`                 |
 | Coarse facts derived from the viewport (which items are on screen, whether an instant is past) | `useFrameValue(selector)` | re-renders only when the value changes |
 
@@ -44,6 +44,8 @@ The engine holds no state of its own beyond animation bookkeeping. Each frame it
    zoom smoothing;
 3. calls phase-0 listeners (DOM writes), then phase-1 listeners (React subscriptions).
 
+Frames speak in main-axis positions (`f.pos(t)`, `f.mainSize`): x when the timeline is horizontal, y when vertical, from the `useLayout` store.
+
 Frames are scheduled on demand:
 
 - every animation frame while animating, during gestures, or when a `LiveText` calls `ctx.fast()`
@@ -60,7 +62,7 @@ next. Call it *before* changing focus/zoom state.
 ```tsx
 function Marker({ ts }: { ts: number }) {
   const ref = useRef<HTMLDivElement>(null)
-  usePositionX(ref, f => f.x(ts))                     // follows pan/zoom
+  usePositionMain(ref, f => f.pos(ts))                     // follows pan/zoom
   return (
     <div ref={ref} className="tl-col">                 {/* absolutely positioned, width 0 */}
       <LiveText compute={f => formatRelativeCoarse(ts - f.now)} />

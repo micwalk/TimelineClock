@@ -60,9 +60,9 @@ export function SpanLane(props: SpanLaneProps) {
   const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true })
 
   useFrameListener(f => {
-    const xa = f.x(resolveTimeRef(a, f.now, f.center))
-    const xb = f.x(resolveTimeRef(b, f.now, f.center))
-    const g = spanGeometry(xa, xb, f.screenW)
+    const pa = f.pos(resolveTimeRef(a, f.now, f.center))
+    const pb = f.pos(resolveTimeRef(b, f.now, f.center))
+    const g = spanGeometry(pa, pb, f.mainSize)
     const s = last.current
     if (g.onScreen !== s.on) {
       s.on = g.onScreen

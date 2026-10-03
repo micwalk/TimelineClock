@@ -28,13 +28,14 @@ export interface SpanGeometry {
   onScreen: boolean
 }
 
-export function spanGeometry(xA: number, xB: number, screenW: number): SpanGeometry {
-  const lo = Math.min(xA, xB)
-  const hi = Math.max(xA, xB)
+/** Visible part of a span between main-axis positions `posA` and `posB`, clamped to the axis. */
+export function spanGeometry(posA: number, posB: number, mainSize: number): SpanGeometry {
+  const lo = Math.min(posA, posB)
+  const hi = Math.max(posA, posB)
   const left = Math.max(0, lo)
-  const right = Math.min(screenW, hi)
-  const onScreen = hi >= 0 && lo <= screenW && xA !== xB
-  return { left, right, mid: (left + right) / 2, leftOffscreen: lo < 0, rightOffscreen: hi > screenW, onScreen }
+  const right = Math.min(mainSize, hi)
+  const onScreen = hi >= 0 && lo <= mainSize && posA !== posB
+  return { left, right, mid: (left + right) / 2, leftOffscreen: lo < 0, rightOffscreen: hi > mainSize, onScreen }
 }
 
 export interface ResolvedSpan {

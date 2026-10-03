@@ -1,16 +1,10 @@
-// Pure viewport math: projection between time and screen x, and the view target
+// Pure viewport math: projection between time and a position along the timeline's
+// main axis (x when horizontal, y when vertical), and the view target
 // (center/width) implied by the current focus mode.
 import type { InstantRecord, SpanRecord } from './entities.ts'
 
 export type FocusMode = 'now' | 'cursor' | 'instant' | 'span'
 
-export interface Projection {
-  center: number
-  width: number
-  screenW: number
-}
-
-export const pxPerMs = (p: Projection) => p.screenW / p.width
 export type Dir = 1 | -1
 
 export interface AxisProjection {
@@ -19,6 +13,8 @@ export interface AxisProjection {
   mainSize: number
   dir: Dir
 }
+
+export const pxPerMs = (p: AxisProjection) => p.mainSize / p.width
 
 export const timeToPos = (p: AxisProjection, t: number) => p.mainSize / 2 + (p.dir * (t - p.center) * p.mainSize) / p.width
 export const posToTime = (p: AxisProjection, pos: number) => p.center + (p.dir * (pos - p.mainSize / 2) * p.width) / p.mainSize
@@ -29,9 +25,6 @@ export function visibleRange(p: AxisProjection): { start: number; end: number } 
 }
 /** New center for a content drag of dPx along the main axis (content follows the finger). */
 export const panCenterByPixels = (p: AxisProjection, dPx: number) => p.center - (p.dir * dPx * p.width) / p.mainSize
-
-export const timeToX = (p: Projection, t: number) => timeToPos({ center: p.center, width: p.width, mainSize: p.screenW, dir: 1 }, t)
-export const xToTime = (p: Projection, x: number) => posToTime({ center: p.center, width: p.width, mainSize: p.screenW, dir: 1 }, x)
 
 /** The subset of view state that determines where the view wants to be. */
 export interface TargetInputs {
@@ -79,16 +72,17 @@ export function resolveViewTarget(v: TargetInputs, instants: InstantRecord[], sp
 
 /**
  * Zoom needed so [aTs, bTs] is comfortably in view: fit with 10% margins when an
- * end is off screen, or zoom in when the range covers under 20% of the width.
+ * end is off screen, or zoom in when the range covers under 20% of the axis.
  * Returns null when no change is needed.
  */
-export function zoomToFitRange(p: Projection, aTs: number, bTs: number): { center: number; width: number } | null {
+export function zoomToFitRange(p: AxisProjection, aTs: number, bTs: number): { center: number; width: number } | null {
   const early = Math.min(aTs, bTs)
   const late = Math.max(aTs, bTs)
   if (late === early) return null
-  const xEarly = timeToX(p, early)
-  const xLate = timeToX(p, late)
-  if (xEarly < 0 || xLate > p.screenW) return { center: (early + late) / 2, width: (late - early) / 0.8 }
-  if (xLate - xEarly < 0.2 * p.screenW) return { center: (early + late) / 2, width: 2 * (late - early) }
+  const ends = [timeToPos(p, early), timeToPos(p, late)]
+  const lo = Math.min(...ends)
+  const hi = Math.max(...ends)
+  if (lo < 0 || hi > p.mainSize) return { center: (early + late) / 2, width: (late - early) / 0.8 }
+  if (hi - lo < 0.2 * p.mainSize) return { center: (early + late) / 2, width: 2 * (late - early) }
   return null
 }

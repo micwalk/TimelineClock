@@ -91,7 +91,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
   }, [instants, spans, v])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
-    .filter(c => spanGeometry(f.x(resolveTimeRef(c.a, f.now, f.center)), f.x(resolveTimeRef(c.b, f.now, f.center)), f.screenW).onScreen)
+    .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
     .map(c => c.key), shallowArrayEqual)
 
   return useMemo(() => {

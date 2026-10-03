@@ -3,7 +3,7 @@
 import { engine } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
-import { zoomToFitRange } from '../domain/viewport.ts'
+import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
 import { incrementOption } from '../domain/time.ts'
@@ -165,7 +165,7 @@ export function beginPan() {
 
 export function panByPixels(dx: number) {
   const f = frame()
-  view.setTimeCenter(v().timeCenter - dx / f.pxPerMs)
+  view.setTimeCenter(panCenterByPixels({ ...f, center: v().timeCenter }, dx))
   refreshLock()
 }
 
@@ -193,7 +193,7 @@ export function selectInstant(id: string) {
   const s = v()
   if (inst && s.viewFocusMode === 'cursor' && !s.moveMode) {
     const f = frame()
-    if (Math.abs(f.x(inst.tsEpochMs) - f.screenW / 2) <= UNDER_CURSOR_PX) {
+    if (Math.abs(f.pos(inst.tsEpochMs) - f.mainSize / 2) <= UNDER_CURSOR_PX) {
       focusInstant(id)
       return
     }

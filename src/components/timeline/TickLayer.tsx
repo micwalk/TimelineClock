@@ -18,7 +18,7 @@ interface TickNode {
 
 export function TickLayer() {
   const innerRef = useRef<HTMLDivElement>(null)
-  const layout = useRef({ center: 0, pxPerMs: 0, start: 0, end: 0, screenW: 0, nodes: new Map<number, TickNode>() })
+  const layout = useRef({ center: 0, pxPerMs: 0, start: 0, end: 0, mainSize: 0, dir: 1, nodes: new Map<number, TickNode>() })
 
   useFrameListener(f => {
     const inner = innerRef.current
@@ -27,7 +27,8 @@ export function TickLayer() {
     const stale =
       s.pxPerMs === 0 ||
       Math.abs(f.pxPerMs - s.pxPerMs) > s.pxPerMs * 1e-6 ||
-      f.screenW !== s.screenW ||
+      f.mainSize !== s.mainSize ||
+      f.dir !== s.dir ||
       f.start < s.start ||
       f.end > s.end
     if (stale) {
@@ -36,7 +37,8 @@ export function TickLayer() {
       s.end = f.end + range * 0.75
       s.center = f.center
       s.pxPerMs = f.pxPerMs
-      s.screenW = f.screenW
+      s.mainSize = f.mainSize
+      s.dir = f.dir
       const seen = new Set<number>()
       for (const tick of generateTicks(s.start, s.end, f.pxPerMs)) {
         seen.add(tick.t)
@@ -53,7 +55,7 @@ export function TickLayer() {
           n = { el, label, x: NaN, h: NaN, a: NaN, fs: NaN, bold: false, text: '' }
           s.nodes.set(tick.t, n)
         }
-        const x = (tick.t - s.center) * s.pxPerMs + s.screenW / 2
+        const x = s.mainSize / 2 + s.dir * (tick.t - s.center) * s.pxPerMs
         if (x !== n.x) { n.x = x; n.el.style.transform = `translate3d(${x}px,0,0)` }
         const { halfHeight, labelAlpha, fontSizePx, bold } = tick.style
         // Quantized so a smooth zoom only rewrites styles when they visibly change.
@@ -71,7 +73,7 @@ export function TickLayer() {
         if (!seen.has(t)) { n.el.remove(); s.nodes.delete(t) }
       }
     }
-    inner.style.transform = `translate3d(${(s.center - f.center) * f.pxPerMs}px,0,0)`
+    inner.style.transform = `translate3d(${s.dir * (s.center - f.center) * f.pxPerMs}px,0,0)`
   })
 
   return (

@@ -19,7 +19,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 
 ## Timeline Rendering Rules
 - Never put per-frame values (pan position, zoom, the current time) in React state.
-- Horizontal position: usePositionX(ref, f => f.x(ts)). Time-dependent text: <LiveText compute={f => ...} />.
+- Position along the time axis: usePositionMain(ref, f => f.pos(ts)). Time-dependent text: <LiveText compute={f => ...} />.
 - Coarse viewport-derived facts (what's on screen, is it past): useFrameValue(selector), which re-renders only on change.
 - Use frame.now when drawing; use engine.sample() inside actions. Avoid Date.now() in render.
 - Call engine.beginTransition() before changing focus/zoom state to animate the change.

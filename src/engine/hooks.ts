@@ -37,17 +37,21 @@ export const shallowArrayEqual = <T>(a: readonly T[], b: readonly T[]) =>
   a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
 
 /** Hard limit on transform offsets so far-off items never produce huge layer sizes. */
-const X_LIMIT = 100_000
+const POS_LIMIT = 100_000
 
-/** Keeps an element horizontally positioned at `getX(frame)` (screen px) via transform. */
-export function usePositionX(ref: React.RefObject<HTMLElement | null>, getX: (f: Frame) => number) {
-  const last = useRef<number | null>(null)
+/**
+ * Keeps an element at main-axis position `getPos(frame)` (px) with a transform:
+ * translateX when the timeline is horizontal, translateY when vertical.
+ */
+export function usePositionMain(ref: React.RefObject<HTMLElement | null>, getPos: (f: Frame) => number) {
+  const last = useRef<{ pos: number; orientation: Frame['orientation'] } | null>(null)
   useFrameListener(f => {
     const el = ref.current
     if (!el) return
-    const x = Math.max(-X_LIMIT, Math.min(X_LIMIT, getX(f)))
-    if (last.current !== null && Math.abs(last.current - x) < 0.01) return
-    last.current = x
-    el.style.transform = `translate3d(${x}px,0,0)`
+    const pos = Math.max(-POS_LIMIT, Math.min(POS_LIMIT, getPos(f)))
+    const prev = last.current
+    if (prev && prev.orientation === f.orientation && Math.abs(prev.pos - pos) < 0.01) return
+    last.current = { pos, orientation: f.orientation }
+    el.style.transform = f.orientation === 'horizontal' ? `translate3d(${pos}px,0,0)` : `translate3d(0,${pos}px,0)`
   })
 }
