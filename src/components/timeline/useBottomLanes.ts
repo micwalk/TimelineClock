@@ -46,9 +46,12 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     showNow: s.showImpliedSelectedNow,
     showPrev: s.showImpliedSelectedPrev,
     editingSpanId: s.editingSpanId,
+    moving: s.moveMode?.instantId ?? null,
   })))
 
   const candidates = useMemo(() => {
+    // An instant being moved follows the cursor, and so do its spans.
+    const ref = (i: InstantRecord): TimeRef => (i.id === v.moving ? 'center' : i.tsEpochMs)
     const byId = new Map(instants.map(i => [i.id, i]))
     const resolved = spans.map(sp => resolveSpan(sp, byId)).filter((r): r is ResolvedSpan => !!r)
     const saved = savedSpanLanes({
@@ -63,14 +66,14 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     const selected = byId.get(v.selectedId ?? '')
     const secondary = byId.get(v.secondaryId ?? '')
     if (selected && v.showNow && !saved.some(s => s.span.startInstantId === selected.id && s.span.endIsNow)) {
-      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: selected.tsEpochMs, b: 'now', tall: false, top: 0 })
+      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', tall: false, top: 0 })
     }
     if (selected && secondary && v.showPrev) {
       const exists = resolved.some(r => !r.span.endIsNow &&
         ((r.span.startInstantId === secondary.id && r.span.endInstantId === selected.id) ||
           (r.span.startInstantId === selected.id && r.span.endInstantId === secondary.id)))
       if (!exists) {
-        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: secondary.tsEpochMs, b: selected.tsEpochMs, tall: false, top: 0 })
+        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), tall: false, top: 0 })
       }
     }
     for (const s of saved) {
@@ -78,8 +81,8 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
         key: s.span.id,
         kind: 'saved',
         span: s,
-        a: s.start.tsEpochMs,
-        b: s.end ? s.end.tsEpochMs : 'now',
+        a: ref(s.start),
+        b: s.end ? ref(s.end) : 'now',
         tall: !!spanHeader(s) || v.editingSpanId === s.span.id,
         top: 0,
       })

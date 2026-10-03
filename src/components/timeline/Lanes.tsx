@@ -68,7 +68,7 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
   )
 }
 
-function SavedSpanChip({ r, editing }: { r: ResolvedSpan; editing: boolean }) {
+function SavedSpanChip({ r, a, b, editing }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean }) {
   const header = spanHeader(r)
   return (
     <>
@@ -84,7 +84,7 @@ function SavedSpanChip({ r, editing }: { r: ResolvedSpan; editing: boolean }) {
         <span className="span-chip__header">{header}</span>
       ) : null}
       <span className="span-chip__text">
-        <Description a={r.start.tsEpochMs} b={r.end ? r.end.tsEpochMs : 'now'} startName={displayName(r.start.label)} endName={spanEndName(r)} />
+        <Description a={a} b={b} startName={displayName(r.start.label)} endName={spanEndName(r)} />
         {isFavoriteNowSpan(r) && <StarSolid className="span-chip__star" aria-label="Favorite" />}
       </span>
     </>
@@ -93,20 +93,29 @@ function SavedSpanChip({ r, editing }: { r: ResolvedSpan; editing: boolean }) {
 
 const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i.id })
 
-function SavedSpanLane({ r, top, variant, controls, emphasis }: { r: ResolvedSpan; top: number | string; variant: LaneVariant; controls: boolean; emphasis?: boolean }) {
+function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
+  r: ResolvedSpan
+  top: number | string
+  variant: LaneVariant
+  controls: boolean
+  emphasis?: boolean
+  /** Endpoint times; default to the records' times (override for live endpoints). */
+  a?: TimeRef
+  b?: TimeRef
+}) {
   const editing = useView(s => s.editingSpanId === r.span.id)
   return (
     <SpanLane
       top={top}
       variant={variant}
       emphasis={emphasis}
-      a={r.start.tsEpochMs}
-      b={r.end ? r.end.tsEpochMs : 'now'}
+      a={a}
+      b={b}
       aTarget={instantTarget(r.start)}
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       chipLabel={`Span ${spanHeader(r) ?? ''}`}
-      chip={<SavedSpanChip r={r} editing={editing} />}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} />}
       onChipClick={() => act.selectSpan(r.span.id)}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} /> }) : undefined}
@@ -243,13 +252,13 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               key={lane.key}
               top={lane.top}
               variant="selected"
-              a={s.tsEpochMs}
+              a={lane.a}
               b="now"
               aTarget={instantTarget(s)}
               bTarget={{ kind: 'now' }}
               arrows
-              chip={<span className="span-chip__text"><Description a={s.tsEpochMs} b="now" startName={displayName(s.label)} endName="Now" /></span>}
-              tools={() => ({ left: <PinButton a={s.tsEpochMs} b="now" /> })}
+              chip={<span className="span-chip__text"><Description a={lane.a} b="now" startName={displayName(s.label)} endName="Now" /></span>}
+              tools={() => ({ left: <PinButton a={lane.a} b="now" /> })}
             />
           )
         }
@@ -260,20 +269,20 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               key={lane.key}
               top={lane.top}
               variant="secondary"
-              a={p.tsEpochMs}
-              b={s.tsEpochMs}
+              a={lane.a}
+              b={lane.b}
               aTarget={instantTarget(p)}
               bTarget={instantTarget(s)}
               arrows
-              chip={<span className="span-chip__text"><Description a={p.tsEpochMs} b={s.tsEpochMs} startName={displayName(p.label)} endName={displayName(s.label, 'selected')} /></span>}
-              tools={() => ({ left: <PinButton a={p.tsEpochMs} b={s.tsEpochMs} /> })}
+              chip={<span className="span-chip__text"><Description a={lane.a} b={lane.b} startName={displayName(p.label)} endName={displayName(s.label, 'selected')} /></span>}
+              tools={() => ({ left: <PinButton a={lane.a} b={lane.b} /> })}
             />
           )
         }
         const r = lane.span
         const variant: LaneVariant = r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
         const controls = r.priority <= 1 || selectedSpanId === r.span.id
-        return <SavedSpanLane key={lane.key} r={r} top={lane.top} variant={variant} controls={controls} />
+        return <SavedSpanLane key={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} variant={variant} controls={controls} />
       })}
     </>
   )

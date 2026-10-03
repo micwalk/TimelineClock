@@ -1,5 +1,5 @@
 // Tabbed list under the controls: all instants, favorites, and spans.
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
@@ -147,7 +147,8 @@ type SpanRowData =
   | { kind: 'implied'; key: string; which: 'selected-now' | 'selected-prev'; label: string; start: InstantRecord; end: InstantRecord | null; visible: boolean; mid: number }
 
 function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
-  const editing = useView(s => row.kind === 'saved' && s.editingSpanId === row.r.span.id)
+  // Local edit state: the timeline lane has its own editor bound to the store.
+  const [editing, setEditing] = useState(false)
   const start = row.kind === 'saved' ? row.r.start : row.start
   const end = row.kind === 'saved' ? row.r.end ?? null : row.end
   const endName = row.kind === 'saved' ? spanEndName(row.r) : end ? displayName(end.label) : 'Now'
@@ -170,7 +171,7 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
         <IconButton icon={visible ? EyeIcon : EyeSlashIcon} label={visible ? 'Hide on timeline' : 'Show on timeline'} bare
           color={visible ? 'var(--ink)' : 'var(--ink-faint)'} pressed={visible} onClick={toggleVisible} />
         {row.kind === 'saved' && (
-          <IconButton icon={PencilIcon} label="Rename span" color="#a3e635" bare onClick={() => view.editSpan(row.r.span.id)} />
+          <IconButton icon={PencilIcon} label="Rename span" color="#a3e635" bare onClick={() => setEditing(true)} />
         )}
       </div>
       <div className="list-row__name">
@@ -178,8 +179,8 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
           <InlineInput
             initial={row.r.span.label}
             ariaLabel="Span name"
-            onCommit={v => act.renameSpan(row.r.span.id, v)}
-            onCancel={() => view.editSpan(null)}
+            onCommit={v => { act.renameSpan(row.r.span.id, v); setEditing(false) }}
+            onCancel={() => setEditing(false)}
           />
         ) : (
           <span className={name === '?' ? 'is-empty' : ''}>{name}</span>
