@@ -131,7 +131,7 @@ function HelpContent() {
           <p>
             Everything you save is stored only in this browser, on this device. Nothing is sent to a
             server or synced to a database, so it won’t appear on your other devices, and clearing
-            this site’s data deletes it.
+            this site’s data deletes it. To keep a copy or move it, use Settings › Data to export a backup.
           </p>
         </section>
 
