@@ -36,6 +36,10 @@ const TRANSITION_MS = 350
 const ZOOM_SMOOTHING_TAU_MS = 70
 const RAF_THRESHOLD_MS = 20
 
+// Falls back to a timer where rAF is unavailable (tests, some embedded contexts).
+const scheduleAnimationFrame: (cb: () => void) => unknown =
+  typeof requestAnimationFrame === 'function' ? cb => requestAnimationFrame(cb) : cb => setTimeout(cb, 16)
+
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -47,7 +51,7 @@ class ViewportEngine {
   private transition: { fromCenter: number; fromWidth: number; start: number; duration: number } | null = null
   private lastPerf = 0
   private seq = 0
-  private rafId: number | null = null
+  private rafId: unknown = null
   private timeoutId: ReturnType<typeof setTimeout> | null = null
   private timeoutDue = Infinity
   private wantsFrame = false
@@ -67,8 +71,18 @@ class ViewportEngine {
     this.invalidate()
   }
 
+  /** The last rendered frame (what listeners last drew). */
   getFrame(): Frame {
     return this.frame
+  }
+
+  /**
+   * The viewport as it would render right now, including in-flight transitions.
+   * Use this when acting on user input: the last frame can be up to a second old
+   * while idle.
+   */
+  sample(): Frame {
+    return this.compute(Date.now(), performance.now(), false)
   }
 
   onFrame(fn: FrameListener, phase: FramePhase = 0): () => void {
@@ -98,14 +112,16 @@ class ViewportEngine {
   /** Animate from what is on screen now to wherever the (just changed) state points. */
   beginTransition(duration = TRANSITION_MS) {
     if (prefersReducedMotion()) duration = 0
-    this.transition = { fromCenter: this.frame.center, fromWidth: this.frame.width, start: performance.now(), duration }
+    // Call before changing state: the sample is what's on screen at this moment.
+    const from = this.sample()
+    this.transition = { fromCenter: from.center, fromWidth: from.width, start: performance.now(), duration }
     this.invalidate()
   }
 
   /** Stop any transition, keeping the current on-screen zoom as the smoothing start point. */
   cancelTransition() {
     if (!this.transition) return
-    this.displayedWidth = this.frame.width
+    this.displayedWidth = this.sample().width
     this.transition = null
   }
 
@@ -121,7 +137,7 @@ class ViewportEngine {
     if (delayMs < RAF_THRESHOLD_MS) {
       if (this.rafId !== null) return
       if (this.timeoutId !== null) { clearTimeout(this.timeoutId); this.timeoutId = null; this.timeoutDue = Infinity }
-      this.rafId = requestAnimationFrame(this.run)
+      this.rafId = scheduleAnimationFrame(this.run)
       return
     }
     if (this.rafId !== null) return

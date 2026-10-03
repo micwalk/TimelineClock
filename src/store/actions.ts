@@ -15,7 +15,8 @@ import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
 const v = () => useView.getState()
-const frame = () => engine.getFrame()
+// Sample the viewport at the moment of the action (not the last, possibly idle-old, frame).
+const frame = () => engine.sample()
 
 /** Time under the cursor (the view center) as currently displayed. */
 export const cursorTime = () => frame().center

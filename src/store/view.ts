@@ -36,6 +36,9 @@ const PERSISTED_KEYS = [
   'cursorLocked', 'cursorLockOffsetMs',
 ] as const satisfies readonly (keyof ViewState)[]
 
+/** Fresh default view state (also used to reset in tests). */
+export const initialViewState = (): ViewState => ({ ...defaults, timeCenter: Date.now() })
+
 const defaults: ViewState = {
   timeWidth: DEFAULT_TIME_WIDTH_MS,
   timeCenter: Date.now(),

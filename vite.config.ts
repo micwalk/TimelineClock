@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -60,14 +61,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          timeline: ['date-fns', 'date-fns-tz'],
-          ui: ['framer-motion', '@headlessui/react'],
-        }
-      }
-    }
+          vendor: ['react', 'react-dom', 'zustand'],
+        },
+      },
+    },
   },
-  optimizeDeps: {
-    include: ['react', 'react-dom', 'date-fns', 'date-fns-tz']
-  }
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
 })
