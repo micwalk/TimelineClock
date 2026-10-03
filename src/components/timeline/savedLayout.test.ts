@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { LayoutContext, SavedLayoutInputs } from './savedLayout.ts'
-import { createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats } from './savedLayout.ts'
+import { createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats, useChipWidths } from './savedLayout.ts'
 import { useSettings } from '../../store/settings.ts'
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
@@ -122,5 +122,16 @@ describe('createSavedLayoutCache', () => {
     const h = createSavedLayoutCache()(frame(1000), inputs(list))
     expect(h.rowsUsed).toBeGreaterThan(2)
     expect(h.rowsUsed).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('useChipWidths.prune', () => {
+  it('drops widths of instants that no longer exist and keeps the rest', () => {
+    useChipWidths.setState({ widths: { a: 10, gone: 20 } })
+    useChipWidths.getState().prune(new Set(['a']))
+    expect(useChipWidths.getState().widths).toEqual({ a: 10 })
+    const same = useChipWidths.getState().widths
+    useChipWidths.getState().prune(new Set(['a']))
+    expect(useChipWidths.getState().widths).toBe(same)
   })
 })

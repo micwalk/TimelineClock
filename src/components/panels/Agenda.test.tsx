@@ -5,7 +5,8 @@ import { AgendaButton } from './AgendaButton.tsx'
 import { AgendaShell } from './AgendaShell.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { useUi } from '../../store/ui.ts'
-import { useEntities } from '../../store/entities.ts'
+import { entities, useEntities } from '../../store/entities.ts'
+import { useView } from '../../store/view.ts'
 
 function setLayout(agendaPlacement: 'bottom' | 'side' | 'drawer', agendaCanDock = true) {
   act(() => useLayout.setState({ agendaPlacement, agendaCanDock, agendaOverride: null }))
@@ -53,6 +54,22 @@ describe('Agenda drawer', () => {
     fireEvent.click(document.querySelector('.agenda-scrim') as Element)
     expect(screen.queryByRole('dialog', { name: 'Agenda' })).toBeNull()
     expect(document.activeElement).toBe(btn)
+  })
+
+  it('picking a row closes the drawer; a docked Agenda stays', () => {
+    const id = entities.createInstant(Date.now() - 60_000, 'Rice')
+    setLayout('drawer')
+    const { unmount } = render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agenda' }))
+    fireEvent.click(screen.getByText('Rice'))
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+    expect(screen.queryByRole('dialog', { name: 'Agenda' })).toBeNull()
+    expect(useUi.getState().agendaOpen).toBe(false)
+    unmount()
+    setLayout('bottom')
+    render(<Harness />)
+    fireEvent.click(screen.getByText('Rice'))
+    expect(screen.getByRole('region', { name: 'Agenda' })).toBeTruthy() // docked: it stays
   })
 })
 

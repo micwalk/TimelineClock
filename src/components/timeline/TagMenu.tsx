@@ -12,9 +12,9 @@ const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
 export function TagMenu({ label, items, onClose }: { label: string; items: TagMenuItem[]; onClose: () => void }) {
   return (
     <div className="menu tl-tag__menu glow-box" role="menu" aria-label={label} data-no-pan onPointerDown={stop} onClick={stop} onDoubleClick={stop}>
-      {items.map(item => (
+      {items.map((item, index) => (
         <button
-          key={item.label}
+          key={`${index}:${item.label}`}
           type="button"
           role="menuitem"
           className="menu__item tl-tag__menu-item"

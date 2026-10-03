@@ -52,6 +52,12 @@ function Relative({ ts }: { ts: number | 'now' | 'center' }) {
   )
 }
 
+/** A row that focuses something: in the drawer, close it so the result is not hidden behind it. */
+function pick(focus: () => void) {
+  focus()
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+}
+
 const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: InstantRecord; focused: boolean; selected: boolean }) {
   const isPast = useFrameValue(f => inst.tsEpochMs < f.now)
   return (
@@ -59,10 +65,10 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: Ins
       data-key={inst.id}
       data-focused={focused}
       className={`list-row list-row--instant glow-box${focused ? ' is-focused' : selected ? ' is-selected' : ''}${isPast ? ' is-past' : ' is-future'}`}
-      onClick={() => act.focusInstant(inst.id)}
+      onClick={() => pick(() => act.focusInstant(inst.id))}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') act.focusInstant(inst.id) }}
+      onKeyDown={e => { if (e.key === 'Enter') pick(() => act.focusInstant(inst.id)) }}
     >
       <div className="list-row__name">
         <IconButton icon={inst.favorite ? StarSolid : StarOutline} label={inst.favorite ? 'Unfavorite' : 'Favorite'}
@@ -82,7 +88,7 @@ function LiveRow({ kind, focused }: { kind: 'now' | 'cursor'; focused: boolean }
       data-key={kind}
       data-focused={focused}
       className={`list-row list-row--instant list-row--${kind} glow-box${focused ? ' is-focused' : ''}`}
-      onClick={() => (kind === 'now' ? act.focusNow() : act.focusCursorAt(act.cursorTime()))}
+      onClick={() => pick(() => (kind === 'now' ? act.focusNow() : act.focusCursorAt(act.cursorTime())))}
       role="button"
       tabIndex={0}
     >
@@ -166,7 +172,7 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
       data-key={row.key}
       data-focused={focused}
       className={`list-row list-row--span glow-box${row.kind === 'implied' ? ' is-implied' : ''}${focused ? ' is-focused' : ''}`}
-      onClick={row.kind === 'saved' ? () => act.focusSpan(row.r.span.id) : undefined}
+      onClick={row.kind === 'saved' ? () => pick(() => act.focusSpan(row.r.span.id)) : undefined}
       role={row.kind === 'saved' ? 'button' : undefined}
       tabIndex={row.kind === 'saved' ? 0 : undefined}
     >

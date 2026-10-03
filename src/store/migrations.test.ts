@@ -22,3 +22,12 @@ describe('runMigrations', () => {
     expect(useView.getState().showImpliedSelectedPrev).toBe(true)
   })
 })
+
+describe('migration persistence', () => {
+  it('saves the view flag before the version, so a quick close cannot lose it', () => {
+    localStorage.clear()
+    runMigrations()
+    const saved = JSON.parse(localStorage.getItem('timeline.state') ?? '{}') as { showImpliedSelectedPrev?: boolean }
+    expect(saved.showImpliedSelectedPrev).toBe(false)
+  })
+})

@@ -87,6 +87,9 @@ useView.subscribe((s, prev) => {
   }
 })
 
+/** Writes any pending view save now (used where a following write must not outrun it). */
+export const flushView = () => saver.flush()
+
 const set = useView.setState
 const get = useView.getState
 

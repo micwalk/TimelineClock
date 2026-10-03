@@ -1,6 +1,6 @@
 // Overlap layout for the saved-instant chips: builds layout inputs from the visible
 // instants and chip widths, and exposes the structural result to React.
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { RefObject } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -34,11 +34,20 @@ export const estimateChipWidth = (label: string): number => 9 * chipName(label).
 interface ChipWidthsState {
   widths: Record<string, number>
   setWidth: (id: string, width: number) => void
+  /** Drops the widths of instants that no longer exist. */
+  prune: (existingIds: ReadonlySet<string>) => void
 }
 
 export const useChipWidths = create<ChipWidthsState>(set => ({
   widths: {},
   setWidth: (id, width) => set(s => (s.widths[id] === width ? s : { widths: { ...s.widths, [id]: width } })),
+  prune: existingIds => set(s => {
+    const stale = Object.keys(s.widths).filter(id => !existingIds.has(id))
+    if (stale.length === 0) return s
+    const widths = { ...s.widths }
+    for (const id of stale) delete widths[id]
+    return { widths }
+  }),
 }))
 
 /**
@@ -279,6 +288,7 @@ export function useSavedLayout(laneCount = 0): SavedLayout {
   const ringing = useAlarms(useShallow(s => s.ringing.map(r => r.instantId)))
   const widths = useChipWidths(s => s.widths)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
+  useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const compute = useRef(createSavedLayoutCache()).current
   const inputs = useMemo<SavedLayoutInputs>(
     () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount }),

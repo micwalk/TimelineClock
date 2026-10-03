@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { recomputeLayout, resolveLayout, useLayout } from './layout.ts'
 import { settings, useSettings } from './settings.ts'
 import * as act from './actions.ts'
+import { useUi } from './ui.ts'
 
 const auto = { orientation: 'auto', verticalDir: 'down' } as const
 
@@ -94,5 +95,19 @@ describe('agenda placement', () => {
     act.toggleAgendaDock()
     size(390, 844)
     expect(useLayout.getState().agendaOverride).toBeNull()
+  })
+})
+
+describe('orientation change', () => {
+  it('closes an open tag menu and time-input popover', () => {
+    useLayout.setState({ orientation: 'horizontal' })
+    useUi.setState({ tagMenu: 'now', timeInput: { kind: 'clock', anchor: 'now' } })
+    useLayout.setState({ orientation: 'vertical' })
+    expect(useUi.getState()).toMatchObject({ tagMenu: null, timeInput: null })
+    useUi.setState({ tagMenu: 'cursor' })
+    useLayout.setState({ dir: -1 }) // not an orientation change
+    expect(useUi.getState().tagMenu).toBe('cursor')
+    useUi.setState({ tagMenu: null })
+    useLayout.setState({ orientation: 'horizontal', dir: 1 })
   })
 })

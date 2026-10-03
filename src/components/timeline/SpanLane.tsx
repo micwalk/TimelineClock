@@ -11,7 +11,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 
-export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
+export type LaneVariant = 'selected' | 'secondary' | 'focused' | 'span'
 
 /** What an endpoint arrow jumps to. Cursor endpoints get no arrow. */
 export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { kind: 'cursor' }

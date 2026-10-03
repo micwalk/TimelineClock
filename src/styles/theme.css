@@ -12,6 +12,7 @@
   --bg-top: #0c1838;
   --bg-bottom: #000000;
   --surface: rgba(3, 8, 24, 0.84);
+  --surface-solid: #02050f; /* opaque base under translucent surfaces */
   --surface-strong: rgba(2, 5, 16, 0.94);
   --surface-raised: rgba(14, 24, 52, 0.9);
   --ink: #f1f5ff;

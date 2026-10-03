@@ -605,7 +605,7 @@
 /* Lane chips and tools draw over the saved chips (lanes are above the columns) on a solid surface. */
 .timeline[data-orientation='vertical'] .tl-lane .span-chip,
 .timeline[data-orientation='vertical'] .tl-lane .icon-btn {
-  background: linear-gradient(var(--surface-strong), var(--surface-strong)) #02050f;
+  background: linear-gradient(var(--surface-strong), var(--surface-strong)) var(--surface-solid);
 }
 
 /* Agenda drawer button: top left in both orientations, the date label moves over */

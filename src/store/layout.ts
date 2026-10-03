@@ -7,6 +7,7 @@ import { resolveAgendaPlacement, resolveOrientation, shapeClass } from '../domai
 import type { Dir } from '../domain/viewport.ts'
 import type { VerticalDir } from './settings.ts'
 import { getTunables, useSettings } from './settings.ts'
+import { ui } from './ui.ts'
 
 export interface LayoutState {
   orientation: Orientation
@@ -92,6 +93,14 @@ export const useLayout = create<LayoutState>(() => ({
   agendaOverride: null,
   agendaCanDock: initialAgenda.canDock,
 }))
+
+// A tag menu or time popover is anchored to the old orientation: close it when the timeline turns.
+useLayout.subscribe((s, prev) => {
+  if (s.orientation !== prev.orientation) {
+    ui.closeTagMenu()
+    ui.closeTimeInput()
+  }
+})
 
 /** Recomputes the store from the window and settings; an override from another shape class lapses. */
 export function recomputeLayout() {
