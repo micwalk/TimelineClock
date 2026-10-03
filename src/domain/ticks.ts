@@ -133,7 +133,7 @@ const pad2 = (n: number) => n.toString().padStart(2, '0')
 
 export function formatTickLabel(t: number, unit: TickUnit): string {
   const d = new Date(t)
-  if (unit.ms < SECOND) return `${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${Math.floor(d.getMilliseconds() / 100)}`
+  if (unit.ms < SECOND) return `${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad2(Math.floor(d.getMilliseconds() / 10))}`
   if (unit.ms < MINUTE) return `${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
   if (unit.ms < HOUR) {
     const h = d.getHours()

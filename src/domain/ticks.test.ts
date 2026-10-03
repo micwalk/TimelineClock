@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, generateTicks, pickTickTiers, TICK_UNITS } from './ticks.ts'
+import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, formatTickLabel, generateTicks, pickTickTiers, TICK_UNITS } from './ticks.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
 
 const SCREEN = 1400
@@ -61,6 +61,11 @@ describe('generateTicks', () => {
     // Noon is a 6h boundary: tallest mark, but the hour label stays visible.
     expect(noon.style.halfHeight).toBeGreaterThanOrEqual(10)
     expect(noon.label).toBe('12PM')
+  })
+
+  it('labels quarter-second ticks with hundredths', () => {
+    const t = new Date(2026, 9, 2, 12, 44, 10, 750).getTime()
+    expect(formatTickLabel(t, { ms: 250 })).toBe('44:10.75')
   })
 
   it('caps tick count per tier', () => {
