@@ -1,12 +1,14 @@
 // Navigation controls under the timeline. Long-press (or the caret) on the ± buttons
 // picks the cursor step.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import {
   ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
 } from '@heroicons/react/20/solid'
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
+import { placeMenu } from '../../domain/menuPlacement.ts'
+import type { MenuPlacement } from '../../domain/menuPlacement.ts'
 import { useView, view } from '../../store/view.ts'
 import * as act from '../../store/actions.ts'
 
@@ -42,6 +44,37 @@ function IncrementButton({ direction }: { direction: 1 | -1 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressed = useRef(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<MenuPlacement | null>(null)
+
+  // Open on whichever side of the trigger has room, capped to it, and inside the viewport.
+  useLayoutEffect(() => {
+    if (!open) { setPlacement(null); return }
+    const place = (scrollActive: boolean) => {
+      const wrap = wrapRef.current
+      const menu = menuRef.current
+      if (!wrap || !menu) return
+      const vv = window.visualViewport
+      const viewport = {
+        width: Math.min(window.innerWidth, vv?.width ?? Infinity),
+        height: Math.min(window.innerHeight, vv?.height ?? Infinity),
+      }
+      const next = placeMenu(wrap.getBoundingClientRect(), { width: menu.offsetWidth, height: menu.scrollHeight }, viewport)
+      setPlacement(prev => (prev && prev.side === next.side && prev.maxHeight === next.maxHeight && prev.shiftX === next.shiftX ? prev : next))
+      if (scrollActive) menu.querySelector<HTMLElement>('.is-active')?.scrollIntoView({ block: 'nearest' })
+    }
+    place(false)
+    // Scroll the active option into view once the height cap has been applied.
+    const raf = requestAnimationFrame(() => place(true))
+    const onResize = () => place(false)
+    window.addEventListener('resize', onResize)
+    window.visualViewport?.addEventListener('resize', onResize)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      window.visualViewport?.removeEventListener('resize', onResize)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -82,7 +115,12 @@ function IncrementButton({ direction }: { direction: 1 | -1 }) {
         <ChevronDownIcon aria-hidden />
       </button>
       {open && (
-        <div className="menu glow-box" role="menu">
+        <div
+          ref={menuRef}
+          className={`menu glow-box${placement?.side === 'above' ? ' menu--above' : ''}`}
+          role="menu"
+          style={placement ? { maxHeight: placement.maxHeight, left: placement.shiftX } : { visibility: 'hidden' }}
+        >
           {TIME_INCREMENT_OPTIONS.map(o => (
             <button
               key={o.value}

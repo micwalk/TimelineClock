@@ -68,8 +68,11 @@
   padding: 6px;
   border-radius: var(--radius-card);
   background: var(--box-bg-strong);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: popover-in 140ms ease-out;
 }
+.menu--above { top: auto; bottom: calc(100% + 8px); }
 .menu__item {
   display: block;
   width: 100%;
