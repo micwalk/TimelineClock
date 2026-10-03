@@ -13,6 +13,39 @@ export function formatClock12h(ts: number): string {
   return `${pad2(displayHour)}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+/** Compact local clock for chips and tags: "6:00p", or "6:04:13p" with seconds. */
+export function formatClockCompact(ts: number, withSeconds: boolean): string {
+  const d = new Date(ts)
+  const h = d.getHours()
+  const hour = h % 12 === 0 ? 12 : h % 12
+  const seconds = withSeconds ? `:${pad2(d.getSeconds())}` : ''
+  return `${hour}:${pad2(d.getMinutes())}${seconds}${h >= 12 ? 'p' : 'a'}`
+}
+
+/**
+ * How long ago or until, for chips: "now", "45s ago", "in 6m", "2h 5m ago", "3d 4h ago".
+ * `deltaMs` is the event's time minus now (negative = past). Units are floored.
+ */
+export function formatRelativeShort(deltaMs: number): string {
+  const abs = Math.abs(deltaMs)
+  if (abs < SECOND) return 'now'
+  let text: string
+  if (abs < MINUTE) {
+    text = `${Math.floor(abs / SECOND)}s`
+  } else if (abs < HOUR) {
+    text = `${Math.floor(abs / MINUTE)}m`
+  } else if (abs < DAY) {
+    const h = Math.floor(abs / HOUR)
+    const m = Math.floor((abs % HOUR) / MINUTE)
+    text = m ? `${h}h ${m}m` : `${h}h`
+  } else {
+    const d = Math.floor(abs / DAY)
+    const h = Math.floor((abs % DAY) / HOUR)
+    text = h ? `${d}d ${h}h` : `${d}d`
+  }
+  return deltaMs < 0 ? `${text} ago` : `in ${text}`
+}
+
 /**
  * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss.mmm" (under a minute).
  * Negative input is treated as zero; callers handle the sign.

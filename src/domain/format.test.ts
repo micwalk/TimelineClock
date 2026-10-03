@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, chipName, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
-  formatRelativeCoarse, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
+  atClockTimeOnDay, chipName, durationShowsMillis, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
+  formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
@@ -106,3 +106,32 @@ describe('showsSeconds', () => {
   })
 })
 
+describe('formatClockCompact', () => {
+  it('drops leading zeros and shortens am/pm', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 18, 0, 0).getTime(), false)).toBe('6:00p')
+    expect(formatClockCompact(new Date(2026, 0, 5, 9, 7, 0).getTime(), false)).toBe('9:07a')
+  })
+  it('shows seconds on request', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 18, 4, 13).getTime(), true)).toBe('6:04:13p')
+  })
+  it('handles midnight and noon', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 0, 5, 0).getTime(), false)).toBe('12:05a')
+    expect(formatClockCompact(new Date(2026, 0, 5, 12, 0, 0).getTime(), false)).toBe('12:00p')
+  })
+})
+
+describe('formatRelativeShort', () => {
+  it('says now within a second', () => {
+    expect(formatRelativeShort(0)).toBe('now')
+    expect(formatRelativeShort(999)).toBe('now')
+    expect(formatRelativeShort(-999)).toBe('now')
+  })
+  it('uses the largest useful units', () => {
+    expect(formatRelativeShort(-45 * SECOND)).toBe('45s ago')
+    expect(formatRelativeShort(6 * MINUTE + 30 * SECOND)).toBe('in 6m')
+    expect(formatRelativeShort(-(2 * HOUR + 5 * MINUTE))).toBe('2h 5m ago')
+    expect(formatRelativeShort(2 * HOUR)).toBe('in 2h')
+    expect(formatRelativeShort(-(3 * DAY + 4 * HOUR))).toBe('3d 4h ago')
+    expect(formatRelativeShort(3 * DAY)).toBe('in 3d')
+  })
+})
