@@ -2,108 +2,81 @@
 
 A timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
 
-## 🚀 Current Status
+## Status
 
-**Phase 0: Foundation & Setup** ✅ **COMPLETE**
-- Project initialized with Vite + React + TypeScript
-- Tailwind CSS v4 configured and working
-- PWA setup with Vite PWA plugin
-- Testing framework (Vitest + React Testing Library) ready
-- Development environment with HMR working
+Working prototype:
 
-**Next: Phase 1 - Core Data Models & State Management** 🎯
+- Zoomable, pannable timeline with Now, a free cursor (optionally locked to an offset from Now), and saved instants
+- Instants: create, rename, favorite, alarm, move, delete; focus history and next/previous navigation
+- Spans between instants (saved and implied), with live durations
+- Alarms with sound, browser notifications, snooze, and a ringing panel
+- List of instants, favorites and spans
+- Settings: glow intensity, alarm ring duration and unanswered behavior, debug buttons
 
-## 📋 Implementation Plan
+The timeline is rendered as DOM (React + CSS transforms), not canvas. See
+[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for how rendering, state and styling fit together.
 
-See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for detailed feature-by-feature development steps and milestones.
+## Tech stack
 
-## 🛠 Tech Stack
+- **Frontend**: React 19 + TypeScript + Vite
+- **Timeline**: React components positioned by a small on-demand viewport engine (`src/engine`)
+- **State**: Zustand stores persisted to localStorage
+- **Styling**: CSS custom-property theme (`src/styles/theme.css`) with a global glow knob; Tailwind v4 available for utilities
+- **Icons**: Heroicons
+- **Testing**: Vitest (jsdom) + Testing Library
+- **PWA**: vite-plugin-pwa (Workbox)
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Timeline**: Native Canvas 2D API with optimized rendering pipeline
-- **Styling**: Tailwind CSS v4 + Headless UI
-- **State Management**: Zustand with persistence
-- **Storage**: IndexedDB via `idb` (local-first)
-- **Date/Time**: `date-fns` + `date-fns-tz` for timezone/DST handling
-- **Forms**: `react-hook-form` + `zod` for validation
-- **Animation**: `framer-motion` for smooth transitions
-- **Testing**: Vitest + React Testing Library + Playwright
-- **PWA**: Vite PWA plugin with Workbox
-
-## 📦 Quick Start
+## Quick start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
+npm run dev        # dev server
+npm test           # unit tests (watch mode); `npx vitest run` for a single run
+npm run build      # type-check + production build
+npm run lint
 ```
 
-## 🧪 Development Commands
-
-```bash
-# Development
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run build:pwa        # Build PWA
-npm run preview          # Preview production build
-
-# Testing
-npm test                 # Run tests
-npm run test:coverage    # Run tests with coverage
-npm run test:watch       # Run tests in watch mode
-
-# Code Quality
-npm run lint             # Run linter
-npm run lint:fix         # Fix linting issues
-npm run type-check       # TypeScript type checking
-```
-
-## 📁 Project Structure
+## Project structure
 
 ```
 src/
-├── components/     # React components
-├── hooks/         # Custom React hooks
-├── store/         # Zustand state management
-├── utils/         # Utility functions
-├── types/         # TypeScript type definitions
-├── services/      # API and storage services
-├── canvas/        # Canvas rendering utilities
-├── parsers/       # Natural language parsing logic
-└── test/          # Test setup and utilities
+├── domain/      # Pure logic: time math, ticks, spans, navigation, alarms (+ tests)
+├── store/       # Zustand stores and actions.ts (all user operations) (+ tests)
+├── engine/      # Viewport engine and hooks: usePositionX, useFrameValue, LiveText
+├── components/
+│   ├── timeline/  # Timeline, instant columns, span lanes, ticks, time-entry popovers
+│   ├── panels/    # Control bar, list panel, ringing alarms, settings
+│   └── common/    # Icon button, inline input
+├── hooks/       # Pan/zoom gestures, hotkeys, FLIP list animation
+├── services/    # Alarm scheduler, audio, notifications
+└── styles/      # theme.css (tokens), timeline.css, panels.css
 ```
 
-## 🎯 Development Milestones
+## Keyboard
 
-1. **M0 (Prototype)** - 2-3 weeks: Basic timeline render, Now animation, tap/drag creation
-2. **M1 (MVP)** - 4-6 weeks: Natural language quick-add, favorites, local storage, PWA
-3. **M2 (Reliable)** - 2-3 weeks: Push notifications, cross-device sync
-4. **M3 (Polish)** - 2-3 weeks: Accessibility, themes, calendar overlay
+| Key | Action |
+|-----|--------|
+| `I` / `W`, `O` / `S` | Zoom in / out |
+| `Z` / `X` | Move cursor back / forward by the step (long-press ± to change it) |
+| `A` / `D` (or arrows) | Previous / next instant |
+| `Q` / `E` | Focus history back / forward |
+| `R` | Focus Now |
+| `Esc` | Clear secondary selection, then selection; cancels a move |
+| `Enter` | Confirm a move |
 
-## 🔧 Key Design Decisions
+## Development milestones
 
-- **Canvas over PixiJS**: Using native Canvas 2D API for better performance and smaller bundle size
-- **Zustand over Redux**: Simpler state management for this use case
-- **Local-first**: Data stays on device by default for privacy and offline functionality
-- **PWA-first**: Progressive Web App approach for cross-platform compatibility
-- **Tailwind CSS v4**: Latest version with improved performance and features
+1. **M0 (Prototype)**: Basic timeline render, Now animation, tap/drag creation
+2. **M1 (MVP)**: Natural language quick-add, favorites, local storage, PWA
+3. **M2 (Reliable)**: Push notifications, cross-device sync
+4. **M3 (Polish)**: Accessibility, themes, calendar overlay
 
-## 🚧 Important Constraints
+## Important constraints
 
 - PWA limitations for wake-up alarms (need Capacitor for precise alarms)
 - Handle device sleep, timezone changes, app backgrounding
-- Support offline functionality
-- Ensure cross-browser compatibility
-- Canvas performance on low-end devices
+- Offline support and cross-browser compatibility
 
-## 📄 License
+## License
 
 MIT License - see LICENSE file for details

@@ -62,7 +62,7 @@
 ## 5. Visual design
 
 - **Alarm glyph (bell)**:  
-  - Rendered as vector icon in canvas.  
+  - Rendered as an SVG icon (Heroicons).  
   - Standardized to 24×24 viewBox, scaled for zoom levels.  
   - Placement: next to instant label on timeline and in cards.  
 - **Timeline presentation**:  

@@ -128,7 +128,7 @@ A single‑view, timeline‑centric clock that unifies Stopwatch, Timer, Alarm, 
 
 ## 6) PWA platform plan
 
-- **Frontend**: React + TypeScript + Vite; Canvas‑based timeline (PixiJS or optimized 2D Canvas) for smooth 60fps; Tailwind for UI; state via Zustand; data in IndexedDB via `idb`.
+- **Frontend**: React + TypeScript + Vite; DOM‑based timeline (React components positioned by CSS transforms, rendered on demand; see docs/ARCHITECTURE.md) for smooth 60fps; CSS-variable theme; state via Zustand; data in localStorage today, IndexedDB via `idb` planned.
 - **Service Worker**: Workbox (precaching, runtime caching, offline).
 - **Installability**: manifest with icons/splash; proper scopes.
 - **Audio**: short local sound files; gate playback behind user gesture to satisfy autoplay policies.
