@@ -78,9 +78,26 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
     act.zoomToTimes(times)
   }
 
+  const toolButtons = selected && !moving ? (
+    <>
+      {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
+      {!inst.alarm && !isPast && <IconButton icon={BellOutline} label="Set alarm" color={bellColor} bare onClick={() => act.toggleAlarm(inst.id)} />}
+      {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
+    </>
+  ) : moving ? (
+    <>
+      <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
+      <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
+    </>
+  ) : null
+  // Vertical: tools sit in a row under the chip so none lies on the marker line. Horizontal: beside the chip.
+  const toolsBelow = vertical && toolButtons !== null
+  const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
+
   return (
     <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
-      <div ref={chipRef} className={`chip chip--saved glow-box glow-text${inst.label ? '' : ' chip--empty'}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -121,20 +138,13 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
           {SNOOZE_MARK}{foldCount}
         </button>
       )}
-      {selected && !moving && (
-        <div className="tl-col__tools">
-          {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
-          {!inst.alarm && !isPast && <IconButton icon={BellOutline} label="Set alarm" color={bellColor} bare onClick={() => act.toggleAlarm(inst.id)} />}
-          {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
-          <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
+      {(editing || toolsBelow) && (
+        <div className="tl-col__below">
+          {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
+          {toolsBelow && tools}
         </div>
       )}
-      {moving && (
-        <div className="tl-col__tools">
-          <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
-          <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
-        </div>
-      )}
+      {!toolsBelow && tools}
     </div>
   )
 }

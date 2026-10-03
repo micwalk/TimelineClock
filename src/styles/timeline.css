@@ -200,6 +200,26 @@
   gap: 3px;
 }
 
+/* Under the chip: the time while renaming, and (vertical) the tools, right-aligned so none sits on the marker line. */
+.tl-col__below {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 100%;
+  width: max-content;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.tl-col__below .chip__time { margin-right: auto; padding: 0 5px; color: var(--ink-dim); }
+.tl-col__below .tl-col__tools { position: static; transform: none; margin: 0; }
+/* While renaming, the input is the one box: the chip around it draws nothing. */
+.chip--editing { background: none; padding: 0; cursor: default; }
+.chip--editing:hover { background: none; }
+.chip--editing .chip-input { margin: 0; }
+
 /* "⟲N": snoozes folded into this chip. The chip shifts left so chip + badge (34px) stay centered on the line. */
 .tl-col__chip.has-fold { transform: translateX(calc(-50% - 17px)); }
 .tl-col__fold {
@@ -218,7 +238,7 @@
   cursor: pointer;
 }
 .tl-col__fold:hover { background: var(--box-bg-raised); }
-.tl-col__chip.has-fold .tl-col__tools { margin-left: 40px; }
+.tl-col__chip.has-fold > .tl-col__tools { margin-left: 40px; }
 
 /* "+N": overflow chips. Accent comes from the most important member. */
 .tl-cluster.is-alarm { --accent: var(--c-alarm); --halo: var(--c-alarm); }

@@ -193,3 +193,36 @@ describe('layering', () => {
     expect(line.querySelector('.tl-col__chip')).toBeNull()
   })
 })
+
+describe('chip polish: renaming and vertical tools', () => {
+  it('shows one box while renaming, with the time under it', () => {
+    const t = twentyMinutesAgo()
+    const id = entities.createInstant(t, 'Tea')
+    useView.setState({ currentSelectedInstantId: id, editingInstantId: id })
+    const { container } = render(<Columns />)
+    const input = screen.getByRole('textbox', { name: 'Instant name' })
+    expect(container.querySelectorAll('input')).toHaveLength(1)
+    expect(input.closest('.glow-box')).toBe(input)
+    expect(container.querySelector('.chip--editing')).not.toBeNull()
+    expect(screen.getByText(formatClockCompact(t, true))).toHaveClass('chip__time')
+  })
+
+  it('puts a vertical selected chip\'s tools in the row below it', () => {
+    const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
+    useView.setState({ currentSelectedInstantId: id })
+    useLayout.setState({ orientation: 'vertical', dir: 1 })
+    const { container } = render(<Columns />)
+    const below = container.querySelector('.tl-col__below')
+    expect(below).not.toBeNull()
+    expect(below!.contains(screen.getByRole('button', { name: 'Delete instant' }))).toBe(true)
+    expect(container.querySelector('.chip--saved')!.contains(below)).toBe(false)
+  })
+
+  it('keeps horizontal tools beside the chip', () => {
+    const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
+    useView.setState({ currentSelectedInstantId: id })
+    const { container } = render(<Columns />)
+    expect(container.querySelector('.tl-col__below')).toBeNull()
+    expect(container.querySelector('.tl-col__tools')).not.toBeNull()
+  })
+})
