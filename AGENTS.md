@@ -1,7 +1,5 @@
 # Timeline Clock - Agent Rules
 
-> Same content as `.cursorrules` (for agents that read AGENTS.md). Keep the two in sync.
-
 ## Project Overview
 This is a timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
 
@@ -54,7 +52,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - **Cursor tag**: stays visible when the cursor lands on an instant (instant focus), in the `--c-cursor-on` accent, showing that instant's time and how long ago; no ＋ there, and the focused chip omits its "· ago"
 - **Cursor landing**: a drag released at almost no speed (below `snapMaxReleaseSpeed`) snaps onto Now or an instant within 12px touch / 8px mouse, else to a tick within `tickSnapPx` (8px); a release with speed, or the end of a glide, never snaps; ± steps and typed times land on an instant only on an exact hit
 - **Control bar**: horizontal, one row (Zoom out, Previous, step back, NOW/＋, step forward, Next, Zoom in). Vertical keeps it a bottom bar but as a two-row grid that follows the screen: row 1 Zoom out, ▲, step up, row 2 Zoom in, ▼, step down, with NOW/＋ spanning both rows in column 4. Up/down respects the time direction (future down: ▲ is the previous instant and step up is −30m; future up: ▲ is the next instant and step up is +30m).
-- **Agenda**: the tabbed list (All Instants / Favorites / All Spans), src/components/panels/Agenda.tsx; the dock/drawer toggle and Settings gear sit in its tab bar. It docks at the bottom (horizontal) or side (vertical) when there is room, otherwise it is a drawer opened by the ☰ button (setting: Auto / Docked / Drawer); picking a row in the drawer closes it
+- **Agenda**: the tabbed list (All Instants / Favorites / All Spans), src/components/panels/Agenda.tsx; the dock/drawer toggle, Help (?) button and Settings gear sit in its tab bar. Help (src/components/panels/Help.tsx, also the ? key) covers concepts, controls, keys, the local-only data note and author credit; update it when controls change. It docks at the bottom (horizontal) or side (vertical) when there is room, otherwise it is a drawer opened by the ☰ button (setting: Auto / Docked / Drawer); picking a row in the drawer closes it
 - **Backup**: Settings > Data exports one JSON file (settings + instants/spans; format in src/domain/backup.ts). Import picks settings, data or both; data combines (matching ids take the imported copy) or replaces
 - **Planned** (see docs/handoffs): Agenda swipe gestures, stopwatch/timer/alarm quick-create, natural-language quick add. Already shipped in layout v2: vertical layout, momentum, label-overlap layout, arrow-shaped tags, Agenda dock/drawer
 

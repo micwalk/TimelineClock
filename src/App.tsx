@@ -3,6 +3,7 @@ import { ControlBar } from './components/panels/ControlBar.tsx'
 import { AgendaShell } from './components/panels/AgendaShell.tsx'
 import { useLayout } from './store/layout.ts'
 import { RingingAlarms } from './components/panels/RingingAlarms.tsx'
+import { HelpDialog } from './components/panels/Help.tsx'
 import { useHotkeys } from './hooks/useHotkeys.ts'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
       </div>
       <AgendaShell />
       <RingingAlarms />
+      <HelpDialog />
     </div>
   )
 }
