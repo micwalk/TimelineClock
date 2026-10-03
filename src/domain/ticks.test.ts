@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, formatTickLabel, generateTicks, pickTickTiers, TICK_UNITS } from './ticks.ts'
+import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, formatTickLabel, generateTicks, nearestFinestTick, pickTickTiers, TICK_UNITS } from './ticks.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
 
 const SCREEN = 1400
@@ -73,17 +73,41 @@ describe('generateTicks', () => {
   })
 })
 
-import { nearestFinestTick as nft } from './ticks.ts'
+
 describe('nearestFinestTick', () => {
-  it('5-minute tier', () => {
-    const base = new Date(2026, 0, 5, 10, 0, 0).getTime()
-    const px = 100 / (15 * 60000)
-    expect(nft(base + 6 * 60000, px)).toBe(base + 5 * 60000)
-    expect(nft(base + 8 * 60000, px)).toBe(base + 10 * 60000)
+  // 15 minutes at exactly 100px makes 15m the labeled tier and 5m the finest.
+  const fiveMinuteZoom = 100 / (15 * MINUTE)
+  const tenAm = new Date(2026, 0, 5, 10, 0, 0).getTime()
+
+  it('rounds to the nearest finest tick', () => {
+    expect(nearestFinestTick(tenAm + 6 * MINUTE, fiveMinuteZoom)).toBe(tenAm + 5 * MINUTE)
+    expect(nearestFinestTick(tenAm + 8 * MINUTE, fiveMinuteZoom)).toBe(tenAm + 10 * MINUTE)
   })
-  it('day boundary', () => {
-    const px = 100 / (7 * 86400000)
-    expect(nft(new Date(2026, 0, 5, 13, 0).getTime(), px)).toBe(new Date(2026, 0, 6).getTime())
-    expect(nft(new Date(2026, 0, 5, 11).getTime(), px)).toBe(new Date(2026, 0, 5).getTime())
+
+  it('breaks ties toward the earlier tick', () => {
+    expect(nearestFinestTick(tenAm + 2.5 * MINUTE, fiveMinuteZoom)).toBe(tenAm)
+  })
+
+  it('snaps to local midnight when days are the finest tier', () => {
+    const weekZoom = 100 / (7 * DAY)
+    expect(nearestFinestTick(new Date(2026, 0, 5, 13).getTime(), weekZoom)).toBe(new Date(2026, 0, 6).getTime())
+    expect(nearestFinestTick(new Date(2026, 0, 5, 11).getTime(), weekZoom)).toBe(new Date(2026, 0, 5).getTime())
+  })
+
+  it('snaps to 00/06/12/18 local when 6 hours is the finest tier', () => {
+    const dayZoom = 100 / DAY
+    expect(pickTickTiers(dayZoom)[0].ms).toBe(6 * HOUR)
+    expect(nearestFinestTick(new Date(2026, 0, 5, 7, 59).getTime(), dayZoom)).toBe(new Date(2026, 0, 5, 6).getTime())
+    expect(nearestFinestTick(new Date(2026, 0, 5, 9, 1).getTime(), dayZoom)).toBe(new Date(2026, 0, 5, 12).getTime())
+  })
+
+  it('always lands on a tick that generateTicks draws', () => {
+    const t = new Date(2026, 2, 8, 1, 37, 21).getTime() // around the US DST change
+    for (const span of [10 * MINUTE, 2 * HOUR, DAY, 10 * DAY, 90 * DAY]) {
+      const pxPerMs = SCREEN / span
+      const snapped = nearestFinestTick(t, pxPerMs)
+      const drawn = generateTicks(t - span, t + span, pxPerMs).map(k => k.t)
+      expect(drawn).toContain(snapped)
+    }
   })
 })

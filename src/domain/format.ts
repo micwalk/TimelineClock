@@ -1,7 +1,7 @@
 // Pure formatting/parsing helpers for times and durations.
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 import { displayName } from './entities.ts'
-import { snoozeBaseLabel } from './alarms.ts'
+import { parseSnoozeLabel } from './alarms.ts'
 
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 
@@ -109,11 +109,15 @@ export function atClockTimeOnDay(dayOf: number, hours24: number, minutes: number
   return d.getTime()
 }
 
+/** Marks a snooze in short names: "Test Alarm ⟲2". */
+const SNOOZE_MARK = '⟲'
+
+/** An instant's name as shown on its timeline chip; snoozes become "Base ⟲N". */
 export function chipName(label: string): string {
-  const m = /^Snooze (\d+): /.exec(label)
-  if (!m) return displayName(label)
-  return `${displayName(snoozeBaseLabel(label))} ?${m[1]}`
+  const snooze = parseSnoozeLabel(label)
+  return snooze ? `${displayName(snooze.base)} ${SNOOZE_MARK}${snooze.count}` : displayName(label)
 }
 
-export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs <= thresholdMs
+/** Saved chips show seconds only when the finest visible tick is shorter than `thresholdMs`. */
+export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs < thresholdMs
 

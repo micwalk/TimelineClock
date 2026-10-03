@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDueAlarms, nextAlarmTime, snoozeBaseLabel, snoozeLabel } from './alarms.ts'
+import { findDueAlarms, nextAlarmTime, parseSnoozeLabel, snoozeBaseLabel, snoozeLabel } from './alarms.ts'
 import { findAdjacent, pushFocusHistory, stepFocusHistory } from './navigation.ts'
 import type { InstantRecord } from './entities.ts'
 import { MINUTE } from './time.ts'
@@ -32,6 +32,13 @@ describe('snooze labels', () => {
     expect(snoozeLabel('Wake up', 1)).toBe('Snooze 1: Wake up')
     expect(snoozeLabel('Snooze 1: Wake up', 2)).toBe('Snooze 2: Wake up')
     expect(snoozeBaseLabel('Snooze 2: Snooze 1: Wake up')).toBe('Wake up')
+  })
+  it('parses the latest snooze count and the base label', () => {
+    expect(parseSnoozeLabel('Snooze 2: Wake up')).toEqual({ base: 'Wake up', count: 2 })
+    expect(parseSnoozeLabel('Snooze 3: Snooze 2: Wake up')).toEqual({ base: 'Wake up', count: 3 })
+    expect(parseSnoozeLabel('snooze  12:Wake up')).toEqual({ base: 'Wake up', count: 12 })
+    expect(parseSnoozeLabel('Wake up')).toBeNull()
+    expect(parseSnoozeLabel('My Snooze 2: thing')).toBeNull()
   })
 })
 

@@ -1,8 +1,7 @@
-import { chipName, showsSeconds } from './format.ts'
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
-  formatRelativeCoarse, formatSignedDuration, parseDurationInput, to24h,
+  atClockTimeOnDay, chipName, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
+  formatRelativeCoarse, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
@@ -87,14 +86,23 @@ describe('clock entry', () => {
   })
 })
 
-describe('chipName/showsSeconds', () => {
-  it('formats', () => {
-    expect(chipName('Snooze 2: Test Alarm')).toBe('Test Alarm ?2')
-    expect(chipName('Snooze 2: Snooze 1: X')).toBe('X ?2')
-    expect(chipName('Plain')).toBe('Plain')
+describe('chipName', () => {
+  it('shortens snoozes to "Base ⟲N"', () => {
+    expect(chipName('Snooze 2: Test Alarm')).toBe('Test Alarm ⟲2')
+    expect(chipName('Snooze 2: Snooze 1: Wake up')).toBe('Wake up ⟲2')
+  })
+  it('leaves other labels alone and names empty ones like displayName', () => {
+    expect(chipName('Take Meds')).toBe('Take Meds')
     expect(chipName('')).toBe('?')
-    expect(showsSeconds(1000, 5000)).toBe(true)
-    expect(showsSeconds(60000, 5000)).toBe(false)
+    expect(chipName('Snooze 1: ')).toBe('? ⟲1')
+  })
+})
+
+describe('showsSeconds', () => {
+  it('shows seconds only when the finest tick is under the threshold', () => {
+    expect(showsSeconds(15 * SECOND, MINUTE)).toBe(true)
+    expect(showsSeconds(MINUTE, MINUTE)).toBe(false)
+    expect(showsSeconds(5 * MINUTE, MINUTE)).toBe(false)
   })
 })
 

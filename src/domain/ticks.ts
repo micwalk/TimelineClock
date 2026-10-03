@@ -104,26 +104,25 @@ export function firstDurationBoundaryAtOrBefore(ts: number, unitMs: number): num
   return Math.floor(ts / unitMs) * unitMs
 }
 
+function firstUnitTimeAtOrBefore(ts: number, unit: TickUnit): number {
+  return unit.calendar ? firstCalendarBoundaryAtOrBefore(ts, unit.calendar) : firstDurationBoundaryAtOrBefore(ts, unit.ms)
+}
+
+/** The next tick of `unit` after `t`, which must be on one of its boundaries. */
+function nextUnitTime(t: number, unit: TickUnit): number {
+  if (unit.calendar) return addCalendar(t, unit.calendar, 1)
+  if (unit.ms === 6 * HOUR) {
+    // Step by wall-clock hours so DST shifts keep the 00/06/12/18 alignment.
+    const d = new Date(t)
+    d.setHours(d.getHours() + 6)
+    return d.getTime()
+  }
+  return t + unit.ms
+}
+
 function* unitTimes(unit: TickUnit, start: number, end: number, maxCount: number): Generator<number> {
   let count = 0
-  if (unit.calendar) {
-    for (let t = firstCalendarBoundaryAtOrBefore(start, unit.calendar); t <= end && count < maxCount; t = addCalendar(t, unit.calendar, 1), count++) {
-      yield t
-    }
-    return
-  }
-  const step = unit.ms
-  if (step === 6 * HOUR) {
-    // Step by wall-clock hours so DST shifts keep the 00/06/12/18 alignment.
-    const d = new Date(firstDurationBoundaryAtOrBefore(start, step))
-    while (d.getTime() <= end && count < maxCount) {
-      yield d.getTime()
-      d.setHours(d.getHours() + 6)
-      count++
-    }
-    return
-  }
-  for (let t = firstDurationBoundaryAtOrBefore(start, step); t <= end && count < maxCount; t += step, count++) {
+  for (let t = firstUnitTimeAtOrBefore(start, unit); t <= end && count < maxCount; t = nextUnitTime(t, unit), count++) {
     yield t
   }
 }
@@ -183,13 +182,13 @@ export function generateTicks(start: number, end: number, pxPerMs: number, maxPe
   return [...byTime.values()].sort((a, b) => a.t - b.t)
 }
 
-/** Nearest tick time of the finest visible tier (calendar-aware). */
+/**
+ * The tick of the finest tier drawn at this zoom that is nearest to `t` (ties go
+ * earlier). Uses the same boundaries as generateTicks, so it lands on a drawn tick.
+ */
 export function nearestFinestTick(t: number, pxPerMs: number): number {
   const unit = pickTickTiers(pxPerMs)[0]
-  const before = unit.calendar ? firstCalendarBoundaryAtOrBefore(t, unit.calendar) : firstDurationBoundaryAtOrBefore(t, unit.ms)
-  let after: number
-  if (unit.calendar) after = addCalendar(before, unit.calendar, 1)
-  else if (unit.ms === 6 * HOUR) { const d = new Date(before); d.setHours(d.getHours() + 6); after = d.getTime() }
-  else after = before + unit.ms
+  const before = firstUnitTimeAtOrBefore(t, unit)
+  const after = nextUnitTime(before, unit)
   return t - before <= after - t ? before : after
 }
