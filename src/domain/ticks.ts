@@ -182,3 +182,14 @@ export function generateTicks(start: number, end: number, pxPerMs: number, maxPe
   })
   return [...byTime.values()].sort((a, b) => a.t - b.t)
 }
+
+/** Nearest tick time of the finest visible tier (calendar-aware). */
+export function nearestFinestTick(t: number, pxPerMs: number): number {
+  const unit = pickTickTiers(pxPerMs)[0]
+  const before = unit.calendar ? firstCalendarBoundaryAtOrBefore(t, unit.calendar) : firstDurationBoundaryAtOrBefore(t, unit.ms)
+  let after: number
+  if (unit.calendar) after = addCalendar(before, unit.calendar, 1)
+  else if (unit.ms === 6 * HOUR) { const d = new Date(before); d.setHours(d.getHours() + 6); after = d.getTime() }
+  else after = before + unit.ms
+  return t - before <= after - t ? before : after
+}

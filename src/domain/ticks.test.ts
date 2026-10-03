@@ -72,3 +72,18 @@ describe('generateTicks', () => {
     expect(generateTicks(0, 1e12, 1, 50).length).toBeLessThanOrEqual(150)
   })
 })
+
+import { nearestFinestTick as nft } from './ticks.ts'
+describe('nearestFinestTick', () => {
+  it('5-minute tier', () => {
+    const base = new Date(2026, 0, 5, 10, 0, 0).getTime()
+    const px = 100 / (15 * 60000)
+    expect(nft(base + 6 * 60000, px)).toBe(base + 5 * 60000)
+    expect(nft(base + 8 * 60000, px)).toBe(base + 10 * 60000)
+  })
+  it('day boundary', () => {
+    const px = 100 / (7 * 86400000)
+    expect(nft(new Date(2026, 0, 5, 13, 0).getTime(), px)).toBe(new Date(2026, 0, 6).getTime())
+    expect(nft(new Date(2026, 0, 5, 11).getTime(), px)).toBe(new Date(2026, 0, 5).getTime())
+  })
+})
