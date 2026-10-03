@@ -9,6 +9,7 @@ import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import * as act from '../../store/actions.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
+import { DataSettings } from './DataSettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
@@ -131,6 +132,11 @@ export function SettingsPanel() {
                 <option value="snooze">Snooze 5 min</option>
               </select>
             </label>
+          </section>
+
+          <section className="settings__group">
+            <h3>Data</h3>
+            <DataSettings />
           </section>
 
           <section className="settings__group">

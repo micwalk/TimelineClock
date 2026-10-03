@@ -14,12 +14,20 @@ export interface AlarmsState {
   unattended: 'dismiss' | 'snooze'
 }
 
+/** The alarm preferences in untrusted JSON (storage or an imported file), with junk replaced by defaults. */
+export function sanitizeAlarmPrefs(raw: unknown): Pick<AlarmsState, 'autoDismissMs' | 'unattended'> {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    autoDismissMs: typeof r.autoDismissMs === 'number' && Number.isFinite(r.autoDismissMs) && r.autoDismissMs > 0 ? r.autoDismissMs : 5 * MINUTE,
+    unattended: r.unattended === 'snooze' ? 'snooze' : 'dismiss',
+  }
+}
+
 const loaded = loadJson<Partial<AlarmsState>>(ALARMS_KEY, {})
 
 export const useAlarms = create<AlarmsState>(() => ({
   ringing: Array.isArray(loaded.ringing) ? loaded.ringing : [],
-  autoDismissMs: typeof loaded.autoDismissMs === 'number' ? loaded.autoDismissMs : 5 * MINUTE,
-  unattended: loaded.unattended === 'snooze' ? 'snooze' : 'dismiss',
+  ...sanitizeAlarmPrefs(loaded),
 }))
 
 useAlarms.subscribe(s => saveJson(ALARMS_KEY, { ringing: s.ringing, autoDismissMs: s.autoDismissMs, unattended: s.unattended }))

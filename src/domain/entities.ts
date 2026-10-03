@@ -30,3 +30,19 @@ export const newSpanId = () => `s_${randomId()}`
 
 export const displayName = (label: string | undefined | null, fallback = '?') =>
   label && label.length > 0 ? label : fallback
+
+/** Keeps the well-formed instant records from untrusted JSON (storage or an imported file). */
+export function sanitizeInstants(data: unknown): InstantRecord[] {
+  if (!Array.isArray(data)) return []
+  return data
+    .filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number' && Number.isFinite(x.tsEpochMs))
+    .map(x => ({ ...x, label: typeof x.label === 'string' ? x.label : '' }))
+}
+
+/** Keeps the well-formed span records from untrusted JSON (storage or an imported file). */
+export function sanitizeSpans(data: unknown): SpanRecord[] {
+  if (!Array.isArray(data)) return []
+  return data
+    .filter((x): x is SpanRecord => !!x && typeof x.id === 'string' && typeof x.startInstantId === 'string' && typeof x.endInstantId === 'string')
+    .map(x => ({ ...x, label: typeof x.label === 'string' ? x.label : '' }))
+}

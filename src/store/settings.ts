@@ -31,18 +31,22 @@ export interface SettingsState {
   layoutVersion: number
 }
 
-const loaded = loadJson<Record<string, unknown>>(SETTINGS_KEY, {})
+/** The settings in untrusted JSON (storage or an imported file), with junk replaced by defaults. */
+export function sanitizeSettings(raw: unknown): SettingsState {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    glow: typeof r.glow === 'number' && Number.isFinite(r.glow) ? Math.min(2, Math.max(0, r.glow)) : 1,
+    tunables: sanitizeTunableOverrides(r.tunables),
+    favoriteLanes: r.favoriteLanes === 'always' ? 'always' : 'selected',
+    orientation: r.orientation === 'horizontal' || r.orientation === 'vertical' ? r.orientation : 'auto',
+    verticalDir: r.verticalDir === 'up' ? 'up' : 'down',
+    tickSnap: r.tickSnap !== false,
+    agendaPlacement: r.agendaPlacement === 'docked' || r.agendaPlacement === 'drawer' ? r.agendaPlacement : 'auto',
+    layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
+  }
+}
 
-export const useSettings = create<SettingsState>(() => ({
-  glow: typeof loaded.glow === 'number' ? loaded.glow : 1,
-  tunables: sanitizeTunableOverrides(loaded.tunables),
-  favoriteLanes: loaded.favoriteLanes === 'always' ? 'always' : 'selected',
-  orientation: loaded.orientation === 'horizontal' || loaded.orientation === 'vertical' ? loaded.orientation : 'auto',
-  verticalDir: loaded.verticalDir === 'up' ? 'up' : 'down',
-  tickSnap: loaded.tickSnap !== false,
-  agendaPlacement: loaded.agendaPlacement === 'docked' || loaded.agendaPlacement === 'drawer' ? loaded.agendaPlacement : 'auto',
-  layoutVersion: typeof loaded.layoutVersion === 'number' && Number.isFinite(loaded.layoutVersion) ? loaded.layoutVersion : 0,
-}))
+export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
 useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, agendaPlacement: s.agendaPlacement, layoutVersion: s.layoutVersion }))
 
