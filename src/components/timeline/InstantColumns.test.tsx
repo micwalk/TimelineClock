@@ -146,6 +146,6 @@ describe('vertical chips', () => {
     const layout: SavedLayout = { visibleIds: [id], rows: { [id]: 1 }, crossOffsets: { [id]: 40 }, folded: {}, foldCount: {}, clusters: [], rowsUsed: 2 }
     const { container } = render(<SavedInstantColumns layout={layout} />)
     const chip = container.querySelector('.tl-col__chip') as HTMLElement
-    expect(chip.style.left).toBe('136px')
+    expect(chip.style.left).toBe('172px')
   })
 })

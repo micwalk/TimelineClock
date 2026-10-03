@@ -557,7 +557,20 @@
   top: 0;
   transform: none;
 }
-.timeline[data-orientation='vertical'] .tl-tag__box { align-items: flex-end; }
+.timeline[data-orientation='vertical'] .tl-tag__box {
+  align-items: flex-end;
+  padding: 3px 6px;
+  font-size: 13px;
+  /* max-width is set inline from verticalTagMaxWidth(); sub lines truncate */
+}
+.timeline[data-orientation='vertical'] .tl-tag__box > * { min-width: 0; max-width: 100%; }
+.timeline[data-orientation='vertical'] .tl-tag__caption { font-size: 9px; }
+.timeline[data-orientation='vertical'] .tl-tag__sub {
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Span lanes: vertical bars stacked inward from the right edge */
 .timeline[data-orientation='vertical'] .tl-lane {

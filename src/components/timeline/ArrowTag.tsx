@@ -5,6 +5,7 @@
 import { useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useLayout } from '../../store/layout.ts'
+import { verticalTagMaxWidth } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 
 /** Points down, tip at (9,18); the sides and back curve inward. */
@@ -41,6 +42,7 @@ export function ArrowTag({ srName, hint, slot, onClick, onDoubleClick, menuOpen,
           type="button"
           className="tl-tag__box glow-box glow-text"
           title={hint}
+          style={vertical ? { maxWidth: verticalTagMaxWidth() } : undefined}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={onClick}

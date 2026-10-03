@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GEOMETRY, GEOMETRY_VERTICAL, geometryStyle, geometryStyleFor, lanesTop } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL, geometryStyle, geometryStyleFor, lanesTop, verticalCrossBudget, verticalTagMaxWidth } from './geometry.ts'
 
 describe('timeline geometry', () => {
   it('exposes every value as a px custom property', () => {
@@ -19,8 +19,20 @@ describe('timeline geometry', () => {
 
   it('has a vertical set, written as px custom properties', () => {
     const style = geometryStyleFor('vertical')
-    expect(style).toMatchObject({ '--tl-axis': '84px', '--tl-tag-arrow': '14px', '--tl-chip-start': '96px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '64px' })
+    expect(style).toMatchObject({ '--tl-axis': '120px', '--tl-tag-arrow': '14px', '--tl-chip-start': '132px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '64px' })
     expect(Object.keys(style)).toHaveLength(Object.keys(GEOMETRY_VERTICAL).length)
     expect(geometryStyleFor('horizontal')).toBe(geometryStyle)
+  })
+
+  it('keeps the vertical live side wide enough for the tags', () => {
+    expect(GEOMETRY_VERTICAL.axis).toBe(120)
+    expect(GEOMETRY_VERTICAL.chipStart).toBe(132)
+    expect(verticalTagMaxWidth()).toBe(GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow - 4)
+  })
+
+  it('shrinks the vertical chip budget for lanes and their chips', () => {
+    const base = 390 - GEOMETRY_VERTICAL.chipStart - 8
+    expect(verticalCrossBudget(390, 0)).toBe(base)
+    expect(verticalCrossBudget(390, 2)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap - 64)
   })
 })

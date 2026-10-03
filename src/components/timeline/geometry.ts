@@ -20,10 +20,10 @@ export const GEOMETRY = {
 /** Vertical timeline: the axis is a vertical line; x offsets from the left edge. */
 export const GEOMETRY_VERTICAL = {
   /** x of the axis. */
-  axis: 84,
+  axis: 120,
   tagArrow: 14,
   /** x where chip column 0 starts. */
-  chipStart: 96,
+  chipStart: 132,
   /** Spacing of span lanes, from the right edge inward. */
   laneGap: 18,
   /** How far the Cursor tag moves along the time axis when it collides with Now. */
@@ -37,10 +37,20 @@ export const geometryStyle = Object.fromEntries(
   Object.entries(GEOMETRY).map(([k, v]) => [`--tl-${kebab(k)}`, `${v}px`]),
 ) as CSSProperties
 
+/** Width kept free for span-lane chips, which sit on the inner side of the bars. */
+const LANE_CHIP_ALLOWANCE = 64
+
 const toStyle = (g: Record<string, number>) =>
   Object.fromEntries(Object.entries(g).map(([k, v]) => [`--tl-${kebab(k)}`, `${v}px`])) as CSSProperties
 
 const verticalStyle = toStyle(GEOMETRY_VERTICAL)
+
+/** Widest a live tag box may be: the room between the left edge and its arrowhead. */
+export const verticalTagMaxWidth = (): number => GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow - 4
+
+/** Room for saved chips in vertical: what is right of chipStart, less lane bars and the lane chips on their inner side. */
+export const verticalCrossBudget = (crossSize: number, laneCount: number): number =>
+  crossSize - GEOMETRY_VERTICAL.chipStart - 8 - (laneCount > 0 ? laneCount * GEOMETRY_VERTICAL.laneGap + LANE_CHIP_ALLOWANCE : 0)
 
 /** The custom properties for the timeline's current orientation. */
 export const geometryStyleFor = (orientation: 'horizontal' | 'vertical'): CSSProperties =>

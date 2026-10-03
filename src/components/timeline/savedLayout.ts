@@ -15,7 +15,7 @@ import { useView } from '../../store/view.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
-import { GEOMETRY_VERTICAL } from './geometry.ts'
+import { verticalCrossBudget } from './geometry.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
@@ -169,7 +169,7 @@ export function useSavedLayout(laneCount = 0): SavedLayout {
     const t = getTunables()
     const r = layoutLabels(items, {
       orientation,
-      crossBudget: orientation === 'vertical' ? f.crossSize - GEOMETRY_VERTICAL.chipStart - laneCount * GEOMETRY_VERTICAL.laneGap - 8 : Infinity,
+      crossBudget: orientation === 'vertical' ? verticalCrossBudget(f.crossSize, laneCount) : Infinity,
       slotGap: t.chipGapPx,
       maxSlots: t.chipRowsMax,
       cluster: orientation === 'vertical' ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
