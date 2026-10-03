@@ -6,16 +6,19 @@ import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { MINUTE, incrementOption } from '../domain/time.ts'
+import { MINUTE, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
-import { getTunables, useSettings } from './settings.ts'
+import type { SettingsState } from './settings.ts'
+import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui } from './ui.ts'
-import { useAlarms } from './alarms.ts'
+import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
+import type { Backup, ImportMode } from '../domain/backup.ts'
+import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
 const v = () => useView.getState()
@@ -455,3 +458,60 @@ export {
   silence as silenceAlarms,
   snooze as snoozeAlarm,
 } from '../services/AlarmScheduler.ts'
+
+// ---------------------------------------------------------------------------
+// Backup: export and import
+
+/** Everything worth keeping as one backup: the settings and the saved instants and spans. */
+export function exportBackup(date = new Date()): Backup {
+  // The migration marker is per device, not a preference.
+  const preferences: Partial<SettingsState> = { ...useSettings.getState() }
+  delete preferences.layoutVersion
+  const { autoDismissMs, unattended } = useAlarms.getState()
+  const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
+  const { instants, spans } = useEntities.getState()
+  return {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: date.toISOString(),
+    settings: {
+      preferences,
+      alarms: { autoDismissMs, unattended },
+      view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
+    },
+    data: { instants, spans },
+  }
+}
+
+export interface ImportChoice {
+  settings: boolean
+  data: boolean
+  /** Data only: replace everything, or combine with what is here. */
+  mode: ImportMode
+}
+
+/** Applies the chosen parts of a (parsed) backup. */
+export function importBackup(backup: Backup, choice: ImportChoice) {
+  if (choice.settings && backup.settings) {
+    const { preferences, alarms, view: viewPrefs } = backup.settings
+    // The migration marker stays this device's: its one-time migrations already ran here.
+    useSettings.setState({ ...sanitizeSettings(preferences), layoutVersion: useSettings.getState().layoutVersion })
+    useAlarms.setState(sanitizeAlarmPrefs(alarms))
+    if (typeof viewPrefs.showImpliedSelectedNow === 'boolean') view.setImpliedVisible('selected-now', viewPrefs.showImpliedSelectedNow)
+    if (typeof viewPrefs.showImpliedSelectedPrev === 'boolean') view.setImpliedVisible('selected-prev', viewPrefs.showImpliedSelectedPrev)
+    const inc = TIME_INCREMENT_OPTIONS.find(o => o.value === viewPrefs.timeIncrement)
+    if (inc) view.setTimeIncrement(inc.value)
+  }
+  if (choice.data && backup.data) {
+    const before = useEntities.getState()
+    const next = importedData(before, backup.data, choice.mode)
+    const instantIds = new Set(next.instants.map(i => i.id))
+    const spanIds = new Set(next.spans.map(sp => sp.id))
+    const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)
+    for (const r of useAlarms.getState().ringing) if (!instantIds.has(r.instantId)) dismiss(r.instantId)
+    for (const sp of before.spans) if (!spanIds.has(sp.id)) view.forgetSpan(sp.id)
+    for (const i of before.instants) if (!instantIds.has(i.id)) view.forgetInstant(i.id)
+    if (lostFocus) focusCursorAt(v().timeCenter, false)
+    useEntities.setState(next)
+  }
+}

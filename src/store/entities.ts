@@ -2,7 +2,7 @@
 // shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
 import type { InstantRecord, SpanRecord } from '../domain/entities.ts'
-import { NOW_SENTINEL, newInstantId, newSpanId } from '../domain/entities.ts'
+import { NOW_SENTINEL, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans } from '../domain/entities.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
@@ -13,18 +13,8 @@ export interface EntitiesState {
   spans: SpanRecord[]
 }
 
-function loadInstants(): InstantRecord[] {
-  const data = loadJson<unknown>(INSTANTS_KEY, [])
-  if (!Array.isArray(data)) return []
-  return data.filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number')
-    .map(x => ({ ...x, label: typeof x.label === 'string' ? x.label : '' }))
-}
-
-function loadSpans(): SpanRecord[] {
-  const data = loadJson<unknown>(SPANS_KEY, [])
-  if (!Array.isArray(data)) return []
-  return data.filter((x): x is SpanRecord => !!x && typeof x.id === 'string' && typeof x.startInstantId === 'string')
-}
+const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
+const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
 
 export const useEntities = create<EntitiesState>(() => ({
   instants: loadInstants(),

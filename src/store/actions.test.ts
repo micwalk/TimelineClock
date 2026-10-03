@@ -7,6 +7,7 @@ import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
+import { parseBackup } from '../domain/backup.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -321,5 +322,60 @@ describe('zoomToTimes', () => {
     const before = view().timeWidth
     act.zoomToTimes([])
     expect(view().timeWidth).toBe(before)
+  })
+})
+
+describe('backup export and import', () => {
+  const roundTrip = () => {
+    const r = parseBackup(JSON.stringify(act.exportBackup()))
+    if (!r.ok) throw new Error(r.error)
+    return r.backup
+  }
+
+  it('exports settings and data, and a settings import restores them (not the migration marker)', () => {
+    settings.setGlow(1.7)
+    settings.setTunable('chipRowsMax', 2)
+    useAlarms.setState({ unattended: 'snooze', autoDismissMs: 2 * MINUTE })
+    useView.setState({ timeIncrement: '1h', showImpliedSelectedNow: true })
+    settings.setLayoutVersion(3)
+    const backup = roundTrip()
+    expect(backup.settings!.preferences).not.toHaveProperty('layoutVersion')
+
+    settings.setGlow(0.2)
+    settings.resetTunable('chipRowsMax')
+    useAlarms.setState({ unattended: 'dismiss', autoDismissMs: MINUTE })
+    useView.setState({ timeIncrement: '30m', showImpliedSelectedNow: false })
+    act.importBackup(backup, { settings: true, data: false, mode: 'combine' })
+
+    expect(useSettings.getState()).toMatchObject({ glow: 1.7, tunables: { chipRowsMax: 2 }, layoutVersion: 3 })
+    expect(useAlarms.getState()).toMatchObject({ unattended: 'snooze', autoDismissMs: 2 * MINUTE })
+    expect(view()).toMatchObject({ timeIncrement: '1h', showImpliedSelectedNow: true })
+  })
+
+  it('replace swaps the data and clears selection and focus on instants that are gone', () => {
+    const keep = entities.createInstant(Date.now() - HOUR, 'Keep')
+    const backup = roundTrip()
+    const gone = entities.createInstant(Date.now() - 2 * HOUR, 'Gone')
+    act.focusInstant(gone, false)
+    act.importBackup(backup, { settings: false, data: true, mode: 'replace' })
+    expect(useEntities.getState().instants.map(i => i.id)).toEqual([keep])
+    expect(view()).toMatchObject({ currentSelectedInstantId: null, focusedInstantId: null, viewFocusMode: 'cursor' })
+  })
+
+  it('combine adds the imported data to what is here', () => {
+    const a = entities.createInstant(Date.now() - HOUR, 'A')
+    const backup = roundTrip()
+    useEntities.setState({ instants: [], spans: [] })
+    const b = entities.createInstant(Date.now(), 'B')
+    act.importBackup(backup, { settings: false, data: true, mode: 'combine' })
+    expect(useEntities.getState().instants.map(i => i.id).sort()).toEqual([a, b].sort())
+  })
+
+  it('a data import leaves settings alone', () => {
+    settings.setGlow(1.3)
+    const backup = roundTrip()
+    settings.setGlow(0.5)
+    act.importBackup(backup, { settings: false, data: true, mode: 'combine' })
+    expect(useSettings.getState().glow).toBe(0.5)
   })
 })
