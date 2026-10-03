@@ -19,12 +19,15 @@ export interface UiState {
   listTab: ListTab
   timeInput: TimeInputTarget | null
   tagMenu: TagMenu | null
+  /** The Agenda drawer (only meaningful while the Agenda is placed in the drawer). */
+  agendaOpen: boolean
 }
 
 export const useUi = create<UiState>(() => ({
   listTab: 'instants',
   timeInput: null,
   tagMenu: null,
+  agendaOpen: false,
 }))
 
 export const ui = {
@@ -32,5 +35,7 @@ export const ui = {
   openTimeInput: (timeInput: TimeInputTarget) => useUi.setState({ timeInput, tagMenu: null }),
   closeTimeInput: () => useUi.setState({ timeInput: null }),
   toggleTagMenu: (which: TagMenu) => useUi.setState(s => ({ tagMenu: s.tagMenu === which ? null : which, timeInput: null })),
+  openAgenda: () => useUi.setState({ agendaOpen: true }),
+  closeAgenda: () => useUi.setState({ agendaOpen: false }),
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
 }

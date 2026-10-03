@@ -69,7 +69,7 @@ src/
 ├── engine/      # Viewport engine and hooks: usePositionX, useFrameValue, LiveText
 ├── components/
 │   ├── timeline/  # Timeline, instant columns, span lanes, ticks, time-entry popovers
-│   ├── panels/    # Control bar, Agenda (ListPanel), ringing alarms, settings
+│   ├── panels/    # Control bar, Agenda, ringing alarms, settings
 │   └── common/    # Icon button, inline input
 ├── hooks/       # Pan/zoom gestures, hotkeys, FLIP list animation
 ├── services/    # Alarm scheduler, audio, notifications

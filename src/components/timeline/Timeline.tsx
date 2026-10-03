@@ -7,6 +7,7 @@ import { useUi } from '../../store/ui.ts'
 import { TickLayer } from './TickLayer.tsx'
 import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
+import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { placeLanes, useVisibleLanes } from './useBottomLanes.ts'
@@ -45,6 +46,7 @@ export function Timeline() {
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
     >
       <TickLayer />
+      <AgendaButton />
       <LiveText className="tl-date glow-text" compute={f => formatDateRange(f.start, f.end, f.now)} />
       <div className="tl-axis" />
       <SavedInstantColumns layout={layout} />

@@ -607,3 +607,23 @@
 .timeline[data-orientation='vertical'] .tl-lane .icon-btn {
   background: linear-gradient(var(--surface-strong), var(--surface-strong)) #02050f;
 }
+
+/* Agenda drawer button: top left in both orientations, the date label moves over */
+.tl-agenda-btn {
+  --accent: var(--c-axis-glow);
+  --halo: var(--c-axis-glow);
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: var(--agenda-btn-size);
+  height: var(--agenda-btn-size);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--ink-dim);
+}
+.tl-agenda-btn svg { width: 22px; height: 22px; }
+.tl-agenda-btn:hover { color: var(--ink); }
+.timeline .tl-agenda-btn + .tl-date { left: calc(8px + var(--agenda-btn-size) + 10px); top: calc(4px + (var(--agenda-btn-size) - 13px) / 2); }

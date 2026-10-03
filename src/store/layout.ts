@@ -2,8 +2,8 @@
 // Resolved from the window shape, the user's settings and the rotate button's
 // session override (domain/layoutMode.ts); startLayoutTracking keeps it current.
 import { create } from 'zustand'
-import type { Orientation, OrientationOverride, OrientationSetting, ShapeClass } from '../domain/layoutMode.ts'
-import { resolveOrientation, shapeClass } from '../domain/layoutMode.ts'
+import type { AgendaOverride, AgendaPlacement, AgendaSetting, Orientation, OrientationOverride, OrientationSetting, ShapeClass } from '../domain/layoutMode.ts'
+import { resolveAgendaPlacement, resolveOrientation, shapeClass } from '../domain/layoutMode.ts'
 import type { Dir } from '../domain/viewport.ts'
 import type { VerticalDir } from './settings.ts'
 import { getTunables, useSettings } from './settings.ts'
@@ -15,6 +15,40 @@ export interface LayoutState {
   shape: ShapeClass
   /** The rotate button's choice; lapses when the shape class changes. */
   override: OrientationOverride | null
+  /** Where the Agenda is: a dock at the bottom or side, or the drawer. */
+  agendaPlacement: AgendaPlacement
+  /** The dock/drawer toggle's choice; lapses when the shape class changes. */
+  agendaOverride: AgendaOverride | null
+  /** Whether this screen has room to dock the Agenda (the dock/drawer toggle shows only then). */
+  agendaCanDock: boolean
+}
+
+export interface ResolvedAgenda {
+  placement: AgendaPlacement
+  canDock: boolean
+}
+
+/** The Agenda placement for a resolved layout, the window size and the settings. */
+export function resolveAgenda(
+  orientation: Orientation,
+  setting: AgendaSetting,
+  override: AgendaOverride | null,
+  shape: ShapeClass,
+  w: number,
+  h: number,
+): ResolvedAgenda {
+  const limits = getTunables()
+  return {
+    placement: resolveAgendaPlacement(orientation, setting, override, shape, w, h, limits),
+    canDock: resolveAgendaPlacement(orientation, 'docked', null, shape, w, h, limits) !== 'drawer',
+  }
+}
+
+/** The Agenda placement the settings alone give (no override) for the current window and layout. */
+export function agendaFromSettings(): AgendaPlacement {
+  const { orientation, shape } = useLayout.getState()
+  const { w, h } = windowSize()
+  return resolveAgenda(orientation, useSettings.getState().agendaPlacement, null, shape, w, h).placement
 }
 
 export interface ResolvedLayout {
@@ -47,7 +81,17 @@ function compute(prevShape: ShapeClass | null, override: OrientationOverride | n
 }
 
 const initial = compute(null, null)
-export const useLayout = create<LayoutState>(() => ({ ...initial, override: null }))
+const initialAgenda = (() => {
+  const { w, h } = windowSize()
+  return resolveAgenda(initial.orientation, useSettings.getState().agendaPlacement, null, initial.shape, w, h)
+})()
+export const useLayout = create<LayoutState>(() => ({
+  ...initial,
+  override: null,
+  agendaPlacement: initialAgenda.placement,
+  agendaOverride: null,
+  agendaCanDock: initialAgenda.canDock,
+}))
 
 /** Recomputes the store from the window and settings; an override from another shape class lapses. */
 export function recomputeLayout() {
@@ -55,9 +99,15 @@ export function recomputeLayout() {
   const base = compute(prev, null)
   const override = current && current.shape === base.shape ? current : null
   const next = override ? compute(prev, override) : base
+  const agendaOverride = useLayout.getState().agendaOverride?.shape === next.shape ? useLayout.getState().agendaOverride : null
+  const { w, h } = windowSize()
+  const agenda = resolveAgenda(next.orientation, useSettings.getState().agendaPlacement, agendaOverride, next.shape, w, h)
   const s = useLayout.getState()
-  if (s.shape === next.shape && s.orientation === next.orientation && s.dir === next.dir && s.override === override) return
-  useLayout.setState({ ...next, override })
+  if (
+    s.shape === next.shape && s.orientation === next.orientation && s.dir === next.dir && s.override === override &&
+    s.agendaOverride === agendaOverride && s.agendaPlacement === agenda.placement && s.agendaCanDock === agenda.canDock
+  ) return
+  useLayout.setState({ ...next, override, agendaOverride, agendaPlacement: agenda.placement, agendaCanDock: agenda.canDock })
 }
 
 /** Listens to window resizes and settings changes. Returns the cleanup. */

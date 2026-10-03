@@ -10,10 +10,11 @@ import { MINUTE, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
-import { recomputeLayout, useLayout } from './layout.ts'
+import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import { getTunables, useSettings } from './settings.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
+import { ui } from './ui.ts'
 import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
@@ -207,6 +208,20 @@ export function rotate() {
   const fromSettings = resolveOrientation(useSettings.getState().orientation, null, shape)
   useLayout.setState({ override: next === fromSettings ? null : { orientation: next, shape } })
   recomputeLayout()
+}
+
+/** Agenda dock/drawer button: switches this shape class between docked and drawer; back to what the settings give clears the override. */
+export function toggleAgendaDock() {
+  const { agendaPlacement, shape } = useLayout.getState()
+  const placement = agendaPlacement === 'drawer' ? 'docked' : 'drawer'
+  useLayout.setState({ agendaOverride: { placement, shape } })
+  recomputeLayout()
+  // Compare against the settings alone, now that the layout is resolved.
+  if ((agendaFromSettings() === 'drawer') === (useLayout.getState().agendaPlacement === 'drawer')) {
+    useLayout.setState({ agendaOverride: null })
+    recomputeLayout()
+  }
+  ui.closeAgenda()
 }
 
 /** End of a drag or glide: snap to Now or to an instant if the center landed within `tolerancePx`, else to the nearest tick. */

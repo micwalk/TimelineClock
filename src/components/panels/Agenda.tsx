@@ -1,4 +1,4 @@
-// Tabbed list under the controls: all instants, favorites, and spans.
+// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, and spans.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
@@ -18,6 +18,8 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline'
+import { useLayout } from '../../store/layout.ts'
 import { useFlip } from '../../hooks/useFlip.ts'
 import { SettingsPanel } from './SettingsPanel.tsx'
 
@@ -254,8 +256,11 @@ function SpansList() {
 
 // ---------------------------------------------------------------------------
 
-export function ListPanel() {
+export function Agenda() {
   const tab = useUi(s => s.listTab)
+  const placement = useLayout(s => s.agendaPlacement)
+  const canDock = useLayout(s => s.agendaCanDock)
+  const inDrawer = placement === 'drawer'
   return (
     <section className="list-panel" aria-label="Agenda">
       <div className="list-header">
@@ -273,6 +278,14 @@ export function ListPanel() {
             </button>
           ))}
         </div>
+        {canDock && (
+          <IconButton
+            icon={inDrawer ? ArrowsPointingInIcon : ArrowsPointingOutIcon}
+            label={inDrawer ? 'Dock Agenda' : 'Undock Agenda'}
+            className="list-dock-btn"
+            onClick={act.toggleAgendaDock}
+          />
+        )}
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">

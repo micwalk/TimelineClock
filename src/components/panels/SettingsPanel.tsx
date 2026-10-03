@@ -22,6 +22,7 @@ export function SettingsPanel() {
   const orientation = useSettings(s => s.orientation)
   const verticalDir = useSettings(s => s.verticalDir)
   const tickSnap = useSettings(s => s.tickSnap)
+  const agendaPlacement = useSettings(s => s.agendaPlacement)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
@@ -91,6 +92,14 @@ export function SettingsPanel() {
               <select value={verticalDir} onChange={e => settings.setVerticalDir(e.target.value === 'up' ? 'up' : 'down')}>
                 <option value="down">Down</option>
                 <option value="up">Up</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Agenda</span>
+              <select value={agendaPlacement} onChange={e => settings.setAgendaPlacement(e.target.value === 'docked' || e.target.value === 'drawer' ? e.target.value : 'auto')}>
+                <option value="auto">Auto</option>
+                <option value="docked">Docked</option>
+                <option value="drawer">Drawer</option>
               </select>
             </label>
             <label className="settings__row">

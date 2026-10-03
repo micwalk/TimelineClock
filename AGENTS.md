@@ -51,8 +51,8 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - **Timeline**: horizontal; Now line follows the clock; a vertical orientation is planned (docs/handoffs)
 - **Gestures**: one-finger/mouse drag moves through time (free cursor at the center); pinch or wheel zooms; double-tap/double-click a label to create or rename; tap selects
 - **Cursor landing**: a drag that ends near Now or an instant snaps onto it (20px touch, 12px mouse); ± steps and typed times land on an instant only on an exact hit
-- **Agenda**: the tabbed list under the timeline (All Instants / Favorites / All Spans); the Settings gear sits in its tab bar
-- **Planned** (see docs/handoffs): vertical layout, momentum, label-overlap layout, Agenda as dock or drawer, arrow-shaped cursor, stopwatch/timer/alarm quick-create, natural-language quick add
+- **Agenda**: the tabbed list (All Instants / Favorites / All Spans), src/components/panels/Agenda.tsx; the dock/drawer toggle and Settings gear sit in its tab bar. It docks at the bottom (horizontal) or side (vertical) when there is room, otherwise it is a drawer opened by the ☰ button (setting: Auto / Docked / Drawer)
+- **Planned** (see docs/handoffs): vertical layout, momentum, label-overlap layout, arrow-shaped cursor, stopwatch/timer/alarm quick-create, natural-language quick add
 
 ## Technical Requirements
 - **Performance**: 60fps timeline, <2s cold start, <500ms warm start

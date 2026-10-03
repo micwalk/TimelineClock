@@ -82,7 +82,7 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 | `useView`        | `timeline.state`        | Focus, selection, zoom, step, cursor lock. Debounced 300ms.        |
 | `useAlarms`      | `timeline.alarms.v1`    | Ringing alarms + ring duration/unanswered behavior.               |
 | `useSettings`    | `timeline.settings.v1`  | Glow, tunables (Settings > Advanced), favorite lanes, layout version for one-time migrations (store/migrations.ts). |
-| `useUi`          | (not persisted)         | Agenda tab, open time-entry popover.                              |
+| `useUi`          | (not persisted)         | Agenda tab, Agenda drawer open, open time-entry popover.                           |
 
 Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an offset
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans

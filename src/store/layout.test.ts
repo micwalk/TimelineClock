@@ -51,3 +51,48 @@ describe('layout store and rotate', () => {
     expect(useLayout.getState().dir).toBe(-1)
   })
 })
+
+describe('agenda placement', () => {
+  const size = (w: number, h: number) => {
+    Object.defineProperty(window, 'innerWidth', { value: w, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: h, configurable: true })
+    recomputeLayout()
+  }
+  beforeEach(() => {
+    useSettings.setState({ orientation: 'auto', verticalDir: 'down', agendaPlacement: 'auto' })
+    useLayout.setState({ override: null, agendaOverride: null, shape: 'landscape' })
+    size(1400, 900)
+  })
+
+  it('phone portrait: drawer; phone landscape: drawer', () => {
+    size(390, 844)
+    expect(useLayout.getState()).toMatchObject({ orientation: 'vertical', agendaPlacement: 'drawer', agendaCanDock: false })
+    size(844, 390)
+    expect(useLayout.getState().agendaPlacement).toBe('drawer')
+  })
+
+  it('1400x900: bottom when horizontal, side when rotated to vertical', () => {
+    expect(useLayout.getState().agendaPlacement).toBe('bottom')
+    act.rotate()
+    expect(useLayout.getState()).toMatchObject({ orientation: 'vertical', agendaPlacement: 'side' })
+  })
+
+  it('the setting forces the drawer; settings changes recompute', () => {
+    useSettings.setState({ agendaPlacement: 'drawer' })
+    recomputeLayout()
+    expect(useLayout.getState().agendaPlacement).toBe('drawer')
+  })
+
+  it('toggle sets the override and a second toggle clears it', () => {
+    act.toggleAgendaDock()
+    expect(useLayout.getState()).toMatchObject({ agendaPlacement: 'drawer', agendaOverride: { placement: 'drawer', shape: 'landscape' } })
+    act.toggleAgendaDock()
+    expect(useLayout.getState()).toMatchObject({ agendaPlacement: 'bottom', agendaOverride: null })
+  })
+
+  it('a shape change clears the override', () => {
+    act.toggleAgendaDock()
+    size(390, 844)
+    expect(useLayout.getState().agendaOverride).toBeNull()
+  })
+})

@@ -5,6 +5,9 @@
  */
 :root {
   /* Surfaces */
+  --agenda-width: 360px;
+  --agenda-drawer-max: 400px;
+  --agenda-btn-size: 40px;
   --bg-top: #0c1838;
   --bg-bottom: #000000;
   --surface: rgba(3, 8, 24, 0.84);
