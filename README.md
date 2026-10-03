@@ -1,5 +1,7 @@
 # Timeline Clock
 
+**Live:** https://timelineclockapp.netlify.app
+
 A timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.
 
 ## Status
