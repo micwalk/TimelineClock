@@ -5,6 +5,7 @@ import { stepGlide } from '../domain/glide.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { endPan, panByPixels } from '../store/actions.ts'
 import { getTunables } from '../store/settings.ts'
+import { useView } from '../store/view.ts'
 
 export interface GlideController {
   /** Starts gliding at `v` px/ms (signed, along the main axis); replaces any glide in progress. */
@@ -29,6 +30,12 @@ export function createGlide(): GlideController {
     let v = v0
     let last = performance.now()
     unsubscribe = engine.onFrame(() => {
+      // Anything but a free cursor (or a move in progress) means something else took over.
+      const vs = useView.getState()
+      if (vs.viewFocusMode !== 'cursor' || vs.moveMode) {
+        stop()
+        return
+      }
       const t = getTunables()
       const now = performance.now()
       const step = stepGlide(v, now - last, t.glideTauMs, t.glideMaxSpeed)
@@ -48,3 +55,8 @@ export function createGlide(): GlideController {
 
   return { start, stop, get active() { return unsubscribe !== null } }
 }
+
+/** The one glide of the app: any navigation (engine.beginTransition, rotate, wheel, zoom) stops it. */
+export const glide: GlideController = createGlide()
+export const stopGlide = (): boolean => glide.stop()
+engine.onNavigate(() => { glide.stop() })

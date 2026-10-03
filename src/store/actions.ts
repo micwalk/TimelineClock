@@ -83,6 +83,7 @@ export function focusSpan(spanId: string, zoomToFit = true) {
 }
 
 export function moveCursorBy(deltaMs: number) {
+  engine.stopMomentum()
   view.setTimeCenter(frame().center + deltaMs)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
   refreshLock()
@@ -174,6 +175,7 @@ export function navigateFocusHistory(delta: -1 | 1) {
 // Zoom & pan
 
 export function zoomBy(factor: number) {
+  engine.stopMomentum()
   view.setTimeWidth(v().timeWidth * factor)
 }
 
@@ -203,6 +205,7 @@ export function wheelPan(dPx: number) {
 
 /** Rotate button: flips the orientation for this shape class; back to what the settings give clears the override. */
 export function rotate() {
+  engine.stopMomentum()
   const { orientation, shape } = useLayout.getState()
   const next = orientation === 'horizontal' ? 'vertical' : 'horizontal'
   const fromSettings = resolveOrientation(useSettings.getState().orientation, null, shape)

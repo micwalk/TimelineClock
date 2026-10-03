@@ -111,8 +111,22 @@ class ViewportEngine {
     this.wantsFrame = true
   }
 
+  private momentumStoppers = new Set<() => void>()
+
+  /** Registers something (the glide) that must stop when navigation starts. Returns the cleanup. */
+  onNavigate(stop: () => void): () => void {
+    this.momentumStoppers.add(stop)
+    return () => { this.momentumStoppers.delete(stop) }
+  }
+
+  /** Stops momentum (a running glide): call when any other navigation begins. */
+  stopMomentum() {
+    for (const stop of [...this.momentumStoppers]) stop()
+  }
+
   /** Animate from what is on screen now to wherever the (just changed) state points. */
   beginTransition(duration = TRANSITION_MS) {
+    this.stopMomentum()
     if (prefersReducedMotion()) duration = 0
     // Call before changing state: the sample is what's on screen at this moment.
     const from = this.sample()

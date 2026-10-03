@@ -2,11 +2,13 @@ import { useRef } from 'react'
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePanZoom } from './usePanZoom.ts'
+import { glide } from './glide.ts'
+import { focusNow, rotate, zoomIn } from '../store/actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { settings, useSettings } from '../store/settings.ts'
 import { useLayout } from '../store/layout.ts'
-import { initialViewState, useView } from '../store/view.ts'
+import { initialViewState, useView, view } from '../store/view.ts'
 
 function Harness({ onTap }: { onTap: () => void }) {
   const ref = useRef<HTMLElement>(null)
@@ -132,7 +134,11 @@ describe('usePanZoom', () => {
   })
 
   describe('glide', () => {
-    afterEach(() => { vi.useRealTimers() })
+    afterEach(() => {
+      glide.stop()
+      vi.runOnlyPendingTimers() // let the engine's pending fake frame fire, or it would stay scheduled forever
+      vi.useRealTimers()
+    })
     const center = () => useView.getState().timeCenter
     /** Lets any real frame the engine already scheduled run first, so the faked ones drive it. */
     const fakeClock = async () => {
@@ -197,6 +203,42 @@ describe('usePanZoom', () => {
       pointer(button, 'pointerup', 400)
       button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
       expect(onTap).not.toHaveBeenCalled()
+    })
+
+    it('focusing Now mid-glide cancels the glide', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      flick(screen.getByTestId('timeline'))
+      vi.advanceTimersByTime(48)
+      expect(glide.active).toBe(true)
+      focusNow()
+      expect(glide.active).toBe(false)
+      expect(useView.getState().viewFocusMode).toBe('now')
+      vi.advanceTimersByTime(2000)
+      expect(useView.getState().viewFocusMode).toBe('now')
+    })
+
+    it('rotating, zooming and a wheel event each cancel a glide in progress', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      const el = screen.getByTestId('timeline')
+      for (const stopIt of [() => zoomIn(), () => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: 10 })), () => rotate()]) {
+        flick(el)
+        vi.advanceTimersByTime(32)
+        expect(glide.active).toBe(true)
+        stopIt()
+        expect(glide.active).toBe(false)
+      }
+    })
+
+    it('a glide stops itself when the view is no longer on a free cursor', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      flick(screen.getByTestId('timeline'))
+      vi.advanceTimersByTime(32)
+      view.setFocus('now') // changed without going through an action
+      vi.advanceTimersByTime(100)
+      expect(glide.active).toBe(false)
     })
 
     it('wheel scrolling never glides', async () => {

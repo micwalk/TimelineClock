@@ -6,7 +6,7 @@ import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
 import { releaseVelocity, shouldGlide } from '../domain/glide.ts'
 import type { PointerSample } from '../domain/glide.ts'
-import { createGlide } from './glide.ts'
+import { glide } from './glide.ts'
 import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
 import { useLayout } from '../store/layout.ts'
 import { getTunables } from '../store/settings.ts'
@@ -24,7 +24,6 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     let pinchDist = 0
     let swallowClick = false
     let samples: PointerSample[] = []
-    const glide = createGlide()
 
     const sample = (pos: number) => {
       const t = performance.now()
@@ -129,6 +128,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     const onWheel = (e: WheelEvent) => {
       if (exempt(e.target)) return
       e.preventDefault()
+      glide.stop()
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
       const dx = clamp(e.deltaX * unit, -400, 400)
       const dy = clamp(e.deltaY * unit, -400, 400)
