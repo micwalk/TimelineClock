@@ -344,3 +344,20 @@
   font: 700 13px/1 var(--font-ui);
   background: color-mix(in srgb, var(--c-danger) 25%, transparent);
 }
+
+/* Settings > Advanced: long list, so the panel scrolls */
+.settings__panel { max-height: calc(100vh - 16px); overflow-y: auto; }
+.settings__advanced summary { cursor: pointer; list-style: none; }
+.settings__advanced summary h3 { display: inline; }
+.settings__advanced summary::before { content: '▸ '; color: var(--ink-faint); }
+.settings__advanced[open] summary::before { content: '▾ '; }
+.settings__subgroup { margin-top: 8px; }
+.settings__subgroup h4 { font: 700 11px/1 var(--font-ui); color: var(--ink-dim); margin: 6px 0; }
+.settings__row--tunable { grid-template-columns: 1fr 76px 26px; }
+.settings__row--tunable label { font-size: 13px; color: var(--ink-dim); }
+.settings__row--tunable input {
+  width: 76px; height: 26px; padding: 0 6px; border-radius: 6px;
+  background: var(--surface-raised); border: 1px solid rgba(148, 163, 184, 0.25);
+  font: 600 13px/1 var(--font-mono); text-align: right;
+}
+.settings__reset-spacer { width: 26px; }

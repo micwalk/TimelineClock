@@ -8,10 +8,11 @@ import { MINUTE } from '../../domain/time.ts'
 import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import * as act from '../../store/actions.ts'
+import { AdvancedSettings } from './AdvancedSettings.tsx'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
 const PANEL_GAP = 8
-const PANEL_EST_HEIGHT = 340
+const PANEL_EST_HEIGHT = 420
 
 /** Places the panel under the gear, or above it when there isn't room below. */
 function panelPosition(gear: HTMLElement): CSSProperties {
@@ -97,6 +98,13 @@ export function SettingsPanel() {
                 <option value="snooze">Snooze 5 min</option>
               </select>
             </label>
+          </section>
+
+          <section className="settings__group">
+            <details className="settings__advanced">
+              <summary><h3>Advanced</h3></summary>
+              <AdvancedSettings />
+            </details>
           </section>
 
           <section className="settings__group">
