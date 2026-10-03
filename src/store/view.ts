@@ -39,8 +39,12 @@ const PERSISTED_KEYS = [
 /** Fresh default view state (also used to reset in tests). */
 export const initialViewState = (): ViewState => ({ ...defaults, timeCenter: Date.now() })
 
+/** First-run zoom: 6 hours across a 1400px screen, scaled so narrow screens keep the same density. */
+const defaultTimeWidth = () =>
+  clampTimeWidth(DEFAULT_TIME_WIDTH_MS * Math.min(1, (typeof window !== 'undefined' ? window.innerWidth : 1400) / 1400))
+
 const defaults: ViewState = {
-  timeWidth: DEFAULT_TIME_WIDTH_MS,
+  timeWidth: defaultTimeWidth(),
   timeCenter: Date.now(),
   viewFocusMode: 'now',
   focusedInstantId: null,
@@ -67,7 +71,7 @@ function loadView(): ViewState {
     if (saved[k] !== undefined && saved[k] !== null) (out as unknown as Record<string, unknown>)[k] = saved[k]
     else if (saved[k] === null) (out as unknown as Record<string, unknown>)[k] = null
   }
-  out.timeWidth = clampTimeWidth(Number(out.timeWidth) || DEFAULT_TIME_WIDTH_MS)
+  out.timeWidth = clampTimeWidth(Number(out.timeWidth) || defaultTimeWidth())
   if (!['now', 'cursor', 'instant', 'span'].includes(out.viewFocusMode)) out.viewFocusMode = 'now'
   if (!TIME_INCREMENT_OPTIONS.some(o => o.value === out.timeIncrement)) out.timeIncrement = '30m'
   if (!Array.isArray(out.focusHistory)) { out.focusHistory = []; out.focusHistoryIndex = -1 }

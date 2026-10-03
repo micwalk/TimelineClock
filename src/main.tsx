@@ -4,7 +4,9 @@ import './index.css'
 import App from './App.tsx'
 import { engine } from './engine/viewportEngine.ts'
 import { startAlarmScheduler } from './services/AlarmScheduler.ts'
+import { applySettingsToDocument } from './store/settings.ts'
 
+applySettingsToDocument()
 engine.start()
 startAlarmScheduler()
 

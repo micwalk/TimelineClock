@@ -56,11 +56,12 @@ export function TickLayer() {
         const x = (tick.t - s.center) * s.pxPerMs + s.screenW / 2
         if (x !== n.x) { n.x = x; n.el.style.transform = `translate3d(${x}px,0,0)` }
         const { halfHeight, labelAlpha, fontSizePx, bold } = tick.style
-        const h = Math.round(halfHeight * 10) / 10
+        // Quantized so a smooth zoom only rewrites styles when they visibly change.
+        const h = Math.round(halfHeight * 2) / 2
         if (h !== n.h) { n.h = h; n.el.style.setProperty('--h', String(h)) }
-        const a = Math.round(labelAlpha * 100) / 100
+        const a = Math.round(labelAlpha * 20) / 20
         if (a !== n.a) { n.a = a; n.el.style.setProperty('--a', String(a)) }
-        const fs = Math.round(fontSizePx * 10) / 10
+        const fs = Math.round(fontSizePx * 4) / 4
         if (fs !== n.fs) { n.fs = fs; n.el.style.setProperty('--fs', String(fs)) }
         if (bold !== n.bold) { n.bold = bold; n.el.classList.toggle('is-bold', bold) }
         const text = tick.label ?? ''

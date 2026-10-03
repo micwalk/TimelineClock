@@ -1,6 +1,7 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
-import { findDueAlarms, nextAlarmTime } from '../domain/alarms.ts'
+import { findDueAlarms, nextAlarmTime, snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
+import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
@@ -24,11 +25,14 @@ function hasRinging() {
 
 function check() {
   const now = Date.now()
-  const { ringing, autoDismissMs } = useAlarms.getState()
+  const { ringing, autoDismissMs, unattended } = useAlarms.getState()
 
-  // Auto-dismiss alarms that have rung long enough.
+  // Alarms nobody answered: dismiss or snooze, per settings.
   const expired = ringing.filter(r => now - r.triggeredAt > autoDismissMs)
-  for (const r of expired) dismiss(r.instantId)
+  for (const r of expired) {
+    if (unattended === 'snooze') snooze(r.instantId)
+    else dismiss(r.instantId)
+  }
 
   const ringingIds = new Set(useAlarms.getState().ringing.map(r => r.instantId))
   const due = findDueAlarms(useEntities.getState().instants, now, ringingIds, autoDismissMs)
@@ -57,6 +61,26 @@ export function dismiss(instantId: string) {
   useAlarms.setState(s => ({ ringing: s.ringing.filter(r => r.instantId !== instantId) }))
   entities.setAlarmFlag(instantId, false)
   if (!hasRinging()) audio.stopAlarmSound()
+}
+
+/**
+ * Dismisses a ringing alarm and sets a new one `minutes` from now, labelled
+ * "Snooze N: <original>" and linked to the original alarm by a hidden span.
+ */
+export function snooze(instantId: string, minutes = 5): string | undefined {
+  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
+  if (!ringing) return
+  const original = entities.getInstant(instantId)
+  const originalId = original?.snoozeOriginalId ?? instantId
+  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing.label
+  const count = entities.snoozeCount(originalId) + 1
+  const newId = entities.createInstant(Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
+    alarm: true,
+    snoozeOriginalId: originalId,
+  })
+  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: false })
+  dismiss(instantId)
+  return newId
 }
 
 /** Stops the sound but keeps alarms on screen. */

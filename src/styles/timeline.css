@@ -214,7 +214,6 @@
   box-shadow:
     0 0 calc(4px * var(--glow)) var(--accent),
     0 0 calc(12px * var(--glow)) color-mix(in srgb, var(--accent) 55%, transparent);
-  will-change: transform, width;
 }
 .tl-lane.is-emphasis .tl-lane__line {
   top: -2.5px;

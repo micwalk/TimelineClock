@@ -3,11 +3,10 @@
 import { engine } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
-import { snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
 import { zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { MINUTE, incrementOption } from '../domain/time.ts'
+import { incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
@@ -341,20 +340,8 @@ export function applyClockInput(hour12: number, minutes: number, seconds: number
 // ---------------------------------------------------------------------------
 // Alarms
 
-export function snoozeAlarm(instantId: string, minutes = 5) {
-  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
-  if (!ringing) return
-  const original = entities.getInstant(instantId)
-  const originalId = original?.snoozeOriginalId ?? instantId
-  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing.label
-  const count = entities.snoozeCount(originalId) + 1
-  const newId = entities.createInstant(Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
-    alarm: true,
-    snoozeOriginalId: originalId,
-  })
-  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: false })
-  dismiss(instantId)
-  return newId
-}
-
-export { dismiss as dismissAlarm, silence as silenceAlarms } from '../services/AlarmScheduler.ts'
+export {
+  dismiss as dismissAlarm,
+  silence as silenceAlarms,
+  snooze as snoozeAlarm,
+} from '../services/AlarmScheduler.ts'
