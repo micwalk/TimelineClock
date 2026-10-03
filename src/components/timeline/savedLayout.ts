@@ -1,6 +1,6 @@
 // Overlap layout for the saved-instant chips: builds layout inputs from the visible
 // instants and chip widths, and exposes the structural result to React.
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { RefObject } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -130,11 +130,143 @@ export interface SavedLayout {
   rowsUsed: number
 }
 
-const layoutEqual = (a: SavedLayout, b: SavedLayout) => JSON.stringify(a) === JSON.stringify(b)
+const sameStrings = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, k) => x === b[k])
+const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<string, T>>) => {
+  const ka = Object.keys(a)
+  if (ka.length !== Object.keys(b).length) return false
+  return ka.every(k => k in b && a[k] === b[k])
+}
+
+/** Structural equality without serializing: the same chips in the same places. */
+export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
+  if (a === b) return true
+  return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
+    sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) &&
+    sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
+    a.clusters.length === b.clusters.length &&
+    a.clusters.every((c, k) => {
+      const d = b.clusters[k]
+      return c.id === d.id && c.slot === d.slot && c.crossOffset === d.crossOffset && c.topPriority === d.topPriority && sameStrings(c.memberIds, d.memberIds)
+    })
+}
+
+/** Counts real layout runs (cache misses); tests use it to prove a pan reuses the result. */
+export const layoutStats = { runs: 0 }
+
+/** Everything except the frame that the layout depends on; each field is compared by identity. */
+export interface SavedLayoutInputs {
+  orientation: 'horizontal' | 'vertical'
+  dir: 1 | -1
+  instants: readonly InstantRecord[]
+  mode: string
+  focusedInstantId: string | null
+  selected: string | null
+  secondary: string | null
+  editing: string | null
+  moving: string | null
+  ringing: readonly string[]
+  widths: Readonly<Record<string, number>>
+  tunables: unknown
+  laneCount: number
+}
+
+type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
+
+interface CacheEntry {
+  inputs: SavedLayoutInputs
+  visible: InstantRecord[]
+  upcoming: boolean[]
+  pxPerMs: number
+  crossSize: number
+  result: SavedLayout
+}
+
+/**
+ * The layout as a function of the frame, memoized. Positions are taken relative to the
+ * earliest visible instant, so a pure pan changes nothing the layout reads: the cache key
+ * is the visible set (and which alarms are still upcoming), zoom, cross size and the inputs.
+ * A moving instant rides the screen center, which a pan does move relative to the others,
+ * so that mode skips the cache.
+ */
+export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInputs) => SavedLayout {
+  let cache: CacheEntry | null = null
+  return (f, c) => {
+    const margin = CULL_MARGIN_PX / f.pxPerMs
+    const lo = f.start - margin
+    const hi = f.end + margin
+    const isVisible = (i: InstantRecord) =>
+      i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
+      (i.tsEpochMs >= lo && i.tsEpochMs <= hi)
+    const prev = cache
+
+    // Cheap probe: walk the instants once against the cached visible set, allocating nothing.
+    if (prev && prev.inputs === c && c.moving === null && prev.pxPerMs === f.pxPerMs && prev.crossSize === f.crossSize) {
+      let n = 0
+      let same = true
+      for (const i of c.instants) {
+        if (!isVisible(i)) continue
+        if (prev.visible[n] !== i || prev.upcoming[n] !== (!!i.alarm && i.tsEpochMs > f.now)) { same = false; break }
+        n++
+      }
+      if (same && n === prev.visible.length) return prev.result
+    }
+
+    layoutStats.runs++
+    const visible = c.instants.filter(isVisible)
+    const origin = visible.reduce((m, i) => Math.min(m, i.tsEpochMs), Infinity)
+    const originPos = Number.isFinite(origin) ? f.pos(origin) : 0
+    const vertical = c.orientation === 'vertical'
+    const items = layoutItems(visible, {
+      now: f.now,
+      pos: ts => f.pos(ts) - originPos,
+      mainSize: f.mainSize,
+      selectedId: c.selected,
+      focusedId: c.mode === 'instant' ? c.focusedInstantId : null,
+      editingId: c.editing,
+      movingId: c.moving,
+      ringingIds: new Set(c.ringing),
+      widths: c.widths,
+      orientation: c.orientation,
+    })
+    const t = getTunables()
+    const r = layoutLabels(items, {
+      orientation: c.orientation,
+      crossBudget: vertical ? verticalCrossBudget(f.crossSize, c.laneCount) : Infinity,
+      slotGap: t.chipGapPx,
+      maxSlots: vertical ? t.chipColumnsMax : t.chipRowsMax,
+      cluster: vertical ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
+      foldBadgeExtent: FOLD_BADGE_WIDTH,
+    })
+    const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
+    const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, vertical ? p.crossOffset : 0]))
+    const deepest = Math.max(-1, ...Object.values(rows), ...r.clusters.map(k => k.slot))
+    const next: SavedLayout = {
+      visibleIds: visible.map(i => i.id),
+      rows,
+      crossOffsets,
+      folded: r.folded,
+      foldCount: r.foldCount,
+      clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, topPriority: k.topPriority })),
+      rowsUsed: Math.max(1, deepest + 1),
+    }
+    // Keep the old object when nothing visible changed, so React skips the render.
+    const result = prev && layoutEqual(prev.result, next) ? prev.result : next
+    cache = {
+      inputs: c,
+      visible,
+      upcoming: visible.map(i => !!i.alarm && i.tsEpochMs > f.now),
+      pxPerMs: f.pxPerMs,
+      crossSize: f.crossSize,
+      result,
+    }
+    return result
+  }
+}
 
 /** `laneCount`: span lanes on screen, which take width from the chips in vertical. */
 export function useSavedLayout(laneCount = 0): SavedLayout {
   const orientation = useLayout(s => s.orientation)
+  const dir = useLayout(s => s.dir)
   const instants = useEntities(s => s.instants)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,
@@ -144,48 +276,13 @@ export function useSavedLayout(laneCount = 0): SavedLayout {
     editing: s.editingInstantId,
     moving: s.moveMode?.instantId ?? null,
   })))
-  const ringingList = useAlarms(useShallow(s => s.ringing.map(r => r.instantId)))
+  const ringing = useAlarms(useShallow(s => s.ringing.map(r => r.instantId)))
   const widths = useChipWidths(s => s.widths)
-  useSettings(s => s.tunables) // tunable changes re-run the layout
-
-  return useFrameValue((f: Frame): SavedLayout => {
-    const keep = new Set([v.selected, v.secondary, v.focusedInstantId, v.editing, v.moving].filter(Boolean) as string[])
-    const margin = CULL_MARGIN_PX / f.pxPerMs
-    const lo = f.start - margin
-    const hi = f.end + margin
-    const visible = instants.filter(i => keep.has(i.id) || (i.tsEpochMs >= lo && i.tsEpochMs <= hi))
-    const items = layoutItems(visible, {
-      now: f.now,
-      pos: f.pos,
-      mainSize: f.mainSize,
-      selectedId: v.selected,
-      focusedId: v.mode === 'instant' ? v.focusedInstantId : null,
-      editingId: v.editing,
-      movingId: v.moving,
-      ringingIds: new Set(ringingList),
-      widths,
-      orientation,
-    })
-    const t = getTunables()
-    const r = layoutLabels(items, {
-      orientation,
-      crossBudget: orientation === 'vertical' ? verticalCrossBudget(f.crossSize, laneCount) : Infinity,
-      slotGap: t.chipGapPx,
-      maxSlots: t.chipRowsMax,
-      cluster: orientation === 'vertical' ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
-      foldBadgeExtent: FOLD_BADGE_WIDTH,
-    })
-    const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
-    const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, orientation === 'vertical' ? p.crossOffset : 0]))
-    const deepest = Math.max(-1, ...Object.values(rows), ...r.clusters.map(c => c.slot))
-    return {
-      visibleIds: visible.map(i => i.id),
-      rows,
-      crossOffsets,
-      folded: r.folded,
-      foldCount: r.foldCount,
-      clusters: r.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, slot: c.slot, crossOffset: c.crossOffset, topPriority: c.topPriority })),
-      rowsUsed: Math.max(1, deepest + 1),
-    }
-  }, layoutEqual)
+  const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
+  const compute = useRef(createSavedLayoutCache()).current
+  const inputs = useMemo<SavedLayoutInputs>(
+    () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount }),
+    [orientation, dir, instants, v, ringing, widths, tunables, laneCount],
+  )
+  return useFrameValue((f: Frame) => compute(f, inputs), layoutEqual)
 }

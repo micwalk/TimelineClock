@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { InstantRecord } from '../../domain/entities.ts'
-import type { LayoutContext } from './savedLayout.ts'
-import { estimateChipWidth, layoutItems } from './savedLayout.ts'
+import type { Frame } from '../../engine/viewportEngine.ts'
+import type { LayoutContext, SavedLayoutInputs } from './savedLayout.ts'
+import { createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats } from './savedLayout.ts'
+import { useSettings } from '../../store/settings.ts'
+
+type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
 
 const inst = (id: string, ts: number, extra: Partial<InstantRecord> = {}): InstantRecord => ({ id, tsEpochMs: ts, label: id, ...extra })
 const ctx = (extra: Partial<LayoutContext> = {}): LayoutContext => ({
@@ -52,5 +56,71 @@ describe('layoutItems', () => {
     const items = layoutItems([inst('abc', 0), inst('measured', 0)], ctx({ orientation: 'vertical', widths: { measured: 123 } }))
     expect(only(items, 'abc')).toMatchObject({ mainExtent: 28, crossExtent: estimateChipWidth('abc') })
     expect(only(items, 'measured')).toMatchObject({ mainExtent: 28, crossExtent: 123 })
+  })
+})
+
+describe('createSavedLayoutCache', () => {
+  const PX = 0.01 // px per ms
+  const frame = (center: number, extra: Partial<FrameLike> = {}): FrameLike => ({
+    now: 0, pxPerMs: PX, mainSize: 800, crossSize: 900,
+    start: center - 400 / PX, end: center + 400 / PX,
+    pos: ts => (ts - center) * PX + 400,
+    ...extra,
+  })
+  const inputs = (instants: InstantRecord[], extra: Partial<SavedLayoutInputs> = {}): SavedLayoutInputs => ({
+    orientation: 'horizontal', dir: 1, instants, mode: 'cursor', focusedInstantId: null, selected: null, secondary: null,
+    editing: null, moving: null, ringing: [], widths: {}, tunables: {}, laneCount: 0, ...extra,
+  })
+  const crowd = (n: number) => Array.from({ length: n }, (_, k) => inst(`c${k}`, 1000 + k))
+
+  beforeEach(() => { useSettings.setState({ tunables: {} }) })
+
+  it('a pure pan reuses the cached layout without running the layout again', () => {
+    const compute = createSavedLayoutCache()
+    const inp = inputs(crowd(6))
+    const first = compute(frame(1000), inp)
+    const runs = layoutStats.runs
+    for (const c of [1010, 1500, 2000]) expect(compute(frame(c), inp)).toBe(first)
+    expect(layoutStats.runs).toBe(runs)
+  })
+
+  it('re-runs when zoom, the visible set or an input changes', () => {
+    const compute = createSavedLayoutCache()
+    const list = [...crowd(3), inst('far', 1000 + 1_000_000)]
+    const inp = inputs(list)
+    compute(frame(1000), inp)
+    let runs = layoutStats.runs
+    compute(frame(1000, { pxPerMs: PX * 2 }), inp)
+    expect(layoutStats.runs).toBe(++runs)
+    compute(frame(1000 + 1_000_000), inp) // the far instant comes in, the crowd goes out
+    expect(layoutStats.runs).toBe(++runs)
+    compute(frame(1000 + 1_000_000), inputs(list, { selected: 'c0' })) // new inputs
+    expect(layoutStats.runs).toBe(++runs)
+  })
+
+  it('does not cache while an instant is being moved', () => {
+    const compute = createSavedLayoutCache()
+    const inp = inputs(crowd(2), { moving: 'c0' })
+    compute(frame(1000), inp)
+    const runs = layoutStats.runs
+    compute(frame(1100), inp)
+    expect(layoutStats.runs).toBe(runs + 1)
+  })
+
+  it('a stable layout keeps its identity across a re-run', () => {
+    const compute = createSavedLayoutCache()
+    const inp = inputs(crowd(3))
+    const first = compute(frame(1000), inp)
+    expect(compute(frame(1000, { pxPerMs: PX * 1.0001 }), inp)).toBe(first)
+  })
+
+  it('uses chipColumnsMax in vertical and chipRowsMax in horizontal', () => {
+    useSettings.setState({ tunables: { chipColumnsMax: 2, chipRowsMax: 5 } })
+    const list = crowd(8)
+    const v = createSavedLayoutCache()(frame(1000), inputs(list, { orientation: 'vertical' }))
+    expect(v.rowsUsed).toBeLessThanOrEqual(2)
+    const h = createSavedLayoutCache()(frame(1000), inputs(list))
+    expect(h.rowsUsed).toBeGreaterThan(2)
+    expect(h.rowsUsed).toBeLessThanOrEqual(5)
   })
 })
