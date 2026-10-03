@@ -2,11 +2,12 @@
 
 The timeline is plain DOM rendered by React. There is no canvas and no render loop.
 React renders *structure* (which instants, spans and buttons exist); a small
-**viewport engine** moves those elements horizontally with CSS transforms and updates
+**viewport engine** moves those elements along the time axis (horizontally or vertically) with CSS transforms and updates
 time-dependent text, without re-rendering React.
 
 ```
- domain/      pure functions: time math, ticks, spans, navigation, alarms   (unit tested)
+ domain/      pure functions: time math, ticks, spans, navigation, alarms,
+              labelLayout (chip overlap), layoutMode, glide, tunables         (unit tested)
  store/       Zustand stores + actions.ts (every user operation)            (unit tested)
  engine/      viewportEngine (frame scheduler) + React hooks
  components/  timeline/ (columns, lanes, ticks, popovers), panels/ (controls, list, alarms, settings)
@@ -82,7 +83,8 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 | `useView`        | `timeline.state`        | Focus, selection, zoom, step, cursor lock. Debounced 300ms.        |
 | `useAlarms`      | `timeline.alarms.v1`    | Ringing alarms + ring duration/unanswered behavior.               |
 | `useSettings`    | `timeline.settings.v1`  | Glow, tunables (Settings > Advanced), favorite lanes, layout version for one-time migrations (store/migrations.ts). |
-| `useUi`          | (not persisted)         | Agenda tab, Agenda drawer open, open time-entry popover.                           |
+| `useUi`          | (not persisted)         | Agenda tab, `agendaOpen` (the drawer), open time-entry popover, `tagMenu` (which live tag's tools menu is open). Both popovers close when the orientation changes. |
+| `useLayout`      | (not persisted)         | Resolved layout, see below. |
 
 Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an offset
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans
@@ -95,6 +97,40 @@ must return **only their own fields**. Spreading a whole state object into a pat
 silently reverts unrelated fields; a bug like that once made refocusing the most
 recent instant undo itself.
 
+## Layout (orientation, chips, Agenda)
+
+- **`store/layout.ts`** resolves the layout from the window size, the settings and the rotate
+  button's session override (`domain/layoutMode.ts`): `orientation` (horizontal or vertical),
+  `dir` (1, or -1 for "future up"), `shape` (portrait/landscape with hysteresis), the
+  `override` (lapses when the shape class changes) and the Agenda placement. `startLayoutTracking`
+  keeps it current. The engine reads it, so `f.pos`/`f.mainSize`/`f.crossSize` already speak in
+  the main axis; components never branch on x/y themselves. `components/timeline/geometry.ts`
+  holds the px distances across the timeline (axis, tag slots, lane offsets, vertical cross
+  budget) and writes them as `--tl-*` custom properties.
+- **Chip overlap layout.** `domain/labelLayout.ts` is pure: positions and chip sizes in,
+  rows/columns, "+N" clusters and snooze folds out. `components/timeline/savedLayout.ts` builds
+  its inputs from the visible instants and measured chip widths (`useChipWidths`, pruned when an
+  instant is deleted) and exposes a structural result (`useSavedLayout`). It is **pan-invariant
+  and cached**: item positions are taken relative to the earliest visible instant, and the last
+  result is reused while the visible set, zoom, cross size, widths and the other inputs are
+  unchanged, so a pure pan costs a cheap probe per frame and no layout. While an instant is
+  being moved the cache is skipped. The limits are the `chipRowsMax` (horizontal) and
+  `chipColumnsMax` (vertical) tunables.
+- **Momentum (`hooks/glide.ts`, `domain/glide.ts`).** A flicked drag keeps panning from engine
+  frames with decaying velocity, then `endPan` lands the cursor. There is one glide for the app;
+  `engine.beginTransition()`, `rotate()`, zoom, ± steps and the wheel stop it, and it stops
+  itself if the view leaves the free cursor.
+- **Tunables (`domain/tunables.ts`, Settings > Advanced).** Every magic number of the gestures
+  and layout (drag thresholds, landing radii, glide constants, chip gaps and limits, Agenda
+  breakpoints) is declared once with label, range and default; the settings store holds only
+  overrides.
+- **Agenda shell (`components/panels/AgendaShell.tsx`).** The Agenda is docked at the bottom or
+  side, or in a modal drawer opened by the menu button (`useUi.agendaOpen`). Placement comes
+  from `useLayout` (setting Auto/Docked/Drawer plus the dock/drawer toggle's override). Picking
+  a row in the drawer closes it.
+- **Stacking.** Timeline pieces stay below 60; the Agenda drawer is 150/151, Settings 200, and the
+  ringing-alarm panel uses `--z-alarm` (300) so Dismiss/Snooze are always reachable.
+
 ## Gestures and cursor landing (`hooks/usePanZoom.ts`, `store/actions.ts`)
 
 - **Drag (one finger or mouse button)** moves through time. A press becomes a drag
@@ -103,7 +139,7 @@ recent instant undo itself.
 - **Click guard:** a mouse drag ends with a click on whatever is under the pointer, and
   that one click is swallowed. Touch drags produce no click, so the guard lasts only
   for the current event (`setTimeout(…, 0)`). Otherwise it would eat the next real tap.
-- **Wheel** zooms (about 10% per notch); **pinch** zooms.
+- **Wheel** zooms (about 10% per notch) in horizontal and pans in vertical; Ctrl+wheel and **pinch** zoom. Drags follow the main axis (x or y). A flick glides (see Layout) and the cursor snaps to a tick at rest.
 - **Where the cursor comes to rest** (`settleCursor`): a drag that ends within 12px
   (mouse) or 20px (touch) of Now or an instant focuses it, hiding the cursor. ± steps
   and typed times land on an instant only on an essentially exact hit (within 2px and
@@ -141,11 +177,11 @@ runs them before every build.
 
 Measured in headless Edge, 1400×900, 40 instants, on the main thread:
 
-| Phase | Canvas (before) | DOM (after) |
-|-------|-----------------|-------------|
-| Idle  | 64.5%           | 0.3%        |
-| Pan   | 44%             | 15%         |
-| Zoom  | 96%             | 32%         |
+| Phase | Canvas (before) | DOM (after) | Layout v2 (before cache) | Layout v2 (after cache) |
+|-------|-----------------|-------------|--------------------------|-------------------------|
+| Idle  | 64.5%           | 0.3%        | -                        | pending re-measure      |
+| Pan   | 44%             | 15%         | 19.5% (over the 15% budget) | pending re-measure   |
+| Zoom  | 96%             | 32%         | 30.1%                    | pending re-measure      |
 
 Per-frame cost while zooming is about 5–6ms (style recalc, ticks, paint), within budget
 for 60fps. If phones struggle, the next levers are fewer tick nodes at extreme zoom

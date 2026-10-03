@@ -46,11 +46,11 @@ See docs/ARCHITECTURE.md before changing the timeline.
 10. **Propose UX changes before building them**: the owner has rejected some unrequested interaction changes
 
 ## UX Patterns (current)
-- **Timeline**: horizontal; Now line follows the clock; a vertical orientation is planned (docs/handoffs)
-- **Gestures**: one-finger/mouse drag moves through time (free cursor at the center); pinch or wheel zooms; double-tap/double-click a label to create or rename; tap selects
+- **Timeline**: horizontal or vertical (auto from the window shape, Settings > Orientation, or the rotate button / V key; vertical time direction is a setting). The Now line follows the clock. Saved-instant chips use the overlap layout (compact chips, "+N" clusters, "⟲N" snooze folds)
+- **Gestures**: one-finger/mouse drag moves through time along the main axis (x horizontal, y vertical; free cursor at the center); a flick glides with momentum, and the cursor snaps onto Now, an instant or a tick where it rests; the wheel zooms in horizontal and pans in vertical (horizontal wheel pans in horizontal); Ctrl+wheel and pinch zoom; V rotates the timeline; double-tap/double-click a label to create or rename; tap selects. Any other navigation (R/Now, an Agenda row, ± steps, zoom, rotate) cancels a glide in progress
 - **Cursor landing**: a drag that ends near Now or an instant snaps onto it (20px touch, 12px mouse); ± steps and typed times land on an instant only on an exact hit
-- **Agenda**: the tabbed list (All Instants / Favorites / All Spans), src/components/panels/Agenda.tsx; the dock/drawer toggle and Settings gear sit in its tab bar. It docks at the bottom (horizontal) or side (vertical) when there is room, otherwise it is a drawer opened by the ☰ button (setting: Auto / Docked / Drawer)
-- **Planned** (see docs/handoffs): vertical layout, momentum, label-overlap layout, arrow-shaped cursor, stopwatch/timer/alarm quick-create, natural-language quick add
+- **Agenda**: the tabbed list (All Instants / Favorites / All Spans), src/components/panels/Agenda.tsx; the dock/drawer toggle and Settings gear sit in its tab bar. It docks at the bottom (horizontal) or side (vertical) when there is room, otherwise it is a drawer opened by the ☰ button (setting: Auto / Docked / Drawer); picking a row in the drawer closes it
+- **Planned** (see docs/handoffs): Agenda swipe gestures, stopwatch/timer/alarm quick-create, natural-language quick add. Already shipped in layout v2: vertical layout, momentum, label-overlap layout, arrow-shaped tags, Agenda dock/drawer
 
 ## Technical Requirements
 - **Performance**: 60fps timeline, <2s cold start, <500ms warm start
