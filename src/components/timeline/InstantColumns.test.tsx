@@ -66,6 +66,15 @@ describe('saved instant chips', () => {
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
+  it('keep the time visible while renaming', () => {
+    const t = twentyMinutesAgo()
+    const id = entities.createInstant(t, 'Tea')
+    useView.setState({ editingInstantId: id })
+    render(<Columns />)
+    expect(screen.getByLabelText('Instant name')).toBeInTheDocument()
+    expect(screen.getByText(formatClockCompact(t, true))).toBeInTheDocument()
+  })
+
   it('offer tools when selected, including delete', () => {
     const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
     useView.setState({ currentSelectedInstantId: id })

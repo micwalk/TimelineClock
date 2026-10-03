@@ -168,6 +168,8 @@
   font: 650 15px/1 var(--font-ui);
 }
 .chip__name { min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+/* Renaming: the input with the time kept visible directly below it. */
+.chip__edit { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; }
 .chip__time { font: 700 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .chip__rel { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); }
 /* Tools hang off the chip's right edge, so a selected chip stays centered on its line and the layout measures the chip alone. */
