@@ -5,17 +5,30 @@ import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
 import { beginPan, endPan, panByPixels, zoomBy } from '../store/actions.ts'
 
-const DRAG_THRESHOLD_PX = 3
+/** Movement before a press becomes a drag. Fingers wobble, so touch gets more slack. */
+const DRAG_THRESHOLD_PX = { mouse: 3, touch: 8 }
+/** How close the cursor must end to Now or an instant to snap onto it. */
+const SNAP_PX = { mouse: 12, touch: 20 }
 const WHEEL_ZOOM_PER_PX = 0.001 // a 100px mouse-wheel notch ≈ 10%
+
+const isTouch = (e: PointerEvent) => e.pointerType === 'touch' || e.pointerType === 'pen'
 
 export function usePanZoom(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const pointers = new Map<number, { x: number; y: number }>()
-    let drag: { id: number; startX: number; lastX: number; moved: boolean } | null = null
+    let drag: { id: number; startX: number; lastX: number; moved: boolean; touch: boolean } | null = null
     let pinchDist = 0
     let swallowClick = false
+
+    // A mouse drag ends with a click on whatever is under the pointer; swallow that
+    // one click only. Touch gestures produce no click, so the guard must not outlive
+    // the current event or it would eat the user's next real tap.
+    const swallowTrailingClick = () => {
+      swallowClick = true
+      setTimeout(() => { swallowClick = false }, 0)
+    }
 
     const exempt = (t: EventTarget | null) => t instanceof Element && !!t.closest('input, textarea, select, [data-no-pan]')
     const distance = () => {
@@ -28,12 +41,12 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (exempt(e.target)) return
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (pointers.size === 1) {
-        drag = { id: e.pointerId, startX: e.clientX, lastX: e.clientX, moved: false }
+        swallowClick = false
+        drag = { id: e.pointerId, startX: e.clientX, lastX: e.clientX, moved: false, touch: isTouch(e) }
       } else if (pointers.size === 2) {
         pinchDist = distance()
         for (const id of pointers.keys()) el.setPointerCapture(id)
         if (drag) drag.moved = true
-        swallowClick = true
       }
     }
 
@@ -48,7 +61,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       }
       if (!drag || e.pointerId !== drag.id) return
       if (!drag.moved) {
-        if (Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD_PX) return
+        if (Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD_PX[drag.touch ? 'touch' : 'mouse']) return
         drag.moved = true
         // Capture only once dragging, so plain clicks still reach chips and buttons.
         el.setPointerCapture(e.pointerId)
@@ -68,8 +81,8 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (drag && e.pointerId === drag.id) {
         if (drag.moved) {
           el.classList.remove('is-panning')
-          endPan()
-          swallowClick = true
+          endPan(SNAP_PX[drag.touch ? 'touch' : 'mouse'])
+          swallowTrailingClick()
         }
         drag = null
       }

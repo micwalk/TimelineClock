@@ -25,9 +25,10 @@ export interface FocusHistory {
 
 const MAX_HISTORY = 20
 
+/** Returns only the history fields, so callers can merge the result into larger state. */
 export function pushFocusHistory(h: FocusHistory, id: string): FocusHistory {
   if (h.focusHistory[h.focusHistory.length - 1] === id) {
-    return { ...h, focusHistoryIndex: h.focusHistory.length - 1 }
+    return { focusHistory: h.focusHistory, focusHistoryIndex: h.focusHistory.length - 1 }
   }
   const next = [...h.focusHistory, id].slice(-MAX_HISTORY)
   return { focusHistory: next, focusHistoryIndex: next.length - 1 }

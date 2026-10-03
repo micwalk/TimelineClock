@@ -46,6 +46,12 @@ describe('navigation', () => {
     expect(findAdjacent(items, 50, -1)).toMatchObject({ id: 'x' })
     expect(findAdjacent(items, 10, -1)).toBeNull()
   })
+  it('returns only history fields, even when given a whole view state', () => {
+    const state = { focusHistory: ['a'], focusHistoryIndex: 0, viewFocusMode: 'cursor', focusedInstantId: null }
+    expect(Object.keys(pushFocusHistory(state, 'a')).sort()).toEqual(['focusHistory', 'focusHistoryIndex'])
+    expect(Object.keys(pushFocusHistory(state, 'b')).sort()).toEqual(['focusHistory', 'focusHistoryIndex'])
+  })
+
   it('records focus history without consecutive duplicates', () => {
     let h = { focusHistory: [] as string[], focusHistoryIndex: -1 }
     h = pushFocusHistory(h, 'a')

@@ -19,6 +19,7 @@ import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { useFlip } from '../../hooks/useFlip.ts'
+import { SettingsPanel } from './SettingsPanel.tsx'
 
 const TABS: { key: ListTab; label: string }[] = [
   { key: 'instants', label: 'All Instants' },
@@ -256,20 +257,23 @@ function SpansList() {
 export function ListPanel() {
   const tab = useUi(s => s.listTab)
   return (
-    <section className="list-panel" aria-label="Saved items">
-      <div className="list-tabs" role="tablist">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            className={`list-tab${tab === t.key ? ' is-active' : ''}`}
-            onClick={() => ui.setListTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
+    <section className="list-panel" aria-label="Agenda">
+      <div className="list-header">
+        <div className="list-tabs" role="tablist">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              className={`list-tab${tab === t.key ? ' is-active' : ''}`}
+              onClick={() => ui.setListTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">
         {tab === 'spans' ? <SpansList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}

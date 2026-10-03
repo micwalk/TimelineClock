@@ -3,13 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import {
-  ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, BellAlertIcon,
+  ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
 } from '@heroicons/react/20/solid'
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
 import { useView, view } from '../../store/view.ts'
 import * as act from '../../store/actions.ts'
-import { useSettings } from '../../store/settings.ts'
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -104,7 +103,6 @@ function IncrementButton({ direction }: { direction: 1 | -1 }) {
 
 export function ControlBar() {
   const nowFocused = useView(s => s.viewFocusMode === 'now')
-  const showTestAlarm = useSettings(s => s.showTestAlarm)
   return (
     <nav className="controls" aria-label="Timeline controls">
       <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
@@ -114,7 +112,6 @@ export function ControlBar() {
       <IncrementButton direction={1} />
       <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
       <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
-      {showTestAlarm && <CtlButton icon={BellAlertIcon} variant="danger" label="Ring a test alarm in 3 seconds" onClick={() => act.createTestAlarm()}>Test alarm</CtlButton>}
     </nav>
   )
 }

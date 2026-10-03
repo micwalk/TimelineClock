@@ -69,7 +69,38 @@ export function moveCursorBy(deltaMs: number) {
   view.setTimeCenter(frame().center + deltaMs)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
   refreshLock()
+  settleCursor(exactLandingMs(), false)
 }
+
+/**
+ * Snap distance for moves that target a precise time (± steps, typed times): only an
+ * essentially exact hit counts, so a typed time is never pulled to a nearby instant.
+ */
+const exactLandingMs = () => Math.min(500, 2 / frame().pxPerMs)
+
+/**
+ * Where a free cursor comes to rest: if it is within `toleranceMs` of Now or of an
+ * instant, focus that instead (the cursor "becomes" it and is hidden).
+ */
+function settleCursor(toleranceMs: number, animate: boolean): boolean {
+  if (v().viewFocusMode !== 'cursor' || v().moveMode) return false
+  const f = frame()
+  if (Math.abs(f.now - f.center) <= toleranceMs) {
+    focusNow(animate)
+    return true
+  }
+  let best: { id: string; d: number } | null = null
+  for (const i of useEntities.getState().instants) {
+    const d = Math.abs(i.tsEpochMs - f.center)
+    if (d <= toleranceMs && (!best || d < best.d)) best = { id: i.id, d }
+  }
+  if (!best) return false
+  focusInstant(best.id, animate)
+  return true
+}
+
+/** Within this many px of the cursor, an instant counts as "under" it. */
+const UNDER_CURSOR_PX = 20
 
 export function moveCursorByIncrement(direction: 1 | -1) {
   moveCursorBy(direction * incrementOption(v().timeIncrement).milliseconds)
@@ -140,19 +171,7 @@ export function panByPixels(dx: number) {
 
 /** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */
 export function endPan(tolerancePx = 12) {
-  const f = frame()
-  const cx = f.screenW / 2
-  if (Math.abs(f.x(f.now) - cx) <= tolerancePx && !v().moveMode) {
-    focusNow()
-    return
-  }
-  if (v().moveMode) return
-  let best: { id: string; d: number } | null = null
-  for (const i of useEntities.getState().instants) {
-    const d = Math.abs(f.x(i.tsEpochMs) - cx)
-    if (d <= tolerancePx && (!best || d < best.d)) best = { id: i.id, d }
-  }
-  if (best) focusInstant(best.id)
+  settleCursor(tolerancePx / frame().pxPerMs, true)
 }
 
 export function toggleCursorLock() {
@@ -168,7 +187,19 @@ export function toggleCursorLock() {
 // ---------------------------------------------------------------------------
 // Selection & editing
 
-export const selectInstant = (id: string) => view.selectInstant(id)
+/** Selects an instant; if it's under the free cursor, the cursor lands on it instead. */
+export function selectInstant(id: string) {
+  const inst = entities.getInstant(id)
+  const s = v()
+  if (inst && s.viewFocusMode === 'cursor' && !s.moveMode) {
+    const f = frame()
+    if (Math.abs(f.x(inst.tsEpochMs) - f.screenW / 2) <= UNDER_CURSOR_PX) {
+      focusInstant(id)
+      return
+    }
+  }
+  view.selectInstant(id)
+}
 export const selectSpan = (id: string) => view.selectSpan(id)
 
 export function escape() {
@@ -327,14 +358,21 @@ export function applyDurationInput(text: string, reference: 'now' | 'selected'):
   }
   const base = reference === 'now' ? frame().now : entities.getInstant(v().currentSelectedInstantId)?.tsEpochMs
   if (typeof base !== 'number') return false
-  focusCursorAt(base + delta)
+  landCursorAt(base + delta)
   return true
 }
 
 /** Moves the cursor to a wall-clock time on the cursor's current day. */
 export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean) {
-  const target = atClockTimeOnDay(frame().center, to24h(hour12, pm), minutes, seconds)
-  focusCursorAt(target)
+  landCursorAt(atClockTimeOnDay(frame().center, to24h(hour12, pm), minutes, seconds))
+}
+
+/** Sends the cursor to a typed time, landing on an instant only if one is exactly there. */
+function landCursorAt(ts: number) {
+  const tolerance = exactLandingMs()
+  const hit = v().moveMode ? undefined : useEntities.getState().instants.find(i => Math.abs(i.tsEpochMs - ts) <= tolerance)
+  if (hit) focusInstant(hit.id)
+  else focusCursorAt(ts)
 }
 
 // ---------------------------------------------------------------------------

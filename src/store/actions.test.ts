@@ -139,6 +139,60 @@ describe('move mode', () => {
   })
 })
 
+describe('refocusing the most recent instant', () => {
+  it('works after moving the cursor away (the reported snapping bug)', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusInstant(id, false)
+    act.moveCursorBy(30 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+    act.moveCursorBy(-30 * MINUTE) // lands exactly back on Rice
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('works when focused directly again (e.g. from the Agenda)', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Rice')
+    act.focusInstant(id, false)
+    act.focusNow(false)
+    act.focusInstant(id, false)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+})
+
+describe('cursor landing on instants', () => {
+  it('stepping exactly onto an instant focuses it (the cursor becomes the instant)', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t - 30 * MINUTE, false)
+    act.moveCursorBy(30 * MINUTE)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('stepping near, but not onto, an instant leaves the cursor where it was sent', () => {
+    const t = Date.now() - HOUR
+    entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t - 40 * MINUTE, false)
+    act.moveCursorBy(30 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+  })
+
+  it('tapping the instant under the cursor focuses it', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t + MINUTE, false) // a few px away at the default zoom
+    act.selectInstant(id)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('tapping an instant away from the cursor only selects it', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t + HOUR, false)
+    act.selectInstant(id)
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: id })
+  })
+})
+
 describe('time entry', () => {
   it('moves the cursor relative to Now', () => {
     const before = Date.now()

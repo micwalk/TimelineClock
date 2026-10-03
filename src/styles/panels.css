@@ -95,12 +95,19 @@
   padding: 0 16px 12px;
 }
 
-.list-tabs {
+.list-header {
   display: flex;
-  gap: 18px;
+  align-items: center;
+  gap: 12px;
   padding: 0 4px;
   border-bottom: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
   box-shadow: 0 1px calc(8px * var(--glow)) -2px var(--c-axis-glow);
+}
+.list-tabs {
+  display: flex;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .list-tab {
   position: relative;
@@ -275,26 +282,27 @@
 
 /* --- Settings ------------------------------------------------------------ */
 
-.settings { position: fixed; left: 16px; bottom: 16px; z-index: 90; }
 .settings__gear {
   --accent: color-mix(in srgb, var(--c-instant) 60%, var(--c-axis-glow));
   --halo: var(--c-axis-glow);
+  flex: none;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
+  margin: 4px 0;
   border-radius: 50%;
   background: var(--surface-strong);
   color: var(--ink-dim);
   transition: transform 300ms ease, color 120ms ease;
 }
-.settings__gear svg { width: 22px; height: 22px; }
+.settings__gear svg { width: 20px; height: 20px; }
 .settings__gear:hover, .settings__gear.is-open { color: var(--ink); transform: rotate(60deg); }
+/* Portaled to <body>; top/bottom/right are set inline next to the gear */
 .settings__panel {
   --accent: var(--c-axis-glow);
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 10px);
+  position: fixed;
+  z-index: 200;
   width: min(320px, calc(100vw - 32px));
   padding: 14px 16px 16px;
   border-radius: 14px;
