@@ -96,7 +96,6 @@ function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpoc
       aTarget={instantTarget(r.start)}
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
-      chipLabel={`Span ${spanHeader(r) ?? ''}`}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} />}
       onChipClick={() => act.selectSpan(r.span.id)}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}

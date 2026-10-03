@@ -45,4 +45,14 @@ describe('span chips', () => {
     act(() => useView.setState({ selectedSpanId: spanId }))
     expect(screen.getByText('Rice → Done')).toBeInTheDocument()
   })
+
+  it('are named by their visible text', () => {
+    render(<BottomLanes lanes={[savedLane().lane]} />)
+    expect(screen.getByRole('button', { name: /26:13/ })).toBeInTheDocument()
+  })
+
+  it('are named by the span name when named', () => {
+    render(<BottomLanes lanes={[savedLane('Cooking').lane]} />)
+    expect(screen.getByRole('button', { name: /Cooking/ })).toBeInTheDocument()
+  })
 })

@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 
 export const GEOMETRY = {
   /** The axis line. */
-  axis: 112,
+  axis: 124,
   /** Arrowhead height; live tag boxes sit just above it. */
   tagArrow: 14,
   /** Distance between the two live tag slots. */
@@ -13,10 +13,10 @@ export const GEOMETRY = {
   /** Main-axis distance under which the Now and Cursor tags would overlap. */
   tagClearance: 100,
   /** Top of the first saved chip row, and the row pitch. */
-  chipTop: 128,
+  chipTop: 140,
   chipRow: 34,
   /** Where bottom lanes start: one chip row plus a gap (the overlap layout adds rows in phase 3). */
-  lanes: 128 + 34 + 14,
+  lanes: 140 + 34 + 14,
 } as const
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
