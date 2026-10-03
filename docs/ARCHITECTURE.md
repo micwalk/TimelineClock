@@ -24,6 +24,8 @@ time-dependent text, without re-rendering React.
 | Text that depends on time or the cursor | `<LiveText compute={f => …} />` | engine writes `textContent`                 |
 | Coarse facts derived from the viewport (which items are on screen, whether an instant is past) | `useFrameValue(selector)` | re-renders only when the value changes |
 
+**Layers: lines never draw over text or boxes.** Everything that is a line (marker lines, span-lane bars and chevrons, the axis, tick marks) lives in a low layer; everything that is text or a box (saved, cluster and fold chips, Now/Cursor tags, menus and popovers, span-lane chips and tools, tick labels, the date label, buttons) sits above it on an opaque background. So a `Marker` renders two sibling elements (`.tl-col--line` and `.tl-col--label`, both moved by `usePositionMain`), `SpanLane` renders `.tl-lane--lines` and `.tl-lane--labels`, and `TickLayer` keeps tick marks and tick labels in two containers. The order is the `--z-lines < --z-ticks-labels < --z-chips < --z-lane-chips < --z-controls < --z-tags < --z-popovers` token ladder in `theme.css`; never put a line in the same element as its label, and never give a box a translucent background (use `--box-bg*`).
+
 Rules of thumb:
 
 - **Never put per-frame values in React state.** If it changes while panning or as the clock

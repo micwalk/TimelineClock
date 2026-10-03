@@ -126,3 +126,18 @@ describe('liveTagsCollide', () => {
     expect(liveTagsCollide(600, 500, 100)).toBe(false)
   })
 })
+
+describe('marker layering', () => {
+  it('keeps the Now line in its own element, apart from the tag that holds the time text', () => {
+    const { container } = render(<NowTag />)
+    const line = container.querySelector('.tl-col--line') as HTMLElement
+    const label = container.querySelector('.tl-col--label') as HTMLElement
+    expect(line.querySelector('.tl-col__line')).not.toBeNull()
+    expect(line.contains(label)).toBe(false)
+    expect(label.contains(line)).toBe(false)
+    expect(label.querySelector('.tl-tag__box')).not.toBeNull()
+    expect(line.querySelector('.tl-tag__box')).toBeNull()
+    expect(line.className).toContain('is-now')
+    expect(label.className).toContain('is-now')
+  })
+})

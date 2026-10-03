@@ -94,3 +94,21 @@ describe('vertical lanes', () => {
     expect(container.querySelector('.span-chip')).not.toBeNull()
   })
 })
+
+describe('layering', () => {
+  it('draws the bar and chevrons in a lines layer separate from the chip and tools', () => {
+    const { lane } = savedLane()
+    const { container } = render(<BottomLanes lanes={[lane]} />)
+    const lines = container.querySelector('.tl-lane--lines') as HTMLElement
+    const labels = container.querySelector('.tl-lane--labels') as HTMLElement
+    expect(lines).not.toBeNull()
+    expect(labels).not.toBeNull()
+    expect(lines.contains(labels)).toBe(false)
+    expect(labels.contains(lines)).toBe(false)
+    expect(lines.querySelector('.tl-lane__line')).not.toBeNull()
+    expect(lines.querySelector('.tl-lane__chev--left')).not.toBeNull()
+    expect(lines.querySelector('.span-chip')).toBeNull()
+    expect(labels.querySelector('.span-chip')).not.toBeNull()
+    expect(labels.querySelector('.tl-lane__line')).toBeNull()
+  })
+})

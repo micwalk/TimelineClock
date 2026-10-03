@@ -21,13 +21,13 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
-  z-index: 5;
+  z-index: var(--z-controls);
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
   color: var(--ink-dim);
   cursor: pointer;
   transition: transform 300ms ease, color 120ms ease;
@@ -39,6 +39,7 @@
 
 .tl-axis {
   position: absolute;
+  z-index: var(--z-lines);
   left: 0;
   right: 0;
   top: var(--tl-axis);
@@ -54,6 +55,9 @@
 }
 
 .tl-ticks { position: absolute; inset: 0; pointer-events: none; }
+.tl-ticks--lines { z-index: var(--z-lines); }
+.tl-ticks--labels { z-index: var(--z-ticks-labels); }
+.tl-tick__label:empty { display: none; }
 
 /* Days in view, top left */
 .tl-date {
@@ -63,6 +67,7 @@
   top: 10px;
   font: 700 13px/1 var(--font-ui);
   letter-spacing: 0.06em;
+  z-index: var(--z-ticks-labels);
   text-transform: uppercase;
   color: var(--ink-dim);
   pointer-events: none;
@@ -85,11 +90,14 @@
   left: 0;
   bottom: calc(var(--h) * 1px + 7px);
   transform: translateX(-50%);
-  opacity: var(--a);
+  /* Opaque pill so no line shows through; the fade is on the text, not the pill. */
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: var(--tick-label-bg);
   font: 500 calc(var(--fs) * 1px) / 1 var(--font-mono);
-  color: #fff;
+  color: rgb(255 255 255 / var(--a));
   white-space: nowrap;
-  text-shadow: 0 0 calc(6px * var(--glow)) var(--c-axis-glow);
+  text-shadow: 0 0 calc(6px * var(--glow)) color-mix(in srgb, var(--c-axis-glow) calc(var(--a) * 100%), transparent);
 }
 .tl-tick.is-bold .tl-tick__label { font-weight: 700; }
 
@@ -103,20 +111,30 @@
   top: 0;
   bottom: 0;
   width: 0;
-  z-index: 3;
   will-change: transform;
 }
-.tl-col:hover { z-index: 8; }
-.tl-col.is-secondary { --accent: var(--c-secondary); --halo: var(--c-secondary); z-index: 4; }
-.tl-col.is-span-end { --accent: var(--c-span); --halo: var(--c-span); z-index: 5; }
-.tl-col.is-selected { --accent: var(--c-selected); --halo: var(--c-selected); z-index: 6; }
-.tl-col.is-focused { --accent: var(--c-focused); --halo: var(--c-focused); z-index: 7; }
-.tl-col.is-cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); z-index: 7; }
-.tl-col.is-now { --accent: var(--c-now); --halo: var(--c-now); z-index: 2; }
-.tl-col.is-now.is-focused { z-index: 9; }
-.tl-col.is-moving { --accent: var(--c-cursor); --halo: var(--c-cursor); z-index: 9; }
-.tl-col.is-ghost { opacity: 0.35; z-index: 1; pointer-events: none; }
-.tl-col.has-popover { z-index: 60; }
+/* Layers (tokens in theme.css): the line half of a marker sits in the lines layer; the label half
+   (chip, tag, badge) above it, ordered among labels by state. */
+.tl-col--line { z-index: var(--z-lines); }
+.tl-col--label { z-index: calc(var(--z-chips) + 3); }
+.tl-col--label:hover { z-index: calc(var(--z-chips) + 8); }
+.tl-col.is-secondary { --accent: var(--c-secondary); --halo: var(--c-secondary); }
+.tl-col--label.is-secondary { z-index: calc(var(--z-chips) + 4); }
+.tl-col.is-span-end { --accent: var(--c-span); --halo: var(--c-span); }
+.tl-col--label.is-span-end { z-index: calc(var(--z-chips) + 5); }
+.tl-col.is-selected { --accent: var(--c-selected); --halo: var(--c-selected); }
+.tl-col--label.is-selected { z-index: calc(var(--z-chips) + 6); }
+.tl-col.is-focused { --accent: var(--c-focused); --halo: var(--c-focused); }
+.tl-col--label.is-focused { z-index: calc(var(--z-chips) + 7); }
+.tl-col.is-cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); }
+.tl-col--label.is-cursor { z-index: calc(var(--z-tags) + 7); }
+.tl-col.is-now { --accent: var(--c-now); --halo: var(--c-now); }
+.tl-col--label.is-now { z-index: calc(var(--z-tags) + 2); }
+.tl-col--label.is-now.is-focused { z-index: calc(var(--z-tags) + 9); }
+.tl-col.is-moving { --accent: var(--c-cursor); --halo: var(--c-cursor); }
+.tl-col--label.is-moving { z-index: calc(var(--z-chips) + 9); }
+.tl-col.is-ghost { opacity: 0.35; pointer-events: none; }
+.tl-col--label.has-popover { z-index: var(--z-popovers); }
 
 .tl-col__line {
   position: absolute;
@@ -194,12 +212,12 @@
   min-width: 26px;
   padding: 0 5px;
   border-radius: var(--radius-chip);
-  background: var(--surface);
+  background: var(--box-bg);
   color: var(--accent);
   font: 700 13px/1 var(--font-ui);
   cursor: pointer;
 }
-.tl-col__fold:hover { background: var(--surface-raised); }
+.tl-col__fold:hover { background: var(--box-bg-raised); }
 .tl-col__chip.has-fold .tl-col__tools { margin-left: 40px; }
 
 /* "+N": overflow chips. Accent comes from the most important member. */
@@ -219,7 +237,7 @@
   color: var(--c-cursor);
   padding: 4px 8px;
   border-radius: 999px;
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
 }
 
 /* --- Live tags (Now, Cursor) ------------------------------------------- */
@@ -252,13 +270,13 @@
   gap: 2px;
   padding: 4px 9px;
   border-radius: var(--radius-chip);
-  background: var(--surface);
+  background: var(--box-bg);
   color: var(--ink);
   font: 700 15px/1.1 var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.tl-tag__box:hover { background: var(--surface-raised); }
+.tl-tag__box:hover { background: var(--box-bg-raised); }
 .tl-tag__caption { font: 800 10px/1 var(--font-ui); letter-spacing: 0.14em; color: var(--accent); }
 .tl-tag__sub { font: 600 12px/1.1 var(--font-mono); color: var(--ink-dim); }
 .tl-tag__menu { left: 50%; transform: translateX(-50%); }
@@ -278,14 +296,14 @@
   padding: 0 9px;
   height: 28px;
   border-radius: var(--radius-chip);
-  background: var(--surface);
+  background: var(--box-bg);
   color: var(--ink);
   font: 650 15px/1 var(--font-ui);
   white-space: nowrap;
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 }
-.chip:hover { background: var(--surface-raised); }
+.chip:hover { background: var(--box-bg-raised); }
 .chip--label { color: var(--ink); }
 .chip--time {
   height: 36px;
@@ -302,7 +320,7 @@
   field-sizing: content;
   padding: 0 9px;
   border-radius: var(--radius-chip);
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
   font: 650 15px/1 var(--font-ui);
   outline: none;
 }
@@ -315,10 +333,12 @@
   left: 0;
   right: 0;
   height: 0;
-  z-index: 10; /* chips sit above instant lines */
   pointer-events: none;
 }
-.tl-lane.is-hot { z-index: 11; }
+/* Bars and chevrons in the lines layer; chips and tools above every line and saved chip. */
+.tl-lane--lines { z-index: var(--z-lines); }
+.tl-lane--labels { z-index: var(--z-lane-chips); }
+.tl-lane--labels.is-hot { z-index: calc(var(--z-lane-chips) + 1); }
 .tl-lane--now { --accent: var(--c-now); }
 .tl-lane--cursor { --accent: var(--c-cursor); }
 .tl-lane--selected { --accent: var(--c-selected); }
@@ -387,11 +407,11 @@
   min-height: 28px;
   padding: 4px 10px;
   border-radius: var(--radius-chip);
-  background: var(--surface);
+  background: var(--box-bg);
   white-space: nowrap;
   cursor: pointer;
 }
-.span-chip:hover { background: var(--surface-raised); }
+.span-chip:hover { background: var(--box-bg-raised); }
 .span-chip__name { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; font: 650 13.5px/1.1 var(--font-ui); }
 .span-chip__sep { color: var(--ink-faint); }
 .span-chip__text {
@@ -413,7 +433,7 @@
   z-index: 50;
   padding: 10px;
   border-radius: var(--radius-card);
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
   pointer-events: auto;
   cursor: default;
   animation: popover-in 140ms ease-out;
@@ -602,12 +622,6 @@
 .timeline[data-orientation='vertical'] .tl-lane__tools--left { top: auto; bottom: 100%; margin-bottom: 4px; flex-direction: row-reverse; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--right { top: 100%; margin-top: 4px; }
 
-/* Lane chips and tools draw over the saved chips (lanes are above the columns) on a solid surface. */
-.timeline[data-orientation='vertical'] .tl-lane .span-chip,
-.timeline[data-orientation='vertical'] .tl-lane .icon-btn {
-  background: linear-gradient(var(--surface-strong), var(--surface-strong)) var(--surface-solid);
-}
-
 /* Agenda drawer button: top left in both orientations, the date label moves over */
 .tl-agenda-btn {
   --accent: var(--c-axis-glow);
@@ -615,13 +629,13 @@
   position: absolute;
   left: 8px;
   top: 4px;
-  z-index: 5;
+  z-index: var(--z-controls);
   display: grid;
   place-items: center;
   width: var(--agenda-btn-size);
   height: var(--agenda-btn-size);
   border-radius: 50%;
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
   color: var(--ink-dim);
 }
 .tl-agenda-btn svg { width: 22px; height: 22px; }

@@ -149,3 +149,18 @@ describe('vertical chips', () => {
     expect(chip.style.left).toBe('172px')
   })
 })
+
+describe('layering', () => {
+  it("puts a saved instant's line in a lines-layer element that never contains its chip", () => {
+    entities.createInstant(twentyMinutesAgo(), 'Rice')
+    const { container } = render(<Columns />)
+    const line = container.querySelector('.tl-col--line') as HTMLElement
+    const label = screen.getByRole('group', { name: 'Instant Rice' })
+    expect(line.querySelector('.tl-col__line')).not.toBeNull()
+    expect(line.contains(label)).toBe(false)
+    expect(label.contains(line)).toBe(false)
+    expect(label).toHaveClass('tl-col--label')
+    expect(label.querySelector('.tl-col__chip')).not.toBeNull()
+    expect(line.querySelector('.tl-col__chip')).toBeNull()
+  })
+})

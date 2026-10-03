@@ -105,38 +105,43 @@ export function SpanLane(props: SpanLaneProps) {
   const leftTarget = aIsLeft ? aTarget : bTarget
   const rightTarget = aIsLeft ? bTarget : aTarget
 
+  const laneClass = `tl-lane tl-lane--${variant}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`
+  const laneStyle = vertical ? ({ '--i': index } as CSSProperties) : { top }
+
+  // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
   return (
-    <div
-      className={`tl-lane tl-lane--${variant}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`}
-      style={vertical ? ({ '--i': index } as CSSProperties) : { top }}
-    >
-      <div ref={lineRef} className="tl-lane__line" />
-      <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
-      <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
-      <div ref={anchorRef} className="tl-lane__anchor">
-        {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
-          <div className="tl-lane__tools tl-lane__tools--left">
-            {arrows && arrowFor(leftTarget, 'left', vertical)}
-            {extra?.left}
-          </div>
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label={chipLabel}
-            className="span-chip glow-box glow-text"
-            onClick={onChipClick}
-            onDoubleClick={onChipDoubleClick}
-            onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
-          >
-            {chip}
-          </div>
-          <div className="tl-lane__tools tl-lane__tools--right">
-            {arrows && arrowFor(rightTarget, 'right', vertical)}
-            {extra?.right}
-          </div>
-          {below}
-        </div>}
+    <>
+      <div className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
+        <div ref={lineRef} className="tl-lane__line" />
+        <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
+        <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
       </div>
-    </div>
+      <div className={`${laneClass} tl-lane--labels`} style={laneStyle}>
+        <div ref={anchorRef} className="tl-lane__anchor">
+          {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
+            <div className="tl-lane__tools tl-lane__tools--left">
+              {arrows && arrowFor(leftTarget, 'left', vertical)}
+              {extra?.left}
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={chipLabel}
+              className="span-chip glow-box glow-text"
+              onClick={onChipClick}
+              onDoubleClick={onChipDoubleClick}
+              onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
+            >
+              {chip}
+            </div>
+            <div className="tl-lane__tools tl-lane__tools--right">
+              {arrows && arrowFor(rightTarget, 'right', vertical)}
+              {extra?.right}
+            </div>
+            {below}
+          </div>}
+        </div>
+      </div>
+    </>
   )
 }

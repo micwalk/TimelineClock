@@ -67,7 +67,7 @@
   min-width: 170px;
   padding: 6px;
   border-radius: var(--radius-card);
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
   animation: popover-in 140ms ease-out;
 }
 .menu__item {
