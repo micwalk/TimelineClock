@@ -206,3 +206,25 @@ describe('time entry', () => {
     expect(view().viewFocusMode).toBe('now')
   })
 })
+
+describe('zoomToTimes', () => {
+  it('centers a free cursor on the middle and fits the span into 60% of the axis', () => {
+    const a = Date.now() - 20 * MINUTE
+    const b = a + 10 * MINUTE
+    act.zoomToTimes([b, a])
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', timeCenter: (a + b) / 2 })
+    expect(view().timeWidth).toBeCloseTo((10 * MINUTE) / 0.6, 0)
+  })
+
+  it('never zooms in past 2 minutes of width', () => {
+    const a = Date.now() - HOUR
+    act.zoomToTimes([a, a + 1000])
+    expect(view().timeWidth).toBe(2 * MINUTE)
+  })
+
+  it('does nothing for an empty list', () => {
+    const before = view().timeWidth
+    act.zoomToTimes([])
+    expect(view().timeWidth).toBe(before)
+  })
+})

@@ -15,8 +15,6 @@ export const GEOMETRY = {
   /** Top of the first saved chip row, and the row pitch. */
   chipTop: 140,
   chipRow: 34,
-  /** Where bottom lanes start: one chip row plus a gap (the overlap layout adds rows in phase 3). */
-  lanes: 140 + 34 + 14,
 } as const
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
@@ -26,5 +24,5 @@ export const geometryStyle = Object.fromEntries(
   Object.entries(GEOMETRY).map(([k, v]) => [`--tl-${kebab(k)}`, `${v}px`]),
 ) as CSSProperties
 
-/** Vertical center of the first bottom lane's band starts here. */
-export const lanesTop = (): number => GEOMETRY.lanes
+/** Where bottom lanes start: below the chip rows in use (at least one), plus a gap. */
+export const lanesTop = (rows: number): number => GEOMETRY.chipTop + Math.max(1, rows) * GEOMETRY.chipRow + 14

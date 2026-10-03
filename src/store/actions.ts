@@ -6,7 +6,7 @@ import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { incrementOption } from '../domain/time.ts'
+import { MINUTE, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
@@ -53,6 +53,15 @@ export function focusCursorAt(ts: number, animate = true) {
   view.setFocus('cursor')
   view.setTimeCenter(ts)
   refreshLock()
+}
+
+/** Zoom to show all the given times (a "+N" chip or "⟲N" badge): free cursor at the middle, the span filling 60% of the axis, at least 2 minutes wide. */
+export function zoomToTimes(times: readonly number[]) {
+  if (times.length === 0) return
+  const lo = Math.min(...times)
+  const hi = Math.max(...times)
+  focusCursorAt((lo + hi) / 2)
+  view.setTimeWidth(Math.max((hi - lo) / 0.6, 2 * MINUTE))
 }
 
 export function focusSpan(spanId: string, zoomToFit = true) {

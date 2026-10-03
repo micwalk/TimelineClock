@@ -202,3 +202,25 @@ describe('layoutLabels: invariants', () => {
     expect(layoutLabels(items, H)).toEqual(layoutLabels([...items].reverse(), H))
   })
 })
+
+describe('layoutLabels: centerPos optional', () => {
+  const NO_CENTER: LabelLayoutOptions = { ...H }
+  delete NO_CENTER.centerPos
+
+  it('breaks ties by time (earlier first) when centerPos is omitted', () => {
+    const r = layoutLabels([chip('a', 20), chip('b', 10)], NO_CENTER)
+    expect(r.placed.b.slot).toBe(0)
+    expect(r.placed.a.slot).toBe(1)
+  })
+
+  it('gives the same placement whatever the pan offset', () => {
+    const items = [chip('a', 0), chip('b', 30), chip('c', 60), chip('d', 400, { priority: 2 })]
+    const base = layoutLabels(items, NO_CENTER)
+    for (const shift of [-1000, 37, 5000]) {
+      const r = layoutLabels(items.map(i => ({ ...i, pos: i.pos + shift })), NO_CENTER)
+      expect(r.placed).toEqual(base.placed)
+      expect(r.folded).toEqual(base.folded)
+      expect(r.clusters.map(c => ({ ...c, pos: 0 }))).toEqual(base.clusters.map(c => ({ ...c, pos: 0 })))
+    }
+  })
+})

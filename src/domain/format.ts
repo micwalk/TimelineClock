@@ -143,7 +143,7 @@ export function atClockTimeOnDay(dayOf: number, hours24: number, minutes: number
 }
 
 /** Marks a snooze in short names: "Test Alarm ⟲2". */
-const SNOOZE_MARK = '⟲'
+export const SNOOZE_MARK = '⟲'
 
 /** An instant's name as shown on its timeline chip; snoozes become "Base ⟲N". */
 export function chipName(label: string): string {

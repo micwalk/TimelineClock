@@ -38,8 +38,8 @@ export interface LabelLayoutOptions {
   slotGap: number
   /** Most chips stacked at one time position (rows or columns). */
   maxSlots: number
-  /** Main-axis position of the screen center; breaks priority ties. */
-  centerPos: number
+  /** Main-axis position of the screen center; breaks priority ties. Omitted: ties go to the earlier chip, so a pan never reorders them. */
+  centerPos?: number
   /** Size of a "+N" cluster chip. */
   cluster: { mainExtent: number; crossExtent: number }
   /** How much a "⟲N" badge widens a chip, px. */
@@ -88,10 +88,14 @@ interface Box {
   pos: number
 }
 
-const byImportance = (centerPos: number) => (a: LabelItem, b: LabelItem) =>
+/** Tie-break: nearer the center, or (no center) earlier in time, so panning never reorders chips. */
+const nearer = (centerPos: number | undefined) => (a: { pos: number }, b: { pos: number }) =>
+  centerPos === undefined ? a.pos - b.pos : Math.abs(a.pos - centerPos) - Math.abs(b.pos - centerPos)
+
+const byImportance = (centerPos: number | undefined) => (a: LabelItem, b: LabelItem) =>
   Number(b.pinned) - Number(a.pinned) ||
   a.priority - b.priority ||
-  Math.abs(a.pos - centerPos) - Math.abs(b.pos - centerPos) ||
+  nearer(centerPos)(a, b) ||
   compareIds(a.id, b.id)
 
 const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -213,7 +217,7 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
       // No room: take over the least important chip under the cluster.
       const victims = boxes
         .filter(b => !b.pinned && mainOverlap(lo, hi, b.lo, b.hi))
-        .sort((a, b) => b.priority - a.priority || Math.abs(b.pos - o.centerPos) - Math.abs(a.pos - o.centerPos) || compareIds(a.id, b.id))
+        .sort((a, b) => b.priority - a.priority || nearer(o.centerPos)(b, a) || compareIds(a.id, b.id))
       if (victims.length === 0) break
       boxes.splice(boxes.indexOf(victims[0]), 1)
       absorb(victims[0].id)

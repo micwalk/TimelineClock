@@ -9,13 +9,15 @@ import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { useBottomLanes } from './useBottomLanes.ts'
+import { useSavedLayout } from './savedLayout.ts'
 import { geometryStyle } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateRange } from '../../domain/format.ts'
 
 export function Timeline() {
   const ref = useRef<HTMLElement>(null)
-  const { lanes, height } = useBottomLanes()
+  const layout = useSavedLayout()
+  const { lanes, height } = useBottomLanes(layout.rowsUsed)
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
@@ -40,7 +42,7 @@ export function Timeline() {
       <TickLayer />
       <LiveText className="tl-date glow-text" compute={f => formatDateRange(f.start, f.end, f.now)} />
       <div className="tl-axis" />
-      <SavedInstantColumns />
+      <SavedInstantColumns layout={layout} />
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />

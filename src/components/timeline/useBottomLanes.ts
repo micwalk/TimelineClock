@@ -32,7 +32,7 @@ export type BottomLane = LaneBase & (
  * Implied spans for the selection (Selected→Now, Secondary→Selected) followed by
  * saved spans, keeping only those on screen. Re-renders only when that set changes.
  */
-export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
+export function useBottomLanes(rowsUsed: number): { lanes: BottomLane[]; height: number } {
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -95,7 +95,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
 
   return useMemo(() => {
     const keys = new Set(onScreenKeys)
-    let y = lanesTop()
+    let y = lanesTop(rowsUsed)
     const lanes: BottomLane[] = []
     for (const c of candidates) {
       if (!keys.has(c.key)) continue
@@ -104,5 +104,5 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
       y += h
     }
     return { lanes, height: y + LANES_BOTTOM_PAD }
-  }, [candidates, onScreenKeys])
+  }, [candidates, onScreenKeys, rowsUsed])
 }

@@ -288,7 +288,7 @@ caller derives a cluster's color and 🔔/★ badges from its members.
 
 Rules:
 - Priority (high → low): focused > selected > moving/editing > ringing > upcoming alarm >
-  favorite > other. Pinned chips go first; ties go to chips nearer the screen center.
+  favorite > other. Pinned chips go first; ties go to the earlier chip (by time, then id), so panning never reorders chips. `centerPos` is optional: when given, ties go to chips nearer the screen center.
 - Snooze groups fold first (C4): a snooze folds into its original when their chips
   overlap, transitively through other snoozes; without the original in view, siblings
   fold into the most important one. Pinned snoozes never fold. The badge widens the

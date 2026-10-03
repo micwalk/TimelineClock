@@ -8,7 +8,12 @@ describe('timeline geometry', () => {
     for (const value of Object.values(geometryStyle)) expect(value).toMatch(/^\d+(\.\d+)?px$/)
   })
 
-  it('starts lanes below the chips', () => {
-    expect(lanesTop()).toBe(GEOMETRY.chipTop + GEOMETRY.chipRow + 14)
+  it('starts lanes below the chip rows actually used', () => {
+    expect(lanesTop(1)).toBe(GEOMETRY.chipTop + GEOMETRY.chipRow + 14)
+    expect(lanesTop(3)).toBe(GEOMETRY.chipTop + 3 * GEOMETRY.chipRow + 14)
+  })
+
+  it('never reserves less than one row', () => {
+    expect(lanesTop(0)).toBe(lanesTop(1))
   })
 })
