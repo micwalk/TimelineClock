@@ -8,6 +8,7 @@ import { HOUR, MINUTE } from '../domain/time.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
+import { useUi } from './ui.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -18,6 +19,29 @@ beforeEach(() => {
 
 const instant = (id: string) => entities.getInstant(id)!
 const view = () => useView.getState()
+
+describe('revealInstant (alarm notification click)', () => {
+  it('focuses and selects the instant and shows a tab that lists it', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rice')
+    useUi.setState({ listTab: 'favorites' })
+    act.revealInstant(id, false)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id, currentSelectedInstantId: id, timeCenter: instant(id).tsEpochMs })
+    expect(useUi.getState().listTab).toBe('instants')
+  })
+
+  it('keeps the Favorites tab when the instant is a favorite', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rice', { favorite: true })
+    useUi.setState({ listTab: 'favorites' })
+    act.revealInstant(id, false)
+    expect(useUi.getState().listTab).toBe('favorites')
+  })
+
+  it('goes to Now when the instant is gone', () => {
+    act.focusCursorAt(Date.now() - HOUR, false)
+    act.revealInstant('missing', false)
+    expect(view().viewFocusMode).toBe('now')
+  })
+})
 
 describe('favorites and alarms', () => {
   it('favoriting adds a visible span to Now; unfavoriting hides it', () => {

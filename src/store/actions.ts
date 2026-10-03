@@ -15,7 +15,7 @@ import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
 import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
-import { ui } from './ui.ts'
+import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
@@ -53,6 +53,18 @@ export function focusInstant(id: string, animate = true) {
   if (animate) engine.beginTransition()
   view.setFocus('instant', { instantId: id })
   view.setTimeCenter(inst.tsEpochMs)
+}
+
+/**
+ * Goes to an instant from outside the timeline (an alarm notification): focus and select it,
+ * and show the Agenda tab that lists it. Falls back to Now if it no longer exists.
+ */
+export function revealInstant(id: string, animate = true) {
+  const inst = entities.getInstant(id)
+  if (!inst) { focusNow(animate); return }
+  focusInstant(id, animate)
+  const tab = useUi.getState().listTab
+  if (tab === 'spans' || (tab === 'favorites' && !inst.favorite)) ui.setListTab('instants')
 }
 
 /** Free cursor at the given time (keeps zoom). */
