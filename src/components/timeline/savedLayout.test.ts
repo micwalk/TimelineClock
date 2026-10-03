@@ -47,4 +47,10 @@ describe('layoutItems', () => {
     expect(only(items, 'snz')).toMatchObject({ groupId: 'orig', pos: 50 })
     expect(only(items, 'mv').pos).toBe(400)
   })
+
+  it('in vertical, chips are CHIP_HEIGHT along time and as wide as measured across it', () => {
+    const items = layoutItems([inst('abc', 0), inst('measured', 0)], ctx({ orientation: 'vertical', widths: { measured: 123 } }))
+    expect(only(items, 'abc')).toMatchObject({ mainExtent: 28, crossExtent: estimateChipWidth('abc') })
+    expect(only(items, 'measured')).toMatchObject({ mainExtent: 28, crossExtent: 123 })
+  })
 })

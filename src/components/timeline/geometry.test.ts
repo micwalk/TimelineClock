@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GEOMETRY, geometryStyle, lanesTop } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL, geometryStyle, geometryStyleFor, lanesTop } from './geometry.ts'
 
 describe('timeline geometry', () => {
   it('exposes every value as a px custom property', () => {
@@ -15,5 +15,12 @@ describe('timeline geometry', () => {
 
   it('never reserves less than one row', () => {
     expect(lanesTop(0)).toBe(lanesTop(1))
+  })
+
+  it('has a vertical set, written as px custom properties', () => {
+    const style = geometryStyleFor('vertical')
+    expect(style).toMatchObject({ '--tl-axis': '84px', '--tl-tag-arrow': '14px', '--tl-chip-start': '96px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '64px' })
+    expect(Object.keys(style)).toHaveLength(Object.keys(GEOMETRY_VERTICAL).length)
+    expect(geometryStyleFor('horizontal')).toBe(geometryStyle)
   })
 })

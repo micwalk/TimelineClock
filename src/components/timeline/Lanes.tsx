@@ -74,9 +74,10 @@ function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: Tim
 
 const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i.id })
 
-function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
+function SavedSpanLane({ r, top, index, variant, controls, emphasis, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
   r: ResolvedSpan
   top: number | string
+  index: number
   variant: LaneVariant
   controls: boolean
   emphasis?: boolean
@@ -89,6 +90,7 @@ function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpoc
   return (
     <SpanLane
       top={top}
+      index={index}
       variant={variant}
       emphasis={emphasis}
       a={a}
@@ -118,6 +120,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
             <SpanLane
               key={lane.key}
               top={lane.top}
+              index={lane.index}
               variant="selected"
               a={lane.a}
               b="now"
@@ -135,6 +138,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
             <SpanLane
               key={lane.key}
               top={lane.top}
+              index={lane.index}
               variant="secondary"
               a={lane.a}
               b={lane.b}
@@ -149,7 +153,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
         const r = lane.span
         const variant: LaneVariant = r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
         const controls = r.focused || r.priority <= 1 || selectedSpanId === r.span.id
-        return <SavedSpanLane key={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} variant={variant} controls={controls} emphasis={r.focused} />
+        return <SavedSpanLane key={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} index={lane.index} variant={variant} controls={controls} emphasis={r.focused} />
       })}
     </>
   )

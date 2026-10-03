@@ -9,6 +9,7 @@ import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../..
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { useView } from '../../store/view.ts'
+import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop } from './geometry.ts'
 
 const LANE_HEIGHT = 40
@@ -18,8 +19,10 @@ interface LaneBase {
   key: string
   a: TimeRef
   b: TimeRef
-  /** Vertical center in px; set once the lane is placed. */
+  /** Vertical center in px (horizontal); set once the lane is placed. */
   top: number
+  /** Lane number from the bottom (horizontal) or from the right edge (vertical); set once placed. */
+  index: number
 }
 
 export type BottomLane = LaneBase & (
@@ -30,9 +33,9 @@ export type BottomLane = LaneBase & (
 
 /**
  * Implied spans for the selection (Selected→Now, Secondary→Selected) followed by
- * saved spans, keeping only those on screen. Re-renders only when that set changes.
+ * saved spans, keeping only those on screen (unplaced: see placeLanes). Re-renders only when that set changes.
  */
-export function useBottomLanes(rowsUsed: number): { lanes: BottomLane[]; height: number } {
+export function useVisibleLanes(): BottomLane[] {
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -66,14 +69,14 @@ export function useBottomLanes(rowsUsed: number): { lanes: BottomLane[]; height:
     const selected = byId.get(v.selectedId ?? '')
     const secondary = byId.get(v.secondaryId ?? '')
     if (selected && v.showNow && !saved.some(s => s.span.startInstantId === selected.id && s.span.endIsNow)) {
-      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', top: 0 })
+      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', top: 0, index: 0 })
     }
     if (selected && secondary && v.showPrev) {
       const exists = resolved.some(r => !r.span.endIsNow &&
         ((r.span.startInstantId === secondary.id && r.span.endInstantId === selected.id) ||
           (r.span.startInstantId === selected.id && r.span.endInstantId === secondary.id)))
       if (!exists) {
-        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0 })
+        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0, index: 0 })
       }
     }
     for (const s of saved) {
@@ -84,6 +87,7 @@ export function useBottomLanes(rowsUsed: number): { lanes: BottomLane[]; height:
         a: ref(s.start),
         b: s.end ? ref(s.end) : 'now',
         top: 0,
+        index: 0,
       })
     }
     return out
@@ -95,14 +99,17 @@ export function useBottomLanes(rowsUsed: number): { lanes: BottomLane[]; height:
 
   return useMemo(() => {
     const keys = new Set(onScreenKeys)
-    let y = lanesTop(rowsUsed)
-    const lanes: BottomLane[] = []
-    for (const c of candidates) {
-      if (!keys.has(c.key)) continue
-      const h = LANE_HEIGHT
-      lanes.push({ ...c, top: y + h / 2 })
-      y += h
-    }
-    return { lanes, height: y + LANES_BOTTOM_PAD }
-  }, [candidates, onScreenKeys, rowsUsed])
+    return candidates.filter(c => keys.has(c.key))
+  }, [candidates, onScreenKeys])
+}
+
+/** Horizontal: lanes stacked below the chip rows, with the timeline's height. Vertical: one lane per index from the right edge; the height comes from the layout. */
+export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation): { lanes: BottomLane[]; height: number | undefined } {
+  let y = lanesTop(rowsUsed)
+  const lanes = visible.map((c, index) => {
+    const lane = { ...c, index, top: y + LANE_HEIGHT / 2 }
+    y += LANE_HEIGHT
+    return lane
+  })
+  return { lanes, height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD }
 }

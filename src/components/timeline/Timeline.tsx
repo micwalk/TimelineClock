@@ -1,5 +1,5 @@
 // The timeline: ticks, axis, span lanes and instant columns as plain DOM.
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { engine } from '../../engine/viewportEngine.ts'
 import { usePanZoom } from '../../hooks/usePanZoom.ts'
 import { useView } from '../../store/view.ts'
@@ -9,16 +9,19 @@ import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
-import { useBottomLanes } from './useBottomLanes.ts'
+import { placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
-import { geometryStyle } from './geometry.ts'
+import { useLayout } from '../../store/layout.ts'
+import { geometryStyleFor } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateRange } from '../../domain/format.ts'
 
 export function Timeline() {
   const ref = useRef<HTMLElement>(null)
-  const layout = useSavedLayout()
-  const { lanes, height } = useBottomLanes(layout.rowsUsed)
+  const orientation = useLayout(s => s.orientation)
+  const visibleLanes = useVisibleLanes()
+  const layout = useSavedLayout(visibleLanes.length)
+  const { lanes, height } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
@@ -37,7 +40,8 @@ export function Timeline() {
     <section
       ref={ref}
       className={`timeline${popoverOpen ? ' has-popover' : ''}`}
-      style={{ ...geometryStyle, height }}
+      data-orientation={orientation}
+      style={{ ...geometryStyleFor(orientation), height }}
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
     >
       <TickLayer />

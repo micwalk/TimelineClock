@@ -6,7 +6,9 @@ import { BellIcon, StarIcon } from '@heroicons/react/24/solid'
 import { usePositionMain } from '../../engine/hooks.ts'
 import { chipName } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
+import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
+import { GEOMETRY_VERTICAL } from './geometry.ts'
 import type { ClusterInfo } from './savedLayout.ts'
 
 /** Color class from the most important member's priority (see layoutItems). */
@@ -15,6 +17,7 @@ const accentClass = (priority: number) =>
 
 export function ClusterChip({ cluster, members }: { cluster: ClusterInfo; members: InstantRecord[] }) {
   const ref = useRef<HTMLDivElement>(null)
+  const vertical = useLayout(s => s.orientation === 'vertical')
   const meanTs = members.reduce((sum, m) => sum + m.tsEpochMs, 0) / Math.max(1, members.length)
   usePositionMain(ref, f => f.pos(meanTs))
 
@@ -24,7 +27,7 @@ export function ClusterChip({ cluster, members }: { cluster: ClusterInfo; member
 
   return (
     <div ref={ref} className={`tl-col tl-cluster ${accentClass(cluster.topPriority)}`}>
-      <div className="tl-col__chip" style={{ '--row': cluster.slot } as CSSProperties}>
+      <div className="tl-col__chip" style={{ '--row': cluster.slot, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cluster.crossOffset } : {}) } as CSSProperties}>
         <button type="button" className="chip chip--cluster glow-box glow-text" aria-label={label} title={label}
           onClick={() => act.zoomToTimes(members.map(m => m.tsEpochMs))}>
           {hasAlarm && <BellIcon aria-hidden />}

@@ -1,13 +1,14 @@
-// One horizontal span lane: a glowing line between two times, off-screen chevrons,
+// One span lane (a horizontal line, or a vertical bar at the right edge): a glowing line between two times, off-screen chevrons,
 // and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
 import { useRef } from 'react'
-import type { ReactNode } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
+import type { CSSProperties, ReactNode } from 'react'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/react/20/solid'
 import { useFrameListener, useFrameValue } from '../../engine/hooks.ts'
 import type { TimeRef } from '../../domain/spans.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { IconButton } from '../common/IconButton.tsx'
+import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -18,6 +19,8 @@ export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { ki
 export interface SpanLaneProps {
   /** Vertical center of the lane in px, or a CSS length. */
   top: number | string
+  /** Vertical: lane number from the right edge. */
+  index?: number
   variant: LaneVariant
   a: TimeRef
   b: TimeRef
@@ -37,13 +40,13 @@ export interface SpanLaneProps {
   below?: ReactNode
 }
 
-function arrowFor(target: EndTarget | undefined, side: 'left' | 'right') {
+function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
   if (!target || target.kind === 'cursor') return null
   const onClick = target.kind === 'now' ? () => focusNow() : () => focusInstant(target.id)
   return (
     <IconButton
       key={`arrow-${side}`}
-      icon={side === 'left' ? ChevronLeftIcon : ChevronRightIcon}
+      icon={vertical ? (side === 'left' ? ChevronUpIcon : ChevronDownIcon) : side === 'left' ? ChevronLeftIcon : ChevronRightIcon}
       label={target.kind === 'now' ? 'Focus Now' : 'Focus endpoint'}
       onClick={onClick}
       className="glow-box"
@@ -52,18 +55,26 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right') {
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const { top, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
   const rightChevRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true })
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
 
   useFrameListener(f => {
     const pa = f.pos(resolveTimeRef(a, f.now, f.center))
     const pb = f.pos(resolveTimeRef(b, f.now, f.center))
     const g = spanGeometry(pa, pb, f.mainSize)
     const s = last.current
+    const v = f.orientation === 'vertical'
+    if (f.orientation !== s.o) {
+      // Orientation switched: forget what was written along the other axis.
+      s.o = f.orientation
+      s.left = s.width = s.mid = NaN
+      if (lineRef.current) { lineRef.current.style.width = ''; lineRef.current.style.height = '' }
+    }
     if (g.onScreen !== s.on) {
       s.on = g.onScreen
       const display = g.onScreen ? '' : 'none'
@@ -75,12 +86,12 @@ export function SpanLane(props: SpanLaneProps) {
     if (lineRef.current && (g.left !== s.left || width !== s.width)) {
       s.left = g.left
       s.width = width
-      lineRef.current.style.transform = `translate3d(${g.left}px,0,0)`
-      lineRef.current.style.width = `${width}px`
+      lineRef.current.style.transform = v ? `translate3d(0,${g.left}px,0)` : `translate3d(${g.left}px,0,0)`
+      lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
     if (anchorRef.current && !(Math.abs(g.mid - s.mid) <= 0.01)) {
       s.mid = g.mid
-      anchorRef.current.style.transform = `translate3d(${g.mid}px,0,0)`
+      anchorRef.current.style.transform = v ? `translate3d(0,${g.mid}px,0)` : `translate3d(${g.mid}px,0,0)`
     }
     if (g.leftOffscreen !== s.l) { s.l = g.leftOffscreen; leftChevRef.current?.classList.toggle('is-visible', s.l) }
     if (g.rightOffscreen !== s.r) { s.r = g.rightOffscreen; rightChevRef.current?.classList.toggle('is-visible', s.r) }
@@ -95,7 +106,7 @@ export function SpanLane(props: SpanLaneProps) {
   return (
     <div
       className={`tl-lane tl-lane--${variant}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`}
-      style={{ top }}
+      style={vertical ? ({ '--i': index } as CSSProperties) : { top }}
     >
       <div ref={lineRef} className="tl-lane__line" />
       <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
@@ -103,7 +114,7 @@ export function SpanLane(props: SpanLaneProps) {
       <div ref={anchorRef} className="tl-lane__anchor">
         <div className="tl-lane__chip-wrap">
           <div className="tl-lane__tools tl-lane__tools--left">
-            {arrows && arrowFor(leftTarget, 'left')}
+            {arrows && arrowFor(leftTarget, 'left', vertical)}
             {extra?.left}
           </div>
           <div
@@ -118,7 +129,7 @@ export function SpanLane(props: SpanLaneProps) {
             {chip}
           </div>
           <div className="tl-lane__tools tl-lane__tools--right">
-            {arrows && arrowFor(rightTarget, 'right')}
+            {arrows && arrowFor(rightTarget, 'right', vertical)}
             {extra?.right}
           </div>
           {below}

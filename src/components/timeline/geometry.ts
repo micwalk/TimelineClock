@@ -17,12 +17,34 @@ export const GEOMETRY = {
   chipRow: 34,
 } as const
 
+/** Vertical timeline: the axis is a vertical line; x offsets from the left edge. */
+export const GEOMETRY_VERTICAL = {
+  /** x of the axis. */
+  axis: 84,
+  tagArrow: 14,
+  /** x where chip column 0 starts. */
+  chipStart: 96,
+  /** Spacing of span lanes, from the right edge inward. */
+  laneGap: 18,
+  /** How far the Cursor tag moves along the time axis when it collides with Now. */
+  tagSlotV: 64,
+} as const
+
 const kebab = (s: string) => s.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
 
 /** Custom properties for the .timeline element: --tl-axis, --tl-tag-arrow, … */
 export const geometryStyle = Object.fromEntries(
   Object.entries(GEOMETRY).map(([k, v]) => [`--tl-${kebab(k)}`, `${v}px`]),
 ) as CSSProperties
+
+const toStyle = (g: Record<string, number>) =>
+  Object.fromEntries(Object.entries(g).map(([k, v]) => [`--tl-${kebab(k)}`, `${v}px`])) as CSSProperties
+
+const verticalStyle = toStyle(GEOMETRY_VERTICAL)
+
+/** The custom properties for the timeline's current orientation. */
+export const geometryStyleFor = (orientation: 'horizontal' | 'vertical'): CSSProperties =>
+  orientation === 'vertical' ? verticalStyle : geometryStyle
 
 /** Where bottom lanes start: below the chip rows in use (at least one), plus a gap. */
 export const lanesTop = (rows: number): number => GEOMETRY.chipTop + Math.max(1, rows) * GEOMETRY.chipRow + 14

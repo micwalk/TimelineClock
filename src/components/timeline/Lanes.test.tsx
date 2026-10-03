@@ -5,6 +5,7 @@ import type { BottomLane } from './useBottomLanes.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
+import { useLayout } from '../../store/layout.ts'
 import { resolveSpan } from '../../domain/spans.ts'
 import { MINUTE, SECOND } from '../../domain/time.ts'
 
@@ -12,6 +13,7 @@ beforeEach(() => {
   engine.cancelTransition()
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
+  useLayout.setState({ orientation: 'horizontal', dir: 1 })
 })
 
 /** A saved span from 30 to 3m47s ago (26:13 long), as useBottomLanes would place it. */
@@ -22,7 +24,7 @@ function savedLane(label = ''): { lane: BottomLane; spanId: string } {
   const spanId = entities.createSpan(a, b, label, { visible: true })
   const byId = new Map(useEntities.getState().instants.map(i => [i.id, i]))
   const r = resolveSpan(entities.getSpan(spanId)!, byId)!
-  return { spanId, lane: { key: spanId, kind: 'saved', span: { ...r, priority: 2, focused: false }, a: r.start.tsEpochMs, b: r.end!.tsEpochMs, top: 200 } }
+  return { spanId, lane: { key: spanId, kind: 'saved', span: { ...r, priority: 2, focused: false }, a: r.start.tsEpochMs, b: r.end!.tsEpochMs, top: 200, index: 0 } }
 }
 
 describe('span chips', () => {
@@ -54,5 +56,24 @@ describe('span chips', () => {
   it('are named by the span name when named', () => {
     render(<BottomLanes lanes={[savedLane('Cooking').lane]} />)
     expect(screen.getByRole('button', { name: /Cooking/ })).toBeInTheDocument()
+  })
+})
+
+describe('vertical lanes', () => {
+  it('write y transforms and heights, and stack from the right edge', async () => {
+    useLayout.setState({ orientation: 'vertical' })
+    engine.setSize(390, 700) // a changed size makes the engine compute a vertical frame
+    await new Promise(r => setTimeout(r, 50))
+    expect(engine.getFrame().orientation).toBe('vertical')
+    const { lane } = savedLane()
+    const { container } = render(<BottomLanes lanes={[{ ...lane, index: 2 }]} />)
+    const root = container.querySelector('.tl-lane') as HTMLElement
+    const line = container.querySelector('.tl-lane__line') as HTMLElement
+    expect(root.style.getPropertyValue('--i')).toBe('2')
+    expect(root.style.top).toBe('')
+    expect(line.style.transform).toMatch(/^translate3d\(0(px)?, ?-?[\d.]+px, ?0(px)?\)$/)
+    expect(line.style.height).toMatch(/^[\d.]+px$/)
+    expect(line.style.width).toBe('')
+    expect(container.querySelector('.tl-lane__chev--left')).not.toBeNull()
   })
 })

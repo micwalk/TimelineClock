@@ -1,9 +1,13 @@
 // Axis ticks, managed imperatively: a pool of DOM nodes keyed by timestamp. Ticks are
 // laid out once per zoom level over a range wider than the screen; panning only
-// translates the container, so a drag costs a single transform write per frame.
+// translates the container (along x, or y when vertical), so a drag costs a single transform write per frame.
 import { useRef } from 'react'
 import { useFrameListener } from '../../engine/hooks.ts'
+import type { Frame } from '../../engine/viewportEngine.ts'
 import { generateTicks } from '../../domain/ticks.ts'
+
+const translate = (orientation: Frame['orientation'], px: number) =>
+  orientation === 'horizontal' ? `translate3d(${px}px,0,0)` : `translate3d(0,${px}px,0)`
 
 interface TickNode {
   el: HTMLDivElement
@@ -18,7 +22,7 @@ interface TickNode {
 
 export function TickLayer() {
   const innerRef = useRef<HTMLDivElement>(null)
-  const layout = useRef({ center: 0, pxPerMs: 0, start: 0, end: 0, mainSize: 0, dir: 1, nodes: new Map<number, TickNode>() })
+  const layout = useRef({ center: 0, pxPerMs: 0, start: 0, end: 0, mainSize: 0, dir: 1, orientation: 'horizontal' as Frame['orientation'], nodes: new Map<number, TickNode>() })
 
   useFrameListener(f => {
     const inner = innerRef.current
@@ -29,6 +33,7 @@ export function TickLayer() {
       Math.abs(f.pxPerMs - s.pxPerMs) > s.pxPerMs * 1e-6 ||
       f.mainSize !== s.mainSize ||
       f.dir !== s.dir ||
+      f.orientation !== s.orientation ||
       f.start < s.start ||
       f.end > s.end
     if (stale) {
@@ -39,6 +44,8 @@ export function TickLayer() {
       s.pxPerMs = f.pxPerMs
       s.mainSize = f.mainSize
       s.dir = f.dir
+      if (f.orientation !== s.orientation) for (const n of s.nodes.values()) n.x = NaN // rewrite along the new axis
+      s.orientation = f.orientation
       const seen = new Set<number>()
       for (const tick of generateTicks(s.start, s.end, f.pxPerMs)) {
         seen.add(tick.t)
@@ -56,7 +63,7 @@ export function TickLayer() {
           s.nodes.set(tick.t, n)
         }
         const x = s.mainSize / 2 + s.dir * (tick.t - s.center) * s.pxPerMs
-        if (x !== n.x) { n.x = x; n.el.style.transform = `translate3d(${x}px,0,0)` }
+        if (x !== n.x) { n.x = x; n.el.style.transform = translate(f.orientation, x) }
         const { halfHeight, labelAlpha, fontSizePx, bold } = tick.style
         // Quantized so a smooth zoom only rewrites styles when they visibly change.
         const h = Math.round(halfHeight * 2) / 2
@@ -73,7 +80,7 @@ export function TickLayer() {
         if (!seen.has(t)) { n.el.remove(); s.nodes.delete(t) }
       }
     }
-    inner.style.transform = `translate3d(${s.dir * (s.center - f.center) * f.pxPerMs}px,0,0)`
+    inner.style.transform = translate(f.orientation, s.dir * (s.center - f.center) * f.pxPerMs)
   })
 
   return (

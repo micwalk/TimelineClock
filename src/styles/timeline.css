@@ -454,3 +454,137 @@
   background: var(--surface-raised);
 }
 .time-entry__btn--primary { --accent: var(--c-selected); color: #fff; background: color-mix(in srgb, var(--c-selected) 45%, transparent); }
+
+/* --- Vertical orientation ------------------------------------------------
+   The horizontal layout turned: the live side (tags, tick labels) is on the left of
+   a vertical axis, saved chips and span lanes are on the right. The engine moves
+   markers, ticks and lanes along y; cross offsets map to `left` instead of `top`.
+   Geometry values (--tl-axis, --tl-chip-start, …) come from GEOMETRY_VERTICAL. */
+
+.timeline[data-orientation='vertical'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: clip;
+}
+
+.timeline[data-orientation='vertical'] .tl-axis {
+  left: var(--tl-axis);
+  right: auto;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  height: auto;
+  margin: 0 0 0 -1.5px;
+}
+
+/* Days in view: a slim strip along the top */
+.timeline[data-orientation='vertical'] .tl-date { left: 10px; top: 6px; }
+
+/* Ticks: short horizontal marks across the axis, labels left of it */
+.timeline[data-orientation='vertical'] .tl-tick { left: var(--tl-axis); top: 0; }
+.timeline[data-orientation='vertical'] .tl-tick__line {
+  left: calc(var(--h) * -1px);
+  width: calc(var(--h) * 2px);
+  top: -0.5px;
+  height: 1px;
+}
+.timeline[data-orientation='vertical'] .tl-tick__label {
+  left: auto;
+  bottom: auto;
+  right: calc(var(--h) * 1px + 7px);
+  top: 0;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+/* Markers: a horizontal line across the full width, faded at both ends */
+.timeline[data-orientation='vertical'] .tl-col {
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: auto;
+  width: auto;
+  height: 0;
+}
+.timeline[data-orientation='vertical'] .tl-col__line {
+  top: -1px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 2px;
+  background: linear-gradient(to right, transparent 0, var(--accent) 18px, var(--accent) calc(100% - 40px), transparent 100%);
+}
+.timeline[data-orientation='vertical'] .tl-col.is-selected .tl-col__line,
+.timeline[data-orientation='vertical'] .tl-col.is-focused .tl-col__line,
+.timeline[data-orientation='vertical'] .tl-col.is-cursor .tl-col__line,
+.timeline[data-orientation='vertical'] .tl-col.is-secondary .tl-col__line,
+.timeline[data-orientation='vertical'] .tl-col.is-span-end .tl-col__line { top: -1.5px; left: 0; width: auto; height: 3px; }
+.timeline[data-orientation='vertical'] .tl-col.is-now .tl-col__line { top: -2px; left: 0; width: auto; height: 4px; }
+
+/* Saved chips: right of the axis, vertically centered on their lines. `left` is written inline (chipStart + cross offset). */
+.timeline[data-orientation='vertical'] .tl-col__chip {
+  left: var(--tl-chip-start);
+  top: 0;
+  transform: translateY(-50%);
+}
+.timeline[data-orientation='vertical'] .tl-col__chip.has-fold { transform: translateY(-50%); }
+.timeline[data-orientation='vertical'] .tl-col__badge {
+  left: var(--tl-chip-start);
+  top: 18px;
+  transform: none;
+}
+
+/* Live tags: right-aligned against the axis, arrowhead pointing right at it */
+.timeline[data-orientation='vertical'] .tl-tag__arrow {
+  left: calc(var(--tl-axis) - var(--tl-tag-arrow));
+  top: -7px;
+  width: var(--tl-tag-arrow);
+  height: var(--tl-tag-arrow);
+}
+.timeline[data-orientation='vertical'] .tl-tag {
+  left: auto;
+  bottom: auto;
+  top: 0;
+  right: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px);
+  transform: translateY(calc(-50% + var(--slot, 0) * var(--tl-tag-slot-v)));
+  align-items: flex-end;
+}
+/* Menus and popovers open to the right of the tag, over the chips */
+.timeline[data-orientation='vertical'] .tl-tag__menu,
+.timeline[data-orientation='vertical'] .popover--below {
+  left: calc(100% + 8px);
+  top: 0;
+  transform: none;
+}
+.timeline[data-orientation='vertical'] .tl-tag__box { align-items: flex-end; }
+
+/* Span lanes: vertical bars stacked inward from the right edge */
+.timeline[data-orientation='vertical'] .tl-lane {
+  left: auto;
+  right: calc(12px + var(--i, 0) * var(--tl-lane-gap));
+  top: 0;
+  bottom: 0;
+  width: 0;
+  height: auto;
+}
+.timeline[data-orientation='vertical'] .tl-lane__line {
+  left: -1.5px;
+  top: 0;
+  width: 3px;
+  height: 0;
+}
+.timeline[data-orientation='vertical'] .tl-lane.is-emphasis .tl-lane__line { left: -2.5px; top: 0; width: 5px; }
+.timeline[data-orientation='vertical'] .tl-lane__chev {
+  left: -8px;
+  top: auto;
+  width: 16px;
+  height: 9px;
+}
+.timeline[data-orientation='vertical'] .tl-lane__chev--left { top: 0; right: auto; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.timeline[data-orientation='vertical'] .tl-lane__chev--right { top: auto; bottom: 0; left: -8px; right: auto; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+/* The chip sits on the bar's inner (left) side, centered on the visible part; its tools go above and below it */
+.timeline[data-orientation='vertical'] .tl-lane__chip-wrap { transform: translate(calc(-100% - 10px), -50%); }
+.timeline[data-orientation='vertical'] .tl-lane__tools { right: 0; left: auto; transform: none; margin: 0; }
+.timeline[data-orientation='vertical'] .tl-lane__tools--left { top: auto; bottom: 100%; margin-bottom: 4px; flex-direction: row-reverse; }
+.timeline[data-orientation='vertical'] .tl-lane__tools--right { top: 100%; margin-top: 4px; }

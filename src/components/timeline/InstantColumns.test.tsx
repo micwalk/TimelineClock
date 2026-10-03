@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SavedInstantColumns } from './InstantColumns.tsx'
+import type { SavedLayout } from './savedLayout.ts'
 import { useSavedLayout } from './savedLayout.ts'
+import { useLayout } from '../../store/layout.ts'
 import { useSettings } from '../../store/settings.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import { entities, useEntities } from '../../store/entities.ts'
@@ -20,6 +22,7 @@ beforeEach(() => {
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
   useAlarms.setState({ ringing: [] })
+  useLayout.setState({ orientation: 'horizontal', dir: 1 })
 })
 
 // The last rendered frame is what components draw from; anchor times to it.
@@ -133,5 +136,16 @@ describe('overlap layout', () => {
     fireEvent.click(badge)
     expect(useView.getState().viewFocusMode).toBe('cursor')
     expect(useView.getState().timeWidth).toBeLessThan(before)
+  })
+})
+
+describe('vertical chips', () => {
+  it('start at chipStart plus the layout cross offset', () => {
+    useLayout.setState({ orientation: 'vertical' })
+    const id = entities.createInstant(twentyMinutesAgo(), 'Take Meds')
+    const layout: SavedLayout = { visibleIds: [id], rows: { [id]: 1 }, crossOffsets: { [id]: 40 }, folded: {}, foldCount: {}, clusters: [], rowsUsed: 2 }
+    const { container } = render(<SavedInstantColumns layout={layout} />)
+    const chip = container.querySelector('.tl-col__chip') as HTMLElement
+    expect(chip.style.left).toBe('136px')
   })
 })

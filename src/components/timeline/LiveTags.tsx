@@ -15,7 +15,7 @@ import { Marker } from './Marker.tsx'
 import { TagMenu } from './TagMenu.tsx'
 import type { TagMenuItem } from './TagMenu.tsx'
 import { ClockPopover, DurationPopover } from './TimeEntryPopover.tsx'
-import { GEOMETRY } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 
 /** The Cursor tag moves out a slot when it would overlap the Now tag (spec C14). */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -75,7 +75,15 @@ export function CursorTag() {
   const selected = useEntities(s => s.instants.find(i => i.id === selectedId))
   const menuOpen = useUi(s => s.tagMenu === 'cursor')
   const timeInput = useUi(s => s.timeInput)
-  const slot = useFrameValue(f => (liveTagsCollide(f.pos(f.now), f.mainSize / 2, GEOMETRY.tagClearance) ? 1 : 0))
+  const slot = useFrameValue(f => {
+    const now = f.pos(f.now)
+    const cursor = f.mainSize / 2
+    if (f.orientation === 'vertical') {
+      // Shift along the time axis, away from Now; the arrowhead stays on the line.
+      return liveTagsCollide(now, cursor, GEOMETRY_VERTICAL.tagSlotV) ? (cursor < now ? -1 : 1) : 0
+    }
+    return liveTagsCollide(now, cursor, GEOMETRY.tagClearance) ? 1 : 0
+  })
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''

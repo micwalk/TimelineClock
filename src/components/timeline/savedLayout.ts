@@ -12,8 +12,10 @@ import type { LabelItem } from '../../domain/labelLayout.ts'
 import { layoutLabels } from '../../domain/labelLayout.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
+import { useLayout } from '../../store/layout.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
+import { GEOMETRY_VERTICAL } from './geometry.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
@@ -73,24 +75,28 @@ export interface LayoutContext {
   movingId: string | null
   ringingIds: ReadonlySet<string>
   widths: Readonly<Record<string, number>>
+  /** Defaults to horizontal. Vertical swaps the chip's extents: its height runs along time. */
+  orientation?: 'horizontal' | 'vertical'
 }
 
 /** Layout items for the given instants. Priority: focused 0, selected 1, moving/editing 2, ringing 3, upcoming alarm 4, favorite 5, other 6. */
 export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext): LabelItem[] {
+  const vertical = c.orientation === 'vertical'
   return instants.map(i => {
     const focused = c.focusedId === i.id
     const selected = c.selectedId === i.id
     const moving = c.movingId === i.id
     const editing = c.editingId === i.id
     const ringing = c.ringingIds.has(i.id)
+    const width = c.widths[i.id] ?? estimateChipWidth(i.label)
     const priority = focused ? 0 : selected ? 1 : moving || editing ? 2 : ringing ? 3
       : i.alarm && i.tsEpochMs > c.now ? 4 : i.favorite ? 5 : 6
     return {
       id: i.id,
       // A moving instant follows the cursor at the center of the view.
       pos: moving ? c.mainSize / 2 : c.pos(i.tsEpochMs),
-      mainExtent: c.widths[i.id] ?? estimateChipWidth(i.label),
-      crossExtent: CHIP_HEIGHT,
+      mainExtent: vertical ? CHIP_HEIGHT : width,
+      crossExtent: vertical ? width : CHIP_HEIGHT,
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),
       pinned: focused || selected || moving || editing || ringing,
@@ -113,6 +119,8 @@ export interface SavedLayout {
   visibleIds: string[]
   /** Chip row (0 = next to the axis) of every chip that is shown. */
   rows: Record<string, number>
+  /** Vertical only: px a chip sits right of chip column 0 (0 in horizontal). */
+  crossOffsets: Record<string, number>
   /** Folded snooze id → the chip showing it. */
   folded: Record<string, string>
   /** Chip id → snoozes it shows. */
@@ -124,7 +132,9 @@ export interface SavedLayout {
 
 const layoutEqual = (a: SavedLayout, b: SavedLayout) => JSON.stringify(a) === JSON.stringify(b)
 
-export function useSavedLayout(): SavedLayout {
+/** `laneCount`: span lanes on screen, which take width from the chips in vertical. */
+export function useSavedLayout(laneCount = 0): SavedLayout {
+  const orientation = useLayout(s => s.orientation)
   const instants = useEntities(s => s.instants)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,
@@ -154,21 +164,24 @@ export function useSavedLayout(): SavedLayout {
       movingId: v.moving,
       ringingIds: new Set(ringingList),
       widths,
+      orientation,
     })
     const t = getTunables()
     const r = layoutLabels(items, {
-      orientation: 'horizontal', // vertical chips arrive with the vertical layout
-      crossBudget: Infinity,
+      orientation,
+      crossBudget: orientation === 'vertical' ? f.crossSize - GEOMETRY_VERTICAL.chipStart - laneCount * GEOMETRY_VERTICAL.laneGap - 8 : Infinity,
       slotGap: t.chipGapPx,
       maxSlots: t.chipRowsMax,
-      cluster: { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
+      cluster: orientation === 'vertical' ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
       foldBadgeExtent: FOLD_BADGE_WIDTH,
     })
     const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
+    const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, orientation === 'vertical' ? p.crossOffset : 0]))
     const deepest = Math.max(-1, ...Object.values(rows), ...r.clusters.map(c => c.slot))
     return {
       visibleIds: visible.map(i => i.id),
       rows,
+      crossOffsets,
       folded: r.folded,
       foldCount: r.foldCount,
       clusters: r.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, slot: c.slot, crossOffset: c.crossOffset, topPriority: c.topPriority })),

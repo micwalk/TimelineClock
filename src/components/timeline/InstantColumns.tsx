@@ -14,7 +14,9 @@ import { displayName } from '../../domain/entities.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
+import { useLayout } from '../../store/layout.ts'
 import { getTunables } from '../../store/settings.ts'
+import { GEOMETRY_VERTICAL } from './geometry.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
@@ -44,6 +46,8 @@ interface ChipProps {
   inst: InstantRecord
   /** Row from the overlap layout (0 = next to the axis). */
   row: number
+  /** Vertical: px right of chip column 0 (from the overlap layout). */
+  cross: number
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
@@ -54,13 +58,14 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, row, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
+function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
   const ts = inst.tsEpochMs
   const isPast = useFrameValue(f => ts < f.now)
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
   const chipRef = useRef<HTMLDivElement>(null)
   useChipWidth(chipRef, inst.id)
   const name = chipName(inst.label)
+  const vertical = useLayout(s => s.orientation === 'vertical')
 
   const bellGlyph = (!!inst.alarm && !isPast) || ringing
   const showRelative = !!inst.favorite || !!inst.alarm || selected || focused
@@ -72,7 +77,7 @@ function SavedChip({ inst, row, foldCount, foldedIds, selected, focused, editing
   }
 
   return (
-    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row } as CSSProperties}>
+    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
       <div ref={chipRef} className={`chip chip--saved glow-box glow-text${inst.label ? '' : ' chip--empty'}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
@@ -128,8 +133,8 @@ function SavedChip({ inst, row, foldCount, foldedIds, selected, focused, editing
 }
 
 /** The line is always drawn; the chip only when the layout gives it a row (folded and clustered instants have none). */
-const SavedMarker = memo(function SavedMarker({ inst, row, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
-  { inst: InstantRecord; row: number | undefined; foldCount: number; foldedIds: string } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
+  { inst: InstantRecord; row: number | undefined; cross: number; foldCount: number; foldedIds: string } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const stateClass = moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''
@@ -137,7 +142,7 @@ const SavedMarker = memo(function SavedMarker({ inst, row, foldCount, foldedIds,
   return (
     <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>
       {row !== undefined && (
-        <SavedChip inst={inst} row={row} foldCount={foldCount} foldedIds={foldedIds}
+        <SavedChip inst={inst} row={row} cross={cross} foldCount={foldCount} foldedIds={foldedIds}
           selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       )}
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
@@ -192,6 +197,7 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
             key={id}
             inst={inst}
             row={layout.rows[id]}
+            cross={layout.crossOffsets[id] ?? 0}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             selected={v.selected === id}

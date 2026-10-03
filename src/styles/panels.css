@@ -361,3 +361,6 @@
   font: 600 13px/1 var(--font-mono); text-align: right;
 }
 .settings__reset-spacer { width: 26px; }
+
+/* Vertical timeline: it takes the remaining height; the Agenda stays below, capped, until it becomes a drawer. */
+.app:has(.timeline[data-orientation='vertical']) .list-panel { flex: 0 1 auto; max-height: 30vh; }
