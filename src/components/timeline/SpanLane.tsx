@@ -1,15 +1,18 @@
-// One horizontal span lane: a glowing line between two times, off-screen chevrons,
+// One span lane (a horizontal line, or a vertical bar at the right or, for live lanes, left edge): a glowing line between two times, off-screen chevrons,
 // and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
 import { useRef } from 'react'
-import type { ReactNode } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
+import type { CSSProperties, ReactNode } from 'react'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/react/20/solid'
 import { useFrameListener, useFrameValue } from '../../engine/hooks.ts'
 import type { TimeRef } from '../../domain/spans.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { IconButton } from '../common/IconButton.tsx'
+import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 
+/** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
 
 /** What an endpoint arrow jumps to. Cursor endpoints get no arrow. */
@@ -18,6 +21,17 @@ export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { ki
 export interface SpanLaneProps {
   /** Vertical center of the lane in px, or a CSS length. */
   top: number | string
+  /**
+   * A live lane (an endpoint at Now or the cursor): drawn on the live side, above the tags (horizontal) or at the left edge (vertical).
+   * Its arrows and tools stay hidden until the chip is tapped (`toolsOpen`); an outside tap or Escape calls `onDismissTools`.
+   */
+  live?: boolean
+  toolsOpen?: boolean
+  onDismissTools?: () => void
+  /** Vertical: draw only the bar, no chip or tools. */
+  barOnly?: boolean
+  /** Vertical: lane number from the right edge. */
+  index?: number
   variant: LaneVariant
   a: TimeRef
   b: TimeRef
@@ -37,13 +51,13 @@ export interface SpanLaneProps {
   below?: ReactNode
 }
 
-function arrowFor(target: EndTarget | undefined, side: 'left' | 'right') {
+function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
   if (!target || target.kind === 'cursor') return null
   const onClick = target.kind === 'now' ? () => focusNow() : () => focusInstant(target.id)
   return (
     <IconButton
       key={`arrow-${side}`}
-      icon={side === 'left' ? ChevronLeftIcon : ChevronRightIcon}
+      icon={vertical ? (side === 'left' ? ChevronUpIcon : ChevronDownIcon) : side === 'left' ? ChevronLeftIcon : ChevronRightIcon}
       label={target.kind === 'now' ? 'Focus Now' : 'Focus endpoint'}
       onClick={onClick}
       className="glow-box"
@@ -52,18 +66,29 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right') {
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
   const rightChevRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true })
+  const labelsRef = useRef<HTMLDivElement>(null)
+  const showTools = !live || !!toolsOpen
+  usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
 
   useFrameListener(f => {
-    const xa = f.x(resolveTimeRef(a, f.now, f.center))
-    const xb = f.x(resolveTimeRef(b, f.now, f.center))
-    const g = spanGeometry(xa, xb, f.screenW)
+    const pa = f.pos(resolveTimeRef(a, f.now, f.center))
+    const pb = f.pos(resolveTimeRef(b, f.now, f.center))
+    const g = spanGeometry(pa, pb, f.mainSize)
     const s = last.current
+    const v = f.orientation === 'vertical'
+    if (f.orientation !== s.o) {
+      // Orientation switched: forget what was written along the other axis.
+      s.o = f.orientation
+      s.left = s.width = s.mid = NaN
+      if (lineRef.current) { lineRef.current.style.width = ''; lineRef.current.style.height = '' }
+    }
     if (g.onScreen !== s.on) {
       s.on = g.onScreen
       const display = g.onScreen ? '' : 'none'
@@ -75,12 +100,12 @@ export function SpanLane(props: SpanLaneProps) {
     if (lineRef.current && (g.left !== s.left || width !== s.width)) {
       s.left = g.left
       s.width = width
-      lineRef.current.style.transform = `translate3d(${g.left}px,0,0)`
-      lineRef.current.style.width = `${width}px`
+      lineRef.current.style.transform = v ? `translate3d(0,${g.left}px,0)` : `translate3d(${g.left}px,0,0)`
+      lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
     if (anchorRef.current && !(Math.abs(g.mid - s.mid) <= 0.01)) {
       s.mid = g.mid
-      anchorRef.current.style.transform = `translate3d(${g.mid}px,0,0)`
+      anchorRef.current.style.transform = v ? `translate3d(0,${g.mid}px,0)` : `translate3d(${g.mid}px,0,0)`
     }
     if (g.leftOffscreen !== s.l) { s.l = g.leftOffscreen; leftChevRef.current?.classList.toggle('is-visible', s.l) }
     if (g.rightOffscreen !== s.r) { s.r = g.rightOffscreen; rightChevRef.current?.classList.toggle('is-visible', s.r) }
@@ -88,42 +113,47 @@ export function SpanLane(props: SpanLaneProps) {
 
   // Which endpoint is on the left only changes when a moving endpoint crosses the other.
   const aIsLeft = useFrameValue(f => resolveTimeRef(a, f.now, f.center) <= resolveTimeRef(b, f.now, f.center))
-  const extra = tools?.({ aIsLeft })
+  const extra = showTools ? tools?.({ aIsLeft }) : undefined
   const leftTarget = aIsLeft ? aTarget : bTarget
   const rightTarget = aIsLeft ? bTarget : aTarget
 
+  const laneClass = `tl-lane tl-lane--${variant}${live ? ' tl-lane--live' : ''}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`
+  const laneStyle = vertical ? ({ '--i': index } as CSSProperties) : { top }
+
+  // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
   return (
-    <div
-      className={`tl-lane tl-lane--${variant}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`}
-      style={{ top }}
-    >
-      <div ref={lineRef} className="tl-lane__line" />
-      <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
-      <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
-      <div ref={anchorRef} className="tl-lane__anchor">
-        <div className="tl-lane__chip-wrap">
-          <div className="tl-lane__tools tl-lane__tools--left">
-            {arrows && arrowFor(leftTarget, 'left')}
-            {extra?.left}
-          </div>
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label={chipLabel}
-            className="span-chip glow-box glow-text"
-            onClick={onChipClick}
-            onDoubleClick={onChipDoubleClick}
-            onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
-          >
-            {chip}
-          </div>
-          <div className="tl-lane__tools tl-lane__tools--right">
-            {arrows && arrowFor(rightTarget, 'right')}
-            {extra?.right}
-          </div>
-          {below}
+    <>
+      <div className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
+        <div ref={lineRef} className="tl-lane__line" />
+        <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
+        <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
+      </div>
+      <div ref={labelsRef} className={`${laneClass} tl-lane--labels`} style={laneStyle}>
+        <div ref={anchorRef} className="tl-lane__anchor">
+          {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
+            <div className="tl-lane__tools tl-lane__tools--left">
+              {arrows && showTools && arrowFor(leftTarget, 'left', vertical)}
+              {extra?.left}
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={chipLabel}
+              className="span-chip glow-box glow-text"
+              onClick={onChipClick}
+              onDoubleClick={onChipDoubleClick}
+              onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
+            >
+              {chip}
+            </div>
+            <div className="tl-lane__tools tl-lane__tools--right">
+              {arrows && showTools && arrowFor(rightTarget, 'right', vertical)}
+              {extra?.right}
+            </div>
+            {below}
+          </div>}
         </div>
       </div>
-    </div>
+    </>
   )
 }

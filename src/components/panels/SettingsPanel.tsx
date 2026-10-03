@@ -8,25 +8,21 @@ import { MINUTE } from '../../domain/time.ts'
 import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import * as act from '../../store/actions.ts'
+import { AdvancedSettings } from './AdvancedSettings.tsx'
+import { panelPosition } from './panelPosition.ts'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
-const PANEL_GAP = 8
-const PANEL_EST_HEIGHT = 340
-
-/** Places the panel under the gear, or above it when there isn't room below. */
-function panelPosition(gear: HTMLElement): CSSProperties {
-  const r = gear.getBoundingClientRect()
-  const right = Math.max(8, window.innerWidth - r.right)
-  return window.innerHeight - r.bottom >= PANEL_EST_HEIGHT + PANEL_GAP
-    ? { right, top: r.bottom + PANEL_GAP }
-    : { right, bottom: window.innerHeight - r.top + PANEL_GAP }
-}
 
 export function SettingsPanel() {
   const [pos, setPos] = useState<CSSProperties | null>(null)
   const gearRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const glow = useSettings(s => s.glow)
+  const favoriteLanes = useSettings(s => s.favoriteLanes)
+  const orientation = useSettings(s => s.orientation)
+  const verticalDir = useSettings(s => s.verticalDir)
+  const tickSnap = useSettings(s => s.tickSnap)
+  const agendaPlacement = useSettings(s => s.agendaPlacement)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
@@ -57,7 +53,7 @@ export function SettingsPanel() {
         aria-label="Settings"
         aria-expanded={open}
         title="Settings"
-        onClick={() => setPos(p => (p || !gearRef.current ? null : panelPosition(gearRef.current)))}
+        onClick={() => setPos(p => (p || !gearRef.current ? null : panelPosition(gearRef.current.getBoundingClientRect(), window.innerWidth, window.innerHeight)))}
       >
         <Cog6ToothIcon aria-hidden />
       </button>
@@ -82,6 +78,44 @@ export function SettingsPanel() {
           </section>
 
           <section className="settings__group">
+            <h3>Timeline</h3>
+            <label className="settings__row">
+              <span>Orientation</span>
+              <select value={orientation} onChange={e => settings.setOrientation(e.target.value === 'horizontal' || e.target.value === 'vertical' ? e.target.value : 'auto')}>
+                <option value="auto">Auto</option>
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Future goes (vertical)</span>
+              <select value={verticalDir} onChange={e => settings.setVerticalDir(e.target.value === 'up' ? 'up' : 'down')}>
+                <option value="down">Down</option>
+                <option value="up">Up</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Agenda</span>
+              <select value={agendaPlacement} onChange={e => settings.setAgendaPlacement(e.target.value === 'docked' || e.target.value === 'drawer' ? e.target.value : 'auto')}>
+                <option value="auto">Auto</option>
+                <option value="docked">Docked</option>
+                <option value="drawer">Drawer</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Lanes for favorites and alarms</span>
+              <select value={favoriteLanes} onChange={e => settings.setFavoriteLanes(e.target.value === 'always' ? 'always' : 'selected')}>
+                <option value="selected">When selected</option>
+                <option value="always">Always</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Snap cursor to ticks</span>
+              <input type="checkbox" checked={tickSnap} onChange={e => settings.setTickSnap(e.target.checked)} />
+            </label>
+          </section>
+
+          <section className="settings__group">
             <h3>Alarms</h3>
             <label className="settings__row">
               <span>Ring for</span>
@@ -97,6 +131,13 @@ export function SettingsPanel() {
                 <option value="snooze">Snooze 5 min</option>
               </select>
             </label>
+          </section>
+
+          <section className="settings__group">
+            <details className="settings__advanced">
+              <summary><h3>Advanced</h3></summary>
+              <AdvancedSettings />
+            </details>
           </section>
 
           <section className="settings__group">

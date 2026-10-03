@@ -5,6 +5,8 @@ import { useAlarms } from './alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
+import { nearestFinestTick } from '../domain/ticks.ts'
+import { settings, useSettings } from './settings.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -46,6 +48,33 @@ describe('favorites and alarms', () => {
     const second = act.snoozeAlarm(first, 5)!
     expect(instant(second).label).toBe('Snooze 2: Wake')
     expect(instant(second).snoozeOriginalId).toBe(id)
+  })
+})
+
+describe('dropInstant', () => {
+  it('drops an unnamed instant at Now without touching focus, selection or editing', () => {
+    const before = { ...view() }
+    const id = act.dropInstant()
+    const inst = instant(id)
+    expect(inst.label).toBe('')
+    expect(Math.abs(inst.tsEpochMs - Date.now())).toBeLessThan(2000)
+    expect(view()).toMatchObject({
+      viewFocusMode: 'now', focusedInstantId: before.focusedInstantId, currentSelectedInstantId: null, editingInstantId: null, timeCenter: before.timeCenter,
+    })
+  })
+
+  it('drops at the cursor in cursor mode and stays in cursor mode', () => {
+    const center = engine.getFrame().center - 10 * MINUTE
+    useView.setState({ viewFocusMode: 'cursor', timeCenter: center })
+    const id = act.dropInstant()
+    expect(Math.abs(instant(id).tsEpochMs - center)).toBeLessThan(2000)
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: null, editingInstantId: null })
+  })
+
+  it('can drop a favorite', () => {
+    const id = act.dropInstant({ favorite: true })
+    expect(instant(id).favorite).toBe(true)
+    expect(instant(id).label).toBe('')
   })
 })
 
@@ -193,6 +222,72 @@ describe('cursor landing on instants', () => {
   })
 })
 
+describe('tick snap', () => {
+  const offTick = () => {
+    const pxPerMs = engine.sample().pxPerMs
+    const tick = nearestFinestTick(Date.now() - 3 * HOUR, pxPerMs)
+    return { pxPerMs, tick, t: tick + 0.3 / pxPerMs } // a few px off the tick
+  }
+
+  it('endPan lands on the nearest finest tick when tickSnap is on', () => {
+    useSettings.setState({ tickSnap: true })
+    const { tick, t } = offTick()
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view().viewFocusMode).toBe('cursor')
+    expect(view().timeCenter).toBe(tick)
+  })
+
+  it('endPan snaps only to a tick within tickSnapPx', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t, pxPerMs } = offTick()
+    settings.setTunable('tickSnapPx', 0.1) // the cursor is 0.3px off the tick
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view().timeCenter).toBe(t)
+    settings.setTunable('tickSnapPx', 0.5)
+    act.endPan(20)
+    expect(view().timeCenter).not.toBe(t)
+    expect(Math.abs(view().timeCenter - t) * pxPerMs).toBeLessThan(0.5)
+    settings.resetTunable('tickSnapPx')
+  })
+
+  it('endPan with snap: false leaves the cursor and does not land on Now or an instant', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t } = offTick()
+    entities.createInstant(t + 1000, 'Rice')
+    act.focusCursorAt(t, false)
+    act.endPan(20, { snap: false })
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', timeCenter: t })
+  })
+
+  it('endPan leaves the cursor put when tickSnap is off', () => {
+    useSettings.setState({ tickSnap: false })
+    const { t } = offTick()
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view().timeCenter).toBe(t)
+    useSettings.setState({ tickSnap: true })
+  })
+
+  it('an instant within the landing radius wins over a tick', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t } = offTick()
+    const id = entities.createInstant(t + 1000, 'Rice')
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('moveCursorBy never snaps to ticks', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t } = offTick()
+    act.focusCursorAt(t - 7000, false)
+    act.moveCursorBy(7000)
+    expect(view().timeCenter).toBe(t)
+  })
+})
+
 describe('time entry', () => {
   it('moves the cursor relative to Now', () => {
     const before = Date.now()
@@ -204,5 +299,27 @@ describe('time entry', () => {
   it('rejects malformed input without changing the view', () => {
     expect(act.applyDurationInput('nope', 'now')).toBe(false)
     expect(view().viewFocusMode).toBe('now')
+  })
+})
+
+describe('zoomToTimes', () => {
+  it('centers a free cursor on the middle and fits the span into 60% of the axis', () => {
+    const a = Date.now() - 20 * MINUTE
+    const b = a + 10 * MINUTE
+    act.zoomToTimes([b, a])
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', timeCenter: (a + b) / 2 })
+    expect(view().timeWidth).toBeCloseTo((10 * MINUTE) / 0.6, 0)
+  })
+
+  it('never zooms in past 2 minutes of width', () => {
+    const a = Date.now() - HOUR
+    act.zoomToTimes([a, a + 1000])
+    expect(view().timeWidth).toBe(2 * MINUTE)
+  })
+
+  it('does nothing for an empty list', () => {
+    const before = view().timeWidth
+    act.zoomToTimes([])
+    expect(view().timeWidth).toBe(before)
   })
 })

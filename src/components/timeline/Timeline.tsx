@@ -1,19 +1,32 @@
 // The timeline: ticks, axis, span lanes and instant columns as plain DOM.
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { engine } from '../../engine/viewportEngine.ts'
 import { usePanZoom } from '../../hooks/usePanZoom.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
+import * as act from '../../store/actions.ts'
 import { TickLayer } from './TickLayer.tsx'
-import { CursorColumn, NowColumn, SavedInstantColumns } from './InstantColumns.tsx'
-import { BottomLanes, TopLanes } from './Lanes.tsx'
-import { useBottomLanes } from './useBottomLanes.ts'
+import { SavedInstantColumns } from './InstantColumns.tsx'
+import { CursorTag, NowTag } from './LiveTags.tsx'
+import { AgendaButton } from '../panels/AgendaButton.tsx'
+import { RotateButton } from './RotateButton.tsx'
+import { BottomLanes } from './Lanes.tsx'
+import { isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
+import { useSavedLayout } from './savedLayout.ts'
+import { useLayout } from '../../store/layout.ts'
+import { geometryStyleFor } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateRange } from '../../domain/format.ts'
 
+const INTERACTIVE = 'button, input, textarea, a, [role="button"], [role="menu"], [role="menuitem"], [role="dialog"], [data-no-pan]'
+
 export function Timeline() {
   const ref = useRef<HTMLElement>(null)
-  const { lanes, height } = useBottomLanes()
+  const orientation = useLayout(s => s.orientation)
+  const visibleLanes = useVisibleLanes()
+  // Only saved-side lanes take width from the vertical chips; live lanes are on the left.
+  const layout = useSavedLayout(useMemo(() => visibleLanes.filter(l => !isLiveLane(l)).length, [visibleLanes]))
+  const { lanes, height, liveCount } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
@@ -32,17 +45,24 @@ export function Timeline() {
     <section
       ref={ref}
       className={`timeline${popoverOpen ? ' has-popover' : ''}`}
-      style={{ height }}
+      data-orientation={orientation}
+      style={{ ...geometryStyleFor(orientation, liveCount), height }}
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
+      onClick={e => {
+        // A tap on empty space deselects; clicks ending a drag never get here (usePanZoom swallows them).
+        if (e.target instanceof Element && e.target.closest(INTERACTIVE)) return
+        act.clearSelection()
+      }}
     >
       <TickLayer />
+      <AgendaButton />
       <LiveText className="tl-date glow-text" compute={f => formatDateRange(f.start, f.end, f.now)} />
       <div className="tl-axis" />
-      <NowColumn />
-      <SavedInstantColumns />
-      <CursorColumn />
-      <TopLanes />
+      <SavedInstantColumns layout={layout} />
+      <NowTag />
+      <CursorTag />
       <BottomLanes lanes={lanes} />
+      <RotateButton />
     </section>
   )
 }

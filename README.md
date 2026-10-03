@@ -66,10 +66,10 @@ after changing it.
 src/
 ├── domain/      # Pure logic: time math, ticks, spans, navigation, alarms (+ tests)
 ├── store/       # Zustand stores and actions.ts (all user operations) (+ tests)
-├── engine/      # Viewport engine and hooks: usePositionX, useFrameValue, LiveText
+├── engine/      # Viewport engine and hooks: usePositionMain, useFrameValue, LiveText
 ├── components/
 │   ├── timeline/  # Timeline, instant columns, span lanes, ticks, time-entry popovers
-│   ├── panels/    # Control bar, Agenda (ListPanel), ringing alarms, settings
+│   ├── panels/    # Control bar, Agenda, ringing alarms, settings
 │   └── common/    # Icon button, inline input
 ├── hooks/       # Pan/zoom gestures, hotkeys, FLIP list animation
 ├── services/    # Alarm scheduler, audio, notifications

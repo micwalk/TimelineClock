@@ -56,7 +56,7 @@ const defaults: ViewState = {
   selectedSpanId: null,
   focusHistory: [],
   focusHistoryIndex: -1,
-  showImpliedSelectedNow: true,
+  showImpliedSelectedNow: false,
   showImpliedSelectedPrev: true,
   timeIncrement: '30m',
   moveMode: null,
@@ -86,6 +86,9 @@ useView.subscribe((s, prev) => {
     saver.save(Object.fromEntries(PERSISTED_KEYS.map(k => [k, s[k]])))
   }
 })
+
+/** Writes any pending view save now (used where a following write must not outrun it). */
+export const flushView = () => saver.flush()
 
 const set = useView.setState
 const get = useView.getState

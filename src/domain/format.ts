@@ -1,5 +1,7 @@
 // Pure formatting/parsing helpers for times and durations.
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
+import { displayName } from './entities.ts'
+import { parseSnoozeLabel } from './alarms.ts'
 
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 
@@ -11,8 +13,47 @@ export function formatClock12h(ts: number): string {
   return `${pad2(displayHour)}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+/** Compact local clock for chips and tags: "6:00p", or "6:04:13p" with seconds. */
+export function formatClockCompact(ts: number, withSeconds: boolean): string {
+  const d = new Date(ts)
+  const h = d.getHours()
+  const hour = h % 12 === 0 ? 12 : h % 12
+  const seconds = withSeconds ? `:${pad2(d.getSeconds())}` : ''
+  return `${hour}:${pad2(d.getMinutes())}${seconds}${h >= 12 ? 'p' : 'a'}`
+}
+
 /**
- * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss.mmm" (under a minute).
+ * How long ago or until, for chips: "now", "45s ago", "in 6m", "2h 5m ago", "3d 4h ago".
+ * `deltaMs` is the event's time minus now (negative = past). Units are floored.
+ */
+export function formatRelativeShort(deltaMs: number): string {
+  const abs = Math.abs(deltaMs)
+  if (abs < SECOND) return 'now'
+  const text = formatDurationShort(abs)
+  return deltaMs < 0 ? `${text} ago` : `in ${text}`
+}
+
+/** A length in its two largest units, floored: "45s", "26m", "1h 5m", "2d 3h". For tight spots like live-lane chips. */
+export function formatDurationShort(ms: number): string {
+  const abs = Math.abs(ms)
+  if (abs < MINUTE) return `${Math.floor(abs / SECOND)}s`
+  if (abs < HOUR) return `${Math.floor(abs / MINUTE)}m`
+  if (abs < DAY) {
+    const h = Math.floor(abs / HOUR)
+    const m = Math.floor((abs % HOUR) / MINUTE)
+    return m ? `${h}h ${m}m` : `${h}h`
+  }
+  const d = Math.floor(abs / DAY)
+  const h = Math.floor((abs % DAY) / HOUR)
+  return h ? `${d}d ${h}h` : `${d}d`
+}
+
+/** Text cut to `max` characters with an ellipsis: "Cooking" stays, "Making dinner" becomes "Making…" at 8. */
+export const truncateText = (text: string, max: number): string =>
+  (text.length > max ? `${text.slice(0, Math.max(1, max - 1)).trimEnd()}…` : text)
+
+/**
+ * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss" (under a minute). Never shows milliseconds.
  * Negative input is treated as zero; callers handle the sign.
  */
 export function formatDurationHMS(ms: number): string {
@@ -24,11 +65,8 @@ export function formatDurationHMS(ms: number): string {
   if (days > 0) return `${days} day${days !== 1 ? 's' : ''}, ${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`
   if (hours > 0) return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`
   if (minutes > 0) return `${pad2(minutes)}:${pad2(seconds)}`
-  return `00:${pad2(seconds)}.${rest.toString().padStart(3, '0')}`
+  return `00:${pad2(seconds)}`
 }
-
-/** True when formatDurationHMS would show milliseconds (so the text changes every frame). */
-export const durationShowsMillis = (ms: number) => Math.abs(ms) < MINUTE
 
 export function formatSignedDuration(ms: number): string {
   return `${ms >= 0 ? '+' : '-'}${formatDurationHMS(Math.abs(ms))}`
@@ -106,3 +144,16 @@ export function atClockTimeOnDay(dayOf: number, hours24: number, minutes: number
   d.setHours(hours24, minutes, seconds, 0)
   return d.getTime()
 }
+
+/** Marks a snooze in short names: "Test Alarm ⟲2". */
+export const SNOOZE_MARK = '⟲'
+
+/** An instant's name as shown on its timeline chip; snoozes become "Base ⟲N". */
+export function chipName(label: string): string {
+  const snooze = parseSnoozeLabel(label)
+  return snooze ? `${displayName(snooze.base)} ${SNOOZE_MARK}${snooze.count}` : displayName(label)
+}
+
+/** Saved chips show seconds only when the finest visible tick is shorter than `thresholdMs`. */
+export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs < thresholdMs
+

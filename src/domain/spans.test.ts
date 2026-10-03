@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { resolveSpan, savedSpanLanes, spanDescription, spanGeometry } from './spans.ts'
-import { HOUR, MINUTE } from './time.ts'
-
-describe('spanDescription', () => {
-  it('describes forward, backward and until-Now spans', () => {
-    expect(spanDescription(0, 90 * MINUTE, 'Start', 'End')).toBe('End 01:30:00 AFTER Start')
-    expect(spanDescription(90 * MINUTE, 0, 'Start', 'End')).toBe('End 01:30:00 BEFORE Start')
-    expect(spanDescription(HOUR, 0, 'Tea', 'Now')).toBe('Now 01:00:00 until Tea')
-  })
-})
+import { resolveSpan, savedSpanLanes, spanGeometry } from './spans.ts'
+import { HOUR } from './time.ts'
 
 describe('spanGeometry', () => {
   it('clamps to the screen and reports off-screen ends', () => {
@@ -37,7 +29,8 @@ describe('savedSpanLanes', () => {
     { id: 'ac', startInstantId: 'a', endInstantId: 'c', label: '', visible: true },
   ]
   const resolved = spans.map(s => resolveSpan(s, byId)!)
-  const base = { resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
+  const base = {
+    favoriteLanes: 'selected' as const, resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
 
   it('shows only visible spans without a selection, ordered by midpoint', () => {
     expect(savedSpanLanes(base).map(s => s.span.id)).toEqual(['ac', 'bc'])
@@ -46,12 +39,24 @@ describe('savedSpanLanes', () => {
     const lanes = savedSpanLanes({ ...base, selectedInstantId: 'a' })
     expect(lanes.map(s => [s.span.id, s.priority])).toEqual([['ab', 1], ['ac', 1], ['bc', 2]])
   })
-  it('prioritizes the focused instant in instant mode and skips the focused span', () => {
+  it('prioritizes the focused instant in instant mode', () => {
     const lanes = savedSpanLanes({ ...base, focusMode: 'instant', focusedInstantId: 'c' })
     expect(lanes.map(s => [s.span.id, s.priority])).toEqual([['ac', 0], ['bc', 0]])
-    expect(savedSpanLanes({ ...base, focusMode: 'span', focusedSpanId: 'ac' }).map(s => s.span.id)).toEqual(['bc'])
+  })
+  it('puts the focused span first and marks it', () => {
+    const lanes = savedSpanLanes({ ...base, focusMode: 'span', focusedSpanId: 'ab' })
+    expect(lanes.map(s => [s.span.id, s.focused])).toEqual([['ab', true], ['ac', false], ['bc', false]])
   })
   it('drops spans whose endpoints no longer exist', () => {
     expect(resolveSpan({ id: 'x', startInstantId: 'a', endInstantId: 'gone', label: '' }, byId)).toBeNull()
+  })
+  it('hides lanes for favorites to Now unless selected, or always on', () => {
+    const fav: InstantRecord = { id: 'f', tsEpochMs: HOUR, label: 'Rice', favorite: true }
+    const favById = new Map([...byId, ['f', fav]])
+    const favSpan = resolveSpan({ id: 'fn', startInstantId: 'f', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }, favById)!
+    const all = { ...base, resolved: [...resolved, favSpan] }
+    expect(savedSpanLanes(all).map(s => s.span.id)).not.toContain('fn')
+    expect(savedSpanLanes({ ...all, selectedInstantId: 'f' }).map(s => s.span.id)).toContain('fn')
+    expect(savedSpanLanes({ ...all, favoriteLanes: 'always' }).map(s => s.span.id)).toContain('fn')
   })
 })

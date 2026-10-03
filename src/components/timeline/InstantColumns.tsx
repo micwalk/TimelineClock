@@ -1,155 +1,36 @@
-// Vertical instant markers: Now, the Cursor, and saved instants. Each is one
-// absolutely positioned column (line + label chip + time chip + tools) moved as a
-// unit by a transform.
+// Saved instant markers: a line plus one compact chip, moved along the time axis by the engine.
 import { memo, useMemo, useRef } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { shallowArrayEqual, useFrameValue, usePositionX } from '../../engine/hooks.ts'
+import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import type { Frame } from '../../engine/viewportEngine.ts'
-import { formatClock12h } from '../../domain/format.ts'
+import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
+import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
-import { useEntities } from '../../store/entities.ts'
+import { entities, useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
-import { ui, useUi } from '../../store/ui.ts'
+import { useLayout } from '../../store/layout.ts'
+import { useUi } from '../../store/ui.ts'
+import { getTunables } from '../../store/settings.ts'
+import { GEOMETRY_VERTICAL } from './geometry.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
-import { ClockPopover } from './TimeEntryPopover.tsx'
-
-/** Label chips extend past the line; keep columns mounted this far off screen. */
-const CULL_MARGIN_PX = 400
-
-interface ColumnProps {
-  className: string
-  getX: (f: Frame) => number
-  label: ReactNode
-  icons?: ReactNode
-  time: ReactNode
-  actions?: ReactNode
-  badge?: ReactNode
-  ariaLabel: string
-}
-
-function Column({ className, getX, label, icons, time, actions, badge, ariaLabel }: ColumnProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  usePositionX(ref, getX)
-  return (
-    <div ref={ref} className={`tl-col ${className}`} role="group" aria-label={ariaLabel}>
-      <div className="tl-col__line" />
-      <div className="tl-col__row tl-col__row--label">
-        {label}
-        {icons && <div className="tl-col__icons">{icons}</div>}
-      </div>
-      <div className="tl-col__row tl-col__row--time">{time}</div>
-      {actions && <div className="tl-col__row tl-col__row--actions">{actions}</div>}
-      {badge}
-    </div>
-  )
-}
+import { Marker } from './Marker.tsx'
+import { ClusterChip } from './ClusterChip.tsx'
+import type { SavedLayout } from './savedLayout.ts'
+import { useChipWidth } from './savedLayout.ts'
 
 const starColor = 'var(--c-favorite)'
 const bellColor = 'var(--c-alarm)'
 
 // ---------------------------------------------------------------------------
-
-export function NowColumn() {
-  const focused = useView(s => s.viewFocusMode === 'now')
-  const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'now')
-  return (
-    <Column
-      className={`is-now${focused ? ' is-focused' : ''}${clockOpen ? ' has-popover' : ''}`}
-      ariaLabel="Now"
-      getX={f => f.x(f.now)}
-      label={
-        <button
-          type="button"
-          className="chip chip--label glow-box glow-text"
-          title="Double-click to save an instant at Now"
-          onDoubleClick={() => act.createInstantAndEdit(Date.now())}
-        >
-          Now
-        </button>
-      }
-      icons={
-        <IconButton icon={StarOutline} label="Save Now as a favorite" color={starColor} bare
-          onClick={() => act.createInstantAndEdit(Date.now(), { favorite: true })} />
-      }
-      time={
-        <div className="tl-col__time-wrap">
-          <button
-            type="button"
-            className="chip chip--time glow-box glow-text"
-            title="Double-click to set the cursor to a time"
-            onDoubleClick={() => (focused ? ui.openTimeInput({ kind: 'clock', anchor: 'now' }) : act.focusNow())}
-          >
-            <LiveText compute={f => formatClock12h(f.now)} />
-          </button>
-          {clockOpen && (
-            <ClockPopover
-              initialTs={Date.now()}
-              onCancel={ui.closeTimeInput}
-              onSubmit={(h, m, s, pm) => { act.applyClockInput(h, m, s, pm); ui.closeTimeInput() }}
-            />
-          )}
-        </div>
-      }
-    />
-  )
-}
-
-export function CursorColumn() {
-  const visible = useView(s => s.viewFocusMode === 'cursor' && !s.moveMode)
-  const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'cursor')
-  if (!visible) return null
-  return (
-    <Column
-      className={`is-cursor${clockOpen ? ' has-popover' : ''}`}
-      ariaLabel="Cursor"
-      getX={f => f.screenW / 2}
-      label={
-        <button
-          type="button"
-          className="chip chip--label glow-box glow-text"
-          title="Double-click to save an instant here"
-          onDoubleClick={() => act.createInstantAndEdit(act.cursorTime())}
-        >
-          Cursor
-        </button>
-      }
-      icons={
-        <IconButton icon={StarOutline} label="Save cursor as a favorite" color={starColor} bare
-          onClick={() => act.createInstantAndEdit(act.cursorTime(), { favorite: true })} />
-      }
-      time={
-        <div className="tl-col__time-wrap">
-          <button
-            type="button"
-            className="chip chip--time glow-box glow-text"
-            title="Double-click to type a time"
-            onDoubleClick={() => ui.openTimeInput({ kind: 'clock', anchor: 'cursor' })}
-          >
-            <LiveText compute={f => formatClock12h(f.center)} />
-          </button>
-          {clockOpen && (
-            <ClockPopover
-              initialTs={act.cursorTime()}
-              onCancel={ui.closeTimeInput}
-              onSubmit={(h, m, s, pm) => { act.applyClockInput(h, m, s, pm); ui.closeTimeInput() }}
-            />
-          )}
-        </div>
-      }
-    />
-  )
-}
-
-// ---------------------------------------------------------------------------
+// Saved instants: a line plus one compact chip ("Take Meds 6:00p · 20m ago").
 
 interface SavedFlags {
   selected: boolean
@@ -158,101 +39,142 @@ interface SavedFlags {
   spanEnd: boolean
   editing: boolean
   moving: boolean
+  /** Zoomed in far enough that every chip shows seconds. */
+  fineSeconds: boolean
 }
 
-const SavedInstantColumn = memo(function SavedInstantColumn({ inst, selected, focused, secondary, spanEnd, editing, moving }: { inst: InstantRecord } & SavedFlags) {
+interface ChipProps {
+  inst: InstantRecord
+  /** Row from the overlap layout (0 = next to the axis). */
+  row: number
+  /** Vertical: px right of chip column 0 (from the overlap layout). */
+  cross: number
+  /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
+  foldCount: number
+  foldedIds: string
+  selected: boolean
+  focused: boolean
+  editing: boolean
+  moving: boolean
+  fineSeconds: boolean
+}
+
+function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
   const ts = inst.tsEpochMs
   const isPast = useFrameValue(f => ts < f.now)
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
-  const name = displayName(inst.label)
+  const chipRef = useRef<HTMLDivElement>(null)
+  useChipWidth(chipRef, inst.id)
+  const name = chipName(inst.label)
+  const vertical = useLayout(s => s.orientation === 'vertical')
+  const unnamed = !inst.label
 
-  const showStar = !!inst.favorite || selected
-  const showBell = (!!inst.alarm && !isPast) || (selected && (!isPast || ringing)) || ringing
-  const stateClass = moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''
+  const bellGlyph = (!!inst.alarm && !isPast) || ringing
+  // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
+  const showRelative = !focused && (!!inst.favorite || !!inst.alarm || selected)
+  const withSeconds = fineSeconds || selected || focused
 
-  const label = editing ? (
-    <InlineInput
-      initial={inst.label}
-      ariaLabel="Instant name"
-      placeholder="Name"
-      onCommit={v => act.renameInstant(inst.id, v)}
-      onCancel={() => view.editInstant(null)}
-    />
-  ) : (
-    <button
-      type="button"
-      className={`chip chip--label glow-box glow-text${inst.label ? '' : ' chip--empty'}`}
-      onClick={() => act.selectInstant(inst.id)}
-      onDoubleClick={() => view.editInstant(inst.id)}
-      title="Click to select, double-click to rename"
-    >
-      {name}
-    </button>
-  )
+  const zoomToFold = () => {
+    const times = [ts, ...foldedIds.split(',').map(id => entities.getInstant(id)?.tsEpochMs).filter((t): t is number => typeof t === 'number')]
+    act.zoomToTimes(times)
+  }
 
-  const icons = (
+  const toolButtons = selected && !moving ? (
     <>
-      {showStar && (
-        <IconButton icon={inst.favorite ? StarSolid : StarOutline} label={inst.favorite ? 'Unfavorite' : 'Favorite'}
-          color={starColor} bare pressed={!!inst.favorite} onClick={() => act.toggleFavorite(inst.id)} />
-      )}
-      {showBell && (
-        <IconButton icon={inst.alarm ? BellAlertIcon : BellOutline} label={inst.alarm ? 'Turn alarm off' : 'Set alarm'}
-          color={bellColor} bare pressed={!!inst.alarm} onClick={() => act.toggleAlarm(inst.id)}
-          className={ringing ? 'is-ringing' : ''} />
-      )}
-      {focused && !moving && (
-        <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />
-      )}
-      {moving && (
-        <>
-          <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
-          <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
-        </>
-      )}
+      {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
+      {!inst.alarm && !isPast && <IconButton icon={BellOutline} label="Set alarm" color={bellColor} bare onClick={() => act.toggleAlarm(inst.id)} />}
+      {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
     </>
-  )
+  ) : moving ? (
+    <>
+      <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
+      <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
+    </>
+  ) : null
+  // Vertical: tools sit in a row under the chip so none lies on the marker line. Horizontal: beside the chip.
+  const toolsBelow = vertical && toolButtons !== null
+  const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
 
   return (
-    <Column
-      className={stateClass}
-      ariaLabel={`Instant ${name}`}
-      getX={moving ? f => f.screenW / 2 : f => f.x(ts)}
-      label={label}
-      icons={icons}
-      time={
-        <button
-          type="button"
-          className="chip chip--time glow-box glow-text"
-          onClick={() => act.selectInstant(inst.id)}
-          onDoubleClick={() => act.focusInstant(inst.id)}
-          title="Click to select, double-click to focus"
-        >
-          {moving ? <LiveText compute={f => formatClock12h(f.center)} /> : formatClock12h(ts)}
+    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
+        {inst.favorite && (
+          <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
+        )}
+        {bellGlyph && (
+          <IconButton icon={BellAlertIcon} label={ringing ? 'Dismiss alarm' : 'Turn alarm off'} color={bellColor} bare pressed
+            className={ringing ? 'is-ringing' : ''} onClick={() => act.toggleAlarm(inst.id)} />
+        )}
+        {editing ? (
+          <InlineInput
+            initial={inst.label}
+            ariaLabel="Instant name"
+            placeholder="Name"
+            onCommit={v => act.renameInstant(inst.id, v)}
+            onCancel={() => view.editInstant(null)}
+          />
+        ) : (
+          <>
+          {unnamed && (
+            <button type="button" className="chip__name-hint" aria-label="Name this instant" onClick={() => view.editInstant(inst.id)}>name…</button>
+          )}
+          <button
+            type="button"
+            className="chip__main"
+            title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click the name to rename, the time to focus`}
+            onClick={() => act.selectInstant(inst.id)}
+          >
+            {!unnamed && <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>}
+            <span className="chip__time" onDoubleClick={() => act.focusInstant(inst.id)}>
+              {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
+            </span>
+            {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+          </button>
+          </>
+        )}
+      </div>
+      {foldCount > 0 && (
+        <button type="button" className="tl-col__fold glow-box glow-text" aria-label={`${foldCount} snooze${foldCount > 1 ? 's' : ''}, zoom to fit`} onClick={zoomToFold}>
+          {SNOOZE_MARK}{foldCount}
         </button>
-      }
-      actions={
-        selected && !moving ? (
-          <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
-        ) : undefined
-      }
-      badge={moving ? <div className="tl-col__badge glow-box glow-text">Moving</div> : undefined}
-    />
+      )}
+      {(editing || toolsBelow) && (
+        <div className="tl-col__below">
+          {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
+          {toolsBelow && tools}
+        </div>
+      )}
+      {!toolsBelow && tools}
+    </div>
+  )
+}
+
+/** The line is always drawn; the chip only when the layout gives it a row (folded and clustered instants have none). */
+const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
+  { inst: InstantRecord; row: number | undefined; cross: number; foldCount: number; foldedIds: string } & SavedFlags) {
+  const ts = inst.tsEpochMs
+  const name = chipName(inst.label)
+  const dropped = useUi(s => s.droppedId === inst.id)
+  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}`
+
+  return (
+    <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>
+      {row !== undefined && (
+        <SavedChip inst={inst} row={row} cross={cross} foldCount={foldCount} foldedIds={foldedIds}
+          selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
+      )}
+      {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
+    </Marker>
   )
 })
 
 /** Faint marker at the original position of an instant being moved. */
 function GhostColumn({ ts }: { ts: number }) {
-  const ref = useRef<HTMLDivElement>(null)
-  usePositionX(ref, f => f.x(ts))
-  return (
-    <div ref={ref} className="tl-col is-ghost" aria-hidden>
-      <div className="tl-col__line" />
-    </div>
-  )
+  return <Marker className="is-ghost" getPos={f => f.pos(ts)} />
 }
 
-export function SavedInstantColumns() {
+export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -265,14 +187,7 @@ export function SavedInstantColumns() {
     moving: s.moveMode?.instantId ?? null,
   })))
 
-  // Mount only instants near the screen (plus anything selected/focused/edited).
-  const pinned = useMemo(() => new Set([v.selected, v.secondary, v.focusedInstantId, v.editing, v.moving].filter(Boolean) as string[]), [v])
-  const visibleIds = useFrameValue(f => {
-    const margin = CULL_MARGIN_PX / f.pxPerMs
-    const lo = f.start - margin
-    const hi = f.end + margin
-    return instants.filter(i => pinned.has(i.id) || (i.tsEpochMs >= lo && i.tsEpochMs <= hi)).map(i => i.id)
-  }, shallowArrayEqual)
+  const fineSeconds = useFrameValue(f => showsSeconds(pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms, getTunables().secondsBelowTickMs))
 
   const spanEnds = useMemo(() => {
     if (v.mode !== 'span' || !v.focusedSpanId) return new Set<string>()
@@ -283,25 +198,44 @@ export function SavedInstantColumns() {
   const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
   const moving = v.moving ? byId.get(v.moving) : undefined
 
+  // Snooze ids per chip that shows them.
+  const foldedIds = useMemo(() => {
+    const out: Record<string, string[]> = {}
+    for (const [snooze, anchor] of Object.entries(layout.folded)) (out[anchor] ??= []).push(snooze)
+    return out
+  }, [layout.folded])
+
   return (
     <>
       {moving && <GhostColumn ts={moving.tsEpochMs} />}
-      {visibleIds.map(id => {
+      {layout.visibleIds.map(id => {
         const inst = byId.get(id)
         if (!inst) return null
         return (
-          <SavedInstantColumn
+          <SavedMarker
             key={id}
             inst={inst}
+            row={layout.rows[id]}
+            cross={layout.crossOffsets[id] ?? 0}
+            foldCount={layout.foldCount[id] ?? 0}
+            foldedIds={(foldedIds[id] ?? []).join(',')}
             selected={v.selected === id}
             focused={v.mode === 'instant' && v.focusedInstantId === id}
             secondary={v.secondary === id}
             spanEnd={spanEnds.has(id)}
             editing={v.editing === id}
             moving={v.moving === id}
+            fineSeconds={fineSeconds}
           />
         )
       })}
+      {layout.clusters.map(c => (
+        <ClusterChip
+          key={c.id}
+          cluster={c}
+          members={c.memberIds.map(m => byId.get(m)).filter((i): i is InstantRecord => !!i)}
+        />
+      ))}
     </>
   )
 }

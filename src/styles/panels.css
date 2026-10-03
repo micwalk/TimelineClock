@@ -67,9 +67,12 @@
   min-width: 170px;
   padding: 6px;
   border-radius: var(--radius-card);
-  background: var(--surface-strong);
+  background: var(--box-bg-strong);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: popover-in 140ms ease-out;
 }
+.menu--above { top: auto; bottom: calc(100% + 8px); }
 .menu__item {
   display: block;
   width: 100%;
@@ -222,7 +225,7 @@
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 100;
+  z-index: var(--z-alarm); /* above the Agenda drawer (150) and Settings (200): Dismiss/Snooze stay reachable */
   width: min(340px, calc(100vw - 36px));
   padding: 14px;
   border-radius: 16px;
@@ -344,3 +347,93 @@
   font: 700 13px/1 var(--font-ui);
   background: color-mix(in srgb, var(--c-danger) 25%, transparent);
 }
+
+/* Settings > Advanced: long list, so the panel scrolls */
+.settings__panel { max-height: calc(100vh - 16px); overflow-y: auto; }
+.settings__advanced summary { cursor: pointer; list-style: none; }
+.settings__advanced summary h3 { display: inline; }
+.settings__advanced summary::before { content: '▸ '; color: var(--ink-faint); }
+.settings__advanced[open] summary::before { content: '▾ '; }
+.settings__subgroup { margin-top: 8px; }
+.settings__subgroup h4 { font: 700 11px/1 var(--font-ui); color: var(--ink-dim); margin: 6px 0; }
+.settings__row--tunable { grid-template-columns: 1fr 76px 26px; }
+.settings__row--tunable label { font-size: 13px; color: var(--ink-dim); }
+.settings__row--tunable input {
+  width: 76px; height: 26px; padding: 0 6px; border-radius: 6px;
+  background: var(--surface-raised); border: 1px solid rgba(148, 163, 184, 0.25);
+  font: 600 13px/1 var(--font-mono); text-align: right;
+}
+.settings__reset-spacer { width: 26px; }
+
+/* --- Agenda placement: bottom (default column), side dock, drawer ------- */
+
+/* In the column layouts the wrapper vanishes, so the timeline and controls lay out as before. */
+.app__main { display: contents; }
+
+.app[data-agenda='side'] { flex-direction: row; }
+.app[data-agenda='side'] .app__main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.app[data-agenda='side'] .list-panel {
+  flex: 0 0 var(--agenda-width);
+  width: var(--agenda-width);
+  max-width: none;
+  margin: 0;
+  padding: 0 12px 12px;
+  height: 100%;
+  border-left: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
+}
+
+.agenda-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 8, 0.6);
+  animation: scrim-in 180ms ease-out;
+}
+.agenda-drawer {
+  --accent: var(--c-axis-glow);
+  position: fixed;
+  z-index: 151;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(85vw, var(--agenda-drawer-max));
+  display: flex;
+  background: var(--surface-strong);
+  border-radius: 0 14px 14px 0;
+  animation: drawer-in 200ms ease-out;
+}
+.agenda-drawer .list-panel { max-width: none; margin: 0; padding: 0 12px 12px; }
+
+.list-dock-btn { flex: none; }
+
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-in { from { translate: -100% 0; } to { translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .agenda-scrim, .agenda-drawer { animation: none; }
+}
+
+/* Vertical timeline: the bar stays at the bottom as a two-row grid that follows the screen.
+   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. NOW / ＋ spans both rows in column 4.
+   Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
+.controls--vertical {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr;
+  grid-template-rows: repeat(2, minmax(44px, auto));
+  gap: 8px;
+  padding: 8px 12px 10px;
+}
+.controls--vertical > .ctl-btn { height: auto; min-height: 44px; min-width: 0; justify-content: center; padding: 0 6px; }
+.controls--vertical .ctl-btn__text { display: none; }
+.controls--vertical .ctl-btn--now .ctl-btn__text, .controls--vertical .ctl-split .ctl-btn__text { display: inline; }
+.controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
+.controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
+.controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
+
+/* The big red button is a ＋ while following Now (drop an instant) and NOW otherwise. */
+.ctl-btn__plus { font: 400 30px/1 var(--font-ui); }

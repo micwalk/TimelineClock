@@ -1,4 +1,4 @@
-// Tabbed list under the controls: all instants, favorites, and spans.
+// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, and spans.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
@@ -18,6 +18,8 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline'
+import { useLayout } from '../../store/layout.ts'
 import { useFlip } from '../../hooks/useFlip.ts'
 import { SettingsPanel } from './SettingsPanel.tsx'
 
@@ -50,6 +52,12 @@ function Relative({ ts }: { ts: number | 'now' | 'center' }) {
   )
 }
 
+/** A row that focuses something: in the drawer, close it so the result is not hidden behind it. */
+function pick(focus: () => void) {
+  focus()
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+}
+
 const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: InstantRecord; focused: boolean; selected: boolean }) {
   const isPast = useFrameValue(f => inst.tsEpochMs < f.now)
   return (
@@ -57,10 +65,10 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: Ins
       data-key={inst.id}
       data-focused={focused}
       className={`list-row list-row--instant glow-box${focused ? ' is-focused' : selected ? ' is-selected' : ''}${isPast ? ' is-past' : ' is-future'}`}
-      onClick={() => act.focusInstant(inst.id)}
+      onClick={() => pick(() => act.focusInstant(inst.id))}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') act.focusInstant(inst.id) }}
+      onKeyDown={e => { if (e.key === 'Enter') pick(() => act.focusInstant(inst.id)) }}
     >
       <div className="list-row__name">
         <IconButton icon={inst.favorite ? StarSolid : StarOutline} label={inst.favorite ? 'Unfavorite' : 'Favorite'}
@@ -80,7 +88,7 @@ function LiveRow({ kind, focused }: { kind: 'now' | 'cursor'; focused: boolean }
       data-key={kind}
       data-focused={focused}
       className={`list-row list-row--instant list-row--${kind} glow-box${focused ? ' is-focused' : ''}`}
-      onClick={() => (kind === 'now' ? act.focusNow() : act.focusCursorAt(act.cursorTime()))}
+      onClick={() => pick(() => (kind === 'now' ? act.focusNow() : act.focusCursorAt(act.cursorTime())))}
       role="button"
       tabIndex={0}
     >
@@ -164,7 +172,7 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
       data-key={row.key}
       data-focused={focused}
       className={`list-row list-row--span glow-box${row.kind === 'implied' ? ' is-implied' : ''}${focused ? ' is-focused' : ''}`}
-      onClick={row.kind === 'saved' ? () => act.focusSpan(row.r.span.id) : undefined}
+      onClick={row.kind === 'saved' ? () => pick(() => act.focusSpan(row.r.span.id)) : undefined}
       role={row.kind === 'saved' ? 'button' : undefined}
       tabIndex={row.kind === 'saved' ? 0 : undefined}
     >
@@ -229,7 +237,7 @@ function SpansList() {
     if (selected) {
       out.push({ kind: 'implied', key: 'implied-now', which: 'selected-now', label: 'Selected to Now', start: selected, end: null, visible: v.showNow, mid: (selected.tsEpochMs + now) / 2 })
       if (secondary) {
-        out.push({ kind: 'implied', key: 'implied-prev', which: 'selected-prev', label: 'Selected to Secondary', start: secondary, end: selected, visible: v.showPrev, mid: (secondary.tsEpochMs + selected.tsEpochMs) / 2 })
+        out.push({ kind: 'implied', key: 'implied-prev', which: 'selected-prev', label: 'Span between selections', start: secondary, end: selected, visible: v.showPrev, mid: (secondary.tsEpochMs + selected.tsEpochMs) / 2 })
       }
     }
     return out.sort((a, b) => a.mid - b.mid)
@@ -254,8 +262,11 @@ function SpansList() {
 
 // ---------------------------------------------------------------------------
 
-export function ListPanel() {
+export function Agenda() {
   const tab = useUi(s => s.listTab)
+  const placement = useLayout(s => s.agendaPlacement)
+  const canDock = useLayout(s => s.agendaCanDock)
+  const inDrawer = placement === 'drawer'
   return (
     <section className="list-panel" aria-label="Agenda">
       <div className="list-header">
@@ -273,6 +284,14 @@ export function ListPanel() {
             </button>
           ))}
         </div>
+        {canDock && (
+          <IconButton
+            icon={inDrawer ? ArrowsPointingInIcon : ArrowsPointingOutIcon}
+            label={inDrawer ? 'Dock Agenda' : 'Undock Agenda'}
+            className="list-dock-btn"
+            onClick={act.toggleAgendaDock}
+          />
+        )}
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">

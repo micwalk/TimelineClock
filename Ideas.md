@@ -13,8 +13,17 @@ Feature Level (Ready to Implement)
 * Snap cursor to timeline ticks (option)
 
 Not sure yet, but needs improvement
+* Step increments configurable in Settings (choose which steps the ± buttons offer) plus a 'Custom…' option to type any step
 * rendering of spans as just rectangles
 * first class spans
+* "Genie" save animation: when Now or the Cursor becomes a saved instant, its readout box
+  drains like hourglass sand into its arrow, flows through the axis, and expands into the
+  new saved-instant chip on the other side. (After layout v2, which puts live markers and
+  saved instants on opposite sides of the axis.)
+* Orientation switch animation: labels hide, the timeline and instant lines rotate into the
+  new orientation, then labels reappear.
+* Wider spans like a traditional calendar view (e.g. a named span such as 'beach' drawn as a block)
+* Scroll the view without moving the cursor or changing selection/focus (hide the cursor while just looking around)
 
 Done:
 * favorite -> span not always working (stars now go through the same favorite path as the label star)

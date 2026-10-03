@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TargetInputs } from './viewport.ts'
-import { resolveViewTarget, timeToX, xToTime, zoomToFitRange } from './viewport.ts'
+import { panCenterByPixels, posToTime, resolveViewTarget, timeToPos, visibleRange, zoomToFitRange } from './viewport.ts'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { HOUR } from './time.ts'
 
@@ -24,14 +24,14 @@ const spans: SpanRecord[] = [
 ]
 
 describe('projection', () => {
-  const p = { center: now, width: 6 * HOUR, screenW: 1200 }
+  const p = { center: now, width: 6 * HOUR, mainSize: 1200, dir: 1 as const }
   it('puts the center in the middle of the screen', () => {
-    expect(timeToX(p, now)).toBe(600)
-    expect(timeToX(p, now - 3 * HOUR)).toBe(0)
-    expect(timeToX(p, now + 3 * HOUR)).toBe(1200)
+    expect(timeToPos(p, now)).toBe(600)
+    expect(timeToPos(p, now - 3 * HOUR)).toBe(0)
+    expect(timeToPos(p, now + 3 * HOUR)).toBe(1200)
   })
   it('round-trips', () => {
-    expect(xToTime(p, timeToX(p, now + 1234567))).toBeCloseTo(now + 1234567, 3)
+    expect(posToTime(p, timeToPos(p, now + 1234567))).toBeCloseTo(now + 1234567, 3)
   })
 })
 
@@ -60,7 +60,7 @@ describe('resolveViewTarget', () => {
 })
 
 describe('zoomToFitRange', () => {
-  const p = { center: now, width: 6 * HOUR, screenW: 1200 }
+  const p = { center: now, width: 6 * HOUR, mainSize: 1200, dir: 1 as const }
   it('zooms out with margins when an end is off screen', () => {
     expect(zoomToFitRange(p, now - 4 * HOUR, now + HOUR)).toEqual({ center: now - 1.5 * HOUR, width: (5 * HOUR) / 0.8 })
   })
@@ -69,5 +69,32 @@ describe('zoomToFitRange', () => {
   })
   it('leaves a comfortable range alone', () => {
     expect(zoomToFitRange(p, now - HOUR, now + HOUR)).toBeNull()
+  })
+  it('gives the same answer when time runs the other way', () => {
+    const flipped = { ...p, dir: -1 as const }
+    expect(zoomToFitRange(flipped, now - 4 * HOUR, now + HOUR)).toEqual(zoomToFitRange(p, now - 4 * HOUR, now + HOUR))
+    expect(zoomToFitRange(flipped, now - HOUR, now + HOUR)).toBeNull()
+  })
+})
+
+describe('axis projection', () => {
+  const mk = (dir: 1 | -1) => ({ center: 1000, width: 400, mainSize: 800, dir })
+  it('maps center to middle and round-trips', () => {
+    for (const dir of [1, -1] as const) {
+      const p = mk(dir)
+      expect(timeToPos(p, 1000)).toBe(400)
+      expect(posToTime(p, timeToPos(p, 1234))).toBeCloseTo(1234)
+    }
+  })
+  it('flips with dir', () => {
+    expect(timeToPos(mk(1), 1100)).toBe(600)
+    expect(timeToPos(mk(-1), 1100)).toBe(200)
+  })
+  it('visibleRange is ordered for both dirs', () => {
+    for (const dir of [1, -1] as const) expect(visibleRange(mk(dir))).toEqual({ start: 800, end: 1200 })
+  })
+  it('pan follows the finger', () => {
+    expect(panCenterByPixels(mk(1), 100)).toBe(950)
+    expect(panCenterByPixels(mk(-1), 100)).toBe(1050)
   })
 })

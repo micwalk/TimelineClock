@@ -3,13 +3,18 @@
 import { engine } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
-import { zoomToFitRange } from '../domain/viewport.ts'
+import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { incrementOption } from '../domain/time.ts'
+import { MINUTE, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
+import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
+import { resolveOrientation } from '../domain/layoutMode.ts'
+import { getTunables, useSettings } from './settings.ts'
+import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
+import { ui } from './ui.ts'
 import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
@@ -19,6 +24,9 @@ const frame = () => engine.sample()
 
 /** Time under the cursor (the view center) as currently displayed. */
 export const cursorTime = () => frame().center
+
+/** Now, as currently displayed. */
+export const nowTime = () => frame().now
 
 /** Keep a locked cursor's offset in sync after the cursor is moved by hand. */
 function refreshLock() {
@@ -52,6 +60,15 @@ export function focusCursorAt(ts: number, animate = true) {
   refreshLock()
 }
 
+/** Zoom to show all the given times (a "+N" chip or "⟲N" badge): free cursor at the middle, the span filling 60% of the axis, at least 2 minutes wide. */
+export function zoomToTimes(times: readonly number[]) {
+  if (times.length === 0) return
+  const lo = Math.min(...times)
+  const hi = Math.max(...times)
+  focusCursorAt((lo + hi) / 2)
+  view.setTimeWidth(Math.max((hi - lo) / 0.6, 2 * MINUTE))
+}
+
 export function focusSpan(spanId: string, zoomToFit = true) {
   const sp = entities.getSpan(spanId)
   if (!sp) return
@@ -66,6 +83,7 @@ export function focusSpan(spanId: string, zoomToFit = true) {
 }
 
 export function moveCursorBy(deltaMs: number) {
+  engine.stopMomentum()
   view.setTimeCenter(frame().center + deltaMs)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
   refreshLock()
@@ -80,9 +98,10 @@ const exactLandingMs = () => Math.min(500, 2 / frame().pxPerMs)
 
 /**
  * Where a free cursor comes to rest: if it is within `toleranceMs` of Now or of an
- * instant, focus that instead (the cursor "becomes" it and is hidden).
+ * instant, focus that instead (the cursor "becomes" it and is hidden). Failing that,
+ * with `snapToTicks` (drag/glide ends only) and the setting on, it eases to the nearest tick.
  */
-function settleCursor(toleranceMs: number, animate: boolean): boolean {
+function settleCursor(toleranceMs: number, animate: boolean, snapToTicks = false): boolean {
   if (v().viewFocusMode !== 'cursor' || v().moveMode) return false
   const f = frame()
   if (Math.abs(f.now - f.center) <= toleranceMs) {
@@ -94,7 +113,15 @@ function settleCursor(toleranceMs: number, animate: boolean): boolean {
     const d = Math.abs(i.tsEpochMs - f.center)
     if (d <= toleranceMs && (!best || d < best.d)) best = { id: i.id, d }
   }
-  if (!best) return false
+  if (!best) {
+    if (!snapToTicks || !useSettings.getState().tickSnap) return false
+    const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
+    if (tick === f.center || Math.abs(tick - f.center) * f.pxPerMs > getTunables().tickSnapPx) return false
+    engine.beginTransition(getTunables().tickSnapEaseMs)
+    view.setTimeCenter(tick)
+    refreshLock()
+    return true
+  }
   focusInstant(best.id, animate)
   return true
 }
@@ -148,6 +175,7 @@ export function navigateFocusHistory(delta: -1 | 1) {
 // Zoom & pan
 
 export function zoomBy(factor: number) {
+  engine.stopMomentum()
   view.setTimeWidth(v().timeWidth * factor)
 }
 
@@ -165,13 +193,48 @@ export function beginPan() {
 
 export function panByPixels(dx: number) {
   const f = frame()
-  view.setTimeCenter(v().timeCenter - dx / f.pxPerMs)
+  view.setTimeCenter(panCenterByPixels({ ...f, center: v().timeCenter }, dx))
   refreshLock()
 }
 
-/** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */
-export function endPan(tolerancePx = 12) {
-  settleCursor(tolerancePx / frame().pxPerMs, true)
+/** Mouse wheel / trackpad scroll along the time axis: pans like a drag, without the landing snap. */
+export function wheelPan(dPx: number) {
+  if (v().viewFocusMode !== 'cursor') beginPan()
+  panByPixels(-dPx)
+}
+
+/** Rotate button: flips the orientation for this shape class; back to what the settings give clears the override. */
+export function rotate() {
+  engine.stopMomentum()
+  const { orientation, shape } = useLayout.getState()
+  const next = orientation === 'horizontal' ? 'vertical' : 'horizontal'
+  const fromSettings = resolveOrientation(useSettings.getState().orientation, null, shape)
+  useLayout.setState({ override: next === fromSettings ? null : { orientation: next, shape } })
+  recomputeLayout()
+}
+
+/** Agenda dock/drawer button: switches this shape class between docked and drawer; back to what the settings give clears the override. */
+export function toggleAgendaDock() {
+  const { agendaPlacement, shape } = useLayout.getState()
+  const placement = agendaPlacement === 'drawer' ? 'docked' : 'drawer'
+  useLayout.setState({ agendaOverride: { placement, shape } })
+  recomputeLayout()
+  // Compare against the settings alone, now that the layout is resolved.
+  if ((agendaFromSettings() === 'drawer') === (useLayout.getState().agendaPlacement === 'drawer')) {
+    useLayout.setState({ agendaOverride: null })
+    recomputeLayout()
+  }
+  ui.closeAgenda()
+}
+
+/**
+ * End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`,
+ * else to the nearest tick within `tickSnapPx`. `{ snap: false }` (a glide's end, or a
+ * release with speed) leaves the cursor exactly where the pan stopped.
+ */
+export function endPan(tolerancePx: number, { snap = true }: { snap?: boolean } = {}) {
+  if (!snap) return
+  settleCursor(tolerancePx / frame().pxPerMs, true, true)
 }
 
 export function toggleCursorLock() {
@@ -193,7 +256,7 @@ export function selectInstant(id: string) {
   const s = v()
   if (inst && s.viewFocusMode === 'cursor' && !s.moveMode) {
     const f = frame()
-    if (Math.abs(f.x(inst.tsEpochMs) - f.screenW / 2) <= UNDER_CURSOR_PX) {
+    if (Math.abs(f.pos(inst.tsEpochMs) - f.mainSize / 2) <= UNDER_CURSOR_PX) {
       focusInstant(id)
       return
     }
@@ -201,6 +264,11 @@ export function selectInstant(id: string) {
   view.selectInstant(id)
 }
 export const selectSpan = (id: string) => view.selectSpan(id)
+
+/** A tap on empty timeline: clears both selected instants and the selected span, nothing else. */
+export function clearSelection() {
+  useView.setState({ currentSelectedInstantId: null, secondarySelectedInstantId: null, selectedSpanId: null })
+}
 
 export function escape() {
   const s = v()
@@ -211,12 +279,16 @@ export function escape() {
 // ---------------------------------------------------------------------------
 // Instants
 
-/** Creates an instant, focuses it and opens its label editor. */
-export function createInstantAndEdit(ts: number, opts: { favorite?: boolean } = {}) {
+/**
+ * The primary action: drop an unnamed instant at the cursor (cursor mode) or at Now.
+ * Nothing else changes: no focus, selection, editing or view movement. The new id is
+ * flagged for a one-time highlight; naming happens later, in one tap, on the chip.
+ */
+export function dropInstant(opts: { favorite?: boolean } = {}) {
+  const ts = v().viewFocusMode === 'cursor' ? cursorTime() : nowTime()
   const id = entities.createInstant(ts, '')
   if (opts.favorite) setFavorite(id, true)
-  focusInstant(id, false)
-  view.editInstant(id)
+  ui.markDropped(id)
   return id
 }
 

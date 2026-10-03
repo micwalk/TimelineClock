@@ -5,11 +5,30 @@
  */
 :root {
   /* Surfaces */
+  /* Layer order inside the timeline: every line (marker lines, span bars, axis, tick marks) is below
+     every box or text (tick labels, chips, tags, popovers), so a line never draws over text. */
+  --z-lines: 1;
+  --z-ticks-labels: 2;
+  --z-chips: 10; /* saved chips and fold/cluster chips: +0..+9 by state */
+  --z-lane-chips: 20; /* span-lane chips and tools */
+  --z-controls: 25; /* rotate, agenda and similar buttons */
+  --z-tags: 30; /* Now and Cursor tags: +0..+9 by state */
+  --z-popovers: 60; /* tag menus and popovers */
+  --z-alarm: 300; /* ringing-alarm panel: above the drawer (150), Settings (200) and everything else */
+  --agenda-width: 360px;
+  --agenda-drawer-max: 400px;
+  --agenda-btn-size: 40px;
   --bg-top: #0c1838;
   --bg-bottom: #000000;
   --surface: rgba(3, 8, 24, 0.84);
+  --surface-solid: #02050f; /* opaque base under translucent surfaces */
   --surface-strong: rgba(2, 5, 16, 0.94);
   --surface-raised: rgba(14, 24, 52, 0.9);
+  /* Opaque boxes: the translucent surface over the solid base, so lines never show through text boxes. */
+  --box-bg: linear-gradient(var(--surface), var(--surface)) var(--surface-solid);
+  --box-bg-strong: linear-gradient(var(--surface-strong), var(--surface-strong)) var(--surface-solid);
+  --box-bg-raised: linear-gradient(var(--surface-raised), var(--surface-raised)) var(--surface-solid);
+  --tick-label-bg: var(--surface-solid);
   --ink: #f1f5ff;
   --ink-dim: #9fb0cf;
   --ink-faint: #5d6d8f;
@@ -25,6 +44,9 @@
   --c-span: #34d399;
   --c-instant: #eef3ff;
   --c-instant-glow: #60a5fa;
+  /* The Cursor tag while it sits on a focused instant. */
+  --c-cursor-on: var(--c-instant);
+  --c-cursor-on-glow: var(--c-instant-glow);
   --c-favorite: #facc15;
   --c-alarm: #fbbf24;
   --c-danger: #f43f5e;
@@ -43,13 +65,8 @@
   --radius-chip: 7px;
   --radius-card: 12px;
 
-  /* Timeline rows, in px from the top of the timeline */
-  --tl-lane-a: 26px;
-  --tl-lane-b: 70px;
-  --tl-axis: 146px;
-  --tl-label: 180px;
-  --tl-time: 214px;
-  --tl-actions: 260px;
+  /* Timeline rows (--tl-axis, --tl-tag-arrow, …) are set on .timeline by
+     components/timeline/geometry.ts so CSS and lane math share one source. */
 
   color-scheme: dark;
 }
@@ -115,7 +132,7 @@ input { font: inherit; color: inherit; }
   height: 26px;
   border-radius: 7px;
   color: var(--accent);
-  background: var(--surface);
+  background: var(--box-bg);
   transition: transform 120ms ease, background 120ms ease;
 }
 .icon-btn > svg {
@@ -125,7 +142,7 @@ input { font: inherit; color: inherit; }
     drop-shadow(0 0 calc(3px * var(--glow)) color-mix(in srgb, var(--accent) 85%, transparent))
     drop-shadow(0 0 calc(7px * var(--glow)) color-mix(in srgb, var(--accent) 40%, transparent));
 }
-.icon-btn:hover { transform: scale(1.12); background: var(--surface-raised); }
+.icon-btn:hover { transform: scale(1.12); background: var(--box-bg-raised); }
 .icon-btn.is-bare { background: transparent; }
 .icon-btn.is-bare:hover { background: transparent; }
 

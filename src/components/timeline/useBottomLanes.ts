@@ -5,36 +5,38 @@ import { shallowArrayEqual, useFrameValue } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry, spanHeader } from '../../domain/spans.ts'
+import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
+import { useSettings } from '../../store/settings.ts'
 import { useView } from '../../store/view.ts'
+import type { Orientation } from '../../domain/layoutMode.ts'
+import { lanesTop, liveLaneTop } from './geometry.ts'
 
-export const LANES_TOP = 312
-const LANE_SHORT = 40
-const LANE_LABELED = 56
+const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
 
 interface LaneBase {
   key: string
   a: TimeRef
   b: TimeRef
-  /** Needs room for a header line. */
-  tall: boolean
-  /** Vertical center in px; set once the lane is placed. */
+  /** Vertical center in px (horizontal); set once the lane is placed. Live lanes: from the top of the live band. */
   top: number
+  /** Lane number within its side: from the bottom / right edge for saved lanes, from the top / left edge for live lanes; set once placed. */
+  index: number
 }
 
 export type BottomLane = LaneBase & (
   | { kind: 'selected-now'; selected: InstantRecord }
+  | { kind: 'selected-cursor'; selected: InstantRecord }
   | { kind: 'secondary'; selected: InstantRecord; secondary: InstantRecord }
   | { kind: 'saved'; span: LaneSpan }
 )
 
 /**
- * Implied spans for the selection (Selected→Now, Secondary→Selected) followed by
- * saved spans, keeping only those on screen. Re-renders only when that set changes.
+ * Implied spans for the selection (Selected→Now, Previous→Selected, Selected→Cursor) followed by
+ * saved spans, keeping only those on screen (unplaced: see placeLanes). Re-renders only when that set changes.
  */
-export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
+export function useVisibleLanes(): BottomLane[] {
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -45,9 +47,11 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     secondaryId: s.secondarySelectedInstantId,
     showNow: s.showImpliedSelectedNow,
     showPrev: s.showImpliedSelectedPrev,
-    editingSpanId: s.editingSpanId,
     moving: s.moveMode?.instantId ?? null,
+    inMove: !!s.moveMode,
   })))
+
+  const favoriteLanes = useSettings(s => s.favoriteLanes)
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -61,20 +65,25 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
       focusedSpanId: v.focusedSpanId,
       selectedInstantId: v.selectedId,
       now: Date.now(),
+      favoriteLanes,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
     const secondary = byId.get(v.secondaryId ?? '')
     if (selected && v.showNow && !saved.some(s => s.span.startInstantId === selected.id && s.span.endIsNow)) {
-      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', tall: false, top: 0 })
+      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', top: 0, index: 0 })
     }
     if (selected && secondary && v.showPrev) {
       const exists = resolved.some(r => !r.span.endIsNow &&
         ((r.span.startInstantId === secondary.id && r.span.endInstantId === selected.id) ||
           (r.span.startInstantId === selected.id && r.span.endInstantId === secondary.id)))
       if (!exists) {
-        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), tall: false, top: 0 })
+        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0, index: 0 })
       }
+    }
+    // Free cursor with a selection: the live lane from the selection to the cursor (hidden by geometry while they coincide).
+    if (selected && v.mode === 'cursor' && !v.inMove) {
+      out.push({ key: 'implied-cursor', kind: 'selected-cursor', selected, a: ref(selected), b: 'center', top: 0, index: 0 })
     }
     for (const s of saved) {
       out.push({
@@ -83,27 +92,59 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
         span: s,
         a: ref(s.start),
         b: s.end ? ref(s.end) : 'now',
-        tall: !!spanHeader(s) || v.editingSpanId === s.span.id,
         top: 0,
+        index: 0,
       })
     }
     return out
-  }, [instants, spans, v])
+  }, [instants, spans, v, favoriteLanes])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
-    .filter(c => spanGeometry(f.x(resolveTimeRef(c.a, f.now, f.center)), f.x(resolveTimeRef(c.b, f.now, f.center)), f.screenW).onScreen)
+    .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
     .map(c => c.key), shallowArrayEqual)
 
   return useMemo(() => {
     const keys = new Set(onScreenKeys)
-    let y = LANES_TOP
-    const lanes: BottomLane[] = []
-    for (const c of candidates) {
-      if (!keys.has(c.key)) continue
-      const h = c.tall ? LANE_LABELED : LANE_SHORT
-      lanes.push({ ...c, top: y + h / 2 })
-      y += h
-    }
-    return { lanes, height: y + LANES_BOTTOM_PAD }
+    return candidates.filter(c => keys.has(c.key))
   }, [candidates, onScreenKeys])
 }
+
+/**
+ * A live lane has an endpoint at Now or the cursor: the implied Selected→Now and Selected→Cursor lanes and saved spans ending at Now.
+ * A span whose endpoint is merely the instant being moved (it rides the cursor) is not live: it stays on the saved side.
+ */
+export const isLiveLane = (lane: BottomLane): boolean =>
+  lane.kind === 'selected-now' || lane.kind === 'selected-cursor' || (lane.kind === 'saved' && lane.b === 'now')
+
+/** Live lanes take Now's accent (red) or the cursor's. */
+export const liveLaneVariant = (lane: BottomLane): 'now' | 'cursor' => (lane.kind === 'selected-cursor' ? 'cursor' : 'now')
+
+/** Splits lanes into the live side (endpoint at Now or the cursor) and the saved side (between saved instants), keeping order. */
+export function partitionLanes(lanes: BottomLane[]): { live: BottomLane[]; saved: BottomLane[] } {
+  const live: BottomLane[] = []
+  const saved: BottomLane[] = []
+  for (const l of lanes) (isLiveLane(l) ? live : saved).push(l)
+  return { live, saved }
+}
+
+/**
+ * Places the lanes. Live lanes (index 0.. from the top of the horizontal live band, or from the left edge in vertical) come first;
+ * saved lanes stack below the chip rows (horizontal, below the band) or from the right edge (vertical).
+ * `height` is the horizontal timeline's height; `liveCount` sizes the live band.
+ */
+export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation): { lanes: BottomLane[]; height: number | undefined; liveCount: number } {
+  const { live, saved } = partitionLanes(visible)
+  const liveCount = orientation === 'vertical' ? 0 : live.length
+  const placedLive = live.map((c, index) => ({ ...c, index, top: liveLaneTop(index) }))
+  let y = lanesTop(rowsUsed, liveCount)
+  const placedSaved = saved.map((c, index) => {
+    const lane = { ...c, index, top: y + LANE_HEIGHT / 2 }
+    y += LANE_HEIGHT
+    return lane
+  })
+  return { lanes: [...placedLive, ...placedSaved], height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD, liveCount }
+}
+
+/** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */
+export const laneHasControls = (lane: BottomLane, selectedSpanId: string | null): boolean =>
+  lane.kind !== 'saved' || lane.span.focused || lane.span.priority <= 1 || selectedSpanId === lane.span.span.id

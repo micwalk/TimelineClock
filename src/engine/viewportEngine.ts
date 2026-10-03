@@ -2,28 +2,35 @@
 // displayed viewport (center/width, including focus transitions and zoom
 // smoothing) and hands each frame to subscribers, which write CSS transforms or
 // text directly. React renders structure; this keeps per-frame work out of React.
+// Positions are along the main axis; orientation and time direction come from the layout store.
 //
 // Frames run only when needed: on state changes, during animations/gestures, when
 // a subscriber asks for continuous frames, otherwise just often enough that Now
 // moves by <= 1/4 px, and at each wall-clock second for the clocks.
 import { useEntities } from '../store/entities.ts'
 import { useView } from '../store/view.ts'
-import type { Projection } from '../domain/viewport.ts'
-import { resolveViewTarget, timeToX, xToTime } from '../domain/viewport.ts'
+import { useLayout } from '../store/layout.ts'
+import type { Orientation } from '../domain/layoutMode.ts'
+import type { AxisProjection } from '../domain/viewport.ts'
+import { posToTime, pxPerMs, resolveViewTarget, timeToPos, visibleRange } from '../domain/viewport.ts'
 import { clamp, easeInOutCubic, lerp } from '../domain/time.ts'
 
-export interface Frame extends Projection {
+export interface Frame extends AxisProjection {
   /** Wall clock for this frame; use it instead of Date.now() for consistency. */
   now: number
-  height: number
+  orientation: Orientation
+  /** Size across the time axis, px (the timeline's height when horizontal). */
+  crossSize: number
   pxPerMs: number
-  /** Times at the left and right screen edges. */
+  /** Earliest and latest visible times, whatever the direction. */
   start: number
   end: number
   /** True while a focus transition or zoom smoothing is in flight. */
   animating: boolean
-  x: (t: number) => number
-  time: (x: number) => number
+  /** Position of a time along the main axis, px from the timeline's start edge. */
+  pos: (t: number) => number
+  /** Time at a main-axis position. */
+  time: (pos: number) => number
   seq: number
 }
 
@@ -66,6 +73,7 @@ class ViewportEngine {
     this.started = true
     useView.subscribe(() => this.invalidate())
     useEntities.subscribe(() => this.invalidate())
+    useLayout.subscribe(() => this.invalidate())
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.invalidate() })
     this.invalidate()
   }
@@ -103,8 +111,22 @@ class ViewportEngine {
     this.wantsFrame = true
   }
 
+  private momentumStoppers = new Set<() => void>()
+
+  /** Registers something (the glide) that must stop when navigation starts. Returns the cleanup. */
+  onNavigate(stop: () => void): () => void {
+    this.momentumStoppers.add(stop)
+    return () => { this.momentumStoppers.delete(stop) }
+  }
+
+  /** Stops momentum (a running glide): call when any other navigation begins. */
+  stopMomentum() {
+    for (const stop of [...this.momentumStoppers]) stop()
+  }
+
   /** Animate from what is on screen now to wherever the (just changed) state points. */
   beginTransition(duration = TRANSITION_MS) {
+    this.stopMomentum()
     if (prefersReducedMotion()) duration = 0
     // Call before changing state: the sample is what's on screen at this moment.
     const from = this.sample()
@@ -170,17 +192,21 @@ class ViewportEngine {
       this.displayedWidth = width
     }
 
-    const p: Projection = { center, width, screenW: this.size.w }
+    const { orientation, dir } = useLayout.getState()
+    const horizontal = orientation === 'horizontal'
+    const p: AxisProjection = { center, width, mainSize: horizontal ? this.size.w : this.size.h, dir }
+    const { start, end } = visibleRange(p)
     return {
       ...p,
       now,
-      height: this.size.h,
-      pxPerMs: this.size.w / width,
-      start: xToTime(p, 0),
-      end: xToTime(p, this.size.w),
+      orientation,
+      crossSize: horizontal ? this.size.h : this.size.w,
+      pxPerMs: pxPerMs(p),
+      start,
+      end,
       animating,
-      x: t => timeToX(p, t),
-      time: x => xToTime(p, x),
+      pos: t => timeToPos(p, t),
+      time: pos => posToTime(p, pos),
       seq: this.seq,
     }
   }

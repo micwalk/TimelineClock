@@ -32,6 +32,14 @@ export function snoozeBaseLabel(label: string): string {
   return label.replace(SNOOZE_PREFIX, '')
 }
 
+const LATEST_SNOOZE = /^Snooze\s+(\d+):/i
+
+/** "Snooze 3: Snooze 2: Wake up" → { base: 'Wake up', count: 3 }; null for other labels. */
+export function parseSnoozeLabel(label: string): { base: string; count: number } | null {
+  const m = LATEST_SNOOZE.exec(label)
+  return m ? { base: snoozeBaseLabel(label), count: Number(m[1]) } : null
+}
+
 export function snoozeLabel(baseLabel: string, count: number): string {
   return `Snooze ${count}: ${snoozeBaseLabel(baseLabel)}`
 }

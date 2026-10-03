@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
-  formatRelativeCoarse, formatSignedDuration, parseDurationInput, to24h,
+  atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, truncateText,
+  formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
@@ -17,11 +17,10 @@ describe('formatClock12h', () => {
 })
 
 describe('formatDurationHMS', () => {
-  it('shows milliseconds under a minute', () => {
-    expect(formatDurationHMS(5 * SECOND + 42)).toBe('00:05.042')
-    expect(durationShowsMillis(59 * SECOND)).toBe(true)
-    expect(durationShowsMillis(-59 * SECOND)).toBe(true)
-    expect(durationShowsMillis(MINUTE)).toBe(false)
+  it('shows seconds only under a minute, never milliseconds', () => {
+    expect(formatDurationHMS(5 * SECOND + 42)).toBe('00:05')
+    expect(formatDurationHMS(10 * SECOND)).toBe('00:10')
+    expect(formatDurationHMS(59 * SECOND + 999)).toBe('00:59')
   })
   it('drops to mm:ss, hh:mm:ss and days as it grows', () => {
     expect(formatDurationHMS(3 * MINUTE + 4 * SECOND)).toBe('03:04')
@@ -30,7 +29,7 @@ describe('formatDurationHMS', () => {
     expect(formatDurationHMS(3 * DAY)).toBe('3 days, 00:00:00')
   })
   it('treats negative input as zero', () => {
-    expect(formatDurationHMS(-5000)).toBe('00:00.000')
+    expect(formatDurationHMS(-5000)).toBe('00:00')
   })
 })
 
@@ -38,6 +37,8 @@ describe('signed and coarse durations', () => {
   it('prefixes a sign', () => {
     expect(formatSignedDuration(-90 * SECOND)).toBe('-01:30')
     expect(formatSignedDuration(90 * SECOND)).toBe('+01:30')
+    expect(formatSignedDuration(10 * SECOND + 400)).toBe('+00:10')
+    expect(formatSignedDuration(-10 * SECOND)).toBe('-00:10')
   })
   it('never shows milliseconds in coarse format', () => {
     expect(formatDurationCoarse(5_500)).toBe('00:05')
@@ -83,5 +84,78 @@ describe('clock entry', () => {
   it('keeps the calendar day of the reference time', () => {
     const ref = at(23, 0, 0)
     expect(atClockTimeOnDay(ref, 6, 30, 0)).toBe(at(6, 30, 0))
+  })
+})
+
+describe('chipName', () => {
+  it('shortens snoozes to "Base ⟲N"', () => {
+    expect(chipName('Snooze 2: Test Alarm')).toBe('Test Alarm ⟲2')
+    expect(chipName('Snooze 2: Snooze 1: Wake up')).toBe('Wake up ⟲2')
+  })
+  it('leaves other labels alone and names empty ones like displayName', () => {
+    expect(chipName('Take Meds')).toBe('Take Meds')
+    expect(chipName('')).toBe('?')
+    expect(chipName('Snooze 1: ')).toBe('? ⟲1')
+  })
+})
+
+describe('showsSeconds', () => {
+  it('shows seconds only when the finest tick is under the threshold', () => {
+    expect(showsSeconds(15 * SECOND, MINUTE)).toBe(true)
+    expect(showsSeconds(MINUTE, MINUTE)).toBe(false)
+    expect(showsSeconds(5 * MINUTE, MINUTE)).toBe(false)
+  })
+})
+
+describe('formatClockCompact', () => {
+  it('drops leading zeros and shortens am/pm', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 18, 0, 0).getTime(), false)).toBe('6:00p')
+    expect(formatClockCompact(new Date(2026, 0, 5, 9, 7, 0).getTime(), false)).toBe('9:07a')
+  })
+  it('shows seconds on request', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 18, 4, 13).getTime(), true)).toBe('6:04:13p')
+  })
+  it('handles midnight and noon', () => {
+    expect(formatClockCompact(new Date(2026, 0, 5, 0, 5, 0).getTime(), false)).toBe('12:05a')
+    expect(formatClockCompact(new Date(2026, 0, 5, 12, 0, 0).getTime(), false)).toBe('12:00p')
+  })
+})
+
+describe('formatRelativeShort', () => {
+  it('says now within a second', () => {
+    expect(formatRelativeShort(0)).toBe('now')
+    expect(formatRelativeShort(999)).toBe('now')
+    expect(formatRelativeShort(-999)).toBe('now')
+  })
+  it('uses the largest useful units', () => {
+    expect(formatRelativeShort(-45 * SECOND)).toBe('45s ago')
+    expect(formatRelativeShort(6 * MINUTE + 30 * SECOND)).toBe('in 6m')
+    expect(formatRelativeShort(-(2 * HOUR + 5 * MINUTE))).toBe('2h 5m ago')
+    expect(formatRelativeShort(2 * HOUR)).toBe('in 2h')
+    expect(formatRelativeShort(-(3 * DAY + 4 * HOUR))).toBe('3d 4h ago')
+    expect(formatRelativeShort(3 * DAY)).toBe('in 3d')
+  })
+})
+
+describe('formatDurationShort', () => {
+  it('uses the two largest units, floored', () => {
+    expect(formatDurationShort(0)).toBe('0s')
+    expect(formatDurationShort(45 * SECOND + 900)).toBe('45s')
+    expect(formatDurationShort(26 * MINUTE + 13 * SECOND)).toBe('26m')
+    expect(formatDurationShort(HOUR + 5 * MINUTE + 30 * SECOND)).toBe('1h 5m')
+    expect(formatDurationShort(2 * HOUR)).toBe('2h')
+    expect(formatDurationShort(2 * DAY + 3 * HOUR + 59 * MINUTE)).toBe('2d 3h')
+    expect(formatDurationShort(3 * DAY)).toBe('3d')
+  })
+  it('ignores the sign', () => {
+    expect(formatDurationShort(-10 * MINUTE)).toBe('10m')
+  })
+})
+
+describe('truncateText', () => {
+  it('keeps short text and cuts long text with an ellipsis within the limit', () => {
+    expect(truncateText('Cooking', 8)).toBe('Cooking')
+    expect(truncateText('Making dinner', 8)).toBe('Making…')
+    expect(truncateText('Making dinner', 8).length).toBeLessThanOrEqual(8)
   })
 })
