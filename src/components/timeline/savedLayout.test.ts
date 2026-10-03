@@ -46,6 +46,14 @@ describe('layoutItems', () => {
     expect(items.filter(i => i.pinned).map(i => i.id)).toEqual(['f', 's', 'r', 'e', 'm'])
   })
 
+  it('pins the secondary-selected instant just after the selected one, so it never folds or clusters', () => {
+    const items = layoutItems([inst('s', 0), inst('p', 0), inst('m', 0)], ctx({ selectedId: 's', secondaryId: 'p', movingId: 'm' }))
+    const by = Object.fromEntries(items.map(i => [i.id, i]))
+    expect(by.p.pinned).toBe(true)
+    expect(by.s.priority).toBeLessThan(by.p.priority)
+    expect(by.p.priority).toBeLessThan(by.m.priority)
+  })
+
   it('passes the snooze group and places a moving instant at the screen center', () => {
     const items = layoutItems([inst('snz', 500, { snoozeOriginalId: 'orig' }), inst('mv', 100)], ctx({ movingId: 'mv' }))
     expect(only(items, 'snz')).toMatchObject({ groupId: 'orig', pos: 50 })

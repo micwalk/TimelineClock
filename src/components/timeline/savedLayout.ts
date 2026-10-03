@@ -78,6 +78,8 @@ export interface LayoutContext {
   pos: (ts: number) => number
   mainSize: number
   selectedId: string | null
+  /** The previously selected instant: an endpoint of the implied span, so it never folds or clusters. */
+  secondaryId?: string | null
   /** Set only while the view is focused on that instant. */
   focusedId: string | null
   editingId: string | null
@@ -88,17 +90,18 @@ export interface LayoutContext {
   orientation?: 'horizontal' | 'vertical'
 }
 
-/** Layout items for the given instants. Priority: focused 0, selected 1, moving/editing 2, ringing 3, upcoming alarm 4, favorite 5, other 6. */
+/** Layout items for the given instants. Priority: focused 0, selected 1, secondary 1.5, moving/editing 2, ringing 3, upcoming alarm 4, favorite 5, other 6. */
 export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext): LabelItem[] {
   const vertical = c.orientation === 'vertical'
   return instants.map(i => {
     const focused = c.focusedId === i.id
     const selected = c.selectedId === i.id
+    const secondary = c.secondaryId === i.id
     const moving = c.movingId === i.id
     const editing = c.editingId === i.id
     const ringing = c.ringingIds.has(i.id)
     const width = c.widths[i.id] ?? estimateChipWidth(i.label)
-    const priority = focused ? 0 : selected ? 1 : moving || editing ? 2 : ringing ? 3
+    const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
       : i.alarm && i.tsEpochMs > c.now ? 4 : i.favorite ? 5 : 6
     return {
       id: i.id,
@@ -108,7 +111,7 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
       crossExtent: vertical ? width : CHIP_HEIGHT,
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),
-      pinned: focused || selected || moving || editing || ringing,
+      pinned: focused || selected || secondary || moving || editing || ringing,
     }
   })
 }
@@ -230,6 +233,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       pos: ts => f.pos(ts) - originPos,
       mainSize: f.mainSize,
       selectedId: c.selected,
+      secondaryId: c.secondary,
       focusedId: c.mode === 'instant' ? c.focusedInstantId : null,
       editingId: c.editing,
       movingId: c.moving,
