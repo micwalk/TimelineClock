@@ -143,7 +143,7 @@ export function endPan(tolerancePx = 12) {
   const f = frame()
   const cx = f.screenW / 2
   if (Math.abs(f.x(f.now) - cx) <= tolerancePx && !v().moveMode) {
-    focusNow(false)
+    focusNow()
     return
   }
   if (v().moveMode) return
@@ -152,7 +152,7 @@ export function endPan(tolerancePx = 12) {
     const d = Math.abs(f.x(i.tsEpochMs) - cx)
     if (d <= tolerancePx && (!best || d < best.d)) best = { id: i.id, d }
   }
-  if (best) focusInstant(best.id, false)
+  if (best) focusInstant(best.id)
 }
 
 export function toggleCursorLock() {

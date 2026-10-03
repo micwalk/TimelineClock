@@ -40,7 +40,7 @@ function Column({ className, getX, label, icons, time, actions, badge, ariaLabel
   const ref = useRef<HTMLDivElement>(null)
   usePositionX(ref, getX)
   return (
-    <div ref={ref} className={`tl-col ${className}`} aria-label={ariaLabel}>
+    <div ref={ref} className={`tl-col ${className}`} role="group" aria-label={ariaLabel}>
       <div className="tl-col__line" />
       <div className="tl-col__row tl-col__row--label">
         {label}

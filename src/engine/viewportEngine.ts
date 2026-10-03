@@ -55,7 +55,6 @@ class ViewportEngine {
   private timeoutId: ReturnType<typeof setTimeout> | null = null
   private timeoutDue = Infinity
   private wantsFrame = false
-  private gestureActive = false
   private started = false
 
   constructor() {
@@ -104,11 +103,6 @@ class ViewportEngine {
     this.wantsFrame = true
   }
 
-  setGestureActive(active: boolean) {
-    this.gestureActive = active
-    if (active) this.invalidate()
-  }
-
   /** Animate from what is on screen now to wherever the (just changed) state points. */
   beginTransition(duration = TRANSITION_MS) {
     if (prefersReducedMotion()) duration = 0
@@ -123,10 +117,6 @@ class ViewportEngine {
     if (!this.transition) return
     this.displayedWidth = this.sample().width
     this.transition = null
-  }
-
-  isTransitioning() {
-    return !!this.transition
   }
 
   invalidate = () => {
@@ -212,7 +202,7 @@ class ViewportEngine {
     for (const fn of this.listeners[0]) fn(f)
     for (const fn of this.listeners[1]) fn(f)
 
-    if (f.animating || this.transition || this.wantsFrame || this.gestureActive) {
+    if (f.animating || this.transition || this.wantsFrame) {
       this.schedule(0)
       return
     }
