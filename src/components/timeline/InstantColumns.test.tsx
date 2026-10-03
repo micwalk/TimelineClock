@@ -82,6 +82,15 @@ describe('saved instant chips', () => {
     expect(entities.getInstant(id)?.favorite).toBe(false)
   })
 
+  it('show time since when selected, but not when focused (the Cursor tag carries it)', () => {
+    const id = entities.createInstant(twentyMinutesAgo(), 'Rice')
+    useView.setState({ currentSelectedInstantId: id })
+    render(<Columns />)
+    expect(screen.getByText('· 20m ago')).toBeInTheDocument()
+    act(() => useView.setState({ viewFocusMode: 'instant', focusedInstantId: id }))
+    expect(screen.queryByText('· 20m ago')).toBeNull()
+  })
+
   it('select on click, rename on double-clicking the name, focus on double-clicking the time', () => {
     const t = twentyMinutesAgo()
     const id = entities.createInstant(t, 'Tea')

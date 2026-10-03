@@ -134,6 +134,54 @@ describe('CursorTag', () => {
   })
 })
 
+describe('CursorTag on a focused instant', () => {
+  const focusOn = (label = 'Rice', agoMs = 26 * 60_000) => {
+    const ts = engine.getFrame().now - agoMs
+    const id = entities.createInstant(ts, label)
+    useView.setState({ viewFocusMode: 'instant', focusedInstantId: id, currentSelectedInstantId: id, timeCenter: ts })
+    return ts
+  }
+
+  it('stays, showing the instant time with seconds and how long ago', () => {
+    const ts = focusOn()
+    render(<CursorTag />)
+    const tag = screen.getByRole('button', { name: /^Cursor/ })
+    expect(tag).toHaveTextContent(formatClockCompact(ts, true))
+    expect(tag).toHaveTextContent('26m ago')
+    expect(tag).not.toHaveTextContent('Now')
+    expect(screen.getAllByRole('group', { name: 'Cursor' })[0].className).toContain('is-on-instant')
+  })
+
+  it('has no + button and ignores double-click', () => {
+    focusOn()
+    render(<CursorTag />)
+    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor' })).toBeNull()
+    fireEvent.doubleClick(screen.getByRole('button', { name: /^Cursor/ }))
+    expect(useEntities.getState().instants).toHaveLength(1)
+  })
+
+  it('offers span to Now, a typed time and an offset from Now', () => {
+    focusOn()
+    render(<CursorTag />)
+    fireEvent.click(screen.getByRole('button', { name: /^Cursor/ }))
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Save span to Now', 'Type a time…', 'Offset from Now…'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save span to Now' }))
+    expect(useEntities.getState().spans).toHaveLength(1)
+  })
+
+  it('is hidden in move mode and keeps the free-cursor look otherwise', () => {
+    focusOn()
+    useView.setState({ moveMode: { instantId: useEntities.getState().instants[0].id, originalCenter: 0 } })
+    const { unmount } = render(<CursorTag />)
+    expect(screen.queryByRole('button', { name: /^Cursor/ })).toBeNull()
+    unmount()
+    useView.setState({ moveMode: null })
+    cursorMode()
+    render(<CursorTag />)
+    expect(screen.getAllByRole('group', { name: 'Cursor' })[0].className).not.toContain('is-on-instant')
+  })
+})
+
 describe('liveTagsCollide', () => {
   it('is true within the clearance on either side, false beyond', () => {
     expect(liveTagsCollide(500, 500, 100)).toBe(true)
