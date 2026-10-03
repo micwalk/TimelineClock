@@ -1,149 +1,109 @@
-# Quick create: stopwatch, timer, alarm — design proposal
+# Stopwatch & Timer: quick UI over instants and spans — design
 
-**Status:** proposal for owner review (2026-10-03). Nothing here is built. Pick or strike
-options in §8; the plan in §9 follows the picks.
-**Sources:** [next-steps handoff §2](../../handoffs/2026-10-02-next-steps.md), PRD
-("Stopwatch", "Timer", "Drag-from-Now handle", "Active area"), AGENTS.md principles 8
-(capture, then relate) and 10 (propose UX changes first).
+**Status:** design for owner review (2026-10-03, rev 2). The model in §1 is the owner's;
+§2–§4 are proposals, and §5 lists what's still open. Nothing is built yet.
 
-## 1. Goal
+Stopwatch and Timer aren't new kinds of entity. They are **quick controls that create
+ordinary instants and spans and track one span live**. Everything they create stays on the
+timeline as history.
 
-Make the owner's cooking flow a few taps, without adding new kinds of things to the
-timeline:
+## 1. Model (owner)
 
-> Rice goes on → tap. Later: name it "rice". Set a 13-minute timer from it, with an alarm.
-> Later still: "it's been 20 minutes since rice".
+A **tracker** is a small persisted record that says which instants a stopwatch or timer
+is following. It owns no time data; all the times live in the instants.
 
-| Step | Today | Target |
-|---|---|---|
-| Capture "rice on" | 1 tap (＋) | 1 tap (unchanged) |
-| Name it | 1 tap + type | 1 tap + type (unchanged) |
-| 13-minute alarmed timer from it | ~6: double-tap Now, select it, cursor +13m, double-tap cursor, tap bell | **3**: tap the chip → ⏲ → 13m |
-| Timer from Now, no instant first | ~4 | **2**: long-press ＋ → 13m |
-| Stopwatch | 2 (drop, then ☆ for the live lane) | **1–2** |
-| "How long since rice?" | glance at the chip (works today) | unchanged |
+```ts
+interface Tracker {
+  id: string
+  kind: 'timer' | 'stopwatch'
+  instantIds: string[]   // timer: [start, end]; stopwatch: [start, lap1, lap2, …, stop?]
+  stopped?: boolean      // stopwatch only
+}
+```
 
-## 2. What already exists (the building blocks)
+### Timer (duration d)
+- **Start:** create instant **A** at Now and instant **B** at Now + d with the alarm on. Save
+  the span **A → B**, which is the original duration. Track the span **Now → B**, the time
+  left. (B's alarm favorites it, which already draws its live lane to Now.)
+- When B rings, the tracked span keeps going as overtime (B → Now).
+- **Cancel** (before B): turn B's alarm off and stop tracking. A, B and A → B stay as history.
 
-No new entity type is needed; stopwatches and timers are compositions of what is there:
+### Stopwatch
+- **Start:** drop instant **S** at Now and favorite it. Track **S → Now**.
+- **Lap:** create instant **L** at Now and save the span from the previous mark to L as a
+  lap. Unfavorite the previous mark and favorite L, so tracking moves to **L → Now**.
+- **Stop:** create instant **E** at Now and save the span from the last mark to E.
+  Unfavorite the last mark. The tracker now shows that **old span**, frozen.
+- **Reset:** stop tracking (remove the tracker). The instants and spans stay.
 
-- **Instant** with `alarm` (rings at its time) and `favorite` (carries a visible span to
-  Now).
-- A **favorite's span to Now is already a live lane** with a colour-coded chip ("26m") on
-  the live side. That *is* a stopwatch display.
-- **Setting an alarm favorites the instant**, so an alarmed future instant already gets a
-  live lane from Now to it, i.e. a **countdown**; after it rings the same lane keeps
-  growing from it ("continues as stopwatch from the end instant", PRD).
-- `dropInstant`, the duration popover (`TimeEntryPopover`), chip tools (☆, 🔔, move,
-  delete), Cursor/Now tag menus.
+## 2. Tracking UI (proposal)
 
-So:
+**A tracker strip** sits between the timeline and the control bar and appears only when
+something is tracked. It holds one compact card per tracker and scrolls sideways if there
+are several. In vertical layout it sits in the same place, above the bottom bar.
 
-| Thing | Made of |
-|---|---|
-| **Stopwatch** | an instant at Now, favorited (live lane counts up). |
-| **Timer** | an alarmed instant at *anchor* + duration (live lane counts down, then up), plus a saved span anchor → end so the history keeps "rice: 13m". |
-| **Alarm** | an alarmed instant at a clock time (exists: cursor to time → drop → 🔔). |
+```
+ ┌───────────────────────────────┐  ┌───────────────────────────────┐
+ │ ⏲ rice              12:41     │  │ ⏱ run              3:07.4     │
+ │ ▓▓▓▓▓░░░░░░░░░░░  of 13:00     │  │ lap 3 · total 18:22           │
+ │            [+1m]  [✕]          │  │       [Lap]  [Stop]           │
+ └───────────────────────────────┘  └───────────────────────────────┘
+```
 
-History stays intact (principle 7): everything created is an ordinary saved instant/span.
+- **Timer card:** the **time left, Now → B, is the big number**. The original duration
+  is small ("of 13:00"), next to a thin progress bar for elapsed / total. After B rings,
+  the big number turns red and counts up as overtime ("+0:42"). Buttons: **+1m**, which
+  moves B later and re-anchors A → B, and **✕** (Cancel, or Reset once it has rung).
+- **Stopwatch card:** the big number is the **current lap span** (last mark → Now), with
+  seconds and tenths under an hour. Small text shows the lap count and the total (S → Now).
+  Buttons: **Lap**, **Stop**; once stopped: **Reset** and **Resume** (Resume is open
+  question 3).
+- **Tapping a card** focuses its tracked span on the timeline (`act.focusSpan`).
+- The name is the label of A or S. A tap on it renames it, using the same inline edit as
+  chips; when there's no name, it shows "Timer 13m" / "Stopwatch".
+- Times update through `LiveText` (no React state per frame), per the timeline rules.
 
-## 3. Entry points (options)
+On the timeline nothing new is drawn. The tracked span is the existing live lane (Now red
+chip), and the saved span A → B and the laps are ordinary saved lanes.
 
-### A. "+ timer" in a chip's tools — *relative to this instant* (recommended)
-Tapping a saved chip already shows its tools. Add a **⏲ timer** tool. It opens a small
-duration picker anchored to the chip (§4). Picking 13m creates the alarmed end instant at
-chip time + 13m and the span chip → end. Also works on the **Now tag** tools (anchor = Now)
-and the **Cursor tag** tools (anchor = cursor).
-*Cost:* 3 taps from a captured instant. *Risk:* the chip toolbar gets one more button
-(☆ 🔔 ⏲ ⇄ 🗑).
+## 3. Starting one (proposal)
 
-### B. Long-press the big ＋ / NOW button — *quick menu* (recommended)
-The primary button keeps its one-tap drop. A long-press (500 ms, same as the ± buttons'
-step menu) opens a menu: **Stopwatch · Timer ▸ (presets) · Alarm at…**. Keyboard: see §6.
-*Cost:* 2 taps for a timer from Now. *Risk:* long-press is undiscoverable; a tiny caret on
-the button (like the ± buttons) fixes that.
+- **Two buttons** in the tracker strip: **⏱** and **⏲**. While nothing is tracked, the
+  strip collapses to just these two small buttons at the right end of the control bar row.
+  Horizontal: after Zoom in. Vertical grid: a 5th column.
+- **⏱:** starts a stopwatch at once (1 tap).
+- **⏲:** opens a preset picker: your **recent durations first** (e.g. 13m), then
+  1 · 3 · 5 · 10 · 15 · 25 · 30 · 60m, then **Custom…**, which is the existing duration
+  input. That makes the rice timer 2 taps, or 1 more for a custom value the first time.
+- **From a selected instant:** the ⏲ picker has a "from *rice*" toggle when an instant is
+  selected. It sets A = that instant instead of a new one at Now ("13m after rice went
+  on").
+- **Keys:** **T** = timer picker, **Shift+S** = stopwatch start/lap. S stays zoom out.
 
-### C. A quick-create strip above the control bar
-Three always-visible buttons: ⏱ Stopwatch, ⏲ Timer, ⏰ Alarm.
-*Cost:* 1–2 taps. *Risk:* costs a row of vertical space on phones, which layout v2 fought
-for; duplicates A/B. Not recommended unless A/B prove too hidden.
+## 4. Implementation outline
 
-### D. Drag-from-Now handle (PRD)
-Grab a handle on the Now line, drag into the future: a live HUD shows "13m", release to
-create the timer. Elegant, but it competes with the pan gesture and needs careful hit
-areas in both orientations. **Later phase**, after A/B.
+1. `domain/trackers.ts` (pure, tested): the tracker record, sanitizing, and the
+   lap/stop/reset transitions as functions over ids. The spans to save and the instants to
+   (un)favorite come back as a plan.
+2. `store/trackers.ts`: a persisted Zustand store, saved in backups as well. Actions in
+   `store/actions.ts`: `startTimer(d, {fromInstantId?})`, `extendTimer`, `cancelTimer`,
+   `startStopwatch`, `lap`, `stopStopwatch`, `resetTracker`. Deleting an instant a tracker
+   uses ends that tracker.
+3. `components/panels/TrackerStrip.tsx` with cards, `DurationPicker.tsx`, and the buttons
+   in `ControlBar`.
+4. Tests (domain + actions + components), a phone-size run in both orientations, and an
+   update to the AGENTS.md / `.cursorrules` UX patterns.
 
-### E. Natural-language quick add
-A text field: `13m`, `rice 13m`, `at 6pm`, `tomorrow 8am`. Good on desktop/keyboard,
-slow on phones. **Later phase** (and a dependency decision: `chrono-node` ≈ 40 KB gz vs. a
-small in-house parser covering `Nm`/`Nh`/`at H:MM`).
+## 5. Open questions
 
-## 4. The duration picker
-
-One component, used by A and B:
-
-- A row of **preset chips**: 1m · 3m · 5m · 10m · 15m · 25m · 30m · 1h.
-- **Recent durations first** (the last 3 used, e.g. *13m*, remembered in settings), so
-  the second rice timer is 2 taps.
-- **Custom…** opens the existing duration input (`TimeEntryPopover`, minutes:seconds).
-- The alarm is **on by default** for timers (a timer without one is just a future
-  instant); a small 🔔 toggle in the picker turns it off.
-
-## 5. What a running timer / stopwatch looks like
-
-v1 uses what is drawn today: the live lane and its chip. Proposed small additions:
-
-- **Countdown text** on a timer's live chip while it is in the future: "−4:32" with
-  seconds under 10 minutes (today the chip shows a coarse "5m").
-- **Label defaults:** a timer's end instant is named from its anchor: "rice +13m"
-  (anchor unnamed → "13m timer"); a stopwatch is "stopwatch" until renamed. Both
-  editable with the existing one-tap "name…" hint.
-- **Done:** ringing behaves as today (overlay, Snooze/Dismiss, notification that now opens
-  the app on the alarm).
-
-Later (PRD "Active area"): big cards for running timers/stopwatches in the Agenda or a
-strip, sorted by time left; Screen Wake Lock while a timer runs in the foreground.
-
-## 6. Keyboard
-
-PRD's T/A/S/I clash with today's keys (I/W zoom in, S/O zoom out, A previous). Proposal:
-keep the navigation keys and add **T = timer** (opens the duration picker anchored to
-the selection, else the cursor, else Now) and **Shift+S = stopwatch** (S stays zoom out).
-`+`/`=` keeps dropping an instant.
-
-## 7. Stopwatch scope
-
-A stopwatch as "an instant plus its live lane" has **no pause and no laps**. Options:
-
-1. **No pause; laps are instants.** Tapping ＋ while a stopwatch runs already drops an
-   instant on its lane; we could render instants inside a stopwatch's span as lap ticks
-   and show split times. Fits "everything is an instant". *(recommended for v1)*
-2. **Real pause/resume** (PRD monotonic `accumulatedMs`): a new stopwatch record type,
-   paused stretches drawn hatched. More model and UI; only worth it if pausing matters for
-   the owner's uses.
-
-## 8. Decisions for the owner
-
-1. Entry points: **A + B** (recommended), or include C, or start with D?
-2. Timer alarm on by default? (recommended: yes)
-3. Timer from an instant: also save the span anchor → end? (recommended: yes, so history
-   reads "rice +13m" as a bar)
-4. Preset list and "recent first" — OK? Any presets to add/remove?
-5. Countdown with seconds on the timer's live chip — OK?
-6. Default labels ("rice +13m", "13m timer", "stopwatch") — OK?
-7. Keyboard: T = timer, Shift+S = stopwatch — OK?
-8. Stopwatch: v1 without pause (laps = instants), or real pause/resume?
-9. Natural-language quick add: next phase, and in-house parser or `chrono-node`?
-
-## 9. Plan (assuming the recommendations)
-
-1. **Domain:** `domain/quickCreate.ts` — timer/stopwatch construction (times, labels,
-   preset ordering with recents), unit-tested.
-2. **Actions:** `act.startTimer(anchor: TimeRef | instantId, durationMs, { alarm })`,
-   `act.startStopwatch()`, recent-durations setting.
-3. **UI:** `DurationPicker` component; ⏲ tool on chip/Now/Cursor tools; long-press + caret
-   menu on the ＋/NOW button (both orientations' control bars); `T` / `Shift+S` hotkeys.
-4. **Display:** countdown text on future live-lane chips.
-5. **Docs:** AGENTS.md/.cursorrules UX patterns, Ideas.md, handoff.
-6. **Verify:** unit + component tests, then a phone-size (390×844) run in both
-   orientations for tap counts in §1.
+1. **Stop shows which span?** I read "stop tracks the old span" as the last lap
+   (last mark → E), frozen, with the total S → E in small text. Or should the total be the
+   big number?
+2. **Lap spans saved?** A lap saves the span previous mark → L as a saved lane, so
+   history shows each lap as a bar. Or are the instants alone enough?
+3. **Resume after Stop?** Resume would continue tracking from E, as a new lap. Or is Stop
+   final and only Reset remains?
+4. **Timer after ringing:** does **Dismiss** in the ringing overlay also end the tracker,
+   or does the card stay showing overtime until ✕?
+5. **Placement:** is a strip above the control bar OK (it costs one card-height row only
+   while something runs), or would you rather have the cards in the Agenda?

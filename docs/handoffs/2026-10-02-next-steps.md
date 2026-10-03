@@ -19,8 +19,8 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 
-Design proposal written, waiting on the owner's picks:
-[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) (§8 lists the
+Design (rev 2, owner model: quick UI over instants and spans) waiting on open questions:
+[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) (§5 lists the
 decisions). Build nothing from it until those are answered.
 
 **What the owner asked for:** "I like your suggestion of stopwatch/timer/alarm buttons.
