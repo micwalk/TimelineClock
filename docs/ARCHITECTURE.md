@@ -175,13 +175,16 @@ runs them before every build.
 
 ## Performance
 
-Measured in headless Edge, 1400×900, 40 instants, on the main thread:
+Measured in headless Edge, 40 instants, on the main thread (layout v2 numbers from the
+Vite dev server):
 
-| Phase | Canvas (before) | DOM (after) | Layout v2 (before cache) | Layout v2 (after cache) |
-|-------|-----------------|-------------|--------------------------|-------------------------|
-| Idle  | 64.5%           | 0.3%        | -                        | pending re-measure      |
-| Pan   | 44%             | 15%         | 19.5% (over the 15% budget) | pending re-measure   |
-| Zoom  | 96%             | 32%         | 30.1%                    | pending re-measure      |
+| Phase | Canvas (before) | DOM (after) | Layout v2, 1400×900 horizontal | Layout v2, 390×844 vertical |
+|-------|-----------------|-------------|--------------------------------|-----------------------------|
+| Idle  | 64.5%           | 0.3%        | 0.4%                           | 0.2%                        |
+| Pan   | 44%             | 15%         | 12.6%                          | 7.3%                        |
+| Zoom  | 96%             | 32%         | 28.4%                          | 15.5%                       |
+
+The overlap layout is pan-invariant and cached; before the cache, pan cost 19.5%.
 
 Per-frame cost while zooming is about 5–6ms (style recalc, ticks, paint), within budget
 for 60fps. If phones struggle, the next levers are fewer tick nodes at extreme zoom
