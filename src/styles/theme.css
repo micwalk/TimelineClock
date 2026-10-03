@@ -1,0 +1,128 @@
+/*
+ * Design tokens. Every color, glow and timeline row offset is a custom property so a
+ * future user style editor only has to change variables. Components set --accent
+ * (the element's color) and optionally --halo (its glow color; defaults to --accent).
+ */
+:root {
+  /* Surfaces */
+  --bg-top: #0c1838;
+  --bg-bottom: #000000;
+  --surface: rgba(3, 8, 24, 0.84);
+  --surface-strong: rgba(2, 5, 16, 0.94);
+  --surface-raised: rgba(14, 24, 52, 0.9);
+  --ink: #f1f5ff;
+  --ink-dim: #9fb0cf;
+  --ink-faint: #5d6d8f;
+
+  /* Role colors */
+  --c-axis: #ffffff;
+  --c-axis-glow: #3b82f6;
+  --c-now: #ff4560;
+  --c-cursor: #22d3ee;
+  --c-focused: #22d3ee;
+  --c-selected: #3b82f6;
+  --c-secondary: #a78bfa;
+  --c-span: #34d399;
+  --c-instant: #eef3ff;
+  --c-instant-glow: #60a5fa;
+  --c-favorite: #facc15;
+  --c-alarm: #fbbf24;
+  --c-danger: #f43f5e;
+  --c-ok: #22c55e;
+  --c-past: #fca5a5;
+  --c-future: #93c5fd;
+
+  /* One knob for every glow in the app (0 = flat, 1 = default, 2 = extra neon). */
+  --glow: 1;
+
+  /* Type */
+  --font-ui: 'Segoe UI Variable Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Cascadia Mono', ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Shape */
+  --radius-chip: 7px;
+  --radius-card: 12px;
+
+  /* Timeline rows, in px from the top of the timeline */
+  --tl-lane-a: 26px;
+  --tl-lane-b: 70px;
+  --tl-axis: 146px;
+  --tl-label: 180px;
+  --tl-time: 214px;
+  --tl-actions: 260px;
+
+  color-scheme: dark;
+}
+
+/* --- Glow primitives ---------------------------------------------------- */
+
+.glow-box {
+  border: 1.5px solid var(--accent);
+  box-shadow:
+    0 0 calc(4px * var(--glow)) color-mix(in srgb, var(--halo, var(--accent)) 90%, transparent),
+    0 0 calc(14px * var(--glow)) color-mix(in srgb, var(--halo, var(--accent)) 45%, transparent),
+    inset 0 0 calc(10px * var(--glow)) color-mix(in srgb, var(--halo, var(--accent)) 22%, transparent);
+}
+
+.glow-text {
+  text-shadow:
+    0 0 calc(4px * var(--glow)) color-mix(in srgb, var(--halo, var(--accent)) 80%, transparent),
+    0 0 calc(12px * var(--glow)) color-mix(in srgb, var(--halo, var(--accent)) 40%, transparent);
+}
+
+.glow-icon {
+  filter:
+    drop-shadow(0 0 calc(3px * var(--glow)) color-mix(in srgb, currentColor 85%, transparent))
+    drop-shadow(0 0 calc(8px * var(--glow)) color-mix(in srgb, currentColor 40%, transparent));
+}
+
+/* --- Base --------------------------------------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(120% 60% at 50% 18%, rgba(59, 130, 246, 0.16), transparent 60%),
+    linear-gradient(to bottom, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--c-cursor); outline-offset: 2px; }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Small square icon button used across timeline and panels */
+/* Inherits --accent from its context unless given a color. */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--accent);
+  background: var(--surface);
+  transition: transform 120ms ease, background 120ms ease;
+}
+.icon-btn > svg {
+  width: 17px;
+  height: 17px;
+  filter:
+    drop-shadow(0 0 calc(3px * var(--glow)) color-mix(in srgb, var(--accent) 85%, transparent))
+    drop-shadow(0 0 calc(7px * var(--glow)) color-mix(in srgb, var(--accent) 40%, transparent));
+}
+.icon-btn:hover { transform: scale(1.12); background: var(--surface-raised); }
+.icon-btn.is-bare { background: transparent; }
+.icon-btn.is-bare:hover { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

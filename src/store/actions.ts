@@ -1,0 +1,359 @@
+// User-level operations that touch several stores and/or the viewport engine.
+// Components and hotkeys call these; they are the app's behavior in one place.
+import { engine } from '../engine/viewportEngine.ts'
+import type { NavTarget } from '../domain/navigation.ts'
+import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
+import { snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
+import { zoomToFitRange } from '../domain/viewport.ts'
+import type { TimeRef } from '../domain/spans.ts'
+import { resolveTimeRef } from '../domain/spans.ts'
+import { MINUTE, incrementOption } from '../domain/time.ts'
+import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
+import { entities, useEntities } from './entities.ts'
+import { useView, view } from './view.ts'
+import { useAlarms } from './alarms.ts'
+import { dismiss } from '../services/AlarmScheduler.ts'
+
+const v = () => useView.getState()
+const frame = () => engine.getFrame()
+
+/** Time under the cursor (the view center) as currently displayed. */
+export const cursorTime = () => frame().center
+
+/** Keep a locked cursor's offset in sync after the cursor is moved by hand. */
+function refreshLock() {
+  if (v().cursorLocked) {
+    const f = frame()
+    view.setCursorLock(true, v().timeCenter, f.now)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Focus & navigation
+
+export function focusNow(animate = true) {
+  if (animate) engine.beginTransition()
+  view.setFocus('now')
+}
+
+export function focusInstant(id: string, animate = true) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  if (animate) engine.beginTransition()
+  view.setFocus('instant', { instantId: id })
+  view.setTimeCenter(inst.tsEpochMs)
+}
+
+/** Free cursor at the given time (keeps zoom). */
+export function focusCursorAt(ts: number, animate = true) {
+  if (animate) engine.beginTransition()
+  view.setFocus('cursor')
+  view.setTimeCenter(ts)
+  refreshLock()
+}
+
+export function focusSpan(spanId: string, zoomToFit = true) {
+  const sp = entities.getSpan(spanId)
+  if (!sp) return
+  const a = entities.getInstant(sp.startInstantId)?.tsEpochMs
+  const b = sp.endIsNow ? frame().now : entities.getInstant(sp.endInstantId)?.tsEpochMs
+  engine.beginTransition()
+  view.setFocus('span', { spanId })
+  if (zoomToFit && typeof a === 'number' && typeof b === 'number') {
+    const fit = zoomToFitRange(frame(), a, b)
+    if (fit) view.setTimeWidth(fit.width)
+  }
+}
+
+export function moveCursorBy(deltaMs: number) {
+  view.setTimeCenter(frame().center + deltaMs)
+  if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
+  refreshLock()
+}
+
+export function moveCursorByIncrement(direction: 1 | -1) {
+  moveCursorBy(direction * incrementOption(v().timeIncrement).milliseconds)
+}
+
+function navItems(): NavTarget[] {
+  const f = frame()
+  const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
+  if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
+  for (const i of useEntities.getState().instants) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
+  return items
+}
+
+function navAnchor(): number {
+  const s = v()
+  const f = frame()
+  if (s.viewFocusMode === 'instant' && s.focusedInstantId) return entities.getInstant(s.focusedInstantId)?.tsEpochMs ?? f.now
+  if (s.viewFocusMode === 'cursor') return f.center
+  if (s.viewFocusMode === 'span') return f.center
+  return f.now
+}
+
+export function goToAdjacentInstant(direction: 1 | -1) {
+  const target = findAdjacent(navItems(), navAnchor(), direction)
+  if (!target) return
+  if (target.kind === 'saved') focusInstant(target.id)
+  else if (target.kind === 'cursor') focusCursorAt(target.ts)
+  else focusNow()
+}
+
+export function navigateFocusHistory(delta: -1 | 1) {
+  const s = v()
+  const index = stepFocusHistory(s, delta)
+  if (index === null) return
+  const id = s.focusHistory[index]
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  engine.beginTransition()
+  useView.setState({ focusHistoryIndex: index })
+  view.setFocus('instant', { instantId: id, skipHistory: true })
+  view.setTimeCenter(inst.tsEpochMs)
+}
+
+// ---------------------------------------------------------------------------
+// Zoom & pan
+
+export function zoomBy(factor: number) {
+  view.setTimeWidth(v().timeWidth * factor)
+}
+
+const ZOOM_STEP = 0.1
+export const zoomIn = () => zoomBy(1 - ZOOM_STEP)
+export const zoomOut = () => zoomBy(1 + ZOOM_STEP)
+
+/** Start of a drag: detach from whatever was followed, keeping the current on-screen center. */
+export function beginPan() {
+  engine.cancelTransition()
+  const f = frame()
+  view.setTimeCenter(f.center)
+  if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
+}
+
+export function panByPixels(dx: number) {
+  const f = frame()
+  view.setTimeCenter(v().timeCenter - dx / f.pxPerMs)
+  refreshLock()
+}
+
+/** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */
+export function endPan(tolerancePx = 12) {
+  const f = frame()
+  const cx = f.screenW / 2
+  if (Math.abs(f.x(f.now) - cx) <= tolerancePx && !v().moveMode) {
+    focusNow(false)
+    return
+  }
+  if (v().moveMode) return
+  let best: { id: string; d: number } | null = null
+  for (const i of useEntities.getState().instants) {
+    const d = Math.abs(f.x(i.tsEpochMs) - cx)
+    if (d <= tolerancePx && (!best || d < best.d)) best = { id: i.id, d }
+  }
+  if (best) focusInstant(best.id, false)
+}
+
+export function toggleCursorLock() {
+  const f = frame()
+  const locking = !v().cursorLocked
+  if (v().viewFocusMode !== 'cursor') {
+    view.setTimeCenter(f.center)
+    view.setFocus('cursor')
+  }
+  view.setCursorLock(locking, f.center, f.now)
+}
+
+// ---------------------------------------------------------------------------
+// Selection & editing
+
+export const selectInstant = (id: string) => view.selectInstant(id)
+export const selectSpan = (id: string) => view.selectSpan(id)
+
+export function escape() {
+  const s = v()
+  if (s.moveMode) cancelMove()
+  else view.deselect()
+}
+
+// ---------------------------------------------------------------------------
+// Instants
+
+/** Creates an instant, focuses it and opens its label editor. */
+export function createInstantAndEdit(ts: number, opts: { favorite?: boolean } = {}) {
+  const id = entities.createInstant(ts, '')
+  if (opts.favorite) setFavorite(id, true)
+  focusInstant(id, false)
+  view.editInstant(id)
+  return id
+}
+
+export function setFavorite(id: string, favorite: boolean) {
+  entities.setFavoriteFlag(id, favorite)
+  // Favorites carry a visible span to Now; unfavoriting just hides it.
+  if (favorite) entities.upsertNowSpan(id, true)
+  else {
+    const sp = entities.nowSpanOf(id)
+    if (sp) entities.setSpanVisible(sp.id, false)
+  }
+}
+
+export function toggleFavorite(id: string) {
+  const inst = entities.getInstant(id)
+  if (inst) setFavorite(id, !inst.favorite)
+}
+
+export function toggleAlarm(id: string) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  if (inst.alarm) {
+    if (useAlarms.getState().ringing.some(r => r.instantId === id)) dismiss(id)
+    else entities.setAlarmFlag(id, false)
+    return
+  }
+  entities.setAlarmFlag(id, true)
+  entities.upsertNowSpan(id, true) // alarms are favorites
+}
+
+export function renameInstant(id: string, label: string) {
+  entities.setInstantLabel(id, label)
+  view.editInstant(null)
+}
+
+export function deleteInstant(id: string) {
+  const inst = entities.getInstant(id)
+  const wasFocused = v().viewFocusMode === 'instant' && v().focusedInstantId === id
+  if (useAlarms.getState().ringing.some(r => r.instantId === id)) dismiss(id)
+  for (const sp of useEntities.getState().spans) {
+    if (sp.startInstantId === id || sp.endInstantId === id) view.forgetSpan(sp.id)
+  }
+  view.forgetInstant(id)
+  entities.deleteInstant(id)
+  if (wasFocused) {
+    if (inst) focusCursorAt(inst.tsEpochMs)
+    else focusNow()
+  }
+}
+
+export function createTestAlarm(delayMs = 3000) {
+  entities.createInstant(Date.now() + delayMs, 'Test Alarm', { alarm: true })
+}
+
+// ---------------------------------------------------------------------------
+// Move mode: the instant follows the cursor until confirmed or cancelled.
+
+export function enterMove(id: string) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  const f = frame()
+  view.setMoveMode({ instantId: id, originalCenter: f.center })
+  view.setTimeCenter(inst.tsEpochMs)
+  view.setFocus('cursor')
+}
+
+export function confirmMove() {
+  const mm = v().moveMode
+  if (!mm) return
+  entities.setInstantTime(mm.instantId, frame().center)
+  view.setMoveMode(null)
+  focusInstant(mm.instantId, false)
+}
+
+export function cancelMove() {
+  const mm = v().moveMode
+  if (!mm) return
+  view.setMoveMode(null)
+  focusInstant(mm.instantId)
+}
+
+// ---------------------------------------------------------------------------
+// Spans
+
+/**
+ * Saves an implied span. Endpoints reuse an instant at exactly that time if one
+ * exists; otherwise new instants are created. The new span is focused and its
+ * label editor opened.
+ */
+export function saveSpanBetween(aTs: number, bTs: number) {
+  const ensure = (ts: number) =>
+    useEntities.getState().instants.find(i => i.tsEpochMs === ts)?.id ?? entities.createInstant(ts, '')
+  const aId = ensure(aTs)
+  const bId = ensure(bTs)
+  const spanId = entities.createSpan(aId, bId, '', { visible: true })
+  focusSpan(spanId, false)
+  view.editSpan(spanId)
+}
+
+/** Saves a span between two possibly-live times, resolved at the moment of the click. */
+export function saveSpanRefs(a: TimeRef, b: TimeRef) {
+  const now = Date.now()
+  const center = frame().center
+  saveSpanBetween(resolveTimeRef(a, now, center), resolveTimeRef(b, now, center))
+}
+
+export function renameSpan(id: string, label: string) {
+  entities.setSpanLabel(id, label)
+  view.editSpan(null)
+}
+
+export function deleteSpan(id: string) {
+  view.forgetSpan(id)
+  entities.deleteSpan(id)
+}
+
+export function toggleSpanVisible(id: string) {
+  const sp = entities.getSpan(id)
+  if (sp) entities.setSpanVisible(id, !sp.visible)
+}
+
+/** Double-click on a span: focus and fit it, or rename if it's already focused. */
+export function activateSpan(id: string) {
+  const s = v()
+  if (s.viewFocusMode === 'span' && s.focusedSpanId === id) view.editSpan(id)
+  else focusSpan(id)
+}
+
+// ---------------------------------------------------------------------------
+// Time entry
+
+/** Applies an "±hh:mm:ss" offset relative to Now or the selected instant. */
+export function applyDurationInput(text: string, reference: 'now' | 'selected'): boolean {
+  let delta: number
+  try {
+    delta = parseDurationInput(text)
+  } catch {
+    return false
+  }
+  const base = reference === 'now' ? frame().now : entities.getInstant(v().currentSelectedInstantId)?.tsEpochMs
+  if (typeof base !== 'number') return false
+  focusCursorAt(base + delta)
+  return true
+}
+
+/** Moves the cursor to a wall-clock time on the cursor's current day. */
+export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean) {
+  const target = atClockTimeOnDay(frame().center, to24h(hour12, pm), minutes, seconds)
+  focusCursorAt(target)
+}
+
+// ---------------------------------------------------------------------------
+// Alarms
+
+export function snoozeAlarm(instantId: string, minutes = 5) {
+  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
+  if (!ringing) return
+  const original = entities.getInstant(instantId)
+  const originalId = original?.snoozeOriginalId ?? instantId
+  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing.label
+  const count = entities.snoozeCount(originalId) + 1
+  const newId = entities.createInstant(Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
+    alarm: true,
+    snoozeOriginalId: originalId,
+  })
+  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: false })
+  dismiss(instantId)
+  return newId
+}
+
+export { dismiss as dismissAlarm, silence as silenceAlarms } from '../services/AlarmScheduler.ts'

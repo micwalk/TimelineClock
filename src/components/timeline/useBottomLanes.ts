@@ -1,0 +1,106 @@
+// Which lanes appear below the timeline, in order, with vertical positions.
+import { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { shallowArrayEqual, useFrameValue } from '../../engine/hooks.ts'
+import type { Frame } from '../../engine/viewportEngine.ts'
+import type { InstantRecord } from '../../domain/entities.ts'
+import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
+import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry, spanHeader } from '../../domain/spans.ts'
+import { useEntities } from '../../store/entities.ts'
+import { useView } from '../../store/view.ts'
+
+export const LANES_TOP = 312
+const LANE_SHORT = 40
+const LANE_LABELED = 56
+const LANES_BOTTOM_PAD = 18
+
+interface LaneBase {
+  key: string
+  a: TimeRef
+  b: TimeRef
+  /** Needs room for a header line. */
+  tall: boolean
+  /** Vertical center in px; set once the lane is placed. */
+  top: number
+}
+
+export type BottomLane = LaneBase & (
+  | { kind: 'selected-now'; selected: InstantRecord }
+  | { kind: 'secondary'; selected: InstantRecord; secondary: InstantRecord }
+  | { kind: 'saved'; span: LaneSpan }
+)
+
+/**
+ * Implied spans for the selection (Selected→Now, Secondary→Selected) followed by
+ * saved spans, keeping only those on screen. Re-renders only when that set changes.
+ */
+export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
+  const instants = useEntities(s => s.instants)
+  const spans = useEntities(s => s.spans)
+  const v = useView(useShallow(s => ({
+    mode: s.viewFocusMode,
+    focusedInstantId: s.focusedInstantId,
+    focusedSpanId: s.focusedSpanId,
+    selectedId: s.currentSelectedInstantId,
+    secondaryId: s.secondarySelectedInstantId,
+    showNow: s.showImpliedSelectedNow,
+    showPrev: s.showImpliedSelectedPrev,
+    editingSpanId: s.editingSpanId,
+  })))
+
+  const candidates = useMemo(() => {
+    const byId = new Map(instants.map(i => [i.id, i]))
+    const resolved = spans.map(sp => resolveSpan(sp, byId)).filter((r): r is ResolvedSpan => !!r)
+    const saved = savedSpanLanes({
+      resolved,
+      focusMode: v.mode,
+      focusedInstantId: v.focusedInstantId,
+      focusedSpanId: v.focusedSpanId,
+      selectedInstantId: v.selectedId,
+      now: Date.now(),
+    })
+    const out: BottomLane[] = []
+    const selected = byId.get(v.selectedId ?? '')
+    const secondary = byId.get(v.secondaryId ?? '')
+    if (selected && v.showNow && !saved.some(s => s.span.startInstantId === selected.id && s.span.endIsNow)) {
+      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: selected.tsEpochMs, b: 'now', tall: false, top: 0 })
+    }
+    if (selected && secondary && v.showPrev) {
+      const exists = resolved.some(r => !r.span.endIsNow &&
+        ((r.span.startInstantId === secondary.id && r.span.endInstantId === selected.id) ||
+          (r.span.startInstantId === selected.id && r.span.endInstantId === secondary.id)))
+      if (!exists) {
+        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: secondary.tsEpochMs, b: selected.tsEpochMs, tall: false, top: 0 })
+      }
+    }
+    for (const s of saved) {
+      out.push({
+        key: s.span.id,
+        kind: 'saved',
+        span: s,
+        a: s.start.tsEpochMs,
+        b: s.end ? s.end.tsEpochMs : 'now',
+        tall: !!spanHeader(s) || v.editingSpanId === s.span.id,
+        top: 0,
+      })
+    }
+    return out
+  }, [instants, spans, v])
+
+  const onScreenKeys = useFrameValue((f: Frame) => candidates
+    .filter(c => spanGeometry(f.x(resolveTimeRef(c.a, f.now, f.center)), f.x(resolveTimeRef(c.b, f.now, f.center)), f.screenW).onScreen)
+    .map(c => c.key), shallowArrayEqual)
+
+  return useMemo(() => {
+    const keys = new Set(onScreenKeys)
+    let y = LANES_TOP
+    const lanes: BottomLane[] = []
+    for (const c of candidates) {
+      if (!keys.has(c.key)) continue
+      const h = c.tall ? LANE_LABELED : LANE_SHORT
+      lanes.push({ ...c, top: y + h / 2 })
+      y += h
+    }
+    return { lanes, height: y + LANES_BOTTOM_PAD }
+  }, [candidates, onScreenKeys])
+}
