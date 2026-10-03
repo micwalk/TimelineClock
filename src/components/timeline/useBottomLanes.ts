@@ -5,21 +5,18 @@ import { shallowArrayEqual, useFrameValue } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry, spanHeader } from '../../domain/spans.ts'
+import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { lanesTop } from './geometry.ts'
 
-const LANE_SHORT = 40
-const LANE_LABELED = 56
+const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
 
 interface LaneBase {
   key: string
   a: TimeRef
   b: TimeRef
-  /** Needs room for a header line. */
-  tall: boolean
   /** Vertical center in px; set once the lane is placed. */
   top: number
 }
@@ -45,7 +42,6 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     secondaryId: s.secondarySelectedInstantId,
     showNow: s.showImpliedSelectedNow,
     showPrev: s.showImpliedSelectedPrev,
-    editingSpanId: s.editingSpanId,
     moving: s.moveMode?.instantId ?? null,
   })))
 
@@ -66,14 +62,14 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     const selected = byId.get(v.selectedId ?? '')
     const secondary = byId.get(v.secondaryId ?? '')
     if (selected && v.showNow && !saved.some(s => s.span.startInstantId === selected.id && s.span.endIsNow)) {
-      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', tall: false, top: 0 })
+      out.push({ key: 'implied-now', kind: 'selected-now', selected, a: ref(selected), b: 'now', top: 0 })
     }
     if (selected && secondary && v.showPrev) {
       const exists = resolved.some(r => !r.span.endIsNow &&
         ((r.span.startInstantId === secondary.id && r.span.endInstantId === selected.id) ||
           (r.span.startInstantId === selected.id && r.span.endInstantId === secondary.id)))
       if (!exists) {
-        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), tall: false, top: 0 })
+        out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0 })
       }
     }
     for (const s of saved) {
@@ -83,7 +79,6 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
         span: s,
         a: ref(s.start),
         b: s.end ? ref(s.end) : 'now',
-        tall: !!spanHeader(s) || v.editingSpanId === s.span.id,
         top: 0,
       })
     }
@@ -100,7 +95,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     const lanes: BottomLane[] = []
     for (const c of candidates) {
       if (!keys.has(c.key)) continue
-      const h = c.tall ? LANE_LABELED : LANE_SHORT
+      const h = LANE_HEIGHT
       lanes.push({ ...c, top: y + h / 2 })
       y += h
     }

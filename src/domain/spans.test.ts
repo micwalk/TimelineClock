@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { resolveSpan, savedSpanLanes, spanDescription, spanGeometry } from './spans.ts'
-import { HOUR, MINUTE } from './time.ts'
-
-describe('spanDescription', () => {
-  it('describes forward, backward and until-Now spans', () => {
-    expect(spanDescription(0, 90 * MINUTE, 'Start', 'End')).toBe('End 01:30:00 AFTER Start')
-    expect(spanDescription(90 * MINUTE, 0, 'Start', 'End')).toBe('End 01:30:00 BEFORE Start')
-    expect(spanDescription(HOUR, 0, 'Tea', 'Now')).toBe('Now 01:00:00 until Tea')
-  })
-})
+import { resolveSpan, savedSpanLanes, spanGeometry } from './spans.ts'
+import { HOUR } from './time.ts'
 
 describe('spanGeometry', () => {
   it('clamps to the screen and reports off-screen ends', () => {

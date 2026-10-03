@@ -335,7 +335,8 @@
   cursor: pointer;
 }
 .span-chip:hover { background: var(--surface-raised); }
-.span-chip__header { font: 700 14px/1.1 var(--font-ui); color: var(--ink); }
+.span-chip__name { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; font: 650 13.5px/1.1 var(--font-ui); }
+.span-chip__sep { color: var(--ink-faint); }
 .span-chip__text {
   display: inline-flex;
   align-items: center;

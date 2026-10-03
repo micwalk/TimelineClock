@@ -2,11 +2,11 @@
 import { EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { durationShowsMillis } from '../../domain/format.ts'
+import { durationShowsMillis, formatDurationHMS } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { isFavoriteNowSpan, resolveTimeRef, spanDescription, spanEndName, spanHeader } from '../../domain/spans.ts'
+import { isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
 import { useView, view } from '../../store/view.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
@@ -18,15 +18,15 @@ import type { BottomLane } from './useBottomLanes.ts'
 // ---------------------------------------------------------------------------
 // Shared bits
 
-/** Live "{end} {dur} AFTER {start}" text; asks for continuous frames while showing ms. */
-function Description({ a, b, startName, endName }: { a: TimeRef; b: TimeRef; startName: string; endName: string }) {
+/** Live length of a span ("26:13"); asks for continuous frames while showing ms. */
+function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
+  const live = a === 'now' || b === 'now' || a === 'center' || b === 'center'
   return (
     <LiveText
       compute={(f, ctx) => {
-        const aTs = resolveTimeRef(a, f.now, f.center)
-        const bTs = resolveTimeRef(b, f.now, f.center)
-        if ((a === 'now' || b === 'now') && durationShowsMillis(bTs - aTs)) ctx.fast()
-        return spanDescription(aTs, bTs, startName, endName)
+        const ms = Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center))
+        if (live && durationShowsMillis(ms)) ctx.fast()
+        return formatDurationHMS(ms)
       }}
     />
   )
@@ -47,10 +47,11 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
   )
 }
 
-function SavedSpanChip({ r, a, b, editing }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean }) {
+function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean }) {
   const header = spanHeader(r)
+  const name = expanded ? `${displayName(r.start.label)} → ${spanEndName(r)}` : header
   return (
-    <>
+    <span className="span-chip__text">
       {editing ? (
         <InlineInput
           initial={r.span.label}
@@ -59,14 +60,15 @@ function SavedSpanChip({ r, a, b, editing }: { r: ResolvedSpan; a: TimeRef; b: T
           onCommit={v => act.renameSpan(r.span.id, v)}
           onCancel={() => view.editSpan(null)}
         />
-      ) : header ? (
-        <span className="span-chip__header">{header}</span>
+      ) : name ? (
+        <>
+          <span className="span-chip__name" title={name}>{name}</span>
+          <span className="span-chip__sep" aria-hidden>·</span>
+        </>
       ) : null}
-      <span className="span-chip__text">
-        <Description a={a} b={b} startName={displayName(r.start.label)} endName={spanEndName(r)} />
-        {isFavoriteNowSpan(r) && <StarSolid className="span-chip__star" aria-label="Favorite" />}
-      </span>
-    </>
+      <Duration a={a} b={b} />
+      {isFavoriteNowSpan(r) && <StarSolid className="span-chip__star" aria-label="Favorite" />}
+    </span>
   )
 }
 
@@ -83,6 +85,7 @@ function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpoc
   b?: TimeRef
 }) {
   const editing = useView(s => s.editingSpanId === r.span.id)
+  const expanded = useView(s => s.selectedSpanId === r.span.id)
   return (
     <SpanLane
       top={top}
@@ -94,7 +97,7 @@ function SavedSpanLane({ r, top, variant, controls, emphasis, a = r.start.tsEpoc
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       chipLabel={`Span ${spanHeader(r) ?? ''}`}
-      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} />}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} />}
       onChipClick={() => act.selectSpan(r.span.id)}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} /> }) : undefined}
@@ -122,7 +125,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               aTarget={instantTarget(s)}
               bTarget={{ kind: 'now' }}
               arrows
-              chip={<span className="span-chip__text"><Description a={lane.a} b="now" startName={displayName(s.label)} endName="Now" /></span>}
+              chip={<span className="span-chip__text"><Duration a={lane.a} b="now" /></span>}
               tools={() => ({ left: <PinButton a={lane.a} b="now" /> })}
             />
           )
@@ -139,7 +142,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               aTarget={instantTarget(p)}
               bTarget={instantTarget(s)}
               arrows
-              chip={<span className="span-chip__text"><Description a={lane.a} b={lane.b} startName={displayName(p.label)} endName={displayName(s.label, 'selected')} /></span>}
+              chip={<span className="span-chip__text"><Duration a={lane.a} b={lane.b} /></span>}
               tools={() => ({ left: <PinButton a={lane.a} b={lane.b} /> })}
             />
           )

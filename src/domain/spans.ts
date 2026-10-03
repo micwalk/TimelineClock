@@ -1,5 +1,4 @@
 // Pure span logic: label text, on-screen geometry, and which saved spans get a lane.
-import { formatDurationHMS } from './format.ts'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { displayName } from './entities.ts'
 
@@ -8,13 +7,6 @@ export type TimeRef = number | 'now' | 'center'
 
 export function resolveTimeRef(ref: TimeRef, now: number, center: number): number {
   return ref === 'now' ? now : ref === 'center' ? center : ref
-}
-
-/** "{end} {duration} AFTER|BEFORE|until {start}" as shown on span chips. */
-export function spanDescription(aTs: number, bTs: number, startName: string, endName: string): string {
-  const diff = bTs - aTs
-  const dir = diff >= 0 ? 'AFTER' : endName === 'Now' ? 'until' : 'BEFORE'
-  return `${endName} ${formatDurationHMS(Math.abs(diff))} ${dir} ${startName}`
 }
 
 export interface SpanGeometry {
