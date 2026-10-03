@@ -59,6 +59,18 @@ export const formatDateTime = (ts: number) => dateTimeFmt.format(ts)
 const shortDateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 export const formatShortDate = (ts: number) => shortDateFmt.format(ts)
 
+const yearFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric' })
+
+/** Calendar days covered by [start, end], e.g. "Thu, Oct 2" or "Thu, Oct 2 – Sat, Oct 4". */
+export function formatDateRange(start: number, end: number, now: number): string {
+  const a = new Date(start)
+  const b = new Date(end)
+  const sameDay = a.toDateString() === b.toDateString()
+  const yearSuffix = (d: Date) => (d.getFullYear() !== new Date(now).getFullYear() ? `, ${yearFmt.format(d)}` : '')
+  const fa = formatShortDate(start) + yearSuffix(a)
+  return sameDay ? fa : `${fa} – ${formatShortDate(end)}${yearSuffix(b)}`
+}
+
 // --- Time entry ---
 
 /** "±hh:mm:ss" with a leading "-" only for negative values. */

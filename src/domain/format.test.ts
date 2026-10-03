@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, durationShowsMillis, formatClock12h, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
+  atClockTimeOnDay, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
   formatRelativeCoarse, formatSignedDuration, parseDurationInput, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
@@ -58,6 +58,18 @@ describe('duration entry', () => {
     expect(() => parseDurationInput('1:00')).toThrow()
     expect(() => parseDurationInput('aa:00:00')).toThrow()
     expect(() => parseDurationInput('00:60:00')).toThrow()
+  })
+})
+
+describe('formatDateRange', () => {
+  const now = at(12, 0, 0)
+  it('shows one day when the view is within a day', () => {
+    expect(formatDateRange(at(9, 0, 0), at(15, 0, 0), now)).not.toContain('–')
+  })
+  it('shows a range across midnight and adds the year when it differs', () => {
+    expect(formatDateRange(at(20, 0, 0), at(20, 0, 0) + 8 * HOUR, now)).toContain('–')
+    const lastYear = new Date(2025, 5, 1).getTime()
+    expect(formatDateRange(lastYear, lastYear + HOUR, now)).toContain('2025')
   })
 })
 

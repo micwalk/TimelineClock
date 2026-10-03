@@ -33,6 +33,20 @@
 }
 
 .tl-ticks { position: absolute; inset: 0; pointer-events: none; }
+
+/* Days in view, top left */
+.tl-date {
+  --accent: var(--c-axis-glow);
+  position: absolute;
+  left: 14px;
+  top: calc(var(--tl-axis) - 58px);
+  font: 700 13px/1 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  pointer-events: none;
+  white-space: nowrap;
+}
 .tl-ticks__inner { position: absolute; left: 0; top: 0; will-change: transform; }
 
 .tl-tick { position: absolute; left: 0; top: var(--tl-axis); }
