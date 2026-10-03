@@ -5,8 +5,9 @@ import { usePanZoom } from '../../hooks/usePanZoom.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
 import { TickLayer } from './TickLayer.tsx'
-import { CursorColumn, NowColumn, SavedInstantColumns } from './InstantColumns.tsx'
-import { BottomLanes, TopLanes } from './Lanes.tsx'
+import { SavedInstantColumns } from './InstantColumns.tsx'
+import { CursorTag, NowTag } from './LiveTags.tsx'
+import { BottomLanes } from './Lanes.tsx'
 import { useBottomLanes } from './useBottomLanes.ts'
 import { geometryStyle } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -39,10 +40,9 @@ export function Timeline() {
       <TickLayer />
       <LiveText className="tl-date glow-text" compute={f => formatDateRange(f.start, f.end, f.now)} />
       <div className="tl-axis" />
-      <NowColumn />
       <SavedInstantColumns />
-      <CursorColumn />
-      <TopLanes />
+      <NowTag />
+      <CursorTag />
       <BottomLanes lanes={lanes} />
     </section>
   )

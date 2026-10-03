@@ -1,156 +1,30 @@
-// Vertical instant markers: Now, the Cursor, and saved instants. Each is one
-// absolutely positioned column (line + label chip + time chip + tools) moved as a
-// unit by a transform.
-import { memo, useMemo, useRef } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+// Saved instant markers: a line plus one compact chip, moved along the time axis by the engine.
+import { memo, useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { shallowArrayEqual, useFrameValue, usePositionMain } from '../../engine/hooks.ts'
+import { shallowArrayEqual, useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import type { Frame } from '../../engine/viewportEngine.ts'
-import { chipName, formatClock12h, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
+import { chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { pickTickTiers } from '../../domain/ticks.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
-import { ui, useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
-import { ClockPopover } from './TimeEntryPopover.tsx'
 import { Marker } from './Marker.tsx'
 
 /** Label chips extend past the line; keep columns mounted this far off screen. */
 const CULL_MARGIN_PX = 400
 
-interface ColumnProps {
-  className: string
-  getPos: (f: Frame) => number
-  label: ReactNode
-  icons?: ReactNode
-  time: ReactNode
-  actions?: ReactNode
-  badge?: ReactNode
-  ariaLabel: string
-}
-
-function Column({ className, getPos, label, icons, time, actions, badge, ariaLabel }: ColumnProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  usePositionMain(ref, getPos)
-  return (
-    <div ref={ref} className={`tl-col ${className}`} role="group" aria-label={ariaLabel}>
-      <div className="tl-col__line" />
-      <div className="tl-col__row tl-col__row--label">
-        {label}
-        {icons && <div className="tl-col__icons">{icons}</div>}
-      </div>
-      <div className="tl-col__row tl-col__row--time">{time}</div>
-      {actions && <div className="tl-col__row tl-col__row--actions">{actions}</div>}
-      {badge}
-    </div>
-  )
-}
-
 const starColor = 'var(--c-favorite)'
 const bellColor = 'var(--c-alarm)'
-
-// ---------------------------------------------------------------------------
-
-export function NowColumn() {
-  const focused = useView(s => s.viewFocusMode === 'now')
-  const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'now')
-  return (
-    <Column
-      className={`is-now${focused ? ' is-focused' : ''}${clockOpen ? ' has-popover' : ''}`}
-      ariaLabel="Now"
-      getPos={f => f.pos(f.now)}
-      label={
-        <button
-          type="button"
-          className="chip chip--label glow-box glow-text"
-          title="Double-click to save an instant at Now"
-          onDoubleClick={() => act.createInstantAndEdit(Date.now())}
-        >
-          Now
-        </button>
-      }
-      icons={
-        <IconButton icon={StarOutline} label="Save Now as a favorite" color={starColor} bare
-          onClick={() => act.createInstantAndEdit(Date.now(), { favorite: true })} />
-      }
-      time={
-        <div className="tl-col__time-wrap">
-          <button
-            type="button"
-            className="chip chip--time glow-box glow-text"
-            title="Double-click to set the cursor to a time"
-            onDoubleClick={() => (focused ? ui.openTimeInput({ kind: 'clock', anchor: 'now' }) : act.focusNow())}
-          >
-            <LiveText compute={f => formatClock12h(f.now)} />
-          </button>
-          {clockOpen && (
-            <ClockPopover
-              initialTs={Date.now()}
-              onCancel={ui.closeTimeInput}
-              onSubmit={(h, m, s, pm) => { act.applyClockInput(h, m, s, pm); ui.closeTimeInput() }}
-            />
-          )}
-        </div>
-      }
-    />
-  )
-}
-
-export function CursorColumn() {
-  const visible = useView(s => s.viewFocusMode === 'cursor' && !s.moveMode)
-  const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'cursor')
-  if (!visible) return null
-  return (
-    <Column
-      className={`is-cursor${clockOpen ? ' has-popover' : ''}`}
-      ariaLabel="Cursor"
-      getPos={f => f.mainSize / 2}
-      label={
-        <button
-          type="button"
-          className="chip chip--label glow-box glow-text"
-          title="Double-click to save an instant here"
-          onDoubleClick={() => act.createInstantAndEdit(act.cursorTime())}
-        >
-          Cursor
-        </button>
-      }
-      icons={
-        <IconButton icon={StarOutline} label="Save cursor as a favorite" color={starColor} bare
-          onClick={() => act.createInstantAndEdit(act.cursorTime(), { favorite: true })} />
-      }
-      time={
-        <div className="tl-col__time-wrap">
-          <button
-            type="button"
-            className="chip chip--time glow-box glow-text"
-            title="Double-click to type a time"
-            onDoubleClick={() => ui.openTimeInput({ kind: 'clock', anchor: 'cursor' })}
-          >
-            <LiveText compute={f => formatClock12h(f.center)} />
-          </button>
-          {clockOpen && (
-            <ClockPopover
-              initialTs={act.cursorTime()}
-              onCancel={ui.closeTimeInput}
-              onSubmit={(h, m, s, pm) => { act.applyClockInput(h, m, s, pm); ui.closeTimeInput() }}
-            />
-          )}
-        </div>
-      }
-    />
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Saved instants: a line plus one compact chip ("Take Meds 6:00p · 20m ago").

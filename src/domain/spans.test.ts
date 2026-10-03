@@ -46,10 +46,13 @@ describe('savedSpanLanes', () => {
     const lanes = savedSpanLanes({ ...base, selectedInstantId: 'a' })
     expect(lanes.map(s => [s.span.id, s.priority])).toEqual([['ab', 1], ['ac', 1], ['bc', 2]])
   })
-  it('prioritizes the focused instant in instant mode and skips the focused span', () => {
+  it('prioritizes the focused instant in instant mode', () => {
     const lanes = savedSpanLanes({ ...base, focusMode: 'instant', focusedInstantId: 'c' })
     expect(lanes.map(s => [s.span.id, s.priority])).toEqual([['ac', 0], ['bc', 0]])
-    expect(savedSpanLanes({ ...base, focusMode: 'span', focusedSpanId: 'ac' }).map(s => s.span.id)).toEqual(['bc'])
+  })
+  it('puts the focused span first and marks it', () => {
+    const lanes = savedSpanLanes({ ...base, focusMode: 'span', focusedSpanId: 'ab' })
+    expect(lanes.map(s => [s.span.id, s.focused])).toEqual([['ab', true], ['ac', false], ['bc', false]])
   })
   it('drops spans whose endpoints no longer exist', () => {
     expect(resolveSpan({ id: 'x', startInstantId: 'a', endInstantId: 'gone', label: '' }, byId)).toBeNull()

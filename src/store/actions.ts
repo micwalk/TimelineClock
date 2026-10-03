@@ -20,6 +20,9 @@ const frame = () => engine.sample()
 /** Time under the cursor (the view center) as currently displayed. */
 export const cursorTime = () => frame().center
 
+/** Now, as currently displayed. */
+export const nowTime = () => frame().now
+
 /** Keep a locked cursor's offset in sync after the cursor is moved by hand. */
 function refreshLock() {
   if (v().cursorLocked) {

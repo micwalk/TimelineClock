@@ -43,7 +43,7 @@
   --radius-chip: 7px;
   --radius-card: 12px;
 
-  /* Timeline rows (--tl-axis, --tl-lane-a, …) are set on .timeline by
+  /* Timeline rows (--tl-axis, --tl-tag-arrow, …) are set on .timeline by
      components/timeline/geometry.ts so CSS and lane math share one source. */
 
   color-scheme: dark;

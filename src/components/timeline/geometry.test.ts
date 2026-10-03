@@ -9,6 +9,6 @@ describe('timeline geometry', () => {
   })
 
   it('starts lanes below the chips', () => {
-    expect(lanesTop()).toBe(312)
+    expect(lanesTop()).toBe(GEOMETRY.chipTop + GEOMETRY.chipRow + 14)
   })
 })

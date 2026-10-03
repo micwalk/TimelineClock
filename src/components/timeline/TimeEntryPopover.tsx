@@ -2,6 +2,7 @@
 // Rendered inside the chip it edits, so it moves with the timeline.
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 
 interface FieldsProps {
   values: string[]
@@ -61,23 +62,6 @@ function Fields({ values, maxes, onChange, onSubmit, onCancel, labels }: FieldsP
       ))}
     </>
   )
-}
-
-function usePopoverDismiss(ref: React.RefObject<HTMLElement | null>, onCancel: () => void) {
-  const cancelRef = useRef(onCancel)
-  cancelRef.current = onCancel
-  useEffect(() => {
-    const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) cancelRef.current()
-    }
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') cancelRef.current() }
-    document.addEventListener('pointerdown', onDown, true)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown, true)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [ref])
 }
 
 const pad2 = (n: number) => n.toString().padStart(2, '0')

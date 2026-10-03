@@ -68,6 +68,8 @@ export type SpanPriority = 0 | 1 | 2
 
 export interface LaneSpan extends ResolvedSpan {
   priority: SpanPriority
+  /** The focused saved span (span focus mode); drawn first and emphasized. */
+  focused: boolean
 }
 
 /**
@@ -85,16 +87,20 @@ export function savedSpanLanes(opts: {
 }): LaneSpan[] {
   const { resolved, focusMode, focusedInstantId, focusedSpanId, selectedInstantId, now } = opts
   const out: LaneSpan[] = []
+  const focused: LaneSpan[] = []
   for (const r of resolved) {
-    if (focusMode === 'span' && focusedSpanId === r.span.id) continue // drawn in the top lane
+    if (focusMode === 'span' && focusedSpanId === r.span.id) {
+      focused.push({ ...r, priority: 0, focused: true })
+      continue
+    }
     const involves = (id: string | null) => !!id && (r.span.startInstantId === id || r.span.endInstantId === id)
     let priority: SpanPriority | -1 = -1
     if (focusMode === 'instant' && focusedInstantId) priority = involves(focusedInstantId) ? 0 : r.span.visible ? 2 : -1
     else if (selectedInstantId) priority = involves(selectedInstantId) ? 1 : r.span.visible ? 2 : -1
     else if (r.span.visible) priority = 2
     if (priority === -1) continue
-    out.push({ ...r, priority })
+    out.push({ ...r, priority, focused: false })
   }
   const mid = (s: LaneSpan) => (s.start.tsEpochMs + spanEndTs(s, now)) / 2
-  return out.sort((x, y) => x.priority - y.priority || mid(x) - mid(y))
+  return [...focused, ...out.sort((x, y) => x.priority - y.priority || mid(x) - mid(y))]
 }

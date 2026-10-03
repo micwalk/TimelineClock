@@ -39,7 +39,7 @@
   --accent: var(--c-axis-glow);
   position: absolute;
   left: 14px;
-  top: calc(var(--tl-axis) - 58px);
+  top: 10px;
   font: 700 13px/1 var(--font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -96,7 +96,6 @@
 .tl-col.is-moving { --accent: var(--c-cursor); --halo: var(--c-cursor); z-index: 9; }
 .tl-col.is-ghost { opacity: 0.35; z-index: 1; pointer-events: none; }
 .tl-col.has-popover { z-index: 60; }
-.tl-col__time-wrap { position: relative; }
 
 .tl-col__line {
   position: absolute;
@@ -123,26 +122,7 @@
     0 0 calc(40px * var(--glow)) color-mix(in srgb, var(--halo) 50%, transparent);
 }
 
-.tl-col__row {
-  position: absolute;
-  left: 0;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.tl-col__row--label { top: var(--tl-label); }
-.tl-col__row--time { top: var(--tl-time); }
-.tl-col__row--actions { top: var(--tl-actions); }
-
 /* Icons beside the label, outside the centered chip */
-.tl-col__icons {
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 6px;
-  display: flex;
-  gap: 3px;
-}
 
 /* Saved instants: one chip under the axis, in a row chosen by the overlap layout */
 .tl-col__chip {
@@ -185,6 +165,53 @@
   background: var(--surface-strong);
 }
 
+/* --- Live tags (Now, Cursor) ------------------------------------------- */
+
+.tl-tag__arrow {
+  position: absolute;
+  left: -9px;
+  top: calc(var(--tl-axis) - var(--tl-tag-arrow));
+  width: 18px;
+  height: var(--tl-tag-arrow);
+  fill: var(--accent);
+  filter:
+    drop-shadow(0 0 calc(3px * var(--glow)) var(--halo))
+    drop-shadow(0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--halo) 60%, transparent));
+  pointer-events: none;
+}
+.tl-tag {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px + var(--slot, 0) * var(--tl-tag-slot));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.tl-tag__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 9px;
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+  color: var(--ink);
+  font: 700 15px/1.1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tl-tag__box:hover { background: var(--surface-raised); }
+.tl-tag__caption { font: 800 10px/1 var(--font-ui); letter-spacing: 0.14em; color: var(--accent); }
+.tl-tag__sub { font: 600 12px/1.1 var(--font-mono); color: var(--ink-dim); }
+.tl-tag__menu { left: 50%; transform: translateX(-50%); }
+.tl-tag__box .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.tl-tag__menu-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.tl-tag__menu-icon { width: 16px; height: 16px; flex: none; color: var(--accent); }
+
 /* --- Chips -------------------------------------------------------------- */
 
 .chip {
@@ -203,8 +230,6 @@
 }
 .chip:hover { background: var(--surface-raised); }
 .chip--label { color: var(--ink); }
-.tl-col.is-now .chip--label,
-.tl-col.is-cursor .chip--label { color: var(--accent); }
 .chip--time {
   height: 36px;
   padding: 0 12px;
