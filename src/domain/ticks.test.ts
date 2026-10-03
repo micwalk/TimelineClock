@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, formatTickLabel, generateTicks, nearestFinestTick, pickTickTiers, TICK_UNITS } from './ticks.ts'
+import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, formatTickLabel, generateTicks, labelSpacingPx, nearestFinestTick, pickTickTiers, TICK_UNITS } from './ticks.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
 
 const SCREEN = 1400
@@ -8,14 +8,49 @@ describe('pickTickTiers', () => {
   it('uses the first unit spaced at least 100px as the middle tier', () => {
     const pxPerMs = SCREEN / (6 * HOUR) // ~389px per hour
     const [lo, mid, hi] = pickTickTiers(pxPerMs)
-    // 15 minutes is ~58px apart here, so hours (~233px) are the labeled tier.
-    expect(mid.ms).toBe(HOUR)
+    // 15 minutes is ~58px apart here, so 30 minutes (~117px) are the labeled tier.
+    expect(mid.ms).toBe(30 * MINUTE)
     expect(lo.ms).toBe(15 * MINUTE)
-    expect(hi.ms).toBe(6 * HOUR)
+    expect(hi.ms).toBe(HOUR)
   })
   it('clamps at the ends of the unit list', () => {
     expect(pickTickTiers(1e6)[0]).toBe(TICK_UNITS[0])
     expect(pickTickTiers(1e-15)[2]).toBe(TICK_UNITS[TICK_UNITS.length - 1])
+  })
+})
+
+describe('30-minute tier and orientation spacing', () => {
+  it('uses 30 minutes as the minor tier when hours are labeled (horizontal, hour at 150px)', () => {
+    const pxPerMs = 150 / HOUR
+    expect(pickTickTiers(pxPerMs).map(u => u.ms)).toEqual([30 * MINUTE, HOUR, 6 * HOUR])
+    const noon = new Date(2026, 9, 2, 12, 0).getTime()
+    const ticks = generateTicks(noon, noon + 3 * HOUR, pxPerMs)
+    const at = (h: number, m: number) => ticks.find(t => t.t === new Date(2026, 9, 2, h, m).getTime())!
+    expect(at(13, 0).label).toBe('1PM')
+    expect(at(13, 30).tier).toBe(0)
+    expect(at(13, 30).label).toBeNull()
+  })
+
+  it('labels hours at phone spacing in vertical (hour at 70px)', () => {
+    const pxPerMs = 70 / HOUR
+    expect(labelSpacingPx('vertical')).toBe(48)
+    expect(labelSpacingPx('horizontal')).toBe(100)
+    expect(pickTickTiers(pxPerMs, labelSpacingPx('vertical')).map(u => u.ms)).toEqual([30 * MINUTE, HOUR, 6 * HOUR])
+    const noon = new Date(2026, 9, 2, 12, 0).getTime()
+    const ticks = generateTicks(noon, noon + 3 * HOUR, pxPerMs, 600, labelSpacingPx('vertical'))
+    const hour = ticks.find(t => t.t === new Date(2026, 9, 2, 13, 0).getTime())!
+    expect(hour.label).toBe('1PM')
+    expect(hour.style.labelAlpha).toBe(1)
+    // Horizontal at the same zoom: the 70px hour is too tight to be the labeled tier.
+    expect(pickTickTiers(pxPerMs)[1].ms).toBe(6 * HOUR)
+  })
+
+  it('snaps to the same ticks it draws in vertical', () => {
+    const t = new Date(2026, 9, 2, 13, 37).getTime()
+    const pxPerMs = 70 / HOUR
+    const snapped = nearestFinestTick(t, pxPerMs, 48)
+    expect(snapped).toBe(new Date(2026, 9, 2, 13, 30).getTime())
+    expect(generateTicks(t - HOUR, t + HOUR, pxPerMs, 600, 48).map(k => k.t)).toContain(snapped)
   })
 })
 

@@ -8,7 +8,7 @@ import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
-import { pickTickTiers } from '../../domain/ticks.ts'
+import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import { entities, useEntities } from '../../store/entities.ts'
@@ -171,7 +171,7 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
     moving: s.moveMode?.instantId ?? null,
   })))
 
-  const fineSeconds = useFrameValue(f => showsSeconds(pickTickTiers(f.pxPerMs)[0].ms, getTunables().secondsBelowTickMs))
+  const fineSeconds = useFrameValue(f => showsSeconds(pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms, getTunables().secondsBelowTickMs))
 
   const spanEnds = useMemo(() => {
     if (v.mode !== 'span' || !v.focusedSpanId) return new Set<string>()

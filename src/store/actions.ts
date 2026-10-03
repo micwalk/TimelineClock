@@ -13,7 +13,7 @@ import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import { getTunables, useSettings } from './settings.ts'
-import { nearestFinestTick } from '../domain/ticks.ts'
+import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui } from './ui.ts'
 import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
@@ -115,7 +115,7 @@ function settleCursor(toleranceMs: number, animate: boolean, snapToTicks = false
   }
   if (!best) {
     if (!snapToTicks || !useSettings.getState().tickSnap) return false
-    const tick = nearestFinestTick(f.center, f.pxPerMs)
+    const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
     if (tick === f.center || Math.abs(tick - f.center) * f.pxPerMs > getTunables().tickSnapPx) return false
     engine.beginTransition(getTunables().tickSnapEaseMs)
     view.setTimeCenter(tick)

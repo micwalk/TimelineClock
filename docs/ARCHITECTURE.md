@@ -149,6 +149,8 @@ recent instant undo itself.
   0.5s), so a precise typed time is never pulled to a nearby instant. Tapping the
   instant under the cursor focuses it.
 
+**Tick tiers** (`domain/ticks.ts`): `pickTickTiers(pxPerMs, minLabelSpacingPx)` picks the first unit (250ms ... 30m, 1h, 6h, day ...) spaced at least that far apart as the labeled tier, with the unit below as the minor tier. `labelSpacingPx(orientation)` gives 100 (horizontal, labels side by side) or 48 (vertical, labels stacked). Drawing (`TickLayer`), tick snapping (`settleCursor`) and the seconds rule (`InstantColumns`) all pass the same value, so they agree.
+
 Gesture tests (`hooks/usePanZoom.test.tsx`) dispatch `MouseEvent`s tagged with
 `pointerType`/`pointerId`, because jsdom has no `PointerEvent`.
 

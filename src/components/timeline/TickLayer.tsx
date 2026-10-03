@@ -4,7 +4,7 @@
 import { useRef } from 'react'
 import { useFrameListener } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
-import { generateTicks } from '../../domain/ticks.ts'
+import { generateTicks, labelSpacingPx } from '../../domain/ticks.ts'
 
 const translate = (orientation: Frame['orientation'], px: number) =>
   orientation === 'horizontal' ? `translate3d(${px}px,0,0)` : `translate3d(0,${px}px,0)`
@@ -47,7 +47,7 @@ export function TickLayer() {
       if (f.orientation !== s.orientation) for (const n of s.nodes.values()) n.x = NaN // rewrite along the new axis
       s.orientation = f.orientation
       const seen = new Set<number>()
-      for (const tick of generateTicks(s.start, s.end, f.pxPerMs)) {
+      for (const tick of generateTicks(s.start, s.end, f.pxPerMs, 600, labelSpacingPx(f.orientation))) {
         seen.add(tick.t)
         let n = s.nodes.get(tick.t)
         if (!n) {
