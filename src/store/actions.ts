@@ -10,6 +10,9 @@ import { MINUTE, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
+import { recomputeLayout, useLayout } from './layout.ts'
+import { resolveOrientation } from '../domain/layoutMode.ts'
+import { useSettings } from './settings.ts'
 import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
@@ -179,6 +182,21 @@ export function panByPixels(dx: number) {
   const f = frame()
   view.setTimeCenter(panCenterByPixels({ ...f, center: v().timeCenter }, dx))
   refreshLock()
+}
+
+/** Mouse wheel / trackpad scroll along the time axis: pans like a drag, without the landing snap. */
+export function wheelPan(dPx: number) {
+  if (v().viewFocusMode !== 'cursor') beginPan()
+  panByPixels(-dPx)
+}
+
+/** Rotate button: flips the orientation for this shape class; back to what the settings give clears the override. */
+export function rotate() {
+  const { orientation, shape } = useLayout.getState()
+  const next = orientation === 'horizontal' ? 'vertical' : 'horizontal'
+  const fromSettings = resolveOrientation(useSettings.getState().orientation, null, shape)
+  useLayout.setState({ override: next === fromSettings ? null : { orientation: next, shape } })
+  recomputeLayout()
 }
 
 /** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */

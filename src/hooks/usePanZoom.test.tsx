@@ -5,6 +5,7 @@ import { usePanZoom } from './usePanZoom.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { settings, useSettings } from '../store/settings.ts'
+import { useLayout } from '../store/layout.ts'
 import { initialViewState, useView } from '../store/view.ts'
 
 function Harness({ onTap }: { onTap: () => void }) {
@@ -18,8 +19,8 @@ function Harness({ onTap }: { onTap: () => void }) {
 }
 
 /** jsdom has no PointerEvent; a MouseEvent tagged with pointer fields is enough for the hook. */
-function pointer(target: Element, type: string, x: number, pointerType: 'touch' | 'mouse' = 'touch', pointerId = 1) {
-  const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 100, button: 0 })
+function pointer(target: Element, type: string, x: number, pointerType: 'touch' | 'mouse' = 'touch', pointerId = 1, y = 100) {
+  const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
   Object.defineProperties(e, { pointerType: { value: pointerType }, pointerId: { value: pointerId } })
   target.dispatchEvent(e)
 }
@@ -49,6 +50,7 @@ beforeEach(() => {
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
   useSettings.setState({ tunables: {} })
+  useLayout.setState({ orientation: 'horizontal', dir: 1 })
 })
 
 describe('usePanZoom', () => {
@@ -104,5 +106,51 @@ describe('usePanZoom', () => {
     const id = entities.createInstant(Date.now() - (100 + 30) / pxPerMs, 'Rice')
     drag(screen.getByTestId('timeline'), 300, 400)
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('a vertical drag uses clientY and ignores x', () => {
+    useLayout.setState({ orientation: 'vertical' })
+    render(<Harness onTap={() => {}} />)
+    const el = screen.getByTestId('timeline')
+    pointer(el, 'pointerdown', 100, 'touch', 1, 300)
+    pointer(el, 'pointermove', 400, 'touch', 1, 300) // x only: below the threshold
+    expect(useView.getState().viewFocusMode).toBe('now')
+    pointer(el, 'pointermove', 400, 'touch', 1, 400)
+    expect(useView.getState().viewFocusMode).toBe('cursor')
+    pointer(el, 'pointerup', 400, 'touch', 1, 400)
+  })
+
+  describe('wheel', () => {
+    const wheel = (el: Element, init: WheelEventInit) => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init }))
+    const width = () => useView.getState().timeWidth
+    const center = () => useView.getState().timeCenter
+
+    it('horizontal: deltaY zooms, deltaX pans, ctrl zooms', () => {
+      render(<Harness onTap={() => {}} />)
+      const el = screen.getByTestId('timeline')
+      const w0 = width()
+      wheel(el, { deltaY: 100 })
+      expect(width()).toBeGreaterThan(w0)
+      const w1 = width()
+      wheel(el, { deltaX: 100 })
+      expect(width()).toBe(w1)
+      expect(useView.getState().viewFocusMode).toBe('cursor')
+      const c = center()
+      wheel(el, { deltaX: 100, ctrlKey: true, deltaY: 100 })
+      expect(center()).toBe(c)
+      expect(width()).toBeGreaterThan(w1)
+    })
+
+    it('vertical: deltaY pans, ctrl+wheel zooms', () => {
+      useLayout.setState({ orientation: 'vertical' })
+      render(<Harness onTap={() => {}} />)
+      const el = screen.getByTestId('timeline')
+      const w0 = width()
+      wheel(el, { deltaY: 100 })
+      expect(width()).toBe(w0)
+      expect(useView.getState().viewFocusMode).toBe('cursor')
+      wheel(el, { deltaY: 100, ctrlKey: true })
+      expect(width()).toBeGreaterThan(w0)
+    })
   })
 })

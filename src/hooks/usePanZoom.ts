@@ -4,7 +4,8 @@
 import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
-import { beginPan, endPan, panByPixels, zoomBy } from '../store/actions.ts'
+import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
+import { useLayout } from '../store/layout.ts'
 import { getTunables } from '../store/settings.ts'
 
 const WHEEL_ZOOM_PER_PX = 0.001 // a 100px mouse-wheel notch ≈ 10%
@@ -16,7 +17,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     const el = ref.current
     if (!el) return
     const pointers = new Map<number, { x: number; y: number }>()
-    let drag: { id: number; startX: number; lastX: number; moved: boolean; touch: boolean } | null = null
+    let drag: { id: number; start: number; last: number; moved: boolean; touch: boolean } | null = null
     let pinchDist = 0
     let swallowClick = false
 
@@ -28,6 +29,8 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       setTimeout(() => { swallowClick = false }, 0)
     }
 
+    // Drags follow the main axis: x when the timeline runs horizontally, y when vertically.
+    const main = (e: { clientX: number; clientY: number }) => (useLayout.getState().orientation === 'vertical' ? e.clientY : e.clientX)
     const exempt = (t: EventTarget | null) => t instanceof Element && !!t.closest('input, textarea, select, [data-no-pan]')
     const distance = () => {
       const [a, b] = [...pointers.values()]
@@ -40,7 +43,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (pointers.size === 1) {
         swallowClick = false
-        drag = { id: e.pointerId, startX: e.clientX, lastX: e.clientX, moved: false, touch: isTouch(e) }
+        drag = { id: e.pointerId, start: main(e), last: main(e), moved: false, touch: isTouch(e) }
       } else if (pointers.size === 2) {
         pinchDist = distance()
         for (const id of pointers.keys()) el.setPointerCapture(id)
@@ -60,18 +63,18 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (!drag || e.pointerId !== drag.id) return
       if (!drag.moved) {
         const t = getTunables()
-        if (Math.abs(e.clientX - drag.startX) < (drag.touch ? t.dragThresholdTouchPx : t.dragThresholdMousePx)) return
+        if (Math.abs(main(e) - drag.start) < (drag.touch ? t.dragThresholdTouchPx : t.dragThresholdMousePx)) return
         drag.moved = true
         // Capture only once dragging, so plain clicks still reach chips and buttons.
         el.setPointerCapture(e.pointerId)
         el.classList.add('is-panning')
         beginPan()
-        panByPixels(e.clientX - drag.startX)
-        drag.lastX = e.clientX
+        panByPixels(main(e) - drag.start)
+        drag.last = main(e)
         return
       }
-      panByPixels(e.clientX - drag.lastX)
-      drag.lastX = e.clientX
+      panByPixels(main(e) - drag.last)
+      drag.last = main(e)
     }
 
     const onPointerUp = (e: PointerEvent) => {
@@ -99,8 +102,16 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (exempt(e.target)) return
       e.preventDefault()
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+      const dx = clamp(e.deltaX * unit, -400, 400)
       const dy = clamp(e.deltaY * unit, -400, 400)
-      if (dy !== 0) zoomBy(Math.exp(dy * WHEEL_ZOOM_PER_PX))
+      const zoom = (d: number) => { if (d !== 0) zoomBy(Math.exp(d * WHEEL_ZOOM_PER_PX)) }
+      if (e.ctrlKey) return zoom(dy) // trackpad pinch arrives as ctrl+wheel
+      if (useLayout.getState().orientation === 'vertical') {
+        if (dy !== 0) wheelPan(dy)
+      } else {
+        zoom(dy)
+        if (dx !== 0) wheelPan(dx)
+      }
     }
 
     el.addEventListener('pointerdown', onPointerDown)

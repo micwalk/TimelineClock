@@ -7,6 +7,7 @@ import { useUi } from '../../store/ui.ts'
 import { TickLayer } from './TickLayer.tsx'
 import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
+import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { useBottomLanes } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
@@ -46,6 +47,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
+      <RotateButton />
     </section>
   )
 }

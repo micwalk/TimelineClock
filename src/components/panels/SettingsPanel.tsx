@@ -19,6 +19,8 @@ export function SettingsPanel() {
   const panelRef = useRef<HTMLDivElement>(null)
   const glow = useSettings(s => s.glow)
   const favoriteLanes = useSettings(s => s.favoriteLanes)
+  const orientation = useSettings(s => s.orientation)
+  const verticalDir = useSettings(s => s.verticalDir)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
@@ -75,6 +77,21 @@ export function SettingsPanel() {
 
           <section className="settings__group">
             <h3>Timeline</h3>
+            <label className="settings__row">
+              <span>Orientation</span>
+              <select value={orientation} onChange={e => settings.setOrientation(e.target.value === 'horizontal' || e.target.value === 'vertical' ? e.target.value : 'auto')}>
+                <option value="auto">Auto</option>
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+            </label>
+            <label className="settings__row">
+              <span>Future goes (vertical)</span>
+              <select value={verticalDir} onChange={e => settings.setVerticalDir(e.target.value === 'up' ? 'up' : 'down')}>
+                <option value="down">Down</option>
+                <option value="up">Up</option>
+              </select>
+            </label>
             <label className="settings__row">
               <span>Lanes for favorites and alarms</span>
               <select value={favoriteLanes} onChange={e => settings.setFavoriteLanes(e.target.value === 'always' ? 'always' : 'selected')}>
