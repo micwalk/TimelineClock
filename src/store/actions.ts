@@ -265,6 +265,11 @@ export function selectInstant(id: string) {
 }
 export const selectSpan = (id: string) => view.selectSpan(id)
 
+/** A tap on empty timeline: clears both selected instants and the selected span, nothing else. */
+export function clearSelection() {
+  useView.setState({ currentSelectedInstantId: null, secondarySelectedInstantId: null, selectedSpanId: null })
+}
+
 export function escape() {
   const s = v()
   if (s.moveMode) cancelMove()

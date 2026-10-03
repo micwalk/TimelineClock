@@ -4,6 +4,7 @@ import { engine } from '../../engine/viewportEngine.ts'
 import { usePanZoom } from '../../hooks/usePanZoom.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
+import * as act from '../../store/actions.ts'
 import { TickLayer } from './TickLayer.tsx'
 import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
@@ -16,6 +17,8 @@ import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateRange } from '../../domain/format.ts'
+
+const INTERACTIVE = 'button, input, textarea, a, [role="button"], [role="menu"], [role="menuitem"], [role="dialog"], [data-no-pan]'
 
 export function Timeline() {
   const ref = useRef<HTMLElement>(null)
@@ -44,6 +47,11 @@ export function Timeline() {
       data-orientation={orientation}
       style={{ ...geometryStyleFor(orientation), height }}
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
+      onClick={e => {
+        // A tap on empty space deselects; clicks ending a drag never get here (usePanZoom swallows them).
+        if (e.target instanceof Element && e.target.closest(INTERACTIVE)) return
+        act.clearSelection()
+      }}
     >
       <TickLayer />
       <AgendaButton />
