@@ -99,6 +99,7 @@ useLayout.subscribe((s, prev) => {
   if (s.orientation !== prev.orientation) {
     ui.closeTagMenu()
     ui.closeTimeInput()
+    ui.closeLaneTools()
   }
 })
 

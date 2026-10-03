@@ -10,7 +10,7 @@ import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
-import { lanesTop } from './geometry.ts'
+import { lanesTop, liveLaneTop } from './geometry.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -19,9 +19,9 @@ interface LaneBase {
   key: string
   a: TimeRef
   b: TimeRef
-  /** Vertical center in px (horizontal); set once the lane is placed. */
+  /** Vertical center in px (horizontal); set once the lane is placed. Live lanes: from the top of the live band. */
   top: number
-  /** Lane number from the bottom (horizontal) or from the right edge (vertical); set once placed. */
+  /** Lane number within its side: from the bottom / right edge for saved lanes, from the top / left edge for live lanes; set once placed. */
   index: number
 }
 
@@ -109,15 +109,40 @@ export function useVisibleLanes(): BottomLane[] {
   }, [candidates, onScreenKeys])
 }
 
-/** Horizontal: lanes stacked below the chip rows, with the timeline's height. Vertical: one lane per index from the right edge; the height comes from the layout. */
-export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation): { lanes: BottomLane[]; height: number | undefined } {
-  let y = lanesTop(rowsUsed)
-  const lanes = visible.map((c, index) => {
+/**
+ * A live lane has an endpoint at Now or the cursor: the implied Selected→Now and Selected→Cursor lanes and saved spans ending at Now.
+ * A span whose endpoint is merely the instant being moved (it rides the cursor) is not live: it stays on the saved side.
+ */
+export const isLiveLane = (lane: BottomLane): boolean =>
+  lane.kind === 'selected-now' || lane.kind === 'selected-cursor' || (lane.kind === 'saved' && lane.b === 'now')
+
+/** Live lanes take Now's accent (red) or the cursor's. */
+export const liveLaneVariant = (lane: BottomLane): 'now' | 'cursor' => (lane.kind === 'selected-cursor' ? 'cursor' : 'now')
+
+/** Splits lanes into the live side (endpoint at Now or the cursor) and the saved side (between saved instants), keeping order. */
+export function partitionLanes(lanes: BottomLane[]): { live: BottomLane[]; saved: BottomLane[] } {
+  const live: BottomLane[] = []
+  const saved: BottomLane[] = []
+  for (const l of lanes) (isLiveLane(l) ? live : saved).push(l)
+  return { live, saved }
+}
+
+/**
+ * Places the lanes. Live lanes (index 0.. from the top of the horizontal live band, or from the left edge in vertical) come first;
+ * saved lanes stack below the chip rows (horizontal, below the band) or from the right edge (vertical).
+ * `height` is the horizontal timeline's height; `liveCount` sizes the live band.
+ */
+export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation): { lanes: BottomLane[]; height: number | undefined; liveCount: number } {
+  const { live, saved } = partitionLanes(visible)
+  const liveCount = orientation === 'vertical' ? 0 : live.length
+  const placedLive = live.map((c, index) => ({ ...c, index, top: liveLaneTop(index) }))
+  let y = lanesTop(rowsUsed, liveCount)
+  const placedSaved = saved.map((c, index) => {
     const lane = { ...c, index, top: y + LANE_HEIGHT / 2 }
     y += LANE_HEIGHT
     return lane
   })
-  return { lanes, height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD }
+  return { lanes: [...placedLive, ...placedSaved], height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD, liveCount }
 }
 
 /** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */

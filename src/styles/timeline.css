@@ -448,6 +448,14 @@
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
+/* Live lanes (an endpoint at Now or the cursor): compact chips; the accent comes from the lane variant (--c-now / --c-cursor). */
+.tl-lane--live .span-chip { min-height: 20px; padding: 1px 8px; gap: 0; }
+.tl-lane--live .span-chip__text { gap: 4px; font-size: 12px; }
+.tl-lane--live .span-chip__name { max-width: 72px; font-size: 12px; }
+.span-chip .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 .span-chip .chip-input { height: 22px; font-size: 14px; }
 .span-chip__star { width: 16px; height: 16px; color: var(--c-favorite); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-favorite)); }
 
@@ -647,6 +655,14 @@
 .timeline[data-orientation='vertical'] .tl-lane__tools { right: 0; left: auto; transform: none; margin: 0; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--left { top: auto; bottom: 100%; margin-bottom: 4px; flex-direction: row-reverse; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--right { top: 100%; margin-top: 4px; }
+
+/* Live lanes: thin bars at the left edge, stacked inward; the chip sits on their inner (right) side, tools above and below it */
+.timeline[data-orientation='vertical'] .tl-lane--live {
+  right: auto;
+  left: calc(var(--tl-live-lane-start) + var(--i, 0) * var(--tl-live-lane-gap));
+}
+.timeline[data-orientation='vertical'] .tl-lane--live .tl-lane__chip-wrap { transform: translate(10px, -50%); }
+.timeline[data-orientation='vertical'] .tl-lane--live .tl-lane__tools { left: 0; right: auto; }
 
 /* Agenda drawer button: top left in both orientations, the date label moves over */
 .tl-agenda-btn {

@@ -67,13 +67,14 @@ describe('implied lane chips', () => {
     expect(screen.getByText('16:00')).toBeInTheDocument()
   })
 
-  it('use the compact time for an unnamed instant and "Cursor" for the cursor', () => {
+  it('name an unnamed instant by its compact time (for screen readers) and show only the short length for a live lane', () => {
     const now = engine.getFrame().now
     const ts = now - 10 * MINUTE
     const id = entities.createInstant(ts, '')
     useView.setState({ currentSelectedInstantId: id, viewFocusMode: 'cursor', timeCenter: now })
     const { result } = renderHook(() => useVisibleLanes())
     render(<BottomLanes lanes={result.current.map(l => ({ ...l, top: 200 }))} />)
-    expect(screen.getByText(`${formatClockCompact(ts, false)} → Cursor`)).toBeInTheDocument()
+    expect(screen.getByText(`${formatClockCompact(ts, false)} to Cursor`, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('10m')).toBeInTheDocument()
   })
 })

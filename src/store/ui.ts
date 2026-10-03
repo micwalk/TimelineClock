@@ -19,6 +19,8 @@ export interface UiState {
   listTab: ListTab
   timeInput: TimeInputTarget | null
   tagMenu: TagMenu | null
+  /** The live lane (by key) whose chip was tapped: its tools show until the next outside tap. */
+  laneTools: string | null
   /** The Agenda drawer (only meaningful while the Agenda is placed in the drawer). */
   agendaOpen: boolean
   /** The instant just dropped; its chip pulses once, then this clears. */
@@ -29,6 +31,7 @@ export const useUi = create<UiState>(() => ({
   listTab: 'instants',
   timeInput: null,
   tagMenu: null,
+  laneTools: null,
   agendaOpen: false,
   droppedId: null,
 }))
@@ -49,4 +52,6 @@ export const ui = {
     dropTimer = setTimeout(() => { dropTimer = null; useUi.setState(s => (s.droppedId === id ? { droppedId: null } : s)) }, DROP_HIGHLIGHT_MS)
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
+  toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
+  closeLaneTools: () => useUi.setState({ laneTools: null }),
 }

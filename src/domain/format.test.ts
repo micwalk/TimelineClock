@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
+  atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, truncateText,
   formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
@@ -134,5 +134,28 @@ describe('formatRelativeShort', () => {
     expect(formatRelativeShort(2 * HOUR)).toBe('in 2h')
     expect(formatRelativeShort(-(3 * DAY + 4 * HOUR))).toBe('3d 4h ago')
     expect(formatRelativeShort(3 * DAY)).toBe('in 3d')
+  })
+})
+
+describe('formatDurationShort', () => {
+  it('uses the two largest units, floored', () => {
+    expect(formatDurationShort(0)).toBe('0s')
+    expect(formatDurationShort(45 * SECOND + 900)).toBe('45s')
+    expect(formatDurationShort(26 * MINUTE + 13 * SECOND)).toBe('26m')
+    expect(formatDurationShort(HOUR + 5 * MINUTE + 30 * SECOND)).toBe('1h 5m')
+    expect(formatDurationShort(2 * HOUR)).toBe('2h')
+    expect(formatDurationShort(2 * DAY + 3 * HOUR + 59 * MINUTE)).toBe('2d 3h')
+    expect(formatDurationShort(3 * DAY)).toBe('3d')
+  })
+  it('ignores the sign', () => {
+    expect(formatDurationShort(-10 * MINUTE)).toBe('10m')
+  })
+})
+
+describe('truncateText', () => {
+  it('keeps short text and cuts long text with an ellipsis within the limit', () => {
+    expect(truncateText('Cooking', 8)).toBe('Cooking')
+    expect(truncateText('Making dinner', 8)).toBe('Making…')
+    expect(truncateText('Making dinner', 8).length).toBeLessThanOrEqual(8)
   })
 })

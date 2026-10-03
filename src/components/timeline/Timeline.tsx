@@ -11,7 +11,7 @@ import { CursorTag, NowTag } from './LiveTags.tsx'
 import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
-import { placeLanes, useVisibleLanes } from './useBottomLanes.ts'
+import { isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
@@ -24,8 +24,9 @@ export function Timeline() {
   const ref = useRef<HTMLElement>(null)
   const orientation = useLayout(s => s.orientation)
   const visibleLanes = useVisibleLanes()
-  const layout = useSavedLayout(visibleLanes.length)
-  const { lanes, height } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
+  // Only saved-side lanes take width from the vertical chips; live lanes are on the left.
+  const layout = useSavedLayout(useMemo(() => visibleLanes.filter(l => !isLiveLane(l)).length, [visibleLanes]))
+  const { lanes, height, liveCount } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
@@ -45,7 +46,7 @@ export function Timeline() {
       ref={ref}
       className={`timeline${popoverOpen ? ' has-popover' : ''}`}
       data-orientation={orientation}
-      style={{ ...geometryStyleFor(orientation), height }}
+      style={{ ...geometryStyleFor(orientation, liveCount), height }}
       aria-label={`Timeline${nowFocused ? ', following Now' : ''}`}
       onClick={e => {
         // A tap on empty space deselects; clicks ending a drag never get here (usePanZoom swallows them).

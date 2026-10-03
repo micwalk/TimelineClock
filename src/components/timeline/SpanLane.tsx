@@ -1,4 +1,4 @@
-// One span lane (a horizontal line, or a vertical bar at the right edge): a glowing line between two times, off-screen chevrons,
+// One span lane (a horizontal line, or a vertical bar at the right or, for live lanes, left edge): a glowing line between two times, off-screen chevrons,
 // and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
 import { useRef } from 'react'
@@ -10,8 +10,10 @@ import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 
-export type LaneVariant = 'selected' | 'secondary' | 'focused' | 'span'
+/** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
+export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
 
 /** What an endpoint arrow jumps to. Cursor endpoints get no arrow. */
 export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { kind: 'cursor' }
@@ -19,6 +21,13 @@ export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { ki
 export interface SpanLaneProps {
   /** Vertical center of the lane in px, or a CSS length. */
   top: number | string
+  /**
+   * A live lane (an endpoint at Now or the cursor): drawn on the live side, above the tags (horizontal) or at the left edge (vertical).
+   * Its arrows and tools stay hidden until the chip is tapped (`toolsOpen`); an outside tap or Escape calls `onDismissTools`.
+   */
+  live?: boolean
+  toolsOpen?: boolean
+  onDismissTools?: () => void
   /** Vertical: draw only the bar, no chip or tools. */
   barOnly?: boolean
   /** Vertical: lane number from the right edge. */
@@ -57,12 +66,15 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
   const rightChevRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
+  const labelsRef = useRef<HTMLDivElement>(null)
+  const showTools = !live || !!toolsOpen
+  usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
   const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
 
   useFrameListener(f => {
@@ -101,11 +113,11 @@ export function SpanLane(props: SpanLaneProps) {
 
   // Which endpoint is on the left only changes when a moving endpoint crosses the other.
   const aIsLeft = useFrameValue(f => resolveTimeRef(a, f.now, f.center) <= resolveTimeRef(b, f.now, f.center))
-  const extra = tools?.({ aIsLeft })
+  const extra = showTools ? tools?.({ aIsLeft }) : undefined
   const leftTarget = aIsLeft ? aTarget : bTarget
   const rightTarget = aIsLeft ? bTarget : aTarget
 
-  const laneClass = `tl-lane tl-lane--${variant}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`
+  const laneClass = `tl-lane tl-lane--${variant}${live ? ' tl-lane--live' : ''}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`
   const laneStyle = vertical ? ({ '--i': index } as CSSProperties) : { top }
 
   // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
@@ -116,11 +128,11 @@ export function SpanLane(props: SpanLaneProps) {
         <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
         <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
       </div>
-      <div className={`${laneClass} tl-lane--labels`} style={laneStyle}>
+      <div ref={labelsRef} className={`${laneClass} tl-lane--labels`} style={laneStyle}>
         <div ref={anchorRef} className="tl-lane__anchor">
           {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
             <div className="tl-lane__tools tl-lane__tools--left">
-              {arrows && arrowFor(leftTarget, 'left', vertical)}
+              {arrows && showTools && arrowFor(leftTarget, 'left', vertical)}
               {extra?.left}
             </div>
             <div
@@ -135,7 +147,7 @@ export function SpanLane(props: SpanLaneProps) {
               {chip}
             </div>
             <div className="tl-lane__tools tl-lane__tools--right">
-              {arrows && arrowFor(rightTarget, 'right', vertical)}
+              {arrows && showTools && arrowFor(rightTarget, 'right', vertical)}
               {extra?.right}
             </div>
             {below}

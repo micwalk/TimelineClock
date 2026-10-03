@@ -51,7 +51,8 @@ within today's budget (see §9).
 - Instant lines run across the whole timeline (full width in vertical, full height in
   horizontal), as today.
 - Span lanes sit beyond the chips: below them in horizontal, at the far (right) edge in
-  vertical.
+  vertical. Owner change (live lanes): spans that include Now or the cursor go to the live
+  side instead (see 5.8).
 
 ### Clutter (approved in the first session)
 1. One compact chip per instant ("Take Meds 6:00p"). Seconds only when zoomed in, or on Now,
@@ -342,6 +343,17 @@ font plus padding/icon constants, cached by text. Tests inject a fake measurer.
 - A focused saved span becomes the first lane, emphasized (it used to be top lane B).
 - Vertical: lanes are vertical bars; the chip sits beside its bar on the inner side,
   centered on the visible part of the span.
+- **Live lanes (owner change, after layout v3):** "Spans that include now or cursor should
+  render to the left/above the timeline. And can have shorter labels, color coded too (now
+  span red, cursor span same color as cursor)." A lane with an endpoint at Now or the cursor
+  (saved spans to Now, Selected→Now, Selected→Cursor; not a span whose endpoint is the
+  instant being moved) is live. Horizontal: a band above the live tags, lanes at
+  y = 10 + i × 24, the axis and everything below shifting down by the band (none: unchanged).
+  Vertical: thin bars at the left edge, x = 8 + i × 12, in the lines layer, chip on the inner
+  side. Chips are short ("45s", "26m", "1h 5m", "2d 3h"; a name is cut to 8 characters then
+  the length), accented `--c-now` or `--c-cursor`. Pin, rename, visibility, delete and the
+  endpoint arrows appear only after tapping the chip. The saved side (below / right edge)
+  holds only spans between two saved instants and alone counts against the vertical chip budget.
 
 ### 5.9 Gestures (`hooks/usePanZoom.ts`, new `hooks/glide.ts`)
 

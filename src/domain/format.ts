@@ -29,22 +29,28 @@ export function formatClockCompact(ts: number, withSeconds: boolean): string {
 export function formatRelativeShort(deltaMs: number): string {
   const abs = Math.abs(deltaMs)
   if (abs < SECOND) return 'now'
-  let text: string
-  if (abs < MINUTE) {
-    text = `${Math.floor(abs / SECOND)}s`
-  } else if (abs < HOUR) {
-    text = `${Math.floor(abs / MINUTE)}m`
-  } else if (abs < DAY) {
-    const h = Math.floor(abs / HOUR)
-    const m = Math.floor((abs % HOUR) / MINUTE)
-    text = m ? `${h}h ${m}m` : `${h}h`
-  } else {
-    const d = Math.floor(abs / DAY)
-    const h = Math.floor((abs % DAY) / HOUR)
-    text = h ? `${d}d ${h}h` : `${d}d`
-  }
+  const text = formatDurationShort(abs)
   return deltaMs < 0 ? `${text} ago` : `in ${text}`
 }
+
+/** A length in its two largest units, floored: "45s", "26m", "1h 5m", "2d 3h". For tight spots like live-lane chips. */
+export function formatDurationShort(ms: number): string {
+  const abs = Math.abs(ms)
+  if (abs < MINUTE) return `${Math.floor(abs / SECOND)}s`
+  if (abs < HOUR) return `${Math.floor(abs / MINUTE)}m`
+  if (abs < DAY) {
+    const h = Math.floor(abs / HOUR)
+    const m = Math.floor((abs % HOUR) / MINUTE)
+    return m ? `${h}h ${m}m` : `${h}h`
+  }
+  const d = Math.floor(abs / DAY)
+  const h = Math.floor((abs % DAY) / HOUR)
+  return h ? `${d}d ${h}h` : `${d}d`
+}
+
+/** Text cut to `max` characters with an ellipsis: "Cooking" stays, "Making dinner" becomes "Making…" at 8. */
+export const truncateText = (text: string, max: number): string =>
+  (text.length > max ? `${text.slice(0, Math.max(1, max - 1)).trimEnd()}…` : text)
 
 /**
  * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss" (under a minute). Never shows milliseconds.

@@ -29,7 +29,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 
 ## Core Concepts
 * Instant -- A point in time. Rendered on the timeline as a vertical line with label. An instant can be saved, or it can represent a concept like "Now" or the current cursor position.
-* Span -- A pair of Instants with a duration between them. One of the instants could be Now or the Cursor. A span can be saved, or it can be implied. Implied spans are automatically generated temporarily based on context: the lane from the selection to the previous selection or to the Cursor (a pin saves it); Selected→Now is opt-in.
+* Span -- A pair of Instants with a duration between them. One of the instants could be Now or the Cursor. A span can be saved, or it can be implied. Implied spans are automatically generated temporarily based on context: the lane from the selection to the previous selection or to the Cursor (a pin saves it); Selected→Now is opt-in. **Live vs saved lanes:** a span with an endpoint at Now or the Cursor (saved spans to Now, Selected→Now, Selected→Cursor) draws on the live side as a thin lane with a short colour-coded chip (Now red, cursor accent; "26m", "1h 5m"; its tools show after a tap): a band above the tags in horizontal, bars at the left edge in vertical. Lanes between two saved instants stay on the saved side (below the chips, or the right edge).
 
 ## Main UI Components
 1. Timeline view -- DOM-rendered horizontally scrolling timeline (src/components/timeline)

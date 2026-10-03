@@ -2,19 +2,20 @@
 import { EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS } from '../../domain/format.ts'
+import { formatDurationHMS, formatDurationShort, truncateText } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
 import { useView, view } from '../../store/view.ts'
+import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
-import { laneHasControls } from './useBottomLanes.ts'
+import { isLiveLane, laneHasControls, liveLaneVariant } from './useBottomLanes.ts'
 
 // ---------------------------------------------------------------------------
 // Shared bits
@@ -27,6 +28,18 @@ function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
     />
   )
 }
+
+/** Live length of a span in compact form ("45s", "26m", "1h 5m"): live lanes are narrow. */
+function ShortDuration({ a, b }: { a: TimeRef; b: TimeRef }) {
+  return (
+    <LiveText
+      compute={f => formatDurationShort(Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)))}
+    />
+  )
+}
+
+/** The longest span name a live lane's chip shows. */
+const LIVE_NAME_MAX = 8
 
 /** An implied lane's endpoint: where it is and what it is called. */
 interface Endpoint { ref: TimeRef; name: string }
@@ -49,6 +62,16 @@ function ImpliedChip({ a, b }: { a: Endpoint; b: Endpoint }) {
   )
 }
 
+/** A live implied lane's chip: just the compact length (its colour says Now or Cursor); the endpoints are for screen readers. */
+function LiveImpliedChip({ from, to, a, b }: { from: string; to: string; a: TimeRef; b: TimeRef }) {
+  return (
+    <span className="span-chip__text">
+      <span className="sr-only">{`${from} to ${to} `}</span>
+      <ShortDuration a={a} b={b} />
+    </span>
+  )
+}
+
 function PinButton({ a, b }: { a: TimeRef; b: TimeRef }) {
   return <IconButton icon={MapPinIcon} label="Save this span" className="glow-box" onClick={() => act.saveSpanRefs(a, b)} />
 }
@@ -64,10 +87,10 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
   )
 }
 
-function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean }) {
+function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean; short?: boolean }) {
   const header = spanHeader(r)
   const ends = `${displayName(r.start.label)} → ${spanEndName(r)}`
-  const name = expanded ? (header ? `${header}: ${ends}` : ends) : header
+  const name = short ? (header ? truncateText(header, LIVE_NAME_MAX) : undefined) : expanded ? (header ? `${header}: ${ends}` : ends) : header
   return (
     <span className="span-chip__text">
       {editing ? (
@@ -80,11 +103,11 @@ function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: Tim
         />
       ) : name ? (
         <>
-          <span className="span-chip__name" title={name}>{name}</span>
+          <span className="span-chip__name" title={short ? header : name}>{name}</span>
           <span className="span-chip__sep" aria-hidden>·</span>
         </>
       ) : null}
-      <Duration a={a} b={b} />
+      {short ? <ShortDuration a={a} b={b} /> : <Duration a={a} b={b} />}
       {isFavoriteNowSpan(r) && <StarSolid className="span-chip__star" aria-label="Favorite" />}
     </span>
   )
@@ -92,33 +115,40 @@ function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: Tim
 
 const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i.id })
 
-function SavedSpanLane({ r, top, index, variant, controls, emphasis, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
+function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, live, toolsOpen, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
   r: ResolvedSpan
+  laneKey: string
   top: number | string
   index: number
   variant: LaneVariant
   controls: boolean
   emphasis?: boolean
+  /** On the live side: short chip, tools only after a tap. */
+  live?: boolean
+  toolsOpen?: boolean
   /** Endpoint times; default to the records' times (override for live endpoints). */
   a?: TimeRef
   b?: TimeRef
 }) {
   const editing = useView(s => s.editingSpanId === r.span.id)
-  const expanded = useView(s => s.selectedSpanId === r.span.id)
+  const expanded = useView(s => s.selectedSpanId === r.span.id) && !live
   return (
     <SpanLane
       top={top}
       index={index}
       variant={variant}
       emphasis={emphasis}
+      live={live}
+      toolsOpen={toolsOpen}
+      onDismissTools={ui.closeLaneTools}
       a={a}
       b={b}
       aTarget={instantTarget(r.start)}
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       barOnly={!controls}
-      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} />}
-      onChipClick={() => act.selectSpan(r.span.id)}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} short={live} />}
+      onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} /> }) : undefined}
     />
@@ -130,42 +160,33 @@ function SavedSpanLane({ r, top, index, variant, controls, emphasis, a = r.start
 
 export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
   const selectedSpanId = useView(s => s.selectedSpanId)
+  const laneTools = useUi(s => s.laneTools)
   return (
     <>
       {lanes.map(lane => {
-        if (lane.kind === 'selected-now') {
+        const live = isLiveLane(lane)
+        const toolsOpen = laneTools === lane.key
+        if (lane.kind === 'selected-now' || lane.kind === 'selected-cursor') {
+          // Live: a thin lane on the live side with a short chip in the Now (red) or cursor accent; the pin shows after a tap.
           const s = lane.selected
+          const to = lane.kind === 'selected-now' ? 'Now' : 'Cursor'
           return (
             <SpanLane
               key={lane.key}
               top={lane.top}
               index={lane.index}
-              variant="selected"
+              variant={liveLaneVariant(lane)}
+              live
+              toolsOpen={toolsOpen}
+              onDismissTools={ui.closeLaneTools}
               a={lane.a}
-              b="now"
+              b={lane.b}
               aTarget={instantTarget(s)}
-              bTarget={{ kind: 'now' }}
+              bTarget={lane.kind === 'selected-now' ? { kind: 'now' } : { kind: 'cursor' }}
               arrows
-              chip={<ImpliedChip a={instantEnd(s, lane.a)} b={{ ref: 'now', name: 'Now' }} />}
-              tools={() => ({ left: <PinButton a={lane.a} b="now" /> })}
-            />
-          )
-        }
-        if (lane.kind === 'selected-cursor') {
-          const s = lane.selected
-          return (
-            <SpanLane
-              key={lane.key}
-              top={lane.top}
-              index={lane.index}
-              variant="selected"
-              a={lane.a}
-              b="center"
-              aTarget={instantTarget(s)}
-              bTarget={{ kind: 'cursor' }}
-              arrows
-              chip={<ImpliedChip a={instantEnd(s, lane.a)} b={{ ref: 'center', name: 'Cursor' }} />}
-              tools={() => ({ left: <PinButton a={lane.a} b="center" /> })}
+              chip={<LiveImpliedChip from={endpointName(s)} to={to} a={lane.a} b={lane.b} />}
+              onChipClick={() => ui.toggleLaneTools(lane.key)}
+              tools={() => ({ left: <PinButton a={lane.a} b={lane.b} /> })}
             />
           )
         }
@@ -188,11 +209,13 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
           )
         }
         const r = lane.span
-        const variant: LaneVariant = r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
-        const controls = laneHasControls(lane, selectedSpanId)
-        return <SavedSpanLane key={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} index={lane.index} variant={variant} controls={controls} emphasis={r.focused} />
+        const variant: LaneVariant = live ? 'now' : r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
+        const controls = live || laneHasControls(lane, selectedSpanId)
+        return (
+          <SavedSpanLane key={lane.key} laneKey={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} index={lane.index}
+            variant={variant} controls={controls} emphasis={r.focused} live={live} toolsOpen={toolsOpen} />
+        )
       })}
     </>
   )
 }
-
