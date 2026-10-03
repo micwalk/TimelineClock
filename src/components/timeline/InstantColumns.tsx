@@ -87,16 +87,13 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
             className={ringing ? 'is-ringing' : ''} onClick={() => act.toggleAlarm(inst.id)} />
         )}
         {editing ? (
-          <div className="chip__edit">
-            <InlineInput
-              initial={inst.label}
-              ariaLabel="Instant name"
-              placeholder="Name"
-              onCommit={v => act.renameInstant(inst.id, v)}
-              onCancel={() => view.editInstant(null)}
-            />
-            <span className="chip__time">{formatClockCompact(ts, true)}</span>
-          </div>
+          <InlineInput
+            initial={inst.label}
+            ariaLabel="Instant name"
+            placeholder="Name"
+            onCommit={v => act.renameInstant(inst.id, v)}
+            onCancel={() => view.editInstant(null)}
+          />
         ) : (
           <button
             type="button"
