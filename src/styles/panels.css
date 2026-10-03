@@ -418,5 +418,22 @@
   .agenda-scrim, .agenda-drawer { animation: none; }
 }
 
+/* Vertical timeline: the bar stays at the bottom as a two-row grid that follows the screen.
+   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. NOW / ＋ spans both rows in column 4.
+   Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
+.controls--vertical {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr;
+  grid-template-rows: repeat(2, minmax(44px, auto));
+  gap: 8px;
+  padding: 8px 12px 10px;
+}
+.controls--vertical > .ctl-btn { height: auto; min-height: 44px; min-width: 0; justify-content: center; padding: 0 6px; }
+.controls--vertical .ctl-btn__text { display: none; }
+.controls--vertical .ctl-btn--now .ctl-btn__text, .controls--vertical .ctl-split .ctl-btn__text { display: inline; }
+.controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
+.controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
+.controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
+
 /* The big red button is a ＋ while following Now (drop an instant) and NOW otherwise. */
 .ctl-btn__plus { font: 400 30px/1 var(--font-ui); }

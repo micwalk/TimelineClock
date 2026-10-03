@@ -374,6 +374,19 @@ font plus padding/icon constants, cached by text. Tests inject a fake measurer.
   for the current zoom, so calendar boundaries and DST match what is drawn), eased over
   `tickSnapEaseMs`. Not applied by `moveCursorBy` (± steps) or typed times.
 
+### 5.9a Vertical control bar (owner change, after layout v3)
+
+An earlier idea moved the controls elsewhere; the owner corrected it: "On vertical, bottom bar
+is still a bottom bar. But within that bottom bar it's like: `- up -time NOW` /
+`+ DOWN +TIME`." In vertical only, the bar is a two-row grid at the bottom: row 1 Zoom out (−),
+▲ (adjacent instant above on screen), step up the screen, then NOW/＋; row 2 Zoom in (+), ▼,
+step down the screen; NOW/＋ takes column 4 across both rows. Up/down follows the vertical
+time direction: future down (dir 1): ▲ = previous instant, step up = "−30m"; future up
+(dir −1): ▲ = next instant, step up = "+30m" (▼ and step down the opposite). Chevron up/down
+icons, accessible names unchanged ("Previous instant", "Back 30 minutes", …), ≥44px targets,
+compact step labels, the split caret / long-press menu kept on both step buttons (viewport-aware
+above/below placement). Horizontal keeps today's bar.
+
 ### 5.10 Agenda
 
 - Rename `ListPanel.tsx` → `Agenda.tsx` (and CSS classes as they're touched).
