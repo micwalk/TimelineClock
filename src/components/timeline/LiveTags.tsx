@@ -5,6 +5,7 @@ import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } fr
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import type { LiveTextContext } from '../../engine/LiveText.tsx'
+import { SECOND } from '../../domain/time.ts'
 import { chipName, durationShowsMillis, formatClockCompact, formatSignedDuration } from '../../domain/format.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
@@ -84,6 +85,9 @@ export function CursorTag() {
     }
     return liveTagsCollide(now, cursor, GEOMETRY.tagClearance) ? 1 : 0
   })
+  // The selected-offset line only shows once the selected instant is a second or more from the cursor (never "+00:00.000" under it).
+  const selectedTs = selected?.tsEpochMs
+  const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(f.center - selectedTs) >= SECOND)
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''
@@ -126,7 +130,7 @@ export function CursorTag() {
       >
         <LiveText compute={f => formatClockCompact(f.center, true)} />{' '}
         <LiveText className="tl-tag__sub" compute={(f, ctx) => offsetText('Now', f.center - f.now, ctx)} />
-        {selected && (
+        {selected && selectedAway && (
           <>
             {' '}
             <LiveText className="tl-tag__sub" compute={(f, ctx) => offsetText(name, f.center - selected.tsEpochMs, ctx)} />

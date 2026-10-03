@@ -68,6 +68,15 @@ describe('CursorTag', () => {
     expect(screen.getByText(/^Rice [+-]/)).toBeInTheDocument()
   })
 
+  it('hides the selected-offset line while the selected instant sits under the cursor', () => {
+    const id = entities.createInstant(engine.getFrame().center, 'Rice')
+    useView.setState({ currentSelectedInstantId: id })
+    cursorMode()
+    render(<CursorTag />)
+    expect(screen.queryByText(/^Rice [+-]/)).toBeNull()
+    expect(screen.getByText(/^Now [+-]/)).toBeInTheDocument()
+  })
+
   it('ignores a selection that no longer exists', () => {
     useView.setState({ currentSelectedInstantId: 'deleted' })
     cursorMode()
