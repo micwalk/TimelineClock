@@ -71,8 +71,11 @@ within today's budget (see §9).
 7. **Never fade, dim or hide the past.**
 
 ### Cursor arrow
-- Double-tap the Cursor tag saves an instant there. A single tap shows its tools (lock,
-  save span, type a time).
+- Double-tap the Cursor tag drops a nameless instant there (no name box, no selection); the
+  tag also has a round ＋ button beside it that does the same. A single tap shows its tools
+  (lock, save span, type a time). While following Now the big red control-bar button is a ＋
+  ("Drop an instant at Now"); it becomes NOW again in cursor mode. Drops are nameless; the chip
+  shows a "name…" hint and one tap on it opens the name box in place.
 
 ### Agenda
 - Rename `ListPanel` → `Agenda`.
@@ -139,7 +142,8 @@ These were open questions 5–7 and details the decisions above left open.
 ### Interaction changes that need the owner's OK (AGENTS rule 10)
 - **I1. Now's ★ moves into the Now tag's tap tools.** Saving Now as a favorite takes two taps
   instead of one until the quick-create work (next-steps handoff §2) adds a one-tap path.
-  Double-tap the Now tag still saves an instant at Now.
+  Double-tap the Now tag drops a nameless instant at Now (superseded: drops are nameless now,
+  and the big button is a ＋ while following Now, so a one-tap path exists).
 - **I2. One chip per saved instant.** Today the name and time are separate chips. In v2,
   double-tapping the name part renames and double-tapping the time part focuses, so both
   existing gestures survive. A single tap anywhere on the chip selects.
@@ -260,7 +264,7 @@ New `components/timeline/LiveTags.tsx` replaces `NowColumn`, `CursorColumn` and 
   touches the axis; it points down in horizontal and right (toward the axis) in vertical.
   The direction setting doesn't affect tags: they always sit on the live side.
 - **Now tag:** "NOW" caption + clock with seconds (`LiveText`). Single tap → tools (★ save
-  as favorite [I1], type a time). Double-tap → save an instant at Now (unchanged).
+  as favorite [I1], type a time). Double-tap → drop a nameless instant at Now.
 - **Cursor tag** (cursor mode only, as today): contents per C7. Single tap → tools: lock to
   Now, save span to Now, save span to selected, type a time, type an offset (from Now / from
   selected) [I3], ★ save as favorite. Double-tap → save an instant at the cursor.

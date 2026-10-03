@@ -2,7 +2,7 @@
 import { EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { durationShowsMillis, formatDurationHMS } from '../../domain/format.ts'
+import { formatDurationHMS } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
@@ -19,16 +19,11 @@ import { laneHasControls } from './useBottomLanes.ts'
 // ---------------------------------------------------------------------------
 // Shared bits
 
-/** Live length of a span ("26:13"); asks for continuous frames while showing ms. */
+/** Live length of a span ("26:13", "00:10"): whole seconds at finest, so no continuous frames. */
 function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
-  const live = a === 'now' || b === 'now' || a === 'center' || b === 'center'
   return (
     <LiveText
-      compute={(f, ctx) => {
-        const ms = Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center))
-        if (live && durationShowsMillis(ms)) ctx.fast()
-        return formatDurationHMS(ms)
-      }}
+      compute={f => formatDurationHMS(Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)))}
     />
   )
 }
