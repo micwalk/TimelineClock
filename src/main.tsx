@@ -5,8 +5,10 @@ import App from './App.tsx'
 import { engine } from './engine/viewportEngine.ts'
 import { startAlarmScheduler } from './services/AlarmScheduler.ts'
 import { applySettingsToDocument } from './store/settings.ts'
+import { runMigrations } from './store/migrations.ts'
 
 applySettingsToDocument()
+runMigrations()
 engine.start()
 startAlarmScheduler()
 

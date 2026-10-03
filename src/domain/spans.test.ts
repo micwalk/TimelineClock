@@ -29,7 +29,8 @@ describe('savedSpanLanes', () => {
     { id: 'ac', startInstantId: 'a', endInstantId: 'c', label: '', visible: true },
   ]
   const resolved = spans.map(s => resolveSpan(s, byId)!)
-  const base = { resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
+  const base = {
+    favoriteLanes: 'selected' as const, resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
 
   it('shows only visible spans without a selection, ordered by midpoint', () => {
     expect(savedSpanLanes(base).map(s => s.span.id)).toEqual(['ac', 'bc'])
@@ -48,5 +49,14 @@ describe('savedSpanLanes', () => {
   })
   it('drops spans whose endpoints no longer exist', () => {
     expect(resolveSpan({ id: 'x', startInstantId: 'a', endInstantId: 'gone', label: '' }, byId)).toBeNull()
+  })
+  it('hides lanes for favorites to Now unless selected, or always on', () => {
+    const fav: InstantRecord = { id: 'f', tsEpochMs: HOUR, label: 'Rice', favorite: true }
+    const favById = new Map([...byId, ['f', fav]])
+    const favSpan = resolveSpan({ id: 'fn', startInstantId: 'f', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }, favById)!
+    const all = { ...base, resolved: [...resolved, favSpan] }
+    expect(savedSpanLanes(all).map(s => s.span.id)).not.toContain('fn')
+    expect(savedSpanLanes({ ...all, selectedInstantId: 'f' }).map(s => s.span.id)).toContain('fn')
+    expect(savedSpanLanes({ ...all, favoriteLanes: 'always' }).map(s => s.span.id)).toContain('fn')
   })
 })

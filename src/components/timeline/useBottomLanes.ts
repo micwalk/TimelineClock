@@ -7,6 +7,7 @@ import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
+import { useSettings } from '../../store/settings.ts'
 import { useView } from '../../store/view.ts'
 import { lanesTop } from './geometry.ts'
 
@@ -45,6 +46,8 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
     moving: s.moveMode?.instantId ?? null,
   })))
 
+  const favoriteLanes = useSettings(s => s.favoriteLanes)
+
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
     const ref = (i: InstantRecord): TimeRef => (i.id === v.moving ? 'center' : i.tsEpochMs)
@@ -57,6 +60,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
       focusedSpanId: v.focusedSpanId,
       selectedInstantId: v.selectedId,
       now: Date.now(),
+      favoriteLanes,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -83,7 +87,7 @@ export function useBottomLanes(): { lanes: BottomLane[]; height: number } {
       })
     }
     return out
-  }, [instants, spans, v])
+  }, [instants, spans, v, favoriteLanes])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)

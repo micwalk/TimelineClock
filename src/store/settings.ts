@@ -5,6 +5,9 @@ import { loadJson, saveJson } from './storage.ts'
 import type { TunableKey, Tunables } from '../domain/tunables.ts'
 import { clampTunable, resolveTunables, sanitizeTunableOverrides } from '../domain/tunables.ts'
 
+/** When favorites and alarms get a lane to Now: only while selected (default), or always. */
+export type FavoriteLanes = 'selected' | 'always'
+
 const SETTINGS_KEY = 'timeline.settings.v1'
 
 export interface SettingsState {
@@ -12,6 +15,9 @@ export interface SettingsState {
   glow: number
   /** The user's changes to behavior tunables; missing keys use the defaults. */
   tunables: Partial<Tunables>
+  favoriteLanes: FavoriteLanes
+  /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
+  layoutVersion: number
 }
 
 const loaded = loadJson<Record<string, unknown>>(SETTINGS_KEY, {})
@@ -19,9 +25,11 @@ const loaded = loadJson<Record<string, unknown>>(SETTINGS_KEY, {})
 export const useSettings = create<SettingsState>(() => ({
   glow: typeof loaded.glow === 'number' ? loaded.glow : 1,
   tunables: sanitizeTunableOverrides(loaded.tunables),
+  favoriteLanes: loaded.favoriteLanes === 'always' ? 'always' : 'selected',
+  layoutVersion: typeof loaded.layoutVersion === 'number' && Number.isFinite(loaded.layoutVersion) ? loaded.layoutVersion : 0,
 }))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -35,6 +43,8 @@ export const getTunables = (): Tunables => resolveTunables(useSettings.getState(
 
 export const settings = {
   setGlow: (glow: number) => useSettings.setState({ glow }),
+  setFavoriteLanes: (favoriteLanes: FavoriteLanes) => useSettings.setState({ favoriteLanes }),
+  setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
   setTunable: (key: TunableKey, value: number) => {
     if (!Number.isFinite(value)) return
     useSettings.setState(s => ({ tunables: { ...s.tunables, [key]: clampTunable(key, value) } }))

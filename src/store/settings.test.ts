@@ -16,21 +16,21 @@ beforeEach(() => localStorage.clear())
 describe('settings store', () => {
   it('starts from defaults with nothing saved', async () => {
     const { useSettings, getTunables } = await loadStore()
-    expect(useSettings.getState()).toEqual({ glow: 1, tunables: {} })
+    expect(useSettings.getState()).toEqual({ glow: 1, tunables: {}, favoriteLanes: 'selected', layoutVersion: 0 })
     expect(getTunables()).toEqual(DEFAULT_TUNABLES)
   })
 
   it('loads saved values and drops junk', async () => {
     localStorage.setItem(KEY, JSON.stringify({ glow: 1.5, tunables: { chipRowsMax: 2, chipGapPx: 999, bogus: 1, glideTauMs: 'x' } }))
     const { useSettings, getTunables } = await loadStore()
-    expect(useSettings.getState()).toEqual({ glow: 1.5, tunables: { chipRowsMax: 2, chipGapPx: 40 } })
+    expect(useSettings.getState()).toEqual({ glow: 1.5, tunables: { chipRowsMax: 2, chipGapPx: 40 }, favoriteLanes: 'selected', layoutVersion: 0 })
     expect(getTunables().chipRowsMax).toBe(2)
   })
 
   it('survives unreadable storage', async () => {
     localStorage.setItem(KEY, '{not json')
     const { useSettings } = await loadStore()
-    expect(useSettings.getState()).toEqual({ glow: 1, tunables: {} })
+    expect(useSettings.getState()).toEqual({ glow: 1, tunables: {}, favoriteLanes: 'selected', layoutVersion: 0 })
   })
 
   it('clamps, saves and resets a tunable', async () => {
@@ -51,6 +51,20 @@ describe('settings store', () => {
     const { settings } = await loadStore()
     settings.setGlow(2)
     settings.setTunable('chipGapPx', 10)
-    expect(saved()).toEqual({ glow: 2, tunables: { chipGapPx: 10 } })
+    expect(saved()).toEqual({ glow: 2, tunables: { chipGapPx: 10 }, favoriteLanes: 'selected', layoutVersion: 0 })
+  })
+
+  it('loads and saves the favorite-lanes choice and layout version', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ favoriteLanes: 'always', layoutVersion: 2 }))
+    const { useSettings, settings } = await loadStore()
+    expect(useSettings.getState()).toMatchObject({ favoriteLanes: 'always', layoutVersion: 2 })
+    settings.setFavoriteLanes('selected')
+    expect(saved().favoriteLanes).toBe('selected')
+  })
+
+  it('falls back on unknown favorite-lanes values', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ favoriteLanes: 'sometimes', layoutVersion: 'x' }))
+    const { useSettings } = await loadStore()
+    expect(useSettings.getState()).toMatchObject({ favoriteLanes: 'selected', layoutVersion: 0 })
   })
 })

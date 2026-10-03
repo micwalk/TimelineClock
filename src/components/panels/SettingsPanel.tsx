@@ -18,6 +18,7 @@ export function SettingsPanel() {
   const gearRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const glow = useSettings(s => s.glow)
+  const favoriteLanes = useSettings(s => s.favoriteLanes)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
@@ -69,6 +70,17 @@ export function SettingsPanel() {
                 onChange={e => settings.setGlow(Number(e.target.value))}
               />
               <output className="mono">{glow.toFixed(1)}×</output>
+            </label>
+          </section>
+
+          <section className="settings__group">
+            <h3>Timeline</h3>
+            <label className="settings__row">
+              <span>Lanes for favorites and alarms</span>
+              <select value={favoriteLanes} onChange={e => settings.setFavoriteLanes(e.target.value === 'always' ? 'always' : 'selected')}>
+                <option value="selected">When selected</option>
+                <option value="always">Always</option>
+              </select>
             </label>
           </section>
 

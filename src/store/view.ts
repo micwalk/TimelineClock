@@ -57,7 +57,7 @@ const defaults: ViewState = {
   focusHistory: [],
   focusHistoryIndex: -1,
   showImpliedSelectedNow: true,
-  showImpliedSelectedPrev: true,
+  showImpliedSelectedPrev: false,
   timeIncrement: '30m',
   moveMode: null,
   editingInstantId: null,
