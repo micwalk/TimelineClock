@@ -50,7 +50,8 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
 
 function SavedSpanChip({ r, a, b, editing, expanded }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean }) {
   const header = spanHeader(r)
-  const name = expanded ? `${displayName(r.start.label)} → ${spanEndName(r)}` : header
+  const ends = `${displayName(r.start.label)} → ${spanEndName(r)}`
+  const name = expanded ? (header ? `${header}: ${ends}` : ends) : header
   return (
     <span className="span-chip__text">
       {editing ? (

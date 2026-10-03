@@ -48,6 +48,14 @@ describe('span chips', () => {
     expect(screen.getByText('Rice → Done')).toBeInTheDocument()
   })
 
+  it('keep the name first when selected: "name: Start → End"', () => {
+    const { lane, spanId } = savedLane('beach')
+    render(<BottomLanes lanes={[lane]} />)
+    act(() => useView.setState({ selectedSpanId: spanId }))
+    expect(screen.getByText('beach: Rice → Done')).toBeInTheDocument()
+    expect(screen.getByText('26:13')).toBeInTheDocument()
+  })
+
   it('are named by their visible text', () => {
     render(<BottomLanes lanes={[savedLane().lane]} />)
     expect(screen.getByRole('button', { name: /26:13/ })).toBeInTheDocument()
