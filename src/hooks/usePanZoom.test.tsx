@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePanZoom } from './usePanZoom.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { entities, useEntities } from '../store/entities.ts'
+import { settings, useSettings } from '../store/settings.ts'
 import { initialViewState, useView } from '../store/view.ts'
 
 function Harness({ onTap }: { onTap: () => void }) {
@@ -47,6 +48,7 @@ beforeEach(() => {
   engine.cancelTransition()
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
+  useSettings.setState({ tunables: {} })
 })
 
 describe('usePanZoom', () => {
@@ -81,6 +83,25 @@ describe('usePanZoom', () => {
     const pxPerMs = engine.sample().pxPerMs
     // After dragging 100px right, this instant sits 16px left of the center.
     const id = entities.createInstant(Date.now() - (100 + 16) / pxPerMs, 'Rice')
+    drag(screen.getByTestId('timeline'), 300, 400)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('takes the touch drag threshold from settings', () => {
+    settings.setTunable('dragThresholdTouchPx', 30)
+    const onTap = vi.fn()
+    render(<Harness onTap={onTap} />)
+    tap(screen.getByText('Tap me'), 50, 20)
+    expect(onTap).toHaveBeenCalledTimes(1)
+    expect(useView.getState().viewFocusMode).toBe('now')
+  })
+
+  it('takes the touch landing radius from settings', () => {
+    settings.setTunable('landingTouchPx', 40)
+    render(<Harness onTap={() => {}} />)
+    const pxPerMs = engine.sample().pxPerMs
+    // 30px from the center after the drag: outside the default 20px, inside 40px.
+    const id = entities.createInstant(Date.now() - (100 + 30) / pxPerMs, 'Rice')
     drag(screen.getByTestId('timeline'), 300, 400)
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })

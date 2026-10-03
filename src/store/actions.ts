@@ -170,7 +170,7 @@ export function panByPixels(dx: number) {
 }
 
 /** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */
-export function endPan(tolerancePx = 12) {
+export function endPan(tolerancePx: number) {
   settleCursor(tolerancePx / frame().pxPerMs, true)
 }
 

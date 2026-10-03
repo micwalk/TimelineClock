@@ -1,14 +1,12 @@
 // Drag to pan, wheel/pinch to zoom on the timeline element. A drag that starts on a
 // chip still pans (like the canvas did); the click that ends a drag is swallowed.
+// Movement and landing limits come from the tunables (Settings > Advanced).
 import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
 import { beginPan, endPan, panByPixels, zoomBy } from '../store/actions.ts'
+import { getTunables } from '../store/settings.ts'
 
-/** Movement before a press becomes a drag. Fingers wobble, so touch gets more slack. */
-const DRAG_THRESHOLD_PX = { mouse: 3, touch: 8 }
-/** How close the cursor must end to Now or an instant to snap onto it. */
-const SNAP_PX = { mouse: 12, touch: 20 }
 const WHEEL_ZOOM_PER_PX = 0.001 // a 100px mouse-wheel notch ≈ 10%
 
 const isTouch = (e: PointerEvent) => e.pointerType === 'touch' || e.pointerType === 'pen'
@@ -61,7 +59,8 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       }
       if (!drag || e.pointerId !== drag.id) return
       if (!drag.moved) {
-        if (Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD_PX[drag.touch ? 'touch' : 'mouse']) return
+        const t = getTunables()
+        if (Math.abs(e.clientX - drag.startX) < (drag.touch ? t.dragThresholdTouchPx : t.dragThresholdMousePx)) return
         drag.moved = true
         // Capture only once dragging, so plain clicks still reach chips and buttons.
         el.setPointerCapture(e.pointerId)
@@ -81,7 +80,8 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (drag && e.pointerId === drag.id) {
         if (drag.moved) {
           el.classList.remove('is-panning')
-          endPan(SNAP_PX[drag.touch ? 'touch' : 'mouse'])
+          const t = getTunables()
+          endPan(drag.touch ? t.landingTouchPx : t.landingMousePx)
           swallowTrailingClick()
         }
         drag = null
