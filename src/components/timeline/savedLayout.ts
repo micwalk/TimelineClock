@@ -133,7 +133,7 @@ export interface SavedLayout {
 const layoutEqual = (a: SavedLayout, b: SavedLayout) => JSON.stringify(a) === JSON.stringify(b)
 
 /** `laneCount`: span lanes on screen, which take width from the chips in vertical. */
-export function useSavedLayout(laneCount = 0, hasLaneChip = false): SavedLayout {
+export function useSavedLayout(laneCount = 0): SavedLayout {
   const orientation = useLayout(s => s.orientation)
   const instants = useEntities(s => s.instants)
   const v = useView(useShallow(s => ({
@@ -169,7 +169,7 @@ export function useSavedLayout(laneCount = 0, hasLaneChip = false): SavedLayout 
     const t = getTunables()
     const r = layoutLabels(items, {
       orientation,
-      crossBudget: orientation === 'vertical' ? verticalCrossBudget(f.crossSize, laneCount, hasLaneChip) : Infinity,
+      crossBudget: orientation === 'vertical' ? verticalCrossBudget(f.crossSize, laneCount) : Infinity,
       slotGap: t.chipGapPx,
       maxSlots: t.chipRowsMax,
       cluster: orientation === 'vertical' ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },

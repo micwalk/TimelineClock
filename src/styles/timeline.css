@@ -601,3 +601,9 @@
 .timeline[data-orientation='vertical'] .tl-lane__tools { right: 0; left: auto; transform: none; margin: 0; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--left { top: auto; bottom: 100%; margin-bottom: 4px; flex-direction: row-reverse; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--right { top: 100%; margin-top: 4px; }
+
+/* Lane chips and tools draw over the saved chips (lanes are above the columns) on a solid surface. */
+.timeline[data-orientation='vertical'] .tl-lane .span-chip,
+.timeline[data-orientation='vertical'] .tl-lane .icon-btn {
+  background: linear-gradient(var(--surface-strong), var(--surface-strong)) #02050f;
+}

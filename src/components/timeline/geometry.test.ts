@@ -32,9 +32,8 @@ describe('timeline geometry', () => {
 
   it('shrinks the vertical chip budget for lanes and their chips', () => {
     const base = 390 - GEOMETRY_VERTICAL.chipStart - 8
-    expect(verticalCrossBudget(390, 0, false)).toBe(base)
-    expect(verticalCrossBudget(390, 2, true)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap - 64)
-    // Lanes with no visible lane chip cost only their bars.
-    expect(verticalCrossBudget(390, 2, false)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap)
+    expect(verticalCrossBudget(390, 0)).toBe(base)
+    // Only the bars cost width; lane chips draw over the saved chips, so selecting never reflows them.
+    expect(verticalCrossBudget(390, 2)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap)
   })
 })
