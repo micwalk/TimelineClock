@@ -137,7 +137,7 @@ function HelpContent() {
 
         <section className="settings__group help__credit">
           <p>
-            Made by <a href={AUTHOR_URL} target="_blank" rel="noreferrer">micwalk</a> ·{' '}
+            Made by <a href={AUTHOR_URL} target="_blank" rel="noreferrer">Michael Walker</a> ·{' '}
             <a href={REPO_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
           </p>
         </section>
