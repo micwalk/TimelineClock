@@ -204,17 +204,22 @@
 .tl-col__below {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   min-width: 100%;
   width: max-content;
   margin-top: 4px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
+  gap: 6px;
 }
-.tl-col__below .chip__time { margin-right: auto; padding: 0 5px; color: var(--ink-dim); }
-.tl-col__below .tl-col__tools { position: static; transform: none; margin: 0; }
+/* The temporary time reads as its own small box. */
+.tl-col__below .chip__time {
+  padding: 4px 7px;
+  border-radius: var(--radius-chip);
+  background: var(--box-bg);
+  color: var(--ink);
+}
+.tl-col__below .tl-col__tools { position: static; transform: none; margin: 0 0 0 auto; }
 /* While renaming, the input is the one box: the chip around it draws nothing. */
 .chip--editing { background: none; padding: 0; cursor: default; }
 .chip--editing:hover { background: none; }
