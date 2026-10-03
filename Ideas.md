@@ -13,6 +13,7 @@ Feature Level (Ready to Implement)
 * Snap cursor to timeline ticks (option)
 
 Not sure yet, but needs improvement
+* Step increments configurable in Settings (choose which steps the ± buttons offer) plus a 'Custom…' option to type any step
 * rendering of spans as just rectangles
 * first class spans
 * "Genie" save animation: when Now or the Cursor becomes a saved instant, its readout box
