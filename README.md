@@ -10,8 +10,9 @@ Working prototype:
 - Instants: create, rename, favorite, alarm, move, delete; focus history and next/previous navigation
 - Spans between instants (saved and implied), with live durations
 - Alarms with sound, browser notifications, snooze, and a ringing panel
-- List of instants, favorites and spans
-- Settings: glow intensity, alarm ring duration and unanswered behavior, debug buttons
+- The **Agenda** (list under the timeline): all instants, favorites, and spans
+- Settings (gear in the Agenda tab bar): glow intensity, how long alarms ring, dismiss or auto-snooze when unanswered, and a Dev test alarm
+- Works with touch: drag to pan, pinch to zoom, taps tolerate finger wobble, the cursor snaps onto nearby instants
 
 The timeline is rendered as DOM (React + CSS transforms), not canvas. See
 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for how rendering, state and styling fit together.
@@ -63,7 +64,7 @@ src/
 ├── engine/      # Viewport engine and hooks: usePositionX, useFrameValue, LiveText
 ├── components/
 │   ├── timeline/  # Timeline, instant columns, span lanes, ticks, time-entry popovers
-│   ├── panels/    # Control bar, list panel, ringing alarms, settings
+│   ├── panels/    # Control bar, Agenda (ListPanel), ringing alarms, settings
 │   └── common/    # Icon button, inline input
 ├── hooks/       # Pan/zoom gestures, hotkeys, FLIP list animation
 ├── services/    # Alarm scheduler, audio, notifications
@@ -82,7 +83,15 @@ src/
 | `Esc` | Clear secondary selection, then selection; cancels a move |
 | `Enter` | Confirm a move |
 
-## Development milestones
+## Documentation
+
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md): how rendering, state, gestures and styling work
+- [docs/handoffs/](./docs/handoffs/): what's next. Layout v2 (vertical layout, gestures and momentum, label overlap, Agenda dock or drawer, cursor arrow) and everything else
+- [PRD_english.md](./PRD_english.md), [docs/prd_alarms.md](./docs/prd_alarms.md): product requirements
+- [Ideas.md](./Ideas.md): running idea and bug list
+- [docs/archive/](./docs/archive/): the original implementation plan
+
+## Roadmap (from the PRD)
 
 1. **M0 (Prototype)**: Basic timeline render, Now animation, tap/drag creation
 2. **M1 (MVP)**: Natural language quick-add, favorites, local storage, PWA

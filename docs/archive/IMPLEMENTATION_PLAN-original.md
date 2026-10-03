@@ -1,9 +1,8 @@
 # Timeline Clock - Implementation Plan
 
-> **Status note (Oct 2026):** this is the original plan. The timeline was first built on
-> canvas and has since been rebuilt as DOM (see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)).
-> Phase 1 items that mention `TimelineCanvas.tsx` / `src/canvas/` are superseded by
-> `src/components/timeline/` and `src/engine/`.
+> **Archived (Oct 2026).** This is the original plan, kept for reference. The timeline was
+> first built on canvas and has since been rebuilt as DOM (see [ARCHITECTURE.md](../ARCHITECTURE.md)).
+> Current plans live in [docs/handoffs/](../handoffs/).
 
 ## Project Overview
 A timeline-centric clock app that unifies Stopwatch, Timer, Alarm, World Clock, and lightweight Calendar concepts. Everything is an Instant, Duration, or TimeRange, surfaced on one scrolling/zoomable timeline with a "Now" marker.

@@ -152,11 +152,7 @@ A single‑view, timeline‑centric clock that unifies Stopwatch, Timer, Alarm, 
 
 - **Local notifications** while app open/foreground.
 - **Scheduled notifications** when app is backgrounded: require **Web Push** with a lightweight backend to schedule exact‑time pushes (iOS/Android PWA limitations prevent exact local scheduling when closed).
-- Backend options: a small Cloudflare Worker/Supabase Edge Function that stores pending alarms and sends a push at `tsEpochMs`.
-
-- **Local notifications** while app open/foreground.
-- **Scheduled notifications** when app is backgrounded: require **Web Push** with a lightweight backend to schedule exact‑time pushes (iOS/Android PWA limitations prevent exact local scheduling when closed).
-- Backend options: a small Cloudflare Worker/Supabase Edge Function that stores pending alarms and sends a push at `tsEpochMs`.
+- Backend options: a small Cloudflare Worker/Supabase Edge Function (or a Netlify Function, since the app is hosted there) that stores pending alarms and sends a push at `tsEpochMs`.
 
 ---
 

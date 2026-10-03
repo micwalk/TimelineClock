@@ -40,16 +40,17 @@ See docs/ARCHITECTURE.md before changing the timeline.
 4. **PWA First**: Works offline, installable, cross-platform
 5. **Local-First**: Data stays on device unless user opts into sync
 6. **Performance First**: Optimize for 60fps timeline rendering and smooth interactions
+7. **History is core**: never fade, dim or hide past instants/spans to reduce clutter; fix clutter with layout
+8. **Capture, then relate**: one tap records an instant (e.g. rice goes on); label it later; create timers/alarms relative to it (+13m); look back at elapsed time. Judge UX by how few taps this takes
+9. **Everything glows**: style through theme tokens (--accent/--halo, .glow-box/.glow-text, --glow) so a future style editor can change it
+10. **Propose UX changes before building them**: the owner has rejected some unrequested interaction changes
 
-## UX Patterns
-- **Timeline**: Horizontal by default, Now line fixed in center, content scrolls right→left
-- **Gestures**: 
-  - Tap empty space = create Instant
-  - Press-drag = create TimeRange
-  - Long-press = context menu
-  - Pinch = zoom, drag = pan
-- **Quick Add**: Natural language parsing (`25m`, `tomorrow 8am`, `in 10m`) using custom parser + date-fns
-- **Cards**: Favorites & active items below timeline with controls
+## UX Patterns (current)
+- **Timeline**: horizontal; Now line follows the clock; a vertical orientation is planned (docs/handoffs)
+- **Gestures**: one-finger/mouse drag moves through time (free cursor at the center); pinch or wheel zooms; double-tap/double-click a label to create or rename; tap selects
+- **Cursor landing**: a drag that ends near Now or an instant snaps onto it (20px touch, 12px mouse); ± steps and typed times land on an instant only on an exact hit
+- **Agenda**: the tabbed list under the timeline (All Instants / Favorites / All Spans); the Settings gear sits in its tab bar
+- **Planned** (see docs/handoffs): vertical layout, momentum, label-overlap layout, Agenda as dock or drawer, arrow-shaped cursor, stopwatch/timer/alarm quick-create, natural-language quick add
 
 ## Technical Requirements
 - **Performance**: 60fps timeline, <2s cold start, <500ms warm start

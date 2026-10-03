@@ -79,14 +79,37 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 | `useEntities`    | `timeline.saved.v1`, `timeline.spans.v1` | Same record format as the original canvas app.    |
 | `useView`        | `timeline.state`        | Focus, selection, zoom, step, cursor lock. Debounced 300ms.        |
 | `useAlarms`      | `timeline.alarms.v1`    | Ringing alarms + ring duration/unanswered behavior.               |
-| `useSettings`    | `timeline.settings.v1`  | Glow intensity, debug button toggle.                               |
-| `useUi`          | (not persisted)         | List tab, open time-entry popover.                                |
+| `useSettings`    | `timeline.settings.v1`  | Glow intensity (more appearance settings will land here).          |
+| `useUi`          | (not persisted)         | Agenda tab, open time-entry popover.                              |
 
 Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an offset
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans
 ending at Now keep widening). Focusing an instant also selects it; the previously
 selected instant becomes the *secondary* selection, and the span between them is
 shown as an implied span.
+
+Store helpers that return partial state (like `domain/navigation.pushFocusHistory`)
+must return **only their own fields**. Spreading a whole state object into a patch
+silently reverts unrelated fields; a bug like that once made refocusing the most
+recent instant undo itself.
+
+## Gestures and cursor landing (`hooks/usePanZoom.ts`, `store/actions.ts`)
+
+- **Drag (one finger or mouse button)** moves through time. A press becomes a drag
+  after 3px with a mouse and 8px with touch (finger wobble). Pointer capture starts only
+  once dragging, so plain taps still reach chips and buttons.
+- **Click guard:** a mouse drag ends with a click on whatever is under the pointer, and
+  that one click is swallowed. Touch drags produce no click, so the guard lasts only
+  for the current event (`setTimeout(…, 0)`). Otherwise it would eat the next real tap.
+- **Wheel** zooms (about 10% per notch); **pinch** zooms.
+- **Where the cursor comes to rest** (`settleCursor`): a drag that ends within 12px
+  (mouse) or 20px (touch) of Now or an instant focuses it, hiding the cursor. ± steps
+  and typed times land on an instant only on an essentially exact hit (within 2px and
+  0.5s), so a precise typed time is never pulled to a nearby instant. Tapping the
+  instant under the cursor focuses it.
+
+Gesture tests (`hooks/usePanZoom.test.tsx`) dispatch `MouseEvent`s tagged with
+`pointerType`/`pointerId`, because jsdom has no `PointerEvent`.
 
 ## Styling
 
@@ -107,8 +130,10 @@ on `globalThis` across HMR.
 ## Testing
 
 `npm test` runs Vitest in jsdom. `domain/*.test.ts` cover the pure logic;
-`store/actions.test.ts` covers user operations end to end through the stores
-(including move mode, which needs the engine running).
+`store/actions.test.ts` covers user operations end to end through the stores;
+`hooks/usePanZoom.test.tsx` covers gestures. Tests don't wait on timers or frames
+(actions read the viewport via `engine.sample()`), so they're stable in CI. Netlify
+runs them before every build.
 
 ## Performance
 
