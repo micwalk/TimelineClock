@@ -1,15 +1,15 @@
 // Momentum controller: after a flicked drag, keeps panning from engine frames with
-// decaying velocity, then lets the cursor land (Now / instant / tick) where it rests.
+// decaying velocity, then stops where it rests (no landing or snapping after a glide).
 // Per-frame values live here, never in React state.
 import { stepGlide } from '../domain/glide.ts'
 import { engine } from '../engine/viewportEngine.ts'
-import { endPan, panByPixels } from '../store/actions.ts'
+import { panByPixels } from '../store/actions.ts'
 import { getTunables } from '../store/settings.ts'
 import { useView } from '../store/view.ts'
 
 export interface GlideController {
   /** Starts gliding at `v` px/ms (signed, along the main axis); replaces any glide in progress. */
-  start(v: number, landingPx: number): void
+  start(v: number): void
   /** Stops without landing. Returns whether a glide was running. */
   stop(): boolean
   readonly active: boolean
@@ -25,7 +25,7 @@ export function createGlide(): GlideController {
     return true
   }
 
-  const start = (v0: number, landingPx: number) => {
+  const start = (v0: number) => {
     stop()
     let v = v0
     let last = performance.now()
@@ -44,7 +44,6 @@ export function createGlide(): GlideController {
       panByPixels(step.dPos)
       if (Math.abs(v) < t.glideStopSpeed) {
         stop()
-        endPan(landingPx)
       } else {
         engine.requestFrame()
       }

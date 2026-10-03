@@ -16,8 +16,10 @@ describe('tunables table', () => {
   it('has the values agreed in the spec', () => {
     expect(DEFAULT_TUNABLES.chipRowsMax).toBe(3)
     expect(DEFAULT_TUNABLES.autoHysteresis).toBe(0.1)
-    expect(DEFAULT_TUNABLES.landingMousePx).toBe(12)
-    expect(DEFAULT_TUNABLES.landingTouchPx).toBe(20)
+    expect(DEFAULT_TUNABLES.landingMousePx).toBe(8)
+    expect(DEFAULT_TUNABLES.landingTouchPx).toBe(12)
+    expect(DEFAULT_TUNABLES.tickSnapPx).toBe(8)
+    expect(DEFAULT_TUNABLES.snapMaxReleaseSpeed).toBe(0.05)
     expect(DEFAULT_TUNABLES.secondsBelowTickMs).toBe(60_000)
   })
 })

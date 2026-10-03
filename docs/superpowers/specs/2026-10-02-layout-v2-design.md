@@ -88,8 +88,10 @@ within today's budget (see §9).
 - Momentum:
   1. Mouse, touch and pen all glide, but only when released while moving (velocity from
      the last ~100ms; no glide if the pointer was still for ~50ms before release).
-  2. Snapping happens only where the glide comes to rest (Now/instant landing rule first,
-     then ticks).
+  2. A glide never snaps: it stops where it comes to rest (owner change after phone testing;
+     the earlier rule snapped at rest). Snapping needs a release at almost no speed
+     (`snapMaxReleaseSpeed`, 0.05 px/ms); a faster release that is too slow to glide also
+     ends without snapping.
   3. Touching during a glide stops it, and that touch is not a tap. A drag can start from it.
   4. Only drags glide. Wheel/trackpad scrolling already has OS momentum.
   5. Glide stays on under prefers-reduced-motion (direct manipulation); focus transitions
@@ -99,7 +101,7 @@ within today's budget (see §9).
 - A setting, **on by default**. Snaps to the **finest ticks currently shown** (tier 0 of
   `pickTickTiers`; always ≥ ~14px apart).
 - Applies only where the cursor comes to rest after a drag or glide, with a short ease.
-  Landing on Now or an instant (12px mouse / 20px touch) wins over ticks.
+  Landing on Now or an instant (8px mouse / 12px touch; lowered from 12/20 after phone testing) wins over ticks. A tick is snapped to only within `tickSnapPx` (8px); farther away the cursor stays.
 - ± steps and typed times are never snapped (relative moves stay exact: "+13m from Rice").
 
 ### Numbers
@@ -178,7 +180,9 @@ style editor's territory). Each entry has a key, label, default, min, max, step 
 | `sideDockMinWidthPx` | 900 | Window width needed for the side-docked Agenda |
 | `bottomDockMinHeightPx` | 600 | Window height needed for the bottom-docked Agenda |
 | `dragThresholdMousePx` / `dragThresholdTouchPx` | 3 / 8 | Press → drag (existing) |
-| `landingMousePx` / `landingTouchPx` | 12 / 20 | Landing on Now/instants (existing) |
+| `landingMousePx` / `landingTouchPx` | 8 / 12 | Landing on Now/instants |
+| `tickSnapPx` | 8 | Snap to a tick only within this distance |
+| `snapMaxReleaseSpeed` | 0.05 | Snap only when released slower than this (px/ms) |
 | `glideWindowMs` | 100 | Velocity sampling window |
 | `glideStillMs` | 50 | Pause before release that cancels a glide |
 | `glideMinSpeed` | 0.3 | px/ms needed to start a glide |
@@ -336,7 +340,7 @@ font plus padding/icon constants, cached by text. Tests inject a fake measurer.
   within the last `glideStillMs` and speed ≥ `glideMinSpeed`, start a glide. The glide is an
   engine frame listener: each frame it pans by `v·dt`, decays `v` by `exp(−dt/glideTauMs)`
   and calls `engine.requestFrame()`; below `glideStopSpeed` it ends and calls
-  `endPan(landing)`. A `pointerdown` during a glide cancels it and marks that press as
+  the glide just ends (no snap). A `pointerdown` during a glide cancels it and marks that press as
   "not a tap" (its click is swallowed unless it becomes a drag). The step function is pure
   and unit tested.
 - **Tick snap** in `settleCursor`: after the Now/instant landing check fails, if the setting

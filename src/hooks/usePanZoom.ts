@@ -108,8 +108,9 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
           const v = pointers.size === 0 && drag.id === e.pointerId && e.type === 'pointerup'
             ? releaseVelocity(samples, performance.now(), { windowMs: t.glideWindowMs, stillMs: t.glideStillMs })
             : 0
-          if (shouldGlide(v, t.glideMinSpeed)) glide.start(v, landing)
-          else endPan(landing)
+          // Snap only when released almost at rest; a glide never snaps where it stops.
+          if (shouldGlide(v, t.glideMinSpeed)) glide.start(v)
+          else endPan(landing, { snap: Math.abs(v) < t.snapMaxReleaseSpeed })
           swallowTrailingClick()
         } else if (swallowClick) {
           swallowTrailingClick() // a press that stopped a glide: swallow its click, then disarm

@@ -27,6 +27,24 @@ function pointer(target: Element, type: string, x: number, pointerType: 'touch' 
   target.dispatchEvent(e)
 }
 
+/** A drag released while still moving at `pxPerMs` (too slow to glide). */
+function driftRelease(target: Element, fromX: number, toX: number, pxPerMs: number) {
+  let clock = 1000
+  const spy = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+  try {
+    pointer(target, 'pointerdown', fromX)
+    const steps = 10
+    const stepMs = Math.abs(toX - fromX) / steps / pxPerMs
+    for (let i = 1; i <= steps; i++) {
+      clock += stepMs
+      pointer(target, 'pointermove', fromX + ((toX - fromX) * i) / steps)
+    }
+    pointer(target, 'pointerup', toX)
+  } finally {
+    spy.mockRestore()
+  }
+}
+
 /** A deliberate drag: slow moves and a pause before release, so it never glides. */
 function drag(target: Element, fromX: number, toX: number, pointerType: 'touch' | 'mouse' = 'touch') {
   let clock = 1000
@@ -96,9 +114,34 @@ describe('usePanZoom', () => {
   it('a touch drag that ends within finger range of an instant snaps onto it', () => {
     render(<Harness onTap={() => {}} />)
     const pxPerMs = engine.sample().pxPerMs
-    // After dragging 100px right, this instant sits 16px left of the center.
-    const id = entities.createInstant(Date.now() - (100 + 16) / pxPerMs, 'Rice')
+    // After dragging 100px right, this instant sits 10px left of the center (default radius 12px).
+    const id = entities.createInstant(Date.now() - (100 + 10) / pxPerMs, 'Rice')
     drag(screen.getByTestId('timeline'), 300, 400)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('a drag released with some speed ends without snapping', () => {
+    render(<Harness onTap={() => {}} />)
+    const pxPerMs = engine.sample().pxPerMs
+    entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice') // would snap if released at rest
+    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.1) // 0.1 px/ms: above 0.05, below the glide speed
+    expect(useView.getState().viewFocusMode).toBe('cursor')
+  })
+
+  it('a drag released almost at rest still snaps', () => {
+    render(<Harness onTap={() => {}} />)
+    const pxPerMs = engine.sample().pxPerMs
+    const id = entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice')
+    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.02)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('takes the snap release speed from settings', () => {
+    settings.setTunable('snapMaxReleaseSpeed', 0.5)
+    render(<Harness onTap={() => {}} />)
+    const pxPerMs = engine.sample().pxPerMs
+    const id = entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice')
+    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.1)
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
@@ -115,7 +158,7 @@ describe('usePanZoom', () => {
     settings.setTunable('landingTouchPx', 40)
     render(<Harness onTap={() => {}} />)
     const pxPerMs = engine.sample().pxPerMs
-    // 30px from the center after the drag: outside the default 20px, inside 40px.
+    // 30px from the center after the drag: outside the default 12px, inside 40px.
     const id = entities.createInstant(Date.now() - (100 + 30) / pxPerMs, 'Rice')
     drag(screen.getByTestId('timeline'), 300, 400)
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
@@ -178,6 +221,20 @@ describe('usePanZoom', () => {
       const settled = center()
       vi.advanceTimersByTime(1000)
       expect(center()).toBe(settled) // and stopped
+    })
+
+    it('a glide that comes to rest on Now or an instant does not snap onto it', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      const el = screen.getByTestId('timeline')
+      flick(el)
+      vi.advanceTimersByTime(8000)
+      const rest = center()
+      // An instant right at the resting point; the glide already ended, so nothing may pull the cursor.
+      entities.createInstant(rest, 'Rice')
+      vi.advanceTimersByTime(1000)
+      expect(useView.getState().viewFocusMode).toBe('cursor')
+      expect(center()).toBe(rest)
     })
 
     it('a release after a pause does not glide', async () => {

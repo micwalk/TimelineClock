@@ -116,7 +116,7 @@ function settleCursor(toleranceMs: number, animate: boolean, snapToTicks = false
   if (!best) {
     if (!snapToTicks || !useSettings.getState().tickSnap) return false
     const tick = nearestFinestTick(f.center, f.pxPerMs)
-    if (tick === f.center) return false
+    if (tick === f.center || Math.abs(tick - f.center) * f.pxPerMs > getTunables().tickSnapPx) return false
     engine.beginTransition(getTunables().tickSnapEaseMs)
     view.setTimeCenter(tick)
     refreshLock()
@@ -227,8 +227,13 @@ export function toggleAgendaDock() {
   ui.closeAgenda()
 }
 
-/** End of a drag or glide: snap to Now or to an instant if the center landed within `tolerancePx`, else to the nearest tick. */
-export function endPan(tolerancePx: number) {
+/**
+ * End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`,
+ * else to the nearest tick within `tickSnapPx`. `{ snap: false }` (a glide's end, or a
+ * release with speed) leaves the cursor exactly where the pan stopped.
+ */
+export function endPan(tolerancePx: number, { snap = true }: { snap?: boolean } = {}) {
+  if (!snap) return
   settleCursor(tolerancePx / frame().pxPerMs, true, true)
 }
 

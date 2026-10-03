@@ -117,7 +117,7 @@ recent instant undo itself.
   being moved the cache is skipped. The limits are the `chipRowsMax` (horizontal) and
   `chipColumnsMax` (vertical) tunables.
 - **Momentum (`hooks/glide.ts`, `domain/glide.ts`).** A flicked drag keeps panning from engine
-  frames with decaying velocity, then `endPan` lands the cursor. There is one glide for the app;
+  frames with decaying velocity, then stops without snapping. There is one glide for the app;
   `engine.beginTransition()`, `rotate()`, zoom, ± steps and the wheel stop it, and it stops
   itself if the view leaves the free cursor.
 - **Tunables (`domain/tunables.ts`, Settings > Advanced).** Every magic number of the gestures
@@ -139,9 +139,12 @@ recent instant undo itself.
 - **Click guard:** a mouse drag ends with a click on whatever is under the pointer, and
   that one click is swallowed. Touch drags produce no click, so the guard lasts only
   for the current event (`setTimeout(…, 0)`). Otherwise it would eat the next real tap.
-- **Wheel** zooms (about 10% per notch) in horizontal and pans in vertical; Ctrl+wheel and **pinch** zoom. Drags follow the main axis (x or y). A flick glides (see Layout) and the cursor snaps to a tick at rest.
-- **Where the cursor comes to rest** (`settleCursor`): a drag that ends within 12px
-  (mouse) or 20px (touch) of Now or an instant focuses it, hiding the cursor. ± steps
+- **Wheel** zooms (about 10% per notch) in horizontal and pans in vertical; Ctrl+wheel and **pinch** zoom. Drags follow the main axis (x or y). A flick glides (see Layout) and stops where it rests, without snapping.
+- **Where the cursor comes to rest** (`settleCursor`): a drag released at almost no
+  speed (below `snapMaxReleaseSpeed`, 0.05 px/ms) that ends within 8px (mouse) or 12px (touch)
+  of Now or an instant focuses it, hiding the cursor; failing that it eases to the nearest
+  finest tick if that is within `tickSnapPx` (8px). A release with speed (`endPan(…, { snap: false })`)
+  or the end of a glide never snaps. ± steps
   and typed times land on an instant only on an essentially exact hit (within 2px and
   0.5s), so a precise typed time is never pulled to a nearby instant. Tapping the
   instant under the cursor focuses it.
