@@ -92,7 +92,10 @@ Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an o
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans
 ending at Now keep widening). Focusing an instant also selects it; the previously
 selected instant becomes the *secondary* selection, and the span between them is
-shown as an implied span.
+shown as an implied span (on by default). In cursor mode a live Selected→Cursor lane runs
+from the selection to the cursor; Selected→Now is opt-in. All three have a pin that saves the span
+and chips that name their endpoints. The Cursor tag stays in instant focus mode (in the
+`--c-cursor-on` accent) with the instant's time and its distance from Now.
 
 Store helpers that return partial state (like `domain/navigation.pushFocusHistory`)
 must return **only their own fields**. Spreading a whole state object into a patch

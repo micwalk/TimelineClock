@@ -66,11 +66,21 @@ within today's budget (see §9).
 5. Quieter defaults: favorites and alarms show "Rice · 20m ago" / "Tea · in 6m" on the chip
    instead of a permanent lane; the lane appears when selected or switched on. Selecting
    shows only Selected→Now; Secondary→Selected becomes opt-in.
+   Owner change (span creation on mobile): the automatic lane spans to the *selection*
+   instead. Previous→Selected is on by default; a live Selected→Cursor lane shows in cursor
+   mode; Selected→Now is off by default (its Agenda toggle stays). Their chips name the
+   endpoints in time order ("Wake up → Sleep · 16:00:00"; unnamed instants show their time,
+   the cursor shows "Cursor"), and each has the 📍 pin that saves the span.
 6. Snoozes stay on the timeline with a short name ("Test Alarm ⟲2") and group with their
    original in the overlap layout.
 7. **Never fade, dim or hide the past.**
 
 ### Cursor arrow
+- Owner change: the Cursor tag no longer hides when the cursor lands on an instant. In instant
+  focus mode it stays, in its own accent (`--c-cursor-on`, default the instant colour), showing
+  the instant's time with seconds and "26m ago" / "in 5m". No ＋ (that drops at a free cursor),
+  no double-tap, and its tools are Save span to Now, Type a time…, Offset from Now…. The focused
+  instant's chip drops its "· ago" suffix because the tag carries it.
 - Double-tap the Cursor tag drops a nameless instant there (no name box, no selection); the
   tag also has a round ＋ button beside it that does the same. A single tap shows its tools
   (lock, save span, type a time). While following Now the big red control-bar button is a ＋
@@ -328,7 +338,7 @@ font plus padding/icon constants, cached by text. Tests inject a fake measurer.
   show/hide, delete). Double-tap → focus the span (unchanged).
 - `savedSpanLanes` adds the C8 rule: favorite/alarm→Now spans get a lane only when their
   instant is selected/focused, or always when the setting says so.
-- Implied lanes: Selected→Now by default; Secondary→Selected only when switched on (C9).
+- Implied lanes: Previous→Selected (on) and Selected→Cursor (live, cursor mode); Selected→Now only when switched on (C9, revised: owner change, layout v3).
 - A focused saved span becomes the first lane, emphasized (it used to be top lane B).
 - Vertical: lanes are vertical bars; the chip sits beside its bar on the inner side,
   centered on the visible part of the span.
@@ -372,7 +382,9 @@ Agenda (Auto/Docked/Drawer) · Snap cursor to ticks (on) · Lanes for favorites 
 - No change to instant or span records. Snooze short names are display-only.
 - `timeline.settings.v1` gains: `orientation`, `verticalDir`, `agendaPlacement`, `tickSnap`,
   `favoriteLanes`, `tunables`, `layoutVersion`. On first load with `layoutVersion < 2`,
-  `showImpliedSelectedPrev` is set to false once (C9), then `layoutVersion = 2`.
+  `showImpliedSelectedPrev` is set to false once (C9), then `layoutVersion = 2`. With
+  `layoutVersion < 3`, `showImpliedSelectedNow` is set to false and `showImpliedSelectedPrev` to
+  true once, then `layoutVersion = 3`.
 - Overrides from the rotate button and the Agenda toggle are session-only.
 
 ## 7. Accessibility and keyboard
