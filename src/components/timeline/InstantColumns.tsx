@@ -15,6 +15,7 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
+import { useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 import { GEOMETRY_VERTICAL } from './geometry.ts'
 import * as act from '../../store/actions.ts'
@@ -66,6 +67,7 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   useChipWidth(chipRef, inst.id)
   const name = chipName(inst.label)
   const vertical = useLayout(s => s.orientation === 'vertical')
+  const unnamed = !inst.label
 
   const bellGlyph = (!!inst.alarm && !isPast) || ringing
   const showRelative = !!inst.favorite || !!inst.alarm || selected || focused
@@ -95,18 +97,23 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
             onCancel={() => view.editInstant(null)}
           />
         ) : (
+          <>
+          {unnamed && (
+            <button type="button" className="chip__name-hint" aria-label="Name this instant" onClick={() => view.editInstant(inst.id)}>name…</button>
+          )}
           <button
             type="button"
             className="chip__main"
             title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click the name to rename, the time to focus`}
             onClick={() => act.selectInstant(inst.id)}
           >
-            <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>
+            {!unnamed && <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>}
             <span className="chip__time" onDoubleClick={() => act.focusInstant(inst.id)}>
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
           </button>
+          </>
         )}
       </div>
       {foldCount > 0 && (
@@ -137,7 +144,8 @@ const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, fol
   { inst: InstantRecord; row: number | undefined; cross: number; foldCount: number; foldedIds: string } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
-  const stateClass = moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''
+  const dropped = useUi(s => s.droppedId === inst.id)
+  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}`
 
   return (
     <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>

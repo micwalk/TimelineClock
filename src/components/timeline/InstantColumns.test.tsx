@@ -8,6 +8,7 @@ import { useSettings } from '../../store/settings.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
+import { ui } from '../../store/ui.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { formatClockCompact } from '../../domain/format.ts'
 import { MINUTE } from '../../domain/time.ts'
@@ -27,6 +28,34 @@ beforeEach(() => {
 
 // The last rendered frame is what components draw from; anchor times to it.
 const twentyMinutesAgo = () => engine.getFrame().now - 20 * MINUTE
+
+describe('unnamed saved chips', () => {
+  it('show a name hint instead of "?", and tapping it opens the name box', () => {
+    const t = twentyMinutesAgo()
+    const id = entities.createInstant(t, '')
+    render(<Columns />)
+    expect(screen.queryByText('?')).toBeNull()
+    expect(screen.getByText(formatClockCompact(t, false))).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Name this instant' }))
+    expect(useView.getState().editingInstantId).toBe(id)
+  })
+
+  it('still select when the time is tapped', () => {
+    const t = twentyMinutesAgo()
+    const id = entities.createInstant(t, '')
+    render(<Columns />)
+    fireEvent.click(screen.getByText(formatClockCompact(t, false)))
+    expect(useView.getState().currentSelectedInstantId).toBe(id)
+  })
+
+  it('pulse once when freshly dropped', () => {
+    const id = entities.createInstant(twentyMinutesAgo(), '')
+    const { container } = render(<Columns />)
+    expect(container.querySelector('.is-dropped')).toBeNull()
+    act(() => ui.markDropped(id))
+    expect(container.querySelector('.tl-col--label.is-dropped')).not.toBeNull()
+  })
+})
 
 describe('saved instant chips', () => {
   it('show the name and a compact time in one chip', () => {

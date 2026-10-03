@@ -1,12 +1,11 @@
 // Now and the Cursor as arrow tags on the live side of the axis. A tap opens the
-// tag's tools; a double-tap saves an instant there.
+// tag's tools; a double-tap drops a nameless instant there (the Cursor tag also has a ＋ button).
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import type { LiveTextContext } from '../../engine/LiveText.tsx'
 import { SECOND } from '../../domain/time.ts'
-import { chipName, durationShowsMillis, formatClockCompact, formatSignedDuration } from '../../domain/format.ts'
+import { chipName, formatClockCompact, formatSignedDuration } from '../../domain/format.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
@@ -26,10 +25,8 @@ export const liveTagsCollide = (nowPos: number, cursorPos: number, clearancePx: 
 const NAME_MAX = 10
 const shortName = (name: string) => (name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1)}…` : name)
 
-function offsetText(name: string, ms: number, ctx: LiveTextContext) {
-  if (durationShowsMillis(ms)) ctx.fast()
-  return `${name} ${formatSignedDuration(ms)}`
-}
+/** "Rice +00:10": whole seconds, so it only changes once a second. */
+const offsetText = (name: string, ms: number) => `${name} ${formatSignedDuration(ms)}`
 
 function clockPopover(anchor: 'now' | 'cursor') {
   return (
@@ -46,16 +43,16 @@ export function NowTag() {
   const menuOpen = useUi(s => s.tagMenu === 'now')
   const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'now')
   const items: TagMenuItem[] = [
-    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.createInstantAndEdit(act.nowTime(), { favorite: true }) },
+    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.dropInstant({ favorite: true }) },
     { label: 'Set cursor to a time…', icon: ClockIcon, onSelect: () => ui.openTimeInput({ kind: 'clock', anchor: 'now' }) },
   ]
   return (
     <Marker className={`is-now${focused ? ' is-focused' : ''}${menuOpen || clockOpen ? ' has-popover' : ''}`} ariaLabel="Now" getPos={f => f.pos(f.now)}>
       <ArrowTag
-        hint="Tap for tools; double-tap to save an instant at Now"
+        hint="Tap for tools; double-tap to drop an instant at Now"
         slot={0}
         onClick={() => ui.toggleTagMenu('now')}
-        onDoubleClick={() => { ui.closeTagMenu(); act.createInstantAndEdit(act.nowTime()) }}
+        onDoubleClick={() => { ui.closeTagMenu(); act.dropInstant() }}
         menuOpen={menuOpen}
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Now tools" items={items} onClose={ui.closeTagMenu} />}
@@ -98,7 +95,7 @@ export function CursorTag() {
     { label: 'Type a time…', icon: ClockIcon, onSelect: () => ui.openTimeInput({ kind: 'clock', anchor: 'cursor' }) },
     { label: 'Offset from Now…', icon: PlusSmallIcon, onSelect: () => ui.openTimeInput({ kind: 'duration', reference: 'now' }) },
     ...(selected ? [{ label: `Offset from ${name}…`, icon: PlusSmallIcon, onSelect: () => ui.openTimeInput({ kind: 'duration', reference: 'selected' }) }] : []),
-    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.saveInstantAtCursor({ favorite: true }) },
+    { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.dropInstant({ favorite: true }) },
   ]
 
   let popover = null
@@ -119,21 +116,22 @@ export function CursorTag() {
     <Marker className={`is-cursor${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}>
       <ArrowTag
         srName="Cursor"
-        hint="Tap for tools; double-tap to save an instant here"
+        hint="Tap for tools; double-tap to drop an instant here"
+        action={{ label: 'Drop an instant at the cursor', onClick: () => act.dropInstant() }}
         slot={slot}
         onClick={() => ui.toggleTagMenu('cursor')}
-        onDoubleClick={() => { ui.closeTagMenu(); act.saveInstantAtCursor() }}
+        onDoubleClick={() => { ui.closeTagMenu(); act.dropInstant() }}
         menuOpen={menuOpen}
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Cursor tools" items={items} onClose={ui.closeTagMenu} />}
         popover={popover ?? undefined}
       >
         <LiveText compute={f => formatClockCompact(f.center, true)} />{' '}
-        <LiveText className="tl-tag__sub" compute={(f, ctx) => offsetText('Now', f.center - f.now, ctx)} />
+        <LiveText className="tl-tag__sub" compute={f => offsetText('Now', f.center - f.now)} />
         {selected && selectedAway && (
           <>
             {' '}
-            <LiveText className="tl-tag__sub" compute={(f, ctx) => offsetText(name, f.center - selected.tsEpochMs, ctx)} />
+            <LiveText className="tl-tag__sub" compute={f => offsetText(name, f.center - selected.tsEpochMs)} />
           </>
         )}
       </ArrowTag>

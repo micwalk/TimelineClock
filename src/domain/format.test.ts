@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atClockTimeOnDay, chipName, durationShowsMillis, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
+  atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
   formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
@@ -17,11 +17,10 @@ describe('formatClock12h', () => {
 })
 
 describe('formatDurationHMS', () => {
-  it('shows milliseconds under a minute', () => {
-    expect(formatDurationHMS(5 * SECOND + 42)).toBe('00:05.042')
-    expect(durationShowsMillis(59 * SECOND)).toBe(true)
-    expect(durationShowsMillis(-59 * SECOND)).toBe(true)
-    expect(durationShowsMillis(MINUTE)).toBe(false)
+  it('shows seconds only under a minute, never milliseconds', () => {
+    expect(formatDurationHMS(5 * SECOND + 42)).toBe('00:05')
+    expect(formatDurationHMS(10 * SECOND)).toBe('00:10')
+    expect(formatDurationHMS(59 * SECOND + 999)).toBe('00:59')
   })
   it('drops to mm:ss, hh:mm:ss and days as it grows', () => {
     expect(formatDurationHMS(3 * MINUTE + 4 * SECOND)).toBe('03:04')
@@ -30,7 +29,7 @@ describe('formatDurationHMS', () => {
     expect(formatDurationHMS(3 * DAY)).toBe('3 days, 00:00:00')
   })
   it('treats negative input as zero', () => {
-    expect(formatDurationHMS(-5000)).toBe('00:00.000')
+    expect(formatDurationHMS(-5000)).toBe('00:00')
   })
 })
 
@@ -38,6 +37,8 @@ describe('signed and coarse durations', () => {
   it('prefixes a sign', () => {
     expect(formatSignedDuration(-90 * SECOND)).toBe('-01:30')
     expect(formatSignedDuration(90 * SECOND)).toBe('+01:30')
+    expect(formatSignedDuration(10 * SECOND + 400)).toBe('+00:10')
+    expect(formatSignedDuration(-10 * SECOND)).toBe('-00:10')
   })
   it('never shows milliseconds in coarse format', () => {
     expect(formatDurationCoarse(5_500)).toBe('00:05')

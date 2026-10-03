@@ -414,3 +414,6 @@
 @media (prefers-reduced-motion: reduce) {
   .agenda-scrim, .agenda-drawer { animation: none; }
 }
+
+/* The big red button is a ＋ while following Now (drop an instant) and NOW otherwise. */
+.ctl-btn__plus { font: 400 30px/1 var(--font-ui); }

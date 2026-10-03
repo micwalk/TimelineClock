@@ -29,12 +29,13 @@ describe('NowTag', () => {
     expect(screen.getByRole('button', { name: `NOW ${formatClockCompact(now, true)}` })).toBeInTheDocument()
   })
 
-  it('saves an instant at Now on double-click and opens its name', () => {
+  it('drops a nameless instant at Now on double-click, without opening an editor', () => {
     render(<NowTag />)
     fireEvent.doubleClick(screen.getByRole('button', { name: /^now/i }))
     const [inst] = useEntities.getState().instants
     expect(inst).toBeDefined()
-    expect(useView.getState().editingInstantId).toBe(inst.id)
+    expect(inst.label).toBe('')
+    expect(useView.getState().editingInstantId).toBeNull()
   })
 
   it('opens its tools on click: save as favorite, set a time', () => {
@@ -95,24 +96,40 @@ describe('CursorTag', () => {
     expect(useEntities.getState().spans).toHaveLength(1)
   })
 
-  it('saves an instant at the cursor on double-click', () => {
+  it('drops a nameless instant at the cursor on double-click, without an editor or a selection', () => {
     cursorMode()
     render(<CursorTag />)
     fireEvent.doubleClick(screen.getByRole('button', { name: /^Cursor/ }))
     expect(useEntities.getState().instants).toHaveLength(1)
-    const id = useEntities.getState().instants[0].id
-    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: id, currentSelectedInstantId: id })
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: null, currentSelectedInstantId: null })
     expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
   })
 
-  it('Save as favorite from the cursor menu keeps the cursor and opens the name box', () => {
+  it('has a round + button that drops an instant at the cursor', () => {
+    cursorMode()
+    render(<CursorTag />)
+    const center = useView.getState().timeCenter
+    fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at the cursor' }))
+    const [inst] = useEntities.getState().instants
+    expect(inst.label).toBe('')
+    expect(Math.abs(inst.tsEpochMs - center)).toBeLessThan(2000)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: null })
+  })
+
+  it('has no + button while following Now', () => {
+    render(<CursorTag />)
+    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor' })).toBeNull()
+  })
+
+  it('Save as favorite from the cursor menu keeps the cursor and drops a nameless favorite', () => {
     cursorMode()
     render(<CursorTag />)
     fireEvent.click(screen.getByRole('button', { name: /^Cursor/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Save as favorite' }))
     const [inst] = useEntities.getState().instants
     expect(inst.favorite).toBe(true)
-    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: inst.id, currentSelectedInstantId: inst.id })
+    expect(inst.label).toBe('')
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: null, currentSelectedInstantId: null })
     expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
   })
 })

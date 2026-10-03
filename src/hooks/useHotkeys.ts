@@ -21,6 +21,7 @@ export function useHotkeys() {
         case 'r': return run(() => act.focusNow())
         case 'd': case 'ArrowRight': case 'ArrowDown': return run(() => act.goToAdjacentInstant(1))
         case 'a': case 'ArrowLeft': case 'ArrowUp': return run(() => act.goToAdjacentInstant(-1))
+        case '+': case '=': return run(() => act.dropInstant())
         case 'v': return run(act.rotate)
         case 'q': return run(() => act.navigateFocusHistory(-1))
         case 'e': return run(() => act.navigateFocusHistory(1))

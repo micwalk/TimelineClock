@@ -279,21 +279,16 @@ export function escape() {
 // ---------------------------------------------------------------------------
 // Instants
 
-/** Creates an instant, focuses it and opens its label editor. */
-export function createInstantAndEdit(ts: number, opts: { favorite?: boolean } = {}) {
+/**
+ * The primary action: drop an unnamed instant at the cursor (cursor mode) or at Now.
+ * Nothing else changes: no focus, selection, editing or view movement. The new id is
+ * flagged for a one-time highlight; naming happens later, in one tap, on the chip.
+ */
+export function dropInstant(opts: { favorite?: boolean } = {}) {
+  const ts = v().viewFocusMode === 'cursor' ? cursorTime() : nowTime()
   const id = entities.createInstant(ts, '')
   if (opts.favorite) setFavorite(id, true)
-  focusInstant(id, false)
-  view.editInstant(id)
-  return id
-}
-
-/** Saves an instant at the free cursor and opens its name box in place: the cursor stays (no focus change), so its tag and readout remain. */
-export function saveInstantAtCursor(opts: { favorite?: boolean } = {}) {
-  const id = entities.createInstant(cursorTime(), '')
-  if (opts.favorite) setFavorite(id, true)
-  view.selectInstant(id)
-  view.editInstant(id)
+  ui.markDropped(id)
   return id
 }
 

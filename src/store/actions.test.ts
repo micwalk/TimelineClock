@@ -51,6 +51,33 @@ describe('favorites and alarms', () => {
   })
 })
 
+describe('dropInstant', () => {
+  it('drops an unnamed instant at Now without touching focus, selection or editing', () => {
+    const before = { ...view() }
+    const id = act.dropInstant()
+    const inst = instant(id)
+    expect(inst.label).toBe('')
+    expect(Math.abs(inst.tsEpochMs - Date.now())).toBeLessThan(2000)
+    expect(view()).toMatchObject({
+      viewFocusMode: 'now', focusedInstantId: before.focusedInstantId, currentSelectedInstantId: null, editingInstantId: null, timeCenter: before.timeCenter,
+    })
+  })
+
+  it('drops at the cursor in cursor mode and stays in cursor mode', () => {
+    const center = engine.getFrame().center - 10 * MINUTE
+    useView.setState({ viewFocusMode: 'cursor', timeCenter: center })
+    const id = act.dropInstant()
+    expect(Math.abs(instant(id).tsEpochMs - center)).toBeLessThan(2000)
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: null, editingInstantId: null })
+  })
+
+  it('can drop a favorite', () => {
+    const id = act.dropInstant({ favorite: true })
+    expect(instant(id).favorite).toBe(true)
+    expect(instant(id).label).toBe('')
+  })
+})
+
 describe('selection and focus', () => {
   it('focusing an instant selects it and shifts the previous selection to secondary', () => {
     const a = entities.createInstant(Date.now() - HOUR, 'A')

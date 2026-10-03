@@ -12,7 +12,7 @@ import * as act from '../../store/actions.ts'
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>
 
-function CtlButton({ icon: Icon, children, onClick, variant, label, ...rest }: {
+function CtlButton({ icon: Icon, children, onClick, variant, label, title, ...rest }: {
   icon?: Icon
   children?: ReactNode
   onClick: () => void
@@ -24,7 +24,7 @@ function CtlButton({ icon: Icon, children, onClick, variant, label, ...rest }: {
       type="button"
       className={`ctl-btn glow-box glow-text${variant ? ` ctl-btn--${variant}` : ''}`}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       onClick={onClick}
       {...rest}
     >
@@ -108,7 +108,9 @@ export function ControlBar() {
       <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
       <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
       <IncrementButton direction={-1} />
-      <CtlButton variant="now" label="Focus Now (R)" aria-pressed={nowFocused} onClick={() => act.focusNow()}>NOW</CtlButton>
+      {nowFocused
+        ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>＋</span></CtlButton>
+        : <CtlButton variant="now" label="Focus Now (R)" onClick={() => act.focusNow()}>NOW</CtlButton>}
       <IncrementButton direction={1} />
       <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
       <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>

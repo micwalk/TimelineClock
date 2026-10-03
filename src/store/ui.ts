@@ -21,6 +21,8 @@ export interface UiState {
   tagMenu: TagMenu | null
   /** The Agenda drawer (only meaningful while the Agenda is placed in the drawer). */
   agendaOpen: boolean
+  /** The instant just dropped; its chip pulses once, then this clears. */
+  droppedId: string | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -28,7 +30,11 @@ export const useUi = create<UiState>(() => ({
   timeInput: null,
   tagMenu: null,
   agendaOpen: false,
+  droppedId: null,
 }))
+
+export const DROP_HIGHLIGHT_MS = 900
+let dropTimer: ReturnType<typeof setTimeout> | null = null
 
 export const ui = {
   setListTab: (listTab: ListTab) => useUi.setState({ listTab }),
@@ -37,5 +43,10 @@ export const ui = {
   toggleTagMenu: (which: TagMenu) => useUi.setState(s => ({ tagMenu: s.tagMenu === which ? null : which, timeInput: null })),
   openAgenda: () => useUi.setState({ agendaOpen: true }),
   closeAgenda: () => useUi.setState({ agendaOpen: false }),
+  markDropped(id: string) {
+    if (dropTimer) clearTimeout(dropTimer)
+    useUi.setState({ droppedId: id })
+    dropTimer = setTimeout(() => { dropTimer = null; useUi.setState(s => (s.droppedId === id ? { droppedId: null } : s)) }, DROP_HIGHLIGHT_MS)
+  },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
 }

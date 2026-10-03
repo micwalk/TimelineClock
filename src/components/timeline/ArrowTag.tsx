@@ -4,6 +4,7 @@
 // stays on the axis.
 import { useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { PlusIcon } from '@heroicons/react/20/solid'
 import { useLayout } from '../../store/layout.ts'
 import { verticalTagMaxWidth } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
@@ -13,7 +14,7 @@ const ARROW_PATH = 'M9 18 Q10.5 8 17 1 Q9 5 1 1 Q7.5 8 9 18 Z'
 /** The same shape pointing right (vertical timeline), tip at (18,9). */
 const ARROW_PATH_RIGHT = 'M18 9 Q8 10.5 1 17 Q5 9 1 1 Q8 7.5 18 9 Z'
 
-export function ArrowTag({ srName, hint, slot, onClick, onDoubleClick, menuOpen, onDismissMenu, menu, popover, children }: {
+export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, menuOpen, onDismissMenu, menu, popover, children }: {
   /**
    * Name read before the visible readout when the readout doesn't say what the tag
    * is ("Cursor"). The readout stays in the accessible name, so it is announced.
@@ -21,6 +22,8 @@ export function ArrowTag({ srName, hint, slot, onClick, onDoubleClick, menuOpen,
   srName?: string
   /** Tooltip: what tapping and double-tapping do. */
   hint: string
+  /** A round glowing button beside the box (right of it, or below it when vertical). */
+  action?: { label: string; onClick: () => void }
   /** Horizontal: 0 or 1 steps up. Vertical: -1, 0 or 1 steps along the time axis, away from the other tag. */
   slot: number
   onClick: () => void
@@ -51,6 +54,11 @@ export function ArrowTag({ srName, hint, slot, onClick, onDoubleClick, menuOpen,
           {srName && <span className="sr-only">{srName} </span>}
           {children}
         </button>
+        {action && (
+          <button type="button" className="tl-tag__drop glow-box glow-text" data-no-pan aria-label={action.label} title={action.label} onClick={action.onClick}>
+            <PlusIcon aria-hidden />
+          </button>
+        )}
         {menuOpen && menu}
         {popover}
       </div>

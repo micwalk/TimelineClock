@@ -47,7 +47,7 @@ export function formatRelativeShort(deltaMs: number): string {
 }
 
 /**
- * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss.mmm" (under a minute).
+ * Duration as "D days, hh:mm:ss", "hh:mm:ss", "mm:ss", or "00:ss" (under a minute). Never shows milliseconds.
  * Negative input is treated as zero; callers handle the sign.
  */
 export function formatDurationHMS(ms: number): string {
@@ -59,11 +59,8 @@ export function formatDurationHMS(ms: number): string {
   if (days > 0) return `${days} day${days !== 1 ? 's' : ''}, ${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`
   if (hours > 0) return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`
   if (minutes > 0) return `${pad2(minutes)}:${pad2(seconds)}`
-  return `00:${pad2(seconds)}.${rest.toString().padStart(3, '0')}`
+  return `00:${pad2(seconds)}`
 }
-
-/** True when formatDurationHMS would show milliseconds (so the text changes every frame). */
-export const durationShowsMillis = (ms: number) => Math.abs(ms) < MINUTE
 
 export function formatSignedDuration(ms: number): string {
   return `${ms >= 0 ? '+' : '-'}${formatDurationHMS(Math.abs(ms))}`
