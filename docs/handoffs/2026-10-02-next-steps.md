@@ -19,7 +19,9 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 
-Not started; needs a full design pass (questions → approaches → spec) with the owner.
+Design proposal written, waiting on the owner's picks:
+[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) (§8 lists the
+decisions). Build nothing from it until those are answered.
 
 **What the owner asked for:** "I like your suggestion of stopwatch/timer/alarm buttons.
 Want to do another UX pass in general." Earlier: "agreed with like 95%", but "some of the
@@ -53,6 +55,10 @@ buttons may replace some of its buttons.
 - "rendering of spans as just rectangles", "first class spans".
 
 ## 4. Reliability (PRD M2)
+- Done 2026-10-03: installed apps pick up new versions (`services/pwaUpdate.ts`: checks on
+  resume and hourly; reloads right after opening/resuming or in the background, never under
+  a ringing alarm). Alarm notification clicks return to the window that rang and go to the
+  alarm's instant (`public/sw-extras.js`, `services/notificationClicks.ts`).
 - Alarms only ring while the page is open. Ringing with the app closed needs Web Push
   and a small backend; a Netlify Function plus scheduled pushes fits the hosting.
 - Screen Wake Lock while a timer runs (PRD).
