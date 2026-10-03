@@ -5,6 +5,7 @@
  */
 :root {
   /* Surfaces */
+  --z-alarm: 300; /* ringing-alarm panel: above the drawer (150), Settings (200) and everything else */
   --agenda-width: 360px;
   --agenda-drawer-max: 400px;
   --agenda-btn-size: 40px;

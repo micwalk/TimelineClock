@@ -222,7 +222,7 @@
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 100;
+  z-index: var(--z-alarm); /* above the Agenda drawer (150) and Settings (200): Dismiss/Snooze stay reachable */
   width: min(340px, calc(100vw - 36px));
   padding: 14px;
   border-radius: 16px;
