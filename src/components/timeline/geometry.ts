@@ -10,6 +10,8 @@ export const GEOMETRY = {
   label: 180,
   time: 214,
   actions: 260,
+  chipTop: 180,
+  chipRow: 34,
   lanes: 312,
 } as const
 

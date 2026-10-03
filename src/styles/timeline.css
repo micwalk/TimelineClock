@@ -144,10 +144,37 @@
   gap: 3px;
 }
 
+/* Saved instants: one chip under the axis, in a row chosen by the overlap layout */
+.tl-col__chip {
+  position: absolute;
+  left: 0;
+  top: calc(var(--tl-chip-top) + var(--row, 0) * var(--tl-chip-row));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.chip--saved { gap: 2px; padding: 0 3px; }
+.chip--saved .icon-btn { width: 22px; height: 22px; }
+.chip--saved .icon-btn > svg { width: 15px; height: 15px; }
+.chip__main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 5px;
+  max-width: 300px;
+  font: 650 15px/1 var(--font-ui);
+}
+.chip__name { min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.chip__time { font: 700 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.chip__rel { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); }
+.tl-col__tools { display: flex; align-items: center; gap: 3px; }
+
 .tl-col__badge {
   position: absolute;
   left: 50%;
-  top: calc(var(--tl-actions) + 2px);
+  top: calc(var(--tl-chip-top) + var(--tl-chip-row) + 4px);
   transform: translateX(-50%);
   font: 700 12px/1 var(--font-ui);
   letter-spacing: 0.08em;
