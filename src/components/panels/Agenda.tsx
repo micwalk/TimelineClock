@@ -237,7 +237,7 @@ function SpansList() {
     if (selected) {
       out.push({ kind: 'implied', key: 'implied-now', which: 'selected-now', label: 'Selected to Now', start: selected, end: null, visible: v.showNow, mid: (selected.tsEpochMs + now) / 2 })
       if (secondary) {
-        out.push({ kind: 'implied', key: 'implied-prev', which: 'selected-prev', label: 'Selected to Secondary', start: secondary, end: selected, visible: v.showPrev, mid: (secondary.tsEpochMs + selected.tsEpochMs) / 2 })
+        out.push({ kind: 'implied', key: 'implied-prev', which: 'selected-prev', label: 'Span between selections', start: secondary, end: selected, visible: v.showPrev, mid: (secondary.tsEpochMs + selected.tsEpochMs) / 2 })
       }
     }
     return out.sort((a, b) => a.mid - b.mid)

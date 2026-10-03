@@ -128,6 +128,7 @@
 .tl-col--label.is-focused { z-index: calc(var(--z-chips) + 7); }
 .tl-col.is-cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); }
 .tl-col--label.is-cursor { z-index: calc(var(--z-tags) + 7); }
+.tl-col.is-cursor.is-on-instant { --accent: var(--c-cursor-on); --halo: var(--c-cursor-on-glow); }
 .tl-col.is-now { --accent: var(--c-now); --halo: var(--c-now); }
 .tl-col--label.is-now { z-index: calc(var(--z-tags) + 2); }
 .tl-col--label.is-now.is-focused { z-index: calc(var(--z-tags) + 9); }

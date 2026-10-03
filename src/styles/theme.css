@@ -44,6 +44,9 @@
   --c-span: #34d399;
   --c-instant: #eef3ff;
   --c-instant-glow: #60a5fa;
+  /* The Cursor tag while it sits on a focused instant. */
+  --c-cursor-on: var(--c-instant);
+  --c-cursor-on-glow: var(--c-instant-glow);
   --c-favorite: #facc15;
   --c-alarm: #fbbf24;
   --c-danger: #f43f5e;

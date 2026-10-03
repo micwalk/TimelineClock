@@ -70,7 +70,8 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   const unnamed = !inst.label
 
   const bellGlyph = (!!inst.alarm && !isPast) || ringing
-  const showRelative = !!inst.favorite || !!inst.alarm || selected || focused
+  // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
+  const showRelative = !focused && (!!inst.favorite || !!inst.alarm || selected)
   const withSeconds = fineSeconds || selected || focused
 
   const zoomToFold = () => {

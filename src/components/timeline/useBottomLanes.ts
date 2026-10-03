@@ -27,12 +27,13 @@ interface LaneBase {
 
 export type BottomLane = LaneBase & (
   | { kind: 'selected-now'; selected: InstantRecord }
+  | { kind: 'selected-cursor'; selected: InstantRecord }
   | { kind: 'secondary'; selected: InstantRecord; secondary: InstantRecord }
   | { kind: 'saved'; span: LaneSpan }
 )
 
 /**
- * Implied spans for the selection (Selected→Now, Secondary→Selected) followed by
+ * Implied spans for the selection (Selected→Now, Previous→Selected, Selected→Cursor) followed by
  * saved spans, keeping only those on screen (unplaced: see placeLanes). Re-renders only when that set changes.
  */
 export function useVisibleLanes(): BottomLane[] {
@@ -47,6 +48,7 @@ export function useVisibleLanes(): BottomLane[] {
     showNow: s.showImpliedSelectedNow,
     showPrev: s.showImpliedSelectedPrev,
     moving: s.moveMode?.instantId ?? null,
+    inMove: !!s.moveMode,
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
@@ -78,6 +80,10 @@ export function useVisibleLanes(): BottomLane[] {
       if (!exists) {
         out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0, index: 0 })
       }
+    }
+    // Free cursor with a selection: the live lane from the selection to the cursor (hidden by geometry while they coincide).
+    if (selected && v.mode === 'cursor' && !v.inMove) {
+      out.push({ key: 'implied-cursor', kind: 'selected-cursor', selected, a: ref(selected), b: 'center', top: 0, index: 0 })
     }
     for (const s of saved) {
       out.push({

@@ -5,7 +5,7 @@ import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } fr
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SECOND } from '../../domain/time.ts'
-import { chipName, formatClockCompact, formatSignedDuration } from '../../domain/format.ts'
+import { chipName, formatClockCompact, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
@@ -67,7 +67,11 @@ export function NowTag() {
 }
 
 export function CursorTag() {
-  const visible = useView(s => s.viewFocusMode === 'cursor' && !s.moveMode)
+  // Shown for the free cursor and while the cursor sits on a focused instant (then in the "on an instant" colour); never in Now or move mode.
+  const freeCursor = useView(s => s.viewFocusMode === 'cursor' && !s.moveMode)
+  const focusedId = useView(s => (s.viewFocusMode === 'instant' && !s.moveMode ? s.focusedInstantId : null))
+  const focusedInst = useEntities(s => (focusedId ? s.instants.find(i => i.id === focusedId) : undefined))
+  const visible = freeCursor || !!focusedInst
   const locked = useView(s => s.cursorLocked)
   const selectedId = useView(s => s.currentSelectedInstantId)
   const selected = useEntities(s => s.instants.find(i => i.id === selectedId))
@@ -88,7 +92,12 @@ export function CursorTag() {
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''
-  const items: TagMenuItem[] = [
+  const onInstant = !freeCursor && focusedInst ? focusedInst : null
+  const items: TagMenuItem[] = onInstant ? [
+    { label: 'Save span to Now', icon: MapPinIcon, onSelect: () => act.saveSpanRefs(onInstant.tsEpochMs, 'now') },
+    { label: 'Type a time…', icon: ClockIcon, onSelect: () => ui.openTimeInput({ kind: 'clock', anchor: 'cursor' }) },
+    { label: 'Offset from Now…', icon: PlusSmallIcon, onSelect: () => ui.openTimeInput({ kind: 'duration', reference: 'now' }) },
+  ] : [
     { label: locked ? 'Unlock from Now' : 'Lock offset to Now', icon: locked ? LockClosedIcon : LockOpenIcon, onSelect: act.toggleCursorLock },
     { label: 'Save span to Now', icon: MapPinIcon, onSelect: () => act.saveSpanRefs('center', 'now') },
     ...(selected ? [{ label: `Save span to ${name}`, icon: MapPinIcon, onSelect: () => act.saveSpanRefs(selected.tsEpochMs, 'center') }] : []),
@@ -100,7 +109,7 @@ export function CursorTag() {
 
   let popover = null
   if (timeInput?.kind === 'clock' && timeInput.anchor === 'cursor') popover = clockPopover('cursor')
-  else if (timeInput?.kind === 'duration' && (timeInput.reference === 'now' || selected)) {
+  else if (timeInput?.kind === 'duration' && (timeInput.reference === 'now' || (selected && !onInstant))) {
     const reference = timeInput.reference
     popover = (
       <DurationPopover
@@ -113,22 +122,31 @@ export function CursorTag() {
   }
 
   return (
-    <Marker className={`is-cursor${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}>
+    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}>
       <ArrowTag
         srName="Cursor"
-        hint="Tap for tools; double-tap to drop an instant here"
-        action={{ label: 'Drop an instant at the cursor', onClick: () => act.dropInstant() }}
+        hint={onInstant ? 'Tap for tools' : 'Tap for tools; double-tap to drop an instant here'}
+        action={onInstant ? undefined : { label: 'Drop an instant at the cursor', onClick: () => act.dropInstant() }}
         slot={slot}
         onClick={() => ui.toggleTagMenu('cursor')}
-        onDoubleClick={() => { ui.closeTagMenu(); act.dropInstant() }}
+        onDoubleClick={() => { if (onInstant) return; ui.closeTagMenu(); act.dropInstant() }}
         menuOpen={menuOpen}
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Cursor tools" items={items} onClose={ui.closeTagMenu} />}
         popover={popover ?? undefined}
       >
-        <LiveText compute={f => formatClockCompact(f.center, true)} />{' '}
-        <LiveText className="tl-tag__sub" compute={f => offsetText('Now', f.center - f.now)} />
-        {selected && selectedAway && (
+        {onInstant ? (
+          <>
+            {formatClockCompact(onInstant.tsEpochMs, true)}{' '}
+            <LiveText className="tl-tag__sub" compute={f => formatRelativeShort(onInstant.tsEpochMs - f.now)} />
+          </>
+        ) : (
+          <>
+            <LiveText compute={f => formatClockCompact(f.center, true)} />{' '}
+            <LiveText className="tl-tag__sub" compute={f => offsetText('Now', f.center - f.now)} />
+          </>
+        )}
+        {!onInstant && selected && selectedAway && (
           <>
             {' '}
             <LiveText className="tl-tag__sub" compute={f => offsetText(name, f.center - selected.tsEpochMs)} />

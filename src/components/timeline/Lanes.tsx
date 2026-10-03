@@ -6,7 +6,7 @@ import { formatDurationHMS } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
+import { endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
 import { useView, view } from '../../store/view.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
@@ -25,6 +25,27 @@ function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
     <LiveText
       compute={f => formatDurationHMS(Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)))}
     />
+  )
+}
+
+/** An implied lane's endpoint: where it is and what it is called. */
+interface Endpoint { ref: TimeRef; name: string }
+const instantEnd = (i: InstantRecord, ref: TimeRef): Endpoint => ({ ref, name: endpointName(i) })
+
+/** "Wake up → Sleep · 16:00:00": endpoint names in time order (live, since an endpoint may be the cursor or Now), then the length. */
+function ImpliedChip({ a, b }: { a: Endpoint; b: Endpoint }) {
+  return (
+    <span className="span-chip__text">
+      <LiveText
+        className="span-chip__name"
+        compute={f => {
+          const aFirst = resolveTimeRef(a.ref, f.now, f.center) <= resolveTimeRef(b.ref, f.now, f.center)
+          return aFirst ? `${a.name} → ${b.name}` : `${b.name} → ${a.name}`
+        }}
+      />
+      <span className="span-chip__sep" aria-hidden>·</span>
+      <Duration a={a.ref} b={b.ref} />
+    </span>
   )
 }
 
@@ -125,8 +146,26 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               aTarget={instantTarget(s)}
               bTarget={{ kind: 'now' }}
               arrows
-              chip={<span className="span-chip__text"><Duration a={lane.a} b="now" /></span>}
+              chip={<ImpliedChip a={instantEnd(s, lane.a)} b={{ ref: 'now', name: 'Now' }} />}
               tools={() => ({ left: <PinButton a={lane.a} b="now" /> })}
+            />
+          )
+        }
+        if (lane.kind === 'selected-cursor') {
+          const s = lane.selected
+          return (
+            <SpanLane
+              key={lane.key}
+              top={lane.top}
+              index={lane.index}
+              variant="selected"
+              a={lane.a}
+              b="center"
+              aTarget={instantTarget(s)}
+              bTarget={{ kind: 'cursor' }}
+              arrows
+              chip={<ImpliedChip a={instantEnd(s, lane.a)} b={{ ref: 'center', name: 'Cursor' }} />}
+              tools={() => ({ left: <PinButton a={lane.a} b="center" /> })}
             />
           )
         }
@@ -143,7 +182,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               aTarget={instantTarget(p)}
               bTarget={instantTarget(s)}
               arrows
-              chip={<span className="span-chip__text"><Duration a={lane.a} b={lane.b} /></span>}
+              chip={<ImpliedChip a={instantEnd(p, lane.a)} b={instantEnd(s, lane.b)} />}
               tools={() => ({ left: <PinButton a={lane.a} b={lane.b} /> })}
             />
           )
