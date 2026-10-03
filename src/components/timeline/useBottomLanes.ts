@@ -113,3 +113,7 @@ export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation:
   })
   return { lanes, height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD }
 }
+
+/** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */
+export const laneHasControls = (lane: BottomLane, selectedSpanId: string | null): boolean =>
+  lane.kind !== 'saved' || lane.span.focused || lane.span.priority <= 1 || selectedSpanId === lane.span.span.id

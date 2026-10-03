@@ -48,9 +48,9 @@ const verticalStyle = toStyle(GEOMETRY_VERTICAL)
 /** Widest a live tag box may be: the room between the left edge and its arrowhead. */
 export const verticalTagMaxWidth = (): number => GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow - 4
 
-/** Room for saved chips in vertical: what is right of chipStart, less lane bars and the lane chips on their inner side. */
-export const verticalCrossBudget = (crossSize: number, laneCount: number): number =>
-  crossSize - GEOMETRY_VERTICAL.chipStart - 8 - (laneCount > 0 ? laneCount * GEOMETRY_VERTICAL.laneGap + LANE_CHIP_ALLOWANCE : 0)
+/** Room for saved chips in vertical: what is right of chipStart, less lane bars and, when one is shown, the lane chip on their inner side. */
+export const verticalCrossBudget = (crossSize: number, laneCount: number, hasLaneChip: boolean): number =>
+  crossSize - GEOMETRY_VERTICAL.chipStart - 8 - laneCount * GEOMETRY_VERTICAL.laneGap - (hasLaneChip ? LANE_CHIP_ALLOWANCE : 0)
 
 /** The custom properties for the timeline's current orientation. */
 export const geometryStyleFor = (orientation: 'horizontal' | 'vertical'): CSSProperties =>

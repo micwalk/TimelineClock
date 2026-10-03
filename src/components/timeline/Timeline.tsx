@@ -9,7 +9,7 @@ import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
-import { placeLanes, useVisibleLanes } from './useBottomLanes.ts'
+import { laneHasControls, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
@@ -20,7 +20,9 @@ export function Timeline() {
   const ref = useRef<HTMLElement>(null)
   const orientation = useLayout(s => s.orientation)
   const visibleLanes = useVisibleLanes()
-  const layout = useSavedLayout(visibleLanes.length)
+  const selectedSpanId = useView(s => s.selectedSpanId)
+  const hasLaneChip = visibleLanes.some(l => laneHasControls(l, selectedSpanId))
+  const layout = useSavedLayout(visibleLanes.length, hasLaneChip)
   const { lanes, height } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)

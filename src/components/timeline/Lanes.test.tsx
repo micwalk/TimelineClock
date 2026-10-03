@@ -75,5 +75,14 @@ describe('vertical lanes', () => {
     expect(line.style.height).toMatch(/^[\d.]+px$/)
     expect(line.style.width).toBe('')
     expect(container.querySelector('.tl-lane__chev--left')).not.toBeNull()
+    expect(container.querySelector('.span-chip')).toBeNull() // no controls: just the bar
+  })
+
+  it('draw the chip in vertical for a lane with controls', () => {
+    useLayout.setState({ orientation: 'vertical' })
+    const { lane } = savedLane()
+    if (lane.kind !== 'saved') throw new Error('saved lane expected')
+    const { container } = render(<BottomLanes lanes={[{ ...lane, span: { ...lane.span, focused: true } }]} />)
+    expect(container.querySelector('.span-chip')).not.toBeNull()
   })
 })

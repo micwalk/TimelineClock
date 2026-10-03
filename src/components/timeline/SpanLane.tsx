@@ -19,6 +19,8 @@ export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { ki
 export interface SpanLaneProps {
   /** Vertical center of the lane in px, or a CSS length. */
   top: number | string
+  /** Vertical: draw only the bar, no chip or tools. */
+  barOnly?: boolean
   /** Vertical: lane number from the right edge. */
   index?: number
   variant: LaneVariant
@@ -55,7 +57,7 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const { top, barOnly, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
@@ -112,7 +114,7 @@ export function SpanLane(props: SpanLaneProps) {
       <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
       <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
       <div ref={anchorRef} className="tl-lane__anchor">
-        <div className="tl-lane__chip-wrap">
+        {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
           <div className="tl-lane__tools tl-lane__tools--left">
             {arrows && arrowFor(leftTarget, 'left', vertical)}
             {extra?.left}
@@ -133,7 +135,7 @@ export function SpanLane(props: SpanLaneProps) {
             {extra?.right}
           </div>
           {below}
-        </div>
+        </div>}
       </div>
     </div>
   )

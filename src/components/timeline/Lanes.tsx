@@ -14,6 +14,7 @@ import { InlineInput } from '../common/InlineInput.tsx'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
+import { laneHasControls } from './useBottomLanes.ts'
 
 // ---------------------------------------------------------------------------
 // Shared bits
@@ -98,6 +99,7 @@ function SavedSpanLane({ r, top, index, variant, controls, emphasis, a = r.start
       aTarget={instantTarget(r.start)}
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
+      barOnly={!controls}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} />}
       onChipClick={() => act.selectSpan(r.span.id)}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
@@ -152,7 +154,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
         }
         const r = lane.span
         const variant: LaneVariant = r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
-        const controls = r.focused || r.priority <= 1 || selectedSpanId === r.span.id
+        const controls = laneHasControls(lane, selectedSpanId)
         return <SavedSpanLane key={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} index={lane.index} variant={variant} controls={controls} emphasis={r.focused} />
       })}
     </>
