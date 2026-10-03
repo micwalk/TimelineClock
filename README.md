@@ -36,6 +36,24 @@ npm run build      # type-check + production build
 npm run lint
 ```
 
+## Deploying (Netlify)
+
+`netlify.toml` holds the whole setup: Netlify runs the tests, builds, and publishes `dist/`
+with the right caching headers. Pick one way to deploy:
+
+- **From a Git repo (recommended):** push this repo to GitHub, then in Netlify choose
+  *Add new site → Import an existing project* and pick the repo. Leave the build settings
+  empty; `netlify.toml` provides them. Every push to `main` deploys, and other branches
+  and pull requests get preview URLs.
+- **From this machine:** `npx netlify-cli login`, then `npx netlify-cli deploy --build`
+  for a preview URL, or add `--prod` to publish.
+
+To use a custom domain, add it under *Domain management* in Netlify. HTTPS is automatic,
+and browser notifications need it.
+
+App icons are generated from `public/logo.svg`; run `npm run generate-pwa-assets`
+after changing it.
+
 ## Project structure
 
 ```

@@ -52,8 +52,8 @@ export class NotificationService {
 			const body = label && label.trim().length > 0 ? label : 'Alarm is ringing'
 			const options: NotificationOptions = {
 				body,
-				icon: '/vite.svg',
-				badge: '/vite.svg',
+				icon: '/pwa-192x192.png',
+				badge: '/pwa-64x64.png',
 				tag: `alarm-${body}`,
 				requireInteraction: true,
 				silent: false

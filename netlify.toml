@@ -1,0 +1,52 @@
+# Netlify build and hosting config. Works for Git-connected sites and `netlify deploy`.
+
+[build]
+  # Failing tests block the deploy.
+  command = "npx vitest run && npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite 7 needs Node 20.19+ or 22.12+.
+  NODE_VERSION = "22"
+
+# Single-page app: unknown paths load the app (real files are still served first).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Hashed build output never changes, so cache it forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Files that must be re-checked on every load so updates reach users immediately.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/registerSW.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

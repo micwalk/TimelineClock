@@ -14,7 +14,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:watch": "vitest --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.7",
@@ -39,6 +40,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "@vite-pwa/assets-generator": "^1.0.4",
     "@vitejs/plugin-react": "^5.0.1",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",

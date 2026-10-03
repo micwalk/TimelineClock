@@ -14,50 +14,32 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      // Icons are generated from public/logo.svg: `npm run generate-pwa-assets`
+      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
       manifest: {
+        id: '/',
         name: 'Timeline Clock',
-        short_name: 'TimelineClock',
-        description: 'A timeline-centric clock app that unifies Stopwatch, Timer, Alarm, and World Clock',
-        theme_color: '#3b82f6',
-        background_color: '#ffffff',
+        short_name: 'Timeline',
+        description: 'A timeline-centric clock: stopwatch, timer, alarm and world clock on one zoomable timeline.',
+        theme_color: '#0c1838',
+        background_color: '#02040c',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
+          { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          }
-        ]
-      }
+      },
     })
   ],
   build: {
-    target: 'esnext',
     rollupOptions: {
       output: {
         manualChunks: {

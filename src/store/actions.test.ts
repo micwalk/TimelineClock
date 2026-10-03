@@ -1,15 +1,10 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { entities, useEntities } from './entities.ts'
 import { initialViewState, useView } from './view.ts'
 import { useAlarms } from './alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
-
-/** Lets the viewport engine run a frame so actions see the updated on-screen center. */
-const flushFrame = () => new Promise(r => setTimeout(r, 40))
-
-beforeAll(() => engine.start())
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -122,24 +117,21 @@ describe('saving spans', () => {
 })
 
 describe('move mode', () => {
-  it('moves the instant to where the cursor ends up', async () => {
+  it('moves the instant to where the cursor ends up', () => {
     const t = Date.now() - HOUR
     const id = entities.createInstant(t, 'Move me')
     act.enterMove(id)
     expect(view()).toMatchObject({ viewFocusMode: 'cursor', moveMode: { instantId: id } })
-    await flushFrame()
     act.moveCursorBy(10 * MINUTE)
-    await flushFrame()
     act.confirmMove()
     expect(instant(id).tsEpochMs).toBeCloseTo(t + 10 * MINUTE, -2)
     expect(view()).toMatchObject({ moveMode: null, viewFocusMode: 'instant', focusedInstantId: id })
   })
 
-  it('cancel leaves the instant where it was', async () => {
+  it('cancel leaves the instant where it was', () => {
     const t = Date.now() - HOUR
     const id = entities.createInstant(t, 'Stay')
     act.enterMove(id)
-    await flushFrame()
     act.moveCursorBy(10 * MINUTE)
     act.cancelMove()
     expect(instant(id).tsEpochMs).toBe(t)
