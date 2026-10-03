@@ -1,5 +1,7 @@
 // Pure formatting/parsing helpers for times and durations.
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
+import { displayName } from './entities.ts'
+import { snoozeBaseLabel } from './alarms.ts'
 
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 
@@ -106,3 +108,12 @@ export function atClockTimeOnDay(dayOf: number, hours24: number, minutes: number
   d.setHours(hours24, minutes, seconds, 0)
   return d.getTime()
 }
+
+export function chipName(label: string): string {
+  const m = /^Snooze (\d+): /.exec(label)
+  if (!m) return displayName(label)
+  return `${displayName(snoozeBaseLabel(label))} ?${m[1]}`
+}
+
+export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs <= thresholdMs
+

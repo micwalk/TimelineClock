@@ -1,3 +1,4 @@
+import { chipName, showsSeconds } from './format.ts'
 import { describe, expect, it } from 'vitest'
 import {
   atClockTimeOnDay, durationShowsMillis, formatClock12h, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS,
@@ -85,3 +86,15 @@ describe('clock entry', () => {
     expect(atClockTimeOnDay(ref, 6, 30, 0)).toBe(at(6, 30, 0))
   })
 })
+
+describe('chipName/showsSeconds', () => {
+  it('formats', () => {
+    expect(chipName('Snooze 2: Test Alarm')).toBe('Test Alarm ?2')
+    expect(chipName('Snooze 2: Snooze 1: X')).toBe('X ?2')
+    expect(chipName('Plain')).toBe('Plain')
+    expect(chipName('')).toBe('?')
+    expect(showsSeconds(1000, 5000)).toBe(true)
+    expect(showsSeconds(60000, 5000)).toBe(false)
+  })
+})
+
