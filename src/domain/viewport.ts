@@ -11,8 +11,27 @@ export interface Projection {
 }
 
 export const pxPerMs = (p: Projection) => p.screenW / p.width
-export const timeToX = (p: Projection, t: number) => p.screenW / 2 + ((t - p.center) / p.width) * p.screenW
-export const xToTime = (p: Projection, x: number) => p.center + ((x - p.screenW / 2) / p.screenW) * p.width
+export type Dir = 1 | -1
+
+export interface AxisProjection {
+  center: number
+  width: number
+  mainSize: number
+  dir: Dir
+}
+
+export const timeToPos = (p: AxisProjection, t: number) => p.mainSize / 2 + (p.dir * (t - p.center) * p.mainSize) / p.width
+export const posToTime = (p: AxisProjection, pos: number) => p.center + (p.dir * (pos - p.mainSize / 2) * p.width) / p.mainSize
+export function visibleRange(p: AxisProjection): { start: number; end: number } {
+  const a = posToTime(p, 0)
+  const b = posToTime(p, p.mainSize)
+  return { start: Math.min(a, b), end: Math.max(a, b) }
+}
+/** New center for a content drag of dPx along the main axis (content follows the finger). */
+export const panCenterByPixels = (p: AxisProjection, dPx: number) => p.center - (p.dir * dPx * p.width) / p.mainSize
+
+export const timeToX = (p: Projection, t: number) => timeToPos({ center: p.center, width: p.width, mainSize: p.screenW, dir: 1 }, t)
+export const xToTime = (p: Projection, x: number) => posToTime({ center: p.center, width: p.width, mainSize: p.screenW, dir: 1 }, x)
 
 /** The subset of view state that determines where the view wants to be. */
 export interface TargetInputs {

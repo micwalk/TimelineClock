@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TargetInputs } from './viewport.ts'
-import { resolveViewTarget, timeToX, xToTime, zoomToFitRange } from './viewport.ts'
+import { panCenterByPixels, posToTime, timeToPos, visibleRange, resolveViewTarget, timeToX, xToTime, zoomToFitRange } from './viewport.ts'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { HOUR } from './time.ts'
 
@@ -69,5 +69,30 @@ describe('zoomToFitRange', () => {
   })
   it('leaves a comfortable range alone', () => {
     expect(zoomToFitRange(p, now - HOUR, now + HOUR)).toBeNull()
+  })
+})
+
+describe('axis projection', () => {
+  const mk = (dir: 1 | -1) => ({ center: 1000, width: 400, mainSize: 800, dir })
+  it('maps center to middle and round-trips', () => {
+    for (const dir of [1, -1] as const) {
+      const p = mk(dir)
+      expect(timeToPos(p, 1000)).toBe(400)
+      expect(posToTime(p, timeToPos(p, 1234))).toBeCloseTo(1234)
+    }
+  })
+  it('flips with dir and matches timeToX for dir=1', () => {
+    expect(timeToPos(mk(1), 1100)).toBe(600)
+    expect(timeToPos(mk(-1), 1100)).toBe(200)
+    const pr = { center: 1000, width: 400, screenW: 800 }
+    expect(timeToPos(mk(1), 1100)).toBe(timeToX(pr, 1100))
+    expect(posToTime(mk(1), 123)).toBe(xToTime(pr, 123))
+  })
+  it('visibleRange is ordered for both dirs', () => {
+    for (const dir of [1, -1] as const) expect(visibleRange(mk(dir))).toEqual({ start: 800, end: 1200 })
+  })
+  it('pan follows the finger', () => {
+    expect(panCenterByPixels(mk(1), 100)).toBe(950)
+    expect(panCenterByPixels(mk(-1), 100)).toBe(1050)
   })
 })
