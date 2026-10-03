@@ -4,6 +4,9 @@
 import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
+import { releaseVelocity, shouldGlide } from '../domain/glide.ts'
+import type { PointerSample } from '../domain/glide.ts'
+import { createGlide } from './glide.ts'
 import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
 import { useLayout } from '../store/layout.ts'
 import { getTunables } from '../store/settings.ts'
@@ -20,6 +23,15 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     let drag: { id: number; start: number; last: number; moved: boolean; touch: boolean } | null = null
     let pinchDist = 0
     let swallowClick = false
+    let samples: PointerSample[] = []
+    const glide = createGlide()
+
+    const sample = (pos: number) => {
+      const t = performance.now()
+      const keep = getTunables().glideWindowMs
+      samples.push({ t, pos })
+      while (samples.length > 2 && t - samples[0].t > keep) samples.shift()
+    }
 
     // A mouse drag ends with a click on whatever is under the pointer; swallow that
     // one click only. Touch gestures produce no click, so the guard must not outlive
@@ -43,6 +55,12 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (pointers.size === 1) {
         swallowClick = false
+        samples = []
+        // Touching during a glide stops it; this press is not a tap, so swallow its click.
+        if (glide.stop()) {
+          swallowClick = true
+          el.classList.remove('is-panning')
+        }
         drag = { id: e.pointerId, start: main(e), last: main(e), moved: false, touch: isTouch(e) }
       } else if (pointers.size === 2) {
         pinchDist = distance()
@@ -71,10 +89,13 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
         beginPan()
         panByPixels(main(e) - drag.start)
         drag.last = main(e)
+        sample(drag.start)
+        sample(main(e))
         return
       }
       panByPixels(main(e) - drag.last)
       drag.last = main(e)
+      sample(main(e))
     }
 
     const onPointerUp = (e: PointerEvent) => {
@@ -84,8 +105,15 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
         if (drag.moved) {
           el.classList.remove('is-panning')
           const t = getTunables()
-          endPan(drag.touch ? t.landingTouchPx : t.landingMousePx)
+          const landing = drag.touch ? t.landingTouchPx : t.landingMousePx
+          const v = pointers.size === 0 && drag.id === e.pointerId && e.type === 'pointerup'
+            ? releaseVelocity(samples, performance.now(), { windowMs: t.glideWindowMs, stillMs: t.glideStillMs })
+            : 0
+          if (shouldGlide(v, t.glideMinSpeed)) glide.start(v, landing)
+          else endPan(landing)
           swallowTrailingClick()
+        } else if (swallowClick) {
+          swallowTrailingClick() // a press that stopped a glide: swallow its click, then disarm
         }
         drag = null
       }
@@ -121,6 +149,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     el.addEventListener('click', onClickCapture, true)
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => {
+      glide.stop()
       el.removeEventListener('pointerdown', onPointerDown)
       el.removeEventListener('pointermove', onPointerMove)
       el.removeEventListener('pointerup', onPointerUp)

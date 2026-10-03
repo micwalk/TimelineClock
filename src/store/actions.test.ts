@@ -5,6 +5,8 @@ import { useAlarms } from './alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
+import { nearestFinestTick } from '../domain/ticks.ts'
+import { useSettings } from './settings.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -190,6 +192,49 @@ describe('cursor landing on instants', () => {
     act.focusCursorAt(t + HOUR, false)
     act.selectInstant(id)
     expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: id })
+  })
+})
+
+describe('tick snap', () => {
+  const offTick = () => {
+    const pxPerMs = engine.sample().pxPerMs
+    const tick = nearestFinestTick(Date.now() - 3 * HOUR, pxPerMs)
+    return { pxPerMs, tick, t: tick + 0.3 / pxPerMs } // a few px off the tick
+  }
+
+  it('endPan lands on the nearest finest tick when tickSnap is on', () => {
+    useSettings.setState({ tickSnap: true })
+    const { tick, t } = offTick()
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view().viewFocusMode).toBe('cursor')
+    expect(view().timeCenter).toBe(tick)
+  })
+
+  it('endPan leaves the cursor put when tickSnap is off', () => {
+    useSettings.setState({ tickSnap: false })
+    const { t } = offTick()
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view().timeCenter).toBe(t)
+    useSettings.setState({ tickSnap: true })
+  })
+
+  it('an instant within the landing radius wins over a tick', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t } = offTick()
+    const id = entities.createInstant(t + 1000, 'Rice')
+    act.focusCursorAt(t, false)
+    act.endPan(20)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('moveCursorBy never snaps to ticks', () => {
+    useSettings.setState({ tickSnap: true })
+    const { t } = offTick()
+    act.focusCursorAt(t - 7000, false)
+    act.moveCursorBy(7000)
+    expect(view().timeCenter).toBe(t)
   })
 })
 

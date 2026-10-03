@@ -23,6 +23,8 @@ export interface SettingsState {
   orientation: OrientationSetting
   /** Vertical only: 'down' puts the future below Now. */
   verticalDir: VerticalDir
+  /** Whether a drag or glide that comes to rest on empty time lands on the nearest tick. */
+  tickSnap: boolean
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -35,10 +37,11 @@ export const useSettings = create<SettingsState>(() => ({
   favoriteLanes: loaded.favoriteLanes === 'always' ? 'always' : 'selected',
   orientation: loaded.orientation === 'horizontal' || loaded.orientation === 'vertical' ? loaded.orientation : 'auto',
   verticalDir: loaded.verticalDir === 'up' ? 'up' : 'down',
+  tickSnap: loaded.tickSnap !== false,
   layoutVersion: typeof loaded.layoutVersion === 'number' && Number.isFinite(loaded.layoutVersion) ? loaded.layoutVersion : 0,
 }))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -55,6 +58,7 @@ export const settings = {
   setFavoriteLanes: (favoriteLanes: FavoriteLanes) => useSettings.setState({ favoriteLanes }),
   setOrientation: (orientation: OrientationSetting) => useSettings.setState({ orientation }),
   setVerticalDir: (verticalDir: VerticalDir) => useSettings.setState({ verticalDir }),
+  setTickSnap: (tickSnap: boolean) => useSettings.setState({ tickSnap }),
   setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
   setTunable: (key: TunableKey, value: number) => {
     if (!Number.isFinite(value)) return

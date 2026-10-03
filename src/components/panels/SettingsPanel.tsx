@@ -21,6 +21,7 @@ export function SettingsPanel() {
   const favoriteLanes = useSettings(s => s.favoriteLanes)
   const orientation = useSettings(s => s.orientation)
   const verticalDir = useSettings(s => s.verticalDir)
+  const tickSnap = useSettings(s => s.tickSnap)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
@@ -98,6 +99,10 @@ export function SettingsPanel() {
                 <option value="selected">When selected</option>
                 <option value="always">Always</option>
               </select>
+            </label>
+            <label className="settings__row">
+              <span>Snap cursor to ticks</span>
+              <input type="checkbox" checked={tickSnap} onChange={e => settings.setTickSnap(e.target.checked)} />
             </label>
           </section>
 

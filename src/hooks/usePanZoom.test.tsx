@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { render, screen } from '@testing-library/react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePanZoom } from './usePanZoom.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { entities, useEntities } from '../store/entities.ts'
@@ -25,11 +25,22 @@ function pointer(target: Element, type: string, x: number, pointerType: 'touch' 
   target.dispatchEvent(e)
 }
 
+/** A deliberate drag: slow moves and a pause before release, so it never glides. */
 function drag(target: Element, fromX: number, toX: number, pointerType: 'touch' | 'mouse' = 'touch') {
-  pointer(target, 'pointerdown', fromX, pointerType)
-  const steps = 10
-  for (let i = 1; i <= steps; i++) pointer(target, 'pointermove', fromX + ((toX - fromX) * i) / steps, pointerType)
-  pointer(target, 'pointerup', toX, pointerType)
+  let clock = 1000
+  const spy = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+  try {
+    pointer(target, 'pointerdown', fromX, pointerType)
+    const steps = 10
+    for (let i = 1; i <= steps; i++) {
+      clock += 40
+      pointer(target, 'pointermove', fromX + ((toX - fromX) * i) / steps, pointerType)
+    }
+    clock += 300
+    pointer(target, 'pointerup', toX, pointerType)
+  } finally {
+    spy.mockRestore()
+  }
 }
 
 function tap(target: Element, x: number, wobblePx = 0) {
@@ -118,6 +129,84 @@ describe('usePanZoom', () => {
     pointer(el, 'pointermove', 400, 'touch', 1, 400)
     expect(useView.getState().viewFocusMode).toBe('cursor')
     pointer(el, 'pointerup', 400, 'touch', 1, 400)
+  })
+
+  describe('glide', () => {
+    afterEach(() => { vi.useRealTimers() })
+    const center = () => useView.getState().timeCenter
+    /** Lets any real frame the engine already scheduled run first, so the faked ones drive it. */
+    const fakeClock = async () => {
+      await new Promise(r => setTimeout(r, 50))
+      vi.useFakeTimers()
+    }
+
+    /** Touch flick: fast moves just before release, so the release velocity is high. */
+    function flick(target: Element, pauseMs = 0) {
+      pointer(target, 'pointerdown', 300)
+      for (let i = 1; i <= 10; i++) {
+        vi.advanceTimersByTime(8)
+        pointer(target, 'pointermove', 300 + i * 20)
+      }
+      if (pauseMs) vi.advanceTimersByTime(pauseMs)
+      pointer(target, 'pointerup', 500)
+    }
+
+    it('a flick still moving at release keeps panning, decaying, then lands', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      const el = screen.getByTestId('timeline')
+      flick(el)
+      const atRelease = center()
+      const positions: number[] = []
+      for (let i = 0; i < 12; i++) {
+        vi.advanceTimersByTime(16)
+        positions.push(center())
+      }
+      expect(positions[11]).toBeLessThan(atRelease) // dragged right = earlier time
+      const steps = positions.map((p, i) => (i === 0 ? atRelease : positions[i - 1]) - p)
+      expect(steps[2]).toBeGreaterThan(0)
+      expect(steps[11]).toBeLessThan(steps[2]) // decays
+      vi.advanceTimersByTime(8000)
+      expect(center()).toBeLessThan(positions[11]) // kept going
+      expect(useView.getState().viewFocusMode).toBe('cursor') // landed on a tick, not an instant
+      const settled = center()
+      vi.advanceTimersByTime(1000)
+      expect(center()).toBe(settled) // and stopped
+    })
+
+    it('a release after a pause does not glide', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      flick(screen.getByTestId('timeline'), 200)
+      const c = center()
+      vi.advanceTimersByTime(500)
+      expect(center()).toBe(c)
+    })
+
+    it('a pointerdown mid-glide stops it and its click reaches nothing', async () => {
+      await fakeClock()
+      const onTap = vi.fn()
+      render(<Harness onTap={onTap} />)
+      flick(screen.getByTestId('timeline'))
+      vi.advanceTimersByTime(48)
+      const button = screen.getByText('Tap me')
+      pointer(button, 'pointerdown', 400)
+      const c = center()
+      vi.advanceTimersByTime(500)
+      expect(center()).toBe(c)
+      pointer(button, 'pointerup', 400)
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      expect(onTap).not.toHaveBeenCalled()
+    })
+
+    it('wheel scrolling never glides', async () => {
+      await fakeClock()
+      render(<Harness onTap={() => {}} />)
+      screen.getByTestId('timeline').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: 100 }))
+      const c = center()
+      vi.advanceTimersByTime(500)
+      expect(center()).toBe(c)
+    })
   })
 
   describe('wheel', () => {

@@ -12,7 +12,8 @@ import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
-import { useSettings } from './settings.ts'
+import { getTunables, useSettings } from './settings.ts'
+import { nearestFinestTick } from '../domain/ticks.ts'
 import { useAlarms } from './alarms.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
 
@@ -95,9 +96,10 @@ const exactLandingMs = () => Math.min(500, 2 / frame().pxPerMs)
 
 /**
  * Where a free cursor comes to rest: if it is within `toleranceMs` of Now or of an
- * instant, focus that instead (the cursor "becomes" it and is hidden).
+ * instant, focus that instead (the cursor "becomes" it and is hidden). Failing that,
+ * with `snapToTicks` (drag/glide ends only) and the setting on, it eases to the nearest tick.
  */
-function settleCursor(toleranceMs: number, animate: boolean): boolean {
+function settleCursor(toleranceMs: number, animate: boolean, snapToTicks = false): boolean {
   if (v().viewFocusMode !== 'cursor' || v().moveMode) return false
   const f = frame()
   if (Math.abs(f.now - f.center) <= toleranceMs) {
@@ -109,7 +111,15 @@ function settleCursor(toleranceMs: number, animate: boolean): boolean {
     const d = Math.abs(i.tsEpochMs - f.center)
     if (d <= toleranceMs && (!best || d < best.d)) best = { id: i.id, d }
   }
-  if (!best) return false
+  if (!best) {
+    if (!snapToTicks || !useSettings.getState().tickSnap) return false
+    const tick = nearestFinestTick(f.center, f.pxPerMs)
+    if (tick === f.center) return false
+    engine.beginTransition(getTunables().tickSnapEaseMs)
+    view.setTimeCenter(tick)
+    refreshLock()
+    return true
+  }
   focusInstant(best.id, animate)
   return true
 }
@@ -199,9 +209,9 @@ export function rotate() {
   recomputeLayout()
 }
 
-/** End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`. */
+/** End of a drag or glide: snap to Now or to an instant if the center landed within `tolerancePx`, else to the nearest tick. */
 export function endPan(tolerancePx: number) {
-  settleCursor(tolerancePx / frame().pxPerMs, true)
+  settleCursor(tolerancePx / frame().pxPerMs, true, true)
 }
 
 export function toggleCursorLock() {
