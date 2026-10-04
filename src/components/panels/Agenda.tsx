@@ -76,6 +76,9 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: Ins
           color="var(--c-favorite)" bare pressed={!!inst.favorite} onClick={() => act.toggleFavorite(inst.id)} />
         <span className={inst.label ? '' : 'is-empty'}>{displayName(inst.label)}</span>
         {inst.alarm && <BellAlertIcon className="list-row__bell" aria-label="Alarm set" />}
+        <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline'}
+          className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={!!inst.hidden}
+          onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
       </div>
       <div className="list-row__dt mono">{formatDateTime(inst.tsEpochMs)}</div>
       <Relative ts={inst.tsEpochMs} />

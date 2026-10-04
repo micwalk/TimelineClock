@@ -798,3 +798,4 @@
 .tl-nowflag__name { font: 650 12px/1 var(--font-ui); color: var(--ink); }
 .tl-nowflag__left { font: 700 13px/1 var(--font-mono); color: var(--accent); }
 .tl-nowflag__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
+.tl-nowflag__total:empty { display: none; }

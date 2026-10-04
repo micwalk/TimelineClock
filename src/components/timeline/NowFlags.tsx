@@ -1,12 +1,13 @@
-// Vertical layout: a box at the Now line for each saved span that contains Now (a running
-// timer, a span you're in), against its bar on the right, showing the span's name and the
-// time left (the original length small). One frame listener places all of them so they
-// never overlap (domain/nowFlags).
+// Vertical layout: label boxes for the saved span lanes on the right, against their bar.
+// A span that contains Now (a running timer, a span you're in) gets its box at the Now line
+// with the time left (the original length small); any other span without its own chip gets
+// one at its middle with its name and length. One frame listener places all of them so
+// they never overlap (domain/nowFlags).
 import { useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { useFrameListener } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS, formatDurationShort, truncateText } from '../../domain/format.ts'
+import { formatDurationHMS, formatDurationShort, formatLiveSpan, truncateText } from '../../domain/format.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { layoutNowFlags } from '../../domain/nowFlags.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
@@ -67,18 +68,25 @@ export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: Saved
       const xlo = GEOMETRY_VERTICAL.chipStart + k.crossOffset
       blockers.push({ lo: c - CHIP_HEIGHT / 2, hi: c + CHIP_HEIGHT / 2, xlo, xhi: xlo + CLUSTER_WIDTH })
     }
+    const running: FlagItem[] = []
     for (const lane of saved) {
       const pa = f.pos(resolveTimeRef(lane.a, f.now, f.center))
       const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
       const g = spanGeometry(pa, pb, f.mainSize)
       if (!g.onScreen) continue
-      if (laneHasControls(lane, selectedSpanId)) blockers.push({ lo: g.mid - LANE_CHIP_SIZE / 2, hi: g.mid + LANE_CHIP_SIZE / 2 })
-      if (Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize) {
-        const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
-        const width = refs.current.get(lane.key)?.offsetWidth || FLAG_WIDTH_GUESS
-        items.push({ key: lane.key, lo: g.left, hi: g.right, xlo: laneX - width, xhi: laneX })
-      }
+      const hasChip = laneHasControls(lane, selectedSpanId)
+      if (hasChip) blockers.push({ lo: g.mid - LANE_CHIP_SIZE / 2, hi: g.mid + LANE_CHIP_SIZE / 2 })
+      const containsNow = Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
+      // Spans with their own chip only get a flag for Now; the chip already names them.
+      if (!containsNow && hasChip) continue
+      const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
+      const width = refs.current.get(lane.key)?.offsetWidth || FLAG_WIDTH_GUESS
+      const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - width, xhi: laneX }
+      if (containsNow) running.push(item)
+      else items.push({ ...item, prefer: g.mid })
     }
+    // Flags at Now go first: they get the spots nearest Now.
+    items.unshift(...running)
     const placed = layoutNowFlags(items, nowPos, FLAG_SIZE, FLAG_GAP, blockers)
     for (const lane of saved) {
       const el = refs.current.get(lane.key)
@@ -107,13 +115,16 @@ export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: Saved
               style={{ display: 'none', height: FLAG_SIZE }}
               role="button"
               tabIndex={0}
-              aria-label={`${name || 'Span'}: time left`}
+              aria-label={name || 'Span'}
               onClick={() => act.selectSpan(r.span.id)}
               onKeyDown={e => { if (e.key === 'Enter') act.selectSpan(r.span.id) }}
             >
               {name && <span className="tl-nowflag__name">{truncateText(name, NAME_MAX)}</span>}
-              <LiveText className="tl-nowflag__left mono" compute={f => formatDurationHMS(end(f) - f.now)} />
-              <LiveText className="tl-nowflag__total mono" compute={f => `/${formatDurationShort(end(f) - start(f))}`} />
+              {/* Containing Now: time left, big, and the length small. Otherwise: the length. */}
+              <LiveText className="tl-nowflag__left mono" compute={f => (start(f) <= f.now && f.now <= end(f)
+                ? formatDurationHMS(end(f) - f.now)
+                : formatLiveSpan(end(f) - start(f), 1 / f.pxPerMs))} />
+              <LiveText className="tl-nowflag__total mono" compute={f => (start(f) <= f.now && f.now <= end(f) ? `/${formatDurationShort(end(f) - start(f))}` : '')} />
             </div>
           </div>
         )

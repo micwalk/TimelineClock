@@ -119,6 +119,31 @@ describe('typing the time while moving an instant', () => {
   })
 })
 
+describe('hiding instants', () => {
+  it('hides an instant, keeps its spans, and lets go of it if selected or focused', () => {
+    const a = entities.createInstant(Date.now() - HOUR, 'A')
+    const b = entities.createInstant(Date.now() - 30 * MINUTE, 'B')
+    const sp = entities.createSpan(a, b, 'A→B', { visible: true })
+    act.focusInstant(a, false)
+    act.setInstantHidden(a, true)
+    expect(instant(a).hidden).toBe(true)
+    expect(entities.getSpan(sp)).toBeTruthy()
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: null })
+    act.setInstantHidden(a, false)
+    expect(instant(a).hidden).toBe(false)
+  })
+
+  it('previous / next skip hidden instants', () => {
+    const now = Date.now()
+    const a = entities.createInstant(now - 2 * HOUR, 'A')
+    const b = entities.createInstant(now - HOUR, 'B')
+    act.setInstantHidden(b, true)
+    act.focusNow(false)
+    act.goToAdjacentInstant(-1)
+    expect(view().focusedInstantId).toBe(a)
+  })
+})
+
 describe('revealInstant (alarm notification click)', () => {
   it('focuses and selects the instant and shows a tab that lists it', () => {
     const id = entities.createInstant(Date.now() - MINUTE, 'Rice')

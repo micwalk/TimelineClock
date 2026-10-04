@@ -111,6 +111,13 @@ describe('live lane placement', () => {
     expect(lanes.map(l => l.index)).toEqual([0, 1])
   })
 
+  it('lanes already placed keep their slots when a more important lane arrives', () => {
+    const savedLane = (k: string): BottomLane => ({ ...secondaryLane, key: k })
+    const first = placeLanes([savedLane('a'), savedLane('b')], 1, 'vertical')
+    const second = placeLanes([savedLane('x'), savedLane('a'), savedLane('b')], 1, 'vertical', first.slots)
+    expect(Object.fromEntries(second.lanes.map(l => [l.key, l.index]))).toEqual({ x: 2, a: 0, b: 1 })
+  })
+
   it('horizontal geometry: the axis offset grows with the live-lane count and equals today\'s with none', () => {
     expect(liveBandHeight(0)).toBe(0)
     expect(liveBandHeight(2)).toBeGreaterThan(liveBandHeight(1))

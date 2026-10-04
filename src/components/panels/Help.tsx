@@ -113,6 +113,7 @@ function HelpContent() {
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
             <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes.</li>
             <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>
+            <li>The <b>eye</b> on a selected chip or an Agenda row hides an instant from the timeline; its spans stay. Tap the eye in the Agenda to show it again.</li>
           </ul>
         </section>
 

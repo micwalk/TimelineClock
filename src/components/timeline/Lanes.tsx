@@ -2,7 +2,7 @@
 import { EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS, formatDurationShort, truncateText } from '../../domain/format.ts'
+import { formatDurationHMS, formatLiveSpan, livePrecision, truncateText } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
@@ -29,11 +29,18 @@ function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
   )
 }
 
-/** Live length of a span in compact form ("45s", "26m", "1h 5m"): live lanes are narrow. */
+/**
+ * Live length of a span on a live lane's chip, as precise as the zoom allows: "26m" zoomed out,
+ * then "26:13", "26:13.4", "26:13.457". Sub-second readouts ask for frames while they show.
+ */
 function ShortDuration({ a, b }: { a: TimeRef; b: TimeRef }) {
   return (
     <LiveText
-      compute={f => formatDurationShort(Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)))}
+      compute={(f, ctx) => {
+        const msPerPx = 1 / f.pxPerMs
+        if ((livePrecision(msPerPx) ?? 0) > 0) ctx.fast()
+        return formatLiveSpan(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center), msPerPx)
+      }}
     />
   )
 }

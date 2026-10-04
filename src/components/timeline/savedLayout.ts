@@ -208,9 +208,10 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const margin = CULL_MARGIN_PX / f.pxPerMs
     const lo = f.start - margin
     const hi = f.end + margin
+    // Hidden instants show only while you're working with them (selected, focused, editing, moving).
     const isVisible = (i: InstantRecord) =>
       i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
-      (i.tsEpochMs >= lo && i.tsEpochMs <= hi)
+      (!i.hidden && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
     const prev = cache
 
     // Cheap probe: walk the instants once against the cached visible set, allocating nothing.

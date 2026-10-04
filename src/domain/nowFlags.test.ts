@@ -32,4 +32,10 @@ describe('layoutNowFlags', () => {
     expect(layoutNowFlags([{ key: 'a', lo: 0, hi: 1000, xlo: 150, xhi: 300 }], 400, 26, 4, [{ lo: 390, hi: 418, xlo: 0, xhi: 100 }]).a).toBe(400)
     expect(layoutNowFlags([{ key: 'a', lo: 0, hi: 1000, xlo: 150, xhi: 300 }], 400, 26, 4, [{ lo: 390, hi: 418, xlo: 0, xhi: 200 }]).a).toBe(373)
   })
+  it('puts a flag where it prefers, else near there', () => {
+    expect(layoutNowFlags([{ key: 'a', lo: 0, hi: 1000, prefer: 700 }], 400, 26, 4).a).toBe(700)
+    const r = layoutNowFlags([{ key: 'a', lo: 0, hi: 1000 }, { key: 'b', lo: 300, hi: 500, prefer: 400 }], 400, 26, 4)
+    expect(r.a).toBe(400)
+    expect(Math.abs(r.b - 400)).toBe(30)
+  })
 })

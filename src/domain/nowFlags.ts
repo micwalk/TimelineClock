@@ -1,12 +1,15 @@
-// Where the Now flags of saved span lanes go (vertical layout): each span that contains
-// Now gets a box at the Now line, against its bar. Boxes from different lanes would
-// overlap there, so each takes the free spot nearest Now inside its own span. Pure.
+// Where the flags of saved span lanes go (vertical layout): each span that contains Now
+// gets a box at the Now line, and other spans a label box at their middle (`prefer`),
+// against their bar. Boxes from different lanes would overlap, so each takes the free spot
+// nearest where it wants to be, inside its own span. Pure.
 
 /** Extent across the time axis, px. Boxes whose extents don't meet never collide; omitted = full width. */
 export interface CrossExtent { xlo?: number; xhi?: number }
 
 export interface FlagItem extends CrossExtent {
   key: string
+  /** Where this flag wants to sit along the time axis, px (default: Now). */
+  prefer?: number
   /** The span's visible extent along the time axis, px (the box stays inside it). */
   lo: number
   hi: number
@@ -33,9 +36,10 @@ export function layoutNowFlags(items: readonly FlagItem[], nowPos: number, size:
     const min = it.lo + half
     const max = it.hi - half
     const clamp = (c: number) => (min > max ? (it.lo + it.hi) / 2 : Math.min(max, Math.max(min, c)))
-    const candidates = [nowPos, ...inWay.flatMap(t => [t.lo - gap - half, t.hi + gap + half])].map(clamp)
-    const best = candidates.filter(free).sort((a, b) => Math.abs(a - nowPos) - Math.abs(b - nowPos))[0]
-    const c = best ?? clamp(nowPos)
+    const want = it.prefer ?? nowPos
+    const candidates = [want, ...inWay.flatMap(t => [t.lo - gap - half, t.hi + gap + half])].map(clamp)
+    const best = candidates.filter(free).sort((a, b) => Math.abs(a - want) - Math.abs(b - want))[0]
+    const c = best ?? clamp(want)
     out[it.key] = c
     taken.push({ lo: c - half, hi: c + half, xlo: it.xlo, xhi: it.xhi })
   }

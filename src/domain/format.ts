@@ -157,3 +157,32 @@ export function chipName(label: string): string {
 /** Saved chips show seconds only when the finest visible tick is shorter than `thresholdMs`. */
 export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs < thresholdMs
 
+
+/** How many px of the time axis one unit of a live readout should span before it is shown. */
+const LIVE_UNIT_PX = 30
+
+/** Decimal places of seconds a live readout shows at this zoom: null = coarse ("26m"), 0 = seconds, 1 = tenths, 3 = ms. */
+export function livePrecision(msPerPx: number): number | null {
+  const unit = msPerPx * LIVE_UNIT_PX
+  if (unit >= MINUTE) return null
+  if (unit >= SECOND) return 0
+  if (unit >= 100) return 1
+  return 3
+}
+
+/**
+ * A live span's length at the precision the zoom supports: "26m" / "1h 5m" zoomed out,
+ * "26:13" / "1:05:13" when seconds are visible, then "26:13.4", then "26:13.457".
+ */
+export function formatLiveSpan(ms: number, msPerPx: number): string {
+  const p = livePrecision(msPerPx)
+  const abs = Math.abs(ms)
+  if (p === null) return formatDurationShort(abs)
+  const step = p === 0 ? SECOND : p === 1 ? 100 : 1
+  const t = Math.floor(abs / step) * step
+  const h = Math.floor(t / HOUR)
+  const m = Math.floor((t % HOUR) / MINUTE)
+  const s = Math.floor((t % MINUTE) / SECOND)
+  const frac = p === 0 ? '' : `.${Math.floor((t % SECOND) / (p === 1 ? 100 : 1)).toString().padStart(p, '0')}`
+  return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}${frac}` : `${m}:${pad2(s)}${frac}`
+}

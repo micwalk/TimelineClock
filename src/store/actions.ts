@@ -156,7 +156,7 @@ function navItems(): NavTarget[] {
   const f = frame()
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
-  for (const i of useEntities.getState().instants) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
+  for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
@@ -415,6 +415,24 @@ export function toggleAlarm(id: string) {
   }
   entities.setAlarmFlag(id, true)
   entities.upsertNowSpan(id, true) // alarms are favorites
+}
+
+/**
+ * Hides an instant from the timeline (or shows it again). Its spans stay; it stays in the
+ * Agenda. Hiding the selected or focused instant lets go of it so it actually disappears.
+ */
+export function setInstantHidden(id: string, hidden: boolean) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  entities.setHiddenFlag(id, hidden)
+  if (!hidden) return
+  const s = v()
+  if (s.viewFocusMode === 'instant' && s.focusedInstantId === id) focusCursorAt(inst.tsEpochMs, false)
+  const after = v()
+  useView.setState({
+    currentSelectedInstantId: after.currentSelectedInstantId === id ? null : after.currentSelectedInstantId,
+    secondarySelectedInstantId: after.secondarySelectedInstantId === id ? null : after.secondarySelectedInstantId,
+  })
 }
 
 export function renameInstant(id: string, label: string) {

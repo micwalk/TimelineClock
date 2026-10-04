@@ -65,6 +65,7 @@ export const entities = {
   setInstantLabel: (id: string, label: string) => patchInstant(id, () => ({ label })),
   setInstantTime: (id: string, tsEpochMs: number) => patchInstant(id, () => ({ tsEpochMs })),
   setFavoriteFlag: (id: string, favorite: boolean) => patchInstant(id, () => ({ favorite })),
+  setHiddenFlag: (id: string, hidden: boolean) => patchInstant(id, () => ({ hidden })),
   setAlarmFlag: (id: string, alarm: boolean) => patchInstant(id, i => ({ alarm, favorite: alarm ? true : i.favorite })),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
