@@ -58,8 +58,12 @@ describe('Timer and Stopwatch buttons', () => {
     expect(view().focusedSpanId).toBe(tracked.id)
     act.stopStopwatch()
     const [, , stop] = sw().marks
-    const closed = spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)!
-    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: closed.id, selectedSpanId: closed.id })
+    // Stop saves the whole run, start to stop, as a "Stopwatch" span, and focuses and selects it.
+    const run = spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)!
+    expect(run).toMatchObject({ label: 'Stopwatch', visible: true })
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: run.id, selectedSpanId: run.id })
+    // The last lap is still saved too.
+    expect(spans().some(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toBe(true)
   })
 
   it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {
@@ -116,6 +120,10 @@ describe('Timer and Stopwatch buttons', () => {
     act.stopStopwatch()
     const [s0, stop] = sw().marks
     expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)?.label).toBe('Stopwatch')
+    // No duplicate run span, and it's the one in focus.
+    const runs = spans().filter(sp => sp.startInstantId === s0 && sp.endInstantId === stop)
+    expect(runs).toHaveLength(1)
+    expect(view().focusedSpanId).toBe(runs[0].id)
   })
 
   it('reset while running stops tracking the current span', () => {

@@ -394,16 +394,20 @@ export function lapStopwatch() {
   trackSpan(entities.nowSpanOf(stopwatch().marks[0])?.id)
 }
 
-/** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
+/**
+ * Stop: an instant at Now ends the last lap (saved as a span), and the whole run, start to
+ * stop, becomes a "Stopwatch" span that is focused and selected: the stopwatch's reading.
+ * Without laps the span the stop closes is already that run.
+ */
 export function stopStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const { marks } = stopwatch()
+  const start = marks[0]
   const stop = closeStopwatchSpan(true)
-  // The reading: the span the stop just closed.
-  const prev = marks[marks.length - 1]
-  const closed = useEntities.getState().spans.find(sp => sp.startInstantId === prev && sp.endInstantId === stop)
-  if (closed) focusSpan(closed.id)
-  if (closed) view.selectSpan(closed.id)
+  const existing = useEntities.getState().spans.find(sp => sp.startInstantId === start && sp.endInstantId === stop)
+  const run = existing?.id ?? entities.createSpan(start, stop, stopwatchStartLabel, { visible: true })
+  focusSpan(run)
+  view.selectSpan(run)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
