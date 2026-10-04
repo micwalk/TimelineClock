@@ -18,6 +18,7 @@ const SPECS = {
   chipRowsMax: { label: 'Chip rows (horizontal)', default: 3, min: 1, max: 8, step: 1, group: 'Layout' },
   chipColumnsMax: { label: 'Chip columns (vertical)', default: 4, min: 1, max: 8, step: 1, group: 'Layout' },
   chipGapPx: { label: 'Gap between chips (px)', default: 6, min: 0, max: 40, step: 1, group: 'Layout' },
+  chipShiftMaxPx: { label: 'Chips may slide along time before clustering (px)', default: 80, min: 0, max: 300, step: 2, group: 'Layout' },
   autoHysteresis: { label: 'Auto orientation margin', default: 0.1, min: 0, max: 0.5, step: 0.01, group: 'Layout' },
   sideDockMinWidthPx: { label: 'Side-docked Agenda needs width (px)', default: 900, min: 300, max: 3000, step: 10, group: 'Layout' },
   bottomDockMinHeightPx: { label: 'Bottom-docked Agenda needs height (px)', default: 600, min: 200, max: 3000, step: 10, group: 'Layout' },

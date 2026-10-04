@@ -50,6 +50,8 @@ interface ChipProps {
   row: number
   /** Vertical: px right of chip column 0 (from the overlap layout). */
   cross: number
+  /** px the chip slid along the time axis away from its line (overlap layout), to avoid a "+N". */
+  shift: number
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
@@ -60,7 +62,7 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
+function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
   const ts = inst.tsEpochMs
   const isPast = useFrameValue(f => ts < f.now)
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
@@ -103,7 +105,7 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
 
   return (
-    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
+    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, '--shift': `${shift}px`, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
       <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
@@ -167,8 +169,8 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
 }
 
 /** The line is always drawn; the chip only when the layout gives it a row (folded and clustered instants have none). */
-const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
-  { inst: InstantRecord; row: number | undefined; cross: number; foldCount: number; foldedIds: string } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
+  { inst: InstantRecord; row: number | undefined; cross: number; shift: number; foldCount: number; foldedIds: string } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -177,7 +179,7 @@ const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, fol
   return (
     <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>
       {row !== undefined && (
-        <SavedChip inst={inst} row={row} cross={cross} foldCount={foldCount} foldedIds={foldedIds}
+        <SavedChip inst={inst} row={row} cross={cross} shift={shift} foldCount={foldCount} foldedIds={foldedIds}
           selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       )}
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
@@ -233,6 +235,7 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
             inst={inst}
             row={layout.rows[id]}
             cross={layout.crossOffsets[id] ?? 0}
+            shift={layout.shifts[id] ?? 0}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             selected={v.selected === id}

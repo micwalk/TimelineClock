@@ -63,7 +63,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
-      {orientation === 'vertical' && <NowFlags lanes={lanes} />}
+      {orientation === 'vertical' && <NowFlags lanes={lanes} layout={layout} />}
       <RotateButton />
     </section>
   )

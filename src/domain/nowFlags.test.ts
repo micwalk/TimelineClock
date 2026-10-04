@@ -27,4 +27,9 @@ describe('layoutNowFlags', () => {
     const r = layoutNowFlags([{ key: 'a', lo: 390, hi: 412 }, { key: 'b', lo: 390, hi: 412 }], 400, 26, 4)
     expect(r.b).toBe(401)
   })
+  it('ignores blockers it does not meet across the axis', () => {
+    // A chip left of the flag (x 0–100) doesn't push a flag at x 150–300; one under it does.
+    expect(layoutNowFlags([{ key: 'a', lo: 0, hi: 1000, xlo: 150, xhi: 300 }], 400, 26, 4, [{ lo: 390, hi: 418, xlo: 0, xhi: 100 }]).a).toBe(400)
+    expect(layoutNowFlags([{ key: 'a', lo: 0, hi: 1000, xlo: 150, xhi: 300 }], 400, 26, 4, [{ lo: 390, hi: 418, xlo: 0, xhi: 200 }]).a).toBe(373)
+  })
 })
