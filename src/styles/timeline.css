@@ -12,6 +12,8 @@
   -webkit-user-select: none;
   cursor: grab;
 }
+/* An open popover or tag menu may overhang the control bar: lift the timeline above it. */
+.timeline:has(.popover, .tl-tag__menu) { z-index: 25; }
 .timeline.is-panning { cursor: grabbing; }
 
 /* Rotate button: bottom-right corner */
@@ -477,19 +479,45 @@
   from { opacity: 0; translate: 0 -4px; }
   to { opacity: 1; translate: 0 0; }
 }
-.time-entry { display: flex; align-items: center; gap: 4px; }
-.time-entry__group { display: inline-flex; align-items: center; gap: 4px; }
-.time-entry__field {
-  width: 46px;
-  height: 36px;
-  text-align: center;
-  border-radius: 7px;
-  background: transparent;
-  font: 700 19px/1 var(--font-mono);
-  outline: none;
+.time-entry { display: flex; align-items: center; gap: 6px; }
+/* One box for hh:mm:ss: digits fill from the right, untyped places stay dim, units under each pair. */
+.time-digits {
+  position: relative;
+  display: inline-flex;
+  padding: 5px 10px 3px;
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: text;
 }
-.time-entry__field:focus { background: var(--surface-raised); }
-.time-entry__sep { font: 700 19px/1 var(--font-mono); color: var(--ink-dim); }
+.time-digits.is-focused { background: var(--surface-raised); }
+.time-digits.is-invalid { --accent: var(--c-danger); --halo: var(--c-danger); }
+/* The real input covers the box invisibly: it takes taps and keys (number pad on phones). */
+.time-digits__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  font-size: 16px; /* no zoom-on-focus on iOS */
+  cursor: text;
+}
+.time-digits__display { display: inline-flex; align-items: flex-start; pointer-events: none; }
+.time-digits__group { display: inline-flex; align-items: flex-start; }
+.time-digits__pair { display: inline-flex; flex-direction: column; align-items: center; }
+.time-digits__num { font: 700 22px/1 var(--font-mono); color: var(--ink-faint); letter-spacing: 0.02em; }
+.time-digits__num .is-typed { color: var(--ink); }
+.time-digits.is-initial .time-digits__num { color: var(--ink-dim); }
+.time-digits__unit { margin-top: 2px; font: 700 9px/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.time-digits__sep { padding: 0 2px; font: 700 22px/1 var(--font-mono); color: var(--ink-faint); }
+.time-digits__caret {
+  align-self: center;
+  width: 2px;
+  height: 20px;
+  margin: 0 0 12px 2px;
+  background: var(--accent);
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .time-digits__caret { animation: none; } }
 .time-entry__toggle {
   height: 32px;
   min-width: 38px;
@@ -499,6 +527,11 @@
   background: var(--surface-raised);
 }
 .time-entry__toggle.is-on { --accent: var(--c-now); color: var(--accent); }
+.time-entry-pop { width: 252px; }
+.time-entry__hint { margin: 6px 0 0; font: 600 11px/1.3 var(--font-ui); color: var(--ink-faint); white-space: normal; }
+.time-entry__modes { display: flex; gap: 4px; margin-bottom: 8px; padding: 3px; border-radius: 9px; background: var(--surface); }
+.time-entry__mode { flex: 1; padding: 5px 10px; border-radius: 7px; font: 650 13px/1 var(--font-ui); color: var(--ink-dim); white-space: nowrap; }
+.time-entry__mode.is-on { color: #fff; background: color-mix(in srgb, var(--c-cursor) 40%, transparent); }
 .time-entry__actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
 .time-entry__btn {
   flex: 1;
@@ -703,7 +736,8 @@
 }
 .tl-col--label.is-dropped .chip--saved { animation: drop-pulse 900ms ease-out 1; }
 
-/* Round ＋ beside the Cursor tag's box: right of it (horizontal) or below it (vertical). */
+/* Round ＋ beside the Cursor tag's box: right of it (horizontal), or across the axis on the
+   saved side, where the dropped instant appears (vertical). */
 .tl-tag__drop {
   position: absolute;
   left: 100%;
@@ -723,9 +757,15 @@
 .tl-tag__drop:hover { background: var(--box-bg-raised); }
 .tl-tag__drop > svg { width: 20px; height: 20px; }
 .timeline[data-orientation='vertical'] .tl-tag__drop {
-  left: auto;
-  right: 0;
-  top: 100%;
-  transform: none;
-  margin: 6px 0 0;
+  /* The tag ends an arrow short of the axis; clear the arrow and the axis glow. */
+  left: calc(100% + 2 * var(--tl-tag-arrow) + 4px);
+  margin: 0;
+  /* Stay on the cursor line when the tag is shifted out of Now's way. */
+  transform: translateY(calc(-50% - var(--slot, 0) * var(--tl-tag-slot-v)));
+  z-index: 2;
 }
+
+/* The move-mode time entry opens under the moving chip in both orientations. */
+.popover--chip { z-index: 70; }
+.tl-col--label:has(.popover--chip) .tl-col__badge { display: none; }
+.timeline[data-orientation='vertical'] .popover--chip { left: 0; top: calc(100% + 8px); }

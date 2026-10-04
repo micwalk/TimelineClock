@@ -90,6 +90,25 @@ describe('Timer and Stopwatch buttons', () => {
   })
 })
 
+describe('typing the time while moving an instant', () => {
+  it('puts the instant at an offset from Now and finishes the move', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Leave')
+    act.enterMove(id)
+    act.moveInstantFromNow(30 * MINUTE)
+    expect(Math.abs(instant(id).tsEpochMs - (engine.sample().now + 30 * MINUTE))).toBeLessThan(1000)
+    expect(view()).toMatchObject({ moveMode: null, viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('puts the instant at a clock time on the same day', () => {
+    const day = new Date(Date.now() + 2 * HOUR)
+    const id = entities.createInstant(day.getTime(), 'Leave')
+    act.enterMove(id)
+    act.moveInstantToClock(9, 15, 0)
+    const d = new Date(instant(id).tsEpochMs)
+    expect([d.getDate(), d.getHours(), d.getMinutes()]).toEqual([day.getDate(), 9, 15])
+  })
+})
+
 describe('revealInstant (alarm notification click)', () => {
   it('focuses and selects the instant and shows a tab that lists it', () => {
     const id = entities.createInstant(Date.now() - MINUTE, 'Rice')

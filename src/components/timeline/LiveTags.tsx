@@ -114,6 +114,7 @@ export function CursorTag() {
     popover = (
       <DurationPopover
         title={reference === 'now' ? 'Offset from Now' : `Offset from ${name}`}
+        from={reference === 'now' ? 'Now' : name}
         initialMs={act.cursorTime() - (reference === 'now' ? act.nowTime() : selected!.tsEpochMs)}
         onCancel={ui.closeTimeInput}
         onSubmit={text => { if (act.applyDurationInput(text, reference)) ui.closeTimeInput() }}

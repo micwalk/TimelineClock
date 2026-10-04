@@ -443,6 +443,24 @@ export function confirmMove() {
   focusInstant(mm.instantId, false)
 }
 
+/** Move mode, typed: put the moving instant at `ts` and finish the move. */
+export function moveInstantTo(ts: number) {
+  const mm = v().moveMode
+  if (!mm) return
+  view.setTimeCenter(ts)
+  entities.setInstantTime(mm.instantId, ts)
+  view.setMoveMode(null)
+  focusInstant(mm.instantId)
+}
+
+/** Move mode, typed as a clock time: same day as where the instant is being moved to. */
+export function moveInstantToClock(hours24: number, minutes: number, seconds: number) {
+  moveInstantTo(atClockTimeOnDay(frame().center, hours24, minutes, seconds))
+}
+
+/** Move mode, typed as an offset from Now. */
+export const moveInstantFromNow = (offsetMs: number) => moveInstantTo(nowTime() + offsetMs)
+
 export function cancelMove() {
   const mm = v().moveMode
   if (!mm) return

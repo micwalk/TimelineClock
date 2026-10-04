@@ -21,7 +21,9 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 
 Stopwatch and Timer buttons shipped 2026-10-04 (see AGENTS.md and the
 [quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) status).
-Still open: a clearer countdown on the timer's live lane chip (it shows coarse "12m"),
+User journeys with tap counts and proposals (relative-to-instant tool, timer from an
+instant, editing a timer's length): [user journeys](../ux/2026-10-04-user-journeys.md),
+waiting on the owner's picks in its §4. Still open: a clearer countdown on the timer's live lane chip (it shows coarse "12m"),
 "timer from the selected instant", natural-language quick add.
 
 **What the owner asked for:** "I like your suggestion of stopwatch/timer/alarm buttons.

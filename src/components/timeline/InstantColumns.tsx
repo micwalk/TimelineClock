@@ -1,10 +1,10 @@
 // Saved instant markers: a line plus one compact chip, moved along the time axis by the engine.
-import { memo, useMemo, useRef } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowsRightLeftIcon, CheckIcon, ClockIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
@@ -23,6 +23,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { Marker } from './Marker.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
+import { TimeEntry } from './TimeEntryPopover.tsx'
 import type { SavedLayout } from './savedLayout.ts'
 import { useChipWidth } from './savedLayout.ts'
 
@@ -74,6 +75,10 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   const showRelative = !focused && (!!inst.favorite || !!inst.alarm || selected)
   const withSeconds = fineSeconds || selected || focused
 
+  // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
+  const [typing, setTyping] = useState(false)
+  if (typing && !moving) setTyping(false)
+
   const zoomToFold = () => {
     const times = [ts, ...foldedIds.split(',').map(id => entities.getInstant(id)?.tsEpochMs).filter((t): t is number => typeof t === 'number')]
     act.zoomToTimes(times)
@@ -88,6 +93,7 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
     </>
   ) : moving ? (
     <>
+      <IconButton icon={ClockIcon} label="Type the time" color="var(--c-cursor)" bare pressed={typing} onClick={() => setTyping(true)} />
       <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
       <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
     </>
@@ -123,13 +129,14 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
             type="button"
             className="chip__main"
             title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click the name to rename, the time to focus`}
-            onClick={() => act.selectInstant(inst.id)}
+            onClick={() => (moving ? setTyping(true) : act.selectInstant(inst.id))}
           >
             {!unnamed && <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>}
             <span className="chip__time" onDoubleClick={() => act.focusInstant(inst.id)}>
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+            {moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(f.center - f.now)}`} />}
           </button>
           </>
         )}
@@ -146,6 +153,15 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
         </div>
       )}
       {!toolsBelow && tools}
+      {moving && typing && (
+        <TimeEntry
+          title={`Move ${displayName(inst.label, 'instant')} to`}
+          className="popover--chip"
+          clock={{ initialTs: act.cursorTime(), onSubmit: t => act.moveInstantToClock(t.h, t.m, t.s) }}
+          offset={{ initialMs: act.cursorTime() - act.nowTime(), from: 'Now', onSubmit: act.moveInstantFromNow }}
+          onCancel={() => setTyping(false)}
+        />
+      )}
     </div>
   )
 }
