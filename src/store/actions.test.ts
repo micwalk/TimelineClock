@@ -23,7 +23,10 @@ const instant = (id: string) => entities.getInstant(id)!
 const view = () => useView.getState()
 
 describe('Timer and Stopwatch buttons', () => {
-  beforeEach(() => useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] }))
+  beforeEach(() => {
+    useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] })
+    useSettings.setState({ stopwatchKeepStart: true })
+  })
   const spans = () => useEntities.getState().spans
   const sw = () => useQuick.getState().stopwatch
 
@@ -68,7 +71,9 @@ describe('Timer and Stopwatch buttons', () => {
     act.lapStopwatch()
     const [, l1] = sw().marks
     expect(instant(l1)).toMatchObject({ label: 'Lap 1', favorite: true })
-    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    // By default the start stays favorited through laps: its span to Now is the total.
+    expect(instant(s0).favorite).toBe(true)
+    expect(entities.nowSpanOf(s0)?.visible).toBe(true)
     expect(entities.nowSpanOf(l1)?.visible).toBe(true)
     expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === l1)).toMatchObject({ label: 'Lap 1', visible: true })
 
@@ -77,6 +82,8 @@ describe('Timer and Stopwatch buttons', () => {
     expect(sw().stopped).toBe(true)
     expect(instant(stop).label).toBe('Stop')
     expect(entities.nowSpanOf(l1)?.visible).toBe(false)
+    // Stopping ends tracking: the start is unfavorited too.
+    expect(instant(s0).favorite).toBe(false)
     expect(spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toMatchObject({ label: 'Lap 2', visible: true })
 
     // Lap and Stop do nothing once stopped; Reset stops tracking and keeps the history.
@@ -85,6 +92,23 @@ describe('Timer and Stopwatch buttons', () => {
     act.resetStopwatch()
     expect(sw()).toEqual(IDLE_STOPWATCH)
     expect(useEntities.getState().instants).toHaveLength(3)
+  })
+
+  it('a second lap unfavorites the first lap but keeps the start', () => {
+    act.startStopwatch()
+    act.lapStopwatch()
+    act.lapStopwatch()
+    const [s0, l1, l2] = sw().marks
+    expect([instant(s0).favorite, instant(l1).favorite, instant(l2).favorite]).toEqual([true, false, true])
+  })
+
+  it('with "laps keep the start favorited" off, a lap moves the favorite to the new lap', () => {
+    useSettings.setState({ stopwatchKeepStart: false })
+    act.startStopwatch()
+    act.lapStopwatch()
+    const [s0, l1] = sw().marks
+    expect([instant(s0).favorite, instant(l1).favorite]).toEqual([false, true])
+    useSettings.setState({ stopwatchKeepStart: true })
   })
 
   it('stopping without laps saves the whole run as "Stopwatch"', () => {

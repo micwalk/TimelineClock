@@ -55,8 +55,10 @@ export function useVisibleLanes(): BottomLane[] {
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
-  // A running stopwatch's lane to Now always shows.
+  // A running stopwatch's lanes to Now (its start, when kept favorited, and the latest lap) always show.
   const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
+  const startId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[0] : null))
+  const keepStart = useSettings(s => s.stopwatchKeepStart)
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -71,7 +73,7 @@ export function useVisibleLanes(): BottomLane[] {
       selectedInstantId: v.selectedId,
       now: Date.now(),
       favoriteLanes,
-      trackedIds: trackedId ? new Set([trackedId]) : undefined,
+      trackedIds: trackedId ? new Set([trackedId, ...(keepStart && startId ? [startId] : [])]) : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -103,7 +105,7 @@ export function useVisibleLanes(): BottomLane[] {
       })
     }
     return out
-  }, [instants, spans, v, favoriteLanes, trackedId])
+  }, [instants, spans, v, favoriteLanes, trackedId, startId, keepStart])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)

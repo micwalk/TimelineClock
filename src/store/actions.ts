@@ -374,7 +374,11 @@ function closeStopwatchSpan(stopping: boolean) {
   const prev = marks[marks.length - 1]
   const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
   entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
-  setFavorite(prev, false)
+  // The lap just ended stops being tracked; the start stays favorited through laps (a setting)
+  // until the stopwatch stops.
+  const keepStart = useSettings.getState().stopwatchKeepStart && !stopping
+  if (prev !== marks[0] || !keepStart) setFavorite(prev, false)
+  if (stopping && marks[0] !== prev) setFavorite(marks[0], false)
   quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
   return id
 }
@@ -384,8 +388,8 @@ export function lapStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const id = closeStopwatchSpan(false)
   setFavorite(id, true)
-  // Keep the whole run in view: focus the start's span to Now (it still exists, hidden as
-  // a favorite lane; focused, it shows as the run's total next to the current lap's lane).
+  // Keep the whole run in view: focus the start's span to Now (the run's total, shown next
+  // to the current lap's lane).
   trackSpan(entities.nowSpanOf(stopwatch().marks[0])?.id)
 }
 
@@ -404,7 +408,10 @@ export function stopStopwatch() {
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
 export function resetStopwatch() {
   const s = stopwatch()
-  if (stopwatchPhase(s) === 'running') setFavorite(s.marks[s.marks.length - 1], false)
+  if (stopwatchPhase(s) === 'running') {
+    setFavorite(s.marks[s.marks.length - 1], false)
+    setFavorite(s.marks[0], false)
+  }
   quick.resetStopwatch()
 }
 

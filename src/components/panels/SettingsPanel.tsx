@@ -23,6 +23,7 @@ export function SettingsPanel() {
   const orientation = useSettings(s => s.orientation)
   const verticalDir = useSettings(s => s.verticalDir)
   const tickSnap = useSettings(s => s.tickSnap)
+  const stopwatchKeepStart = useSettings(s => s.stopwatchKeepStart)
   const agendaPlacement = useSettings(s => s.agendaPlacement)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
@@ -113,6 +114,10 @@ export function SettingsPanel() {
             <label className="settings__row">
               <span>Snap cursor to ticks</span>
               <input type="checkbox" checked={tickSnap} onChange={e => settings.setTickSnap(e.target.checked)} />
+            </label>
+            <label className="settings__row" title="On: a lap favorites the new lap and keeps the start favorited, so both spans to Now show (lap and total). Off: only the latest lap stays favorited.">
+              <span>Stopwatch laps keep the start favorited</span>
+              <input type="checkbox" checked={stopwatchKeepStart} onChange={e => settings.setStopwatchKeepStart(e.target.checked)} />
             </label>
           </section>
 
