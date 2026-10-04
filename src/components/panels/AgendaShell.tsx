@@ -14,11 +14,11 @@ function Drawer() {
     const el = ref.current
     el?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()
     const onKey = (e: KeyboardEvent) => {
-      // Esc closes the Settings popover first, if it is open.
-      if (e.key === 'Escape' && !document.querySelector('.settings__panel')) {
+      // Esc closes the Settings popover or Help first, if one is open.
+      if (e.key === 'Escape' && !document.querySelector('.settings__panel') && !useUi.getState().helpOpen) {
         e.preventDefault()
         ui.closeAgenda()
-      } else if (e.key === 'Tab' && el) {
+      } else if (e.key === 'Tab' && el && !useUi.getState().helpOpen) {
         const items = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
         if (items.length === 0) return
         const first = items[0]

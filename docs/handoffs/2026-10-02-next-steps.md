@@ -15,7 +15,7 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 - License: MIT (`LICENSE`).
 - Private dev-server hostnames don't belong in the repo: put them in `.env.local`
   (gitignored) as `DEV_ALLOWED_HOSTS=host1,host2`; `vite.config.ts` reads it.
-- Agent instructions live in both `.cursorrules` and `AGENTS.md` (same content; keep them in sync).
+- Agent instructions live in `AGENTS.md`.
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 

@@ -21,6 +21,7 @@ import { InlineInput } from '../common/InlineInput.tsx'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline'
 import { useLayout } from '../../store/layout.ts'
 import { useFlip } from '../../hooks/useFlip.ts'
+import { HelpButton } from './Help.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 
 const TABS: { key: ListTab; label: string }[] = [
@@ -292,6 +293,7 @@ export function Agenda() {
             onClick={act.toggleAgendaDock}
           />
         )}
+        <HelpButton />
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">
