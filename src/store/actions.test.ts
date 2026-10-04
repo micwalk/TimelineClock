@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { entities, useEntities } from './entities.ts'
 import { initialViewState, useView } from './view.ts'
 import { useAlarms } from './alarms.ts'
@@ -149,6 +149,28 @@ describe('typing the time while moving an instant', () => {
     act.moveInstantToClock(9, 15, 0)
     const d = new Date(instant(id).tsEpochMs)
     expect([d.getDate(), d.getHours(), d.getMinutes()]).toEqual([day.getDate(), 9, 15])
+  })
+})
+
+describe('notification permission', () => {
+  let requestPermission: ReturnType<typeof vi.fn>
+  beforeEach(() => {
+    requestPermission = vi.fn().mockResolvedValue('granted')
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('is not asked for when dropping instants', () => {
+    act.dropInstant()
+    expect(requestPermission).not.toHaveBeenCalled()
+  })
+
+  it('is asked for when a bell is set or a timer started', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Wake')
+    act.toggleAlarm(id)
+    expect(requestPermission).toHaveBeenCalledTimes(1)
+    act.startTimer(5 * MINUTE)
+    expect(requestPermission).toHaveBeenCalledTimes(2) // still 'default' in this stub; the browser keeps the answer
   })
 })
 

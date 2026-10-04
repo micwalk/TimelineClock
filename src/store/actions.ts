@@ -19,7 +19,7 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
-import { dismiss } from '../services/AlarmScheduler.ts'
+import { dismiss, primeNotifications } from '../services/AlarmScheduler.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -327,6 +327,7 @@ export function startTimer(ms: number) {
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
+  void primeNotifications() // the first timer asks for notification permission
   showAroundNow([now, now + ms])
   return end
 }
@@ -440,6 +441,7 @@ export function toggleAlarm(id: string) {
   }
   entities.setAlarmFlag(id, true)
   entities.upsertNowSpan(id, true) // alarms are favorites
+  void primeNotifications() // the first bell asks for notification permission
 }
 
 /**
@@ -481,6 +483,7 @@ export function deleteInstant(id: string) {
 }
 
 export function createTestAlarm(delayMs = 3000) {
+  void primeNotifications()
   entities.createInstant(Date.now() + delayMs, 'Test Alarm', { alarm: true })
 }
 
