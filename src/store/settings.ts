@@ -25,6 +25,8 @@ export interface SettingsState {
   verticalDir: VerticalDir
   /** Whether a drag or glide that comes to rest on empty time lands on the nearest tick. */
   tickSnap: boolean
+  /** Stopwatch laps keep the start favorited (its span to Now shows the total) alongside the latest lap. */
+  stopwatchKeepStart: boolean
   /** Where the Agenda lives: Auto docks when there is room, Docked prefers a dock, Drawer always uses the drawer. */
   agendaPlacement: AgendaSetting
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
@@ -41,6 +43,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     orientation: r.orientation === 'horizontal' || r.orientation === 'vertical' ? r.orientation : 'auto',
     verticalDir: r.verticalDir === 'up' ? 'up' : 'down',
     tickSnap: r.tickSnap !== false,
+    stopwatchKeepStart: r.stopwatchKeepStart !== false,
     agendaPlacement: r.agendaPlacement === 'docked' || r.agendaPlacement === 'drawer' ? r.agendaPlacement : 'auto',
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
   }
@@ -48,7 +51,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, agendaPlacement: s.agendaPlacement, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -66,6 +69,7 @@ export const settings = {
   setOrientation: (orientation: OrientationSetting) => useSettings.setState({ orientation }),
   setVerticalDir: (verticalDir: VerticalDir) => useSettings.setState({ verticalDir }),
   setTickSnap: (tickSnap: boolean) => useSettings.setState({ tickSnap }),
+  setStopwatchKeepStart: (stopwatchKeepStart: boolean) => useSettings.setState({ stopwatchKeepStart }),
   setAgendaPlacement: (agendaPlacement: AgendaSetting) => useSettings.setState({ agendaPlacement }),
   setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
   setTunable: (key: TunableKey, value: number) => {

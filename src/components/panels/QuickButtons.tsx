@@ -26,7 +26,6 @@ export function StopwatchButton({ style }: { style?: CSSProperties }) {
   const phase = stopwatchPhase(sw)
   const startTs = useMarkTime(sw.marks[0])
   const lastTs = useMarkTime(sw.marks[sw.marks.length - 1])
-  const prevTs = useMarkTime(sw.marks[sw.marks.length - 2])
 
   if (phase === 'idle' || startTs === null || lastTs === null) {
     return (
@@ -37,11 +36,10 @@ export function StopwatchButton({ style }: { style?: CSSProperties }) {
   }
 
   if (phase === 'stopped') {
-    // The reading is the span the stop ended (the last lap, or the whole run without laps).
-    const from = prevTs ?? startTs
+    // The reading is the whole run, start to stop.
     return (
       <CtlButton icon={ArrowPathIcon} className="ctl-btn--quick" label="Reset the stopwatch" title="Stopwatch: reset" style={style} onClick={act.resetStopwatch}
-        sub={<Elapsed from={from} to={lastTs} />}>
+        sub={<Elapsed from={startTs} to={lastTs} />}>
         Reset
       </CtlButton>
     )

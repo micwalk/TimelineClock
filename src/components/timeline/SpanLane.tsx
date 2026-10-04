@@ -1,7 +1,7 @@
 // One span lane (a horizontal line, or a vertical bar at the right or, for live lanes, left edge): a glowing line between two times, off-screen chevrons,
-// and a chip centered on the visible part of the line with tools on either side.
+// endpoint arrows on the line at its visible ends, and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/react/20/solid'
 import { useFrameListener, useFrameValue } from '../../engine/hooks.ts'
@@ -11,6 +11,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
+import { observeLaneChip, rightSideLayout } from './rightSideLayout.ts'
 
 /** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -49,6 +50,10 @@ export interface SpanLaneProps {
   tools?: (order: { aIsLeft: boolean }) => { left?: ReactNode; right?: ReactNode }
   /** Content rendered below the chip (e.g. a popover). */
   below?: ReactNode
+  /** Selected or focused: its chip, tools and endpoint arrows draw over everything else. */
+  selected?: boolean
+  /** Vertical: key in the shared lane layout (rightSideLayout), which places the chip clear of other lane chips. */
+  layoutKey?: string
 }
 
 function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
@@ -66,13 +71,16 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, selected, layoutKey } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
   const rightChevRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
+  const startEndRef = useRef<HTMLDivElement>(null)
+  const finishEndRef = useRef<HTMLDivElement>(null)
+  const chipWrapRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
   const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
@@ -94,6 +102,8 @@ export function SpanLane(props: SpanLaneProps) {
       const display = g.onScreen ? '' : 'none'
       if (lineRef.current) lineRef.current.style.display = display
       if (anchorRef.current) anchorRef.current.style.display = display
+      if (startEndRef.current) startEndRef.current.style.display = display
+      if (finishEndRef.current) finishEndRef.current.style.display = display
     }
     if (!g.onScreen) return
     const width = g.right - g.left
@@ -103,13 +113,27 @@ export function SpanLane(props: SpanLaneProps) {
       lineRef.current.style.transform = v ? `translate3d(0,${g.left}px,0)` : `translate3d(${g.left}px,0,0)`
       lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
-    if (anchorRef.current && !(Math.abs(g.mid - s.mid) <= 0.01)) {
-      s.mid = g.mid
-      anchorRef.current.style.transform = v ? `translate3d(0,${g.mid}px,0)` : `translate3d(${g.mid}px,0,0)`
+    // Vertical lane chips take their spot from the shared layout, so they never overlap each other.
+    const mid = v && layoutKey ? (rightSideLayout(f).chips[layoutKey] ?? g.mid) : g.mid
+    if (anchorRef.current && !(Math.abs(mid - s.mid) <= 0.01)) {
+      s.mid = mid
+      anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
     }
+    // Endpoint arrows sit on the line at its visible ends.
+    const place = (el: HTMLDivElement | null, pos: number) => { if (el) el.style.transform = v ? `translate3d(0,${pos}px,0)` : `translate3d(${pos}px,0,0)` }
+    place(startEndRef.current, g.left)
+    place(finishEndRef.current, g.right)
     if (g.leftOffscreen !== s.l) { s.l = g.leftOffscreen; leftChevRef.current?.classList.toggle('is-visible', s.l) }
     if (g.rightOffscreen !== s.r) { s.r = g.rightOffscreen; rightChevRef.current?.classList.toggle('is-visible', s.r) }
   })
+
+  // The shared lane layout needs this chip's width (vertical) to tell what it would touch.
+  const hasChip = !(vertical && barOnly)
+  useEffect(() => {
+    const el = chipWrapRef.current
+    if (!layoutKey || !el || !hasChip) return
+    return observeLaneChip(layoutKey, el)
+  }, [layoutKey, hasChip])
 
   // Which endpoint is on the left only changes when a moving endpoint crosses the other.
   const aIsLeft = useFrameValue(f => resolveTimeRef(a, f.now, f.center) <= resolveTimeRef(b, f.now, f.center))
@@ -118,6 +142,7 @@ export function SpanLane(props: SpanLaneProps) {
   const rightTarget = aIsLeft ? bTarget : aTarget
 
   const laneClass = `tl-lane tl-lane--${variant}${live ? ' tl-lane--live' : ''}${emphasis ? ' is-emphasis' : ''}${hot ? ' is-hot' : ''}`
+  const showArrows = !!arrows && showTools && !(vertical && barOnly)
   const laneStyle = vertical ? ({ '--i': index } as CSSProperties) : { top }
 
   // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
@@ -128,11 +153,16 @@ export function SpanLane(props: SpanLaneProps) {
         <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
         <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
       </div>
-      <div ref={labelsRef} className={`${laneClass} tl-lane--labels`} style={laneStyle}>
+      <div ref={labelsRef} className={`${laneClass} tl-lane--labels${selected || (live && toolsOpen) ? ' is-selected' : ''}`} style={laneStyle}>
+        {showArrows && (
+          <>
+            <div ref={startEndRef} className="tl-lane__end">{arrowFor(leftTarget, 'left', vertical)}</div>
+            <div ref={finishEndRef} className="tl-lane__end">{arrowFor(rightTarget, 'right', vertical)}</div>
+          </>
+        )}
         <div ref={anchorRef} className="tl-lane__anchor">
-          {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
+          {!(vertical && barOnly) && <div ref={chipWrapRef} className="tl-lane__chip-wrap">
             <div className="tl-lane__tools tl-lane__tools--left">
-              {arrows && showTools && arrowFor(leftTarget, 'left', vertical)}
               {extra?.left}
             </div>
             <div
@@ -147,7 +177,6 @@ export function SpanLane(props: SpanLaneProps) {
               {chip}
             </div>
             <div className="tl-lane__tools tl-lane__tools--right">
-              {arrows && showTools && arrowFor(rightTarget, 'right', vertical)}
               {extra?.right}
             </div>
             {below}

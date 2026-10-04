@@ -19,7 +19,7 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
-import { dismiss } from '../services/AlarmScheduler.ts'
+import { dismiss, primeNotifications } from '../services/AlarmScheduler.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -327,6 +327,7 @@ export function startTimer(ms: number) {
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
+  void primeNotifications() // the first timer asks for notification permission
   showAroundNow([now, now + ms])
   return end
 }
@@ -374,7 +375,11 @@ function closeStopwatchSpan(stopping: boolean) {
   const prev = marks[marks.length - 1]
   const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
   entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
-  setFavorite(prev, false)
+  // The lap just ended stops being tracked; the start stays favorited through laps (a setting)
+  // until the stopwatch stops.
+  const keepStart = useSettings.getState().stopwatchKeepStart && !stopping
+  if (prev !== marks[0] || !keepStart) setFavorite(prev, false)
+  if (stopping && marks[0] !== prev) setFavorite(marks[0], false)
   quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
   return id
 }
@@ -384,27 +389,34 @@ export function lapStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const id = closeStopwatchSpan(false)
   setFavorite(id, true)
-  // Keep the whole run in view: focus the start's span to Now (it still exists, hidden as
-  // a favorite lane; focused, it shows as the run's total next to the current lap's lane).
+  // Keep the whole run in view: focus the start's span to Now (the run's total, shown next
+  // to the current lap's lane).
   trackSpan(entities.nowSpanOf(stopwatch().marks[0])?.id)
 }
 
-/** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
+/**
+ * Stop: an instant at Now ends the last lap (saved as a span), and the whole run, start to
+ * stop, becomes a "Stopwatch" span that is focused and selected: the stopwatch's reading.
+ * Without laps the span the stop closes is already that run.
+ */
 export function stopStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const { marks } = stopwatch()
+  const start = marks[0]
   const stop = closeStopwatchSpan(true)
-  // The reading: the span the stop just closed.
-  const prev = marks[marks.length - 1]
-  const closed = useEntities.getState().spans.find(sp => sp.startInstantId === prev && sp.endInstantId === stop)
-  if (closed) focusSpan(closed.id)
-  if (closed) view.selectSpan(closed.id)
+  const existing = useEntities.getState().spans.find(sp => sp.startInstantId === start && sp.endInstantId === stop)
+  const run = existing?.id ?? entities.createSpan(start, stop, stopwatchStartLabel, { visible: true })
+  focusSpan(run)
+  view.selectSpan(run)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
 export function resetStopwatch() {
   const s = stopwatch()
-  if (stopwatchPhase(s) === 'running') setFavorite(s.marks[s.marks.length - 1], false)
+  if (stopwatchPhase(s) === 'running') {
+    setFavorite(s.marks[s.marks.length - 1], false)
+    setFavorite(s.marks[0], false)
+  }
   quick.resetStopwatch()
 }
 
@@ -433,6 +445,7 @@ export function toggleAlarm(id: string) {
   }
   entities.setAlarmFlag(id, true)
   entities.upsertNowSpan(id, true) // alarms are favorites
+  void primeNotifications() // the first bell asks for notification permission
 }
 
 /**
@@ -474,6 +487,7 @@ export function deleteInstant(id: string) {
 }
 
 export function createTestAlarm(delayMs = 3000) {
+  void primeNotifications()
   entities.createInstant(Date.now() + delayMs, 'Test Alarm', { alarm: true })
 }
 

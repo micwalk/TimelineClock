@@ -5,24 +5,24 @@ import type { CSSProperties } from 'react'
 
 export const GEOMETRY = {
   /** The axis line. */
-  axis: 124,
+  axis: 150,
   /** Arrowhead height; live tag boxes sit just above it. */
   tagArrow: 14,
   /** Distance between the two live tag slots. */
-  tagSlot: 48,
+  tagSlot: 60,
   /** Main-axis distance under which the Now and Cursor tags would overlap. */
-  tagClearance: 100,
+  tagClearance: 130,
   /** Top of the first saved chip row, and the row pitch. */
-  chipTop: 140,
+  chipTop: 166,
   chipRow: 34,
 } as const
 
 /** Live lanes (spans with an endpoint at Now or the cursor), horizontal: a band above the live tags. */
 export const LIVE_LANES = {
   /** y of the first lane's center. */
-  top: 10,
+  top: 16,
   /** Distance between lane centers. */
-  pitch: 24,
+  pitch: 32,
   /** Room under the last lane before the live tags may start. */
   gap: 8,
 } as const
@@ -36,17 +36,17 @@ export const liveLaneTop = (index: number): number => LIVE_LANES.top + index * L
 /** Vertical timeline: the axis is a vertical line; x offsets from the left edge. */
 export const GEOMETRY_VERTICAL = {
   /** x of the axis. */
-  axis: 120,
+  axis: 140,
   tagArrow: 14,
   /** x where chip column 0 starts. */
-  chipStart: 132,
+  chipStart: 152,
   /** Spacing of saved span lanes, from the right edge inward. */
   laneGap: 18,
   /** Live lanes: x of the first bar from the left edge, and the spacing inward. */
   liveLaneStart: 8,
   liveLaneGap: 12,
   /** How far the Cursor tag moves along the time axis when it collides with Now. */
-  tagSlotV: 64,
+  tagSlotV: 76,
 } as const
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)

@@ -182,6 +182,8 @@ export interface SavedLayoutInputs {
   widths: Readonly<Record<string, number>>
   tunables: unknown
   laneCount: number
+  /** Endpoints of the selected or focused span: shown even when hidden. Absent = none. */
+  revealIds?: readonly string[]
 }
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
@@ -208,10 +210,12 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const margin = CULL_MARGIN_PX / f.pxPerMs
     const lo = f.start - margin
     const hi = f.end + margin
-    // Hidden instants show only while you're working with them (selected, focused, editing, moving).
+    // Hidden instants show only while you're working with them (selected, focused, editing,
+    // moving) or with a span they end (selected or focused span).
+    const revealed = (i: InstantRecord) => !!c.revealIds?.includes(i.id)
     const isVisible = (i: InstantRecord) =>
       i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
-      (!i.hidden && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
+      ((!i.hidden || revealed(i)) && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
     const prev = cache
 
     // Cheap probe: walk the instants once against the cached visible set, allocating nothing.
@@ -295,14 +299,20 @@ export function useSavedLayout(laneCount = 0): SavedLayout {
     editing: s.editingInstantId,
     moving: s.moveMode?.instantId ?? null,
   })))
+  // The selected or focused span's endpoints, so hidden ones show with it.
+  const spanIds = useView(useShallow(s => [s.selectedSpanId, s.viewFocusMode === 'span' ? s.focusedSpanId : null]))
+  const spans = useEntities(s => s.spans)
+  const revealIds = useMemo(() => spans
+    .filter(sp => spanIds.includes(sp.id))
+    .flatMap(sp => [sp.startInstantId, sp.endInstantId]), [spans, spanIds])
   const ringing = useAlarms(useShallow(s => s.ringing.map(r => r.instantId)))
   const widths = useChipWidths(s => s.widths)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const compute = useRef(createSavedLayoutCache()).current
   const inputs = useMemo<SavedLayoutInputs>(
-    () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount }),
-    [orientation, dir, instants, v, ringing, widths, tunables, laneCount],
+    () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount, revealIds }),
+    [orientation, dir, instants, v, ringing, widths, tunables, laneCount, revealIds],
   )
   return useFrameValue((f: Frame) => compute(f, inputs), layoutEqual)
 }

@@ -46,7 +46,7 @@ function ShortDuration({ a, b }: { a: TimeRef; b: TimeRef }) {
 }
 
 /** The longest span name a live lane's chip shows. */
-const LIVE_NAME_MAX = 8
+const LIVE_NAME_MAX = 12
 
 /** An implied lane's endpoint: where it is and what it is called. */
 interface Endpoint { ref: TimeRef; name: string }
@@ -97,7 +97,9 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
 function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean; short?: boolean }) {
   const header = spanHeader(r)
   const ends = `${displayName(r.start.label)} → ${spanEndName(r)}`
-  const name = short ? (header ? truncateText(header, LIVE_NAME_MAX) : undefined) : expanded ? (header ? `${header}: ${ends}` : ends) : header
+  // Live chips (spans to Now) name the span, else the instant it runs from.
+  const liveName = header ?? (r.span.endIsNow ? endpointName(r.start) : undefined)
+  const name = short ? (liveName ? truncateText(liveName, LIVE_NAME_MAX) : undefined) : expanded ? (header ? `${header}: ${ends}` : ends) : header
   return (
     <span className="span-chip__text">
       {editing ? (
@@ -110,7 +112,7 @@ function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan;
         />
       ) : name ? (
         <>
-          <span className="span-chip__name" title={short ? header : name}>{name}</span>
+          <span className="span-chip__name" title={short ? liveName : name}>{name}</span>
           <span className="span-chip__sep" aria-hidden>·</span>
         </>
       ) : null}
@@ -138,13 +140,16 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
   b?: TimeRef
 }) {
   const editing = useView(s => s.editingSpanId === r.span.id)
-  const expanded = useView(s => s.selectedSpanId === r.span.id) && !live
+  const isSelected = useView(s => s.selectedSpanId === r.span.id)
+  const expanded = isSelected && !live
   return (
     <SpanLane
       top={top}
       index={index}
       variant={variant}
       emphasis={emphasis}
+      selected={isSelected || !!emphasis}
+      layoutKey={laneKey}
       live={live}
       toolsOpen={toolsOpen}
       onDismissTools={ui.closeLaneTools}
@@ -183,6 +188,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               top={lane.top}
               index={lane.index}
               variant={liveLaneVariant(lane)}
+              layoutKey={lane.key}
               live
               toolsOpen={toolsOpen}
               onDismissTools={ui.closeLaneTools}
@@ -205,6 +211,8 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               top={lane.top}
               index={lane.index}
               variant="secondary"
+              selected
+              layoutKey={lane.key}
               a={lane.a}
               b={lane.b}
               aTarget={instantTarget(p)}

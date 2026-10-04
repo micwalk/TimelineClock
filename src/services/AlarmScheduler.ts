@@ -98,6 +98,11 @@ export function primeAudio() {
   audio.primeAudioContext()
 }
 
+/**
+ * Asks for notification permission, once, the first time the user sets something that
+ * will ring (a bell on an instant, a timer). Call it from that tap: browsers only allow
+ * the prompt during a user gesture. Never asked up front.
+ */
 export async function primeNotifications() {
   try {
     if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission()
@@ -112,11 +117,9 @@ export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: st
   started = true
   // Reschedule whenever instants change (new alarm, moved alarm, deleted alarm).
   useEntities.subscribe((s, prev) => { if (s.instants !== prev.instants) schedule() })
-  // Audio and notification permission need a user gesture.
-  const onGesture = () => {
-    primeAudio()
-    void primeNotifications()
-  }
+  // Audio needs a user gesture to unlock. (Notification permission waits for the first
+  // alarm or timer: see primeNotifications.)
+  const onGesture = () => primeAudio()
   document.addEventListener('pointerdown', onGesture, { once: true })
   document.addEventListener('keydown', onGesture, { once: true })
   if (hasRinging()) audio.startAlarmSound(hasRinging)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { entities, useEntities } from './entities.ts'
 import { initialViewState, useView } from './view.ts'
 import { useAlarms } from './alarms.ts'
@@ -23,7 +23,10 @@ const instant = (id: string) => entities.getInstant(id)!
 const view = () => useView.getState()
 
 describe('Timer and Stopwatch buttons', () => {
-  beforeEach(() => useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] }))
+  beforeEach(() => {
+    useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] })
+    useSettings.setState({ stopwatchKeepStart: true })
+  })
   const spans = () => useEntities.getState().spans
   const sw = () => useQuick.getState().stopwatch
 
@@ -55,8 +58,12 @@ describe('Timer and Stopwatch buttons', () => {
     expect(view().focusedSpanId).toBe(tracked.id)
     act.stopStopwatch()
     const [, , stop] = sw().marks
-    const closed = spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)!
-    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: closed.id, selectedSpanId: closed.id })
+    // Stop saves the whole run, start to stop, as a "Stopwatch" span, and focuses and selects it.
+    const run = spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)!
+    expect(run).toMatchObject({ label: 'Stopwatch', visible: true })
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: run.id, selectedSpanId: run.id })
+    // The last lap is still saved too.
+    expect(spans().some(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toBe(true)
   })
 
   it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {
@@ -68,7 +75,9 @@ describe('Timer and Stopwatch buttons', () => {
     act.lapStopwatch()
     const [, l1] = sw().marks
     expect(instant(l1)).toMatchObject({ label: 'Lap 1', favorite: true })
-    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    // By default the start stays favorited through laps: its span to Now is the total.
+    expect(instant(s0).favorite).toBe(true)
+    expect(entities.nowSpanOf(s0)?.visible).toBe(true)
     expect(entities.nowSpanOf(l1)?.visible).toBe(true)
     expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === l1)).toMatchObject({ label: 'Lap 1', visible: true })
 
@@ -77,6 +86,8 @@ describe('Timer and Stopwatch buttons', () => {
     expect(sw().stopped).toBe(true)
     expect(instant(stop).label).toBe('Stop')
     expect(entities.nowSpanOf(l1)?.visible).toBe(false)
+    // Stopping ends tracking: the start is unfavorited too.
+    expect(instant(s0).favorite).toBe(false)
     expect(spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toMatchObject({ label: 'Lap 2', visible: true })
 
     // Lap and Stop do nothing once stopped; Reset stops tracking and keeps the history.
@@ -87,11 +98,32 @@ describe('Timer and Stopwatch buttons', () => {
     expect(useEntities.getState().instants).toHaveLength(3)
   })
 
+  it('a second lap unfavorites the first lap but keeps the start', () => {
+    act.startStopwatch()
+    act.lapStopwatch()
+    act.lapStopwatch()
+    const [s0, l1, l2] = sw().marks
+    expect([instant(s0).favorite, instant(l1).favorite, instant(l2).favorite]).toEqual([true, false, true])
+  })
+
+  it('with "laps keep the start favorited" off, a lap moves the favorite to the new lap', () => {
+    useSettings.setState({ stopwatchKeepStart: false })
+    act.startStopwatch()
+    act.lapStopwatch()
+    const [s0, l1] = sw().marks
+    expect([instant(s0).favorite, instant(l1).favorite]).toEqual([false, true])
+    useSettings.setState({ stopwatchKeepStart: true })
+  })
+
   it('stopping without laps saves the whole run as "Stopwatch"', () => {
     act.startStopwatch()
     act.stopStopwatch()
     const [s0, stop] = sw().marks
     expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)?.label).toBe('Stopwatch')
+    // No duplicate run span, and it's the one in focus.
+    const runs = spans().filter(sp => sp.startInstantId === s0 && sp.endInstantId === stop)
+    expect(runs).toHaveLength(1)
+    expect(view().focusedSpanId).toBe(runs[0].id)
   })
 
   it('reset while running stops tracking the current span', () => {
@@ -128,6 +160,28 @@ describe('typing the time while moving an instant', () => {
   })
 })
 
+describe('notification permission', () => {
+  let requestPermission: ReturnType<typeof vi.fn>
+  beforeEach(() => {
+    requestPermission = vi.fn().mockResolvedValue('granted')
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('is not asked for when dropping instants', () => {
+    act.dropInstant()
+    expect(requestPermission).not.toHaveBeenCalled()
+  })
+
+  it('is asked for when a bell is set or a timer started', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Wake')
+    act.toggleAlarm(id)
+    expect(requestPermission).toHaveBeenCalledTimes(1)
+    act.startTimer(5 * MINUTE)
+    expect(requestPermission).toHaveBeenCalledTimes(2) // still 'default' in this stub; the browser keeps the answer
+  })
+})
+
 describe('hiding instants', () => {
   it('hides an instant, keeps its spans, and lets go of it if selected or focused', () => {
     const a = entities.createInstant(Date.now() - HOUR, 'A')
@@ -143,7 +197,8 @@ describe('hiding instants', () => {
   })
 
   it('previous / next skip hidden instants', () => {
-    const now = Date.now()
+    // Navigation measures from the engine's clock, so build the instants from it too.
+    const now = engine.sample().now
     const a = entities.createInstant(now - 2 * HOUR, 'A')
     const b = entities.createInstant(now - HOUR, 'B')
     act.setInstantHidden(b, true)

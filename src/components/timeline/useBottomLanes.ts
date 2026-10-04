@@ -13,7 +13,7 @@ import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
-import { stableSlots } from '../../domain/laneSlots.ts'
+import { nestSlots, stableSlots } from '../../domain/laneSlots.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -55,8 +55,10 @@ export function useVisibleLanes(): BottomLane[] {
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
-  // A running stopwatch's lane to Now always shows.
+  // A running stopwatch's lanes to Now (its start, when kept favorited, and the latest lap) always show.
   const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
+  const startId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[0] : null))
+  const keepStart = useSettings(s => s.stopwatchKeepStart)
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -71,7 +73,7 @@ export function useVisibleLanes(): BottomLane[] {
       selectedInstantId: v.selectedId,
       now: Date.now(),
       favoriteLanes,
-      trackedIds: trackedId ? new Set([trackedId]) : undefined,
+      trackedIds: trackedId ? new Set([trackedId, ...(keepStart && startId ? [startId] : [])]) : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -103,7 +105,7 @@ export function useVisibleLanes(): BottomLane[] {
       })
     }
     return out
-  }, [instants, spans, v, favoriteLanes, trackedId])
+  }, [instants, spans, v, favoriteLanes, trackedId, startId, keepStart])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
@@ -140,13 +142,20 @@ export const NO_LANE_SLOTS: LaneSlots = { live: {}, saved: {} }
 /**
  * Places the lanes. Live lanes (index 0.. from the top of the horizontal live band, or from the left edge in vertical) come first;
  * saved lanes stack below the chip rows (horizontal, below the band) or from the right edge (vertical).
- * A lane already on screen keeps its slot (`prev`, from the last call) when others come and go; new lanes take free slots.
+ * A lane already on screen keeps its slot (`prev`, from the last call) when others come and go; new lanes take free slots;
+ * a saved span that contains another moves outward past it.
  * `height` is the horizontal timeline's height; `liveCount` sizes the live band.
  */
 export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation, prev: LaneSlots = NO_LANE_SLOTS):
   { lanes: BottomLane[]; height: number | undefined; liveCount: number; slots: LaneSlots } {
   const { live, saved } = partitionLanes(visible)
-  const slots: LaneSlots = { live: stableSlots(prev.live, live.map(l => l.key)), saved: stableSlots(prev.saved, saved.map(l => l.key)) }
+  // Saved lanes: stable, except that a span containing another sits further out (nestSlots).
+  const ranges = Object.fromEntries(saved.map(l => [l.key, typeof l.a === 'number' && typeof l.b === 'number'
+    ? { lo: Math.min(l.a, l.b), hi: Math.max(l.a, l.b) } : undefined]))
+  const slots: LaneSlots = {
+    live: stableSlots(prev.live, live.map(l => l.key)),
+    saved: nestSlots(stableSlots(prev.saved, saved.map(l => l.key)), ranges),
+  }
   const span = (m: Record<string, number>) => Math.max(0, ...Object.values(m).map(v => v + 1))
   const liveCount = orientation === 'vertical' ? 0 : span(slots.live)
   const placedLive = live.map(c => ({ ...c, index: slots.live[c.key], top: liveLaneTop(slots.live[c.key]) }))
