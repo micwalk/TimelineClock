@@ -87,7 +87,18 @@ describe('live and saved lanes', () => {
     const { live } = partitionLanes(result.current)
     render(<BottomLanes lanes={live.map((l, i) => ({ ...l, top: 10 + i * 24, index: i }))} />)
     expect(screen.getByText('1h 5m')).toBeInTheDocument()
-    expect(screen.getByText('Making…')).toBeInTheDocument()
+    expect(screen.getByText('Making dinn…')).toBeInTheDocument()
+  })
+
+  it('names an unnamed span to Now after the instant it runs from', () => {
+    const now = engine.getFrame().now
+    const a = entities.createInstant(now - 65 * MINUTE, 'Long walk')
+    entities.upsertNowSpan(a, true)
+    useView.setState({ currentSelectedInstantId: a })
+    const { result } = renderHook(() => useVisibleLanes())
+    const { live } = partitionLanes(result.current)
+    render(<BottomLanes lanes={live.map((l, i) => ({ ...l, top: 10 + i * 24, index: i }))} />)
+    expect(screen.getAllByText('Long walk').length).toBeGreaterThan(0)
   })
 })
 
@@ -96,10 +107,10 @@ describe('live lane placement', () => {
   const cursorLane = (i: number): BottomLane => ({ key: `c${i}`, kind: 'selected-cursor', selected: inst, a: 1, b: 'center', top: 0, index: 0 })
   const secondaryLane: BottomLane = { key: 's', kind: 'secondary', selected: inst, secondary: inst, a: 1, b: 2, top: 0, index: 0 }
 
-  it('horizontal: live lanes sit at y = 10 + i * 24 and saved lanes start below the band', () => {
+  it('horizontal: live lanes sit at y = 16 + i * 32 and saved lanes start below the band', () => {
     const { lanes, liveCount } = placeLanes([cursorLane(0), secondaryLane, cursorLane(1)], 1, 'horizontal')
     expect(liveCount).toBe(2)
-    expect(lanes.filter(isLiveLane).map(l => l.top)).toEqual([10, 34])
+    expect(lanes.filter(isLiveLane).map(l => l.top)).toEqual([16, 48])
     const saved = lanes.find(l => !isLiveLane(l))!
     expect(saved.top).toBeGreaterThan(lanesTop(1, 2))
   })

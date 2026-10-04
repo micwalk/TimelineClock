@@ -19,14 +19,14 @@ describe('timeline geometry', () => {
 
   it('has a vertical set, written as px custom properties', () => {
     const style = geometryStyleFor('vertical')
-    expect(style).toMatchObject({ '--tl-axis': '120px', '--tl-tag-arrow': '14px', '--tl-chip-start': '132px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '64px' })
+    expect(style).toMatchObject({ '--tl-axis': '140px', '--tl-tag-arrow': '14px', '--tl-chip-start': '152px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '76px' })
     expect(Object.keys(style)).toHaveLength(Object.keys(GEOMETRY_VERTICAL).length)
     expect(geometryStyleFor('horizontal')).toBe(geometryStyle)
   })
 
   it('keeps the vertical live side wide enough for the tags', () => {
-    expect(GEOMETRY_VERTICAL.axis).toBe(120)
-    expect(GEOMETRY_VERTICAL.chipStart).toBe(132)
+    expect(GEOMETRY_VERTICAL.axis).toBe(140)
+    expect(GEOMETRY_VERTICAL.chipStart).toBe(152)
     expect(verticalTagMaxWidth()).toBe(GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow - 4)
   })
 

@@ -143,7 +143,8 @@ describe('hiding instants', () => {
   })
 
   it('previous / next skip hidden instants', () => {
-    const now = Date.now()
+    // Navigation measures from the engine's clock, so build the instants from it too.
+    const now = engine.sample().now
     const a = entities.createInstant(now - 2 * HOUR, 'A')
     const b = entities.createInstant(now - HOUR, 'B')
     act.setInstantHidden(b, true)
