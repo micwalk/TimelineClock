@@ -224,3 +224,36 @@ describe('layoutLabels: centerPos optional', () => {
     }
   })
 })
+
+describe('layoutLabels: no one-chip clusters', () => {
+  it('a lone chip that does not fit joins the least important chip it hits ("+2", never "+1")', () => {
+    // Vertical, room for one 170-wide column: b fits, a does not.
+    const wide = { crossExtent: 170 }
+    const r = layoutLabels([vchip('a', 100, { ...wide, priority: 3 }), vchip('b', 105, { ...wide, priority: 2 })], V)
+    expect(r.clusters).toHaveLength(1)
+    expect(r.clusters[0].memberIds).toEqual(['a', 'b'])
+    expect(r.placed).toEqual({})
+    expect(accounted(r)).toEqual(['a', 'b'])
+  })
+
+  it('keeps a pinned chip and only then shows "+1"', () => {
+    const wide = { crossExtent: 170 }
+    const r = layoutLabels([vchip('a', 100, { ...wide, priority: 3 }), vchip('b', 105, { ...wide, priority: 2, pinned: true })], V)
+    expect(Object.keys(r.placed)).toEqual(['b'])
+    expect(r.clusters[0].memberIds).toEqual(['a'])
+  })
+
+  it('leaves clusters of two or more alone', () => {
+    const r = layoutLabels([chip('a', 0), chip('b', 10), chip('c', 20), chip('d', 30)], H)
+    expect(r.clusters.every(c => c.memberIds.length >= 2)).toBe(true)
+    expect(accounted(r)).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('layoutLabels: a lone chip always shows', () => {
+  it('places a chip with no neighbours next to the axis even when it is wider than the room', () => {
+    const r = layoutLabels([vchip('a', 100, { crossExtent: 400 })], V)
+    expect(r.placed).toEqual({ a: { slot: 0, crossOffset: 0 } })
+    expect(r.clusters).toEqual([])
+  })
+})

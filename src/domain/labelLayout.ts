@@ -7,9 +7,12 @@
 //   1. Snoozes that collide with their original (or with each other) fold into
 //      one chip, which gets a "⟲N" badge.
 //   2. Chips are placed greedily, most important first, at the nearest free
-//      cross offset within the slot limit and the cross budget.
+//      cross offset within the slot limit and the cross budget. A chip with
+//      nothing beside it is placed next to the axis even past the budget.
 //   3. Chips that don't fit collapse into "+N" clusters. A cluster with no room
-//      takes the place of the least important chip it overlaps, absorbing it.
+//      takes the place of the least important chip it overlaps, absorbing it, and
+//      so does a cluster that would hold a single chip ("+1" hides one chip to show
+//      a counter no smaller than the chip's own place).
 //
 // Nothing disappears: every item ends up placed, folded or in a cluster, and
 // markers are always drawn whatever happens to their chips.
@@ -168,7 +171,10 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
     const { main, cross } = extents(it)
     const lo = it.pos - main / 2
     const hi = it.pos + main / 2
-    const spot = findSpot(lo, hi, cross, !it.pinned)
+    // A chip with nothing beside it always shows next to the axis, even if it is wider
+    // than the room (it overhangs); only chips that collide with others collapse.
+    const alone = (s: { offset: number; slot: number } | null) => (s && s.slot === 0 ? s : null)
+    const spot = findSpot(lo, hi, cross, !it.pinned) ?? alone(findSpot(lo, hi, cross, false))
     if (!spot) {
       unplaced.push(it)
       continue
@@ -212,15 +218,24 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
     const pos = run.reduce((sum, it) => sum + it.pos, 0) / run.length
     const lo = pos - o.cluster.mainExtent / 2
     const hi = pos + o.cluster.mainExtent / 2
+    // The least important chip a cluster at [lo, hi] would cover, if any.
+    const victimFor = (vLo: number, vHi: number) => boxes
+      .filter(b => !b.pinned && mainOverlap(vLo, vHi, b.lo, b.hi))
+      .sort((a, b) => b.priority - a.priority || nearer(o.centerPos)(b, a) || compareIds(a.id, b.id))[0]
+    const take = (victim: Box) => { boxes.splice(boxes.indexOf(victim), 1); absorb(victim.id) }
+    // A lone chip that didn't fit joins the least important chip it collides with: never "+1".
+    if (memberIds.size === 1) {
+      const it = run[0]
+      const { main } = extents(it)
+      const victim = victimFor(it.pos - main / 2, it.pos + main / 2)
+      if (victim) take(victim)
+    }
     let spot = findSpot(lo, hi, o.cluster.crossExtent, true)
     while (!spot) {
       // No room: take over the least important chip under the cluster.
-      const victims = boxes
-        .filter(b => !b.pinned && mainOverlap(lo, hi, b.lo, b.hi))
-        .sort((a, b) => b.priority - a.priority || nearer(o.centerPos)(b, a) || compareIds(a.id, b.id))
-      if (victims.length === 0) break
-      boxes.splice(boxes.indexOf(victims[0]), 1)
-      absorb(victims[0].id)
+      const victim = victimFor(lo, hi)
+      if (!victim) break
+      take(victim)
       spot = findSpot(lo, hi, o.cluster.crossExtent, true)
     }
     // Only pinned chips left in the way: overflow rather than hide the cluster. Without

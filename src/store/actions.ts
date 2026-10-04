@@ -3,10 +3,10 @@
 import { engine } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
-import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
+import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { MINUTE, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
+import { MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
@@ -327,10 +327,25 @@ export function startTimer(ms: number) {
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
+  showAroundNow([now, now + ms])
   return end
 }
 
+/** Narrowest view when showing a stopwatch's run: laps a few seconds apart still get their own chips. */
+const STOPWATCH_MIN_WIDTH = 30 * SECOND
+
+/**
+ * Follow Now, zoomed so all of `times` are on screen and far enough apart that their chips
+ * don't collapse into "+N". Used when a timer or stopwatch is set.
+ */
+function showAroundNow(times: readonly number[], minWidth = 0) {
+  engine.beginTransition()
+  view.setFocus('now')
+  view.setTimeWidth(widthToShow(nowTime(), times, minWidth))
+}
+
 const stopwatch = () => useQuick.getState().stopwatch
+const stopwatchStart = () => entities.getInstant(stopwatch().marks[0])?.tsEpochMs
 
 /** Stopwatch start: an instant at Now, favorited, so its span to Now is tracked. */
 export function startStopwatch() {
@@ -339,6 +354,7 @@ export function startStopwatch() {
   setFavorite(id, true)
   ui.markDropped(id)
   quick.setStopwatch({ marks: [id], stopped: false })
+  showAroundNow([nowTime()], STOPWATCH_MIN_WIDTH)
 }
 
 /** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
@@ -357,12 +373,14 @@ export function lapStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const id = closeStopwatchSpan(false)
   setFavorite(id, true)
+  showAroundNow([stopwatchStart() ?? nowTime(), nowTime()], STOPWATCH_MIN_WIDTH)
 }
 
 /** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
 export function stopStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   closeStopwatchSpan(true)
+  showAroundNow([stopwatchStart() ?? nowTime(), nowTime()], STOPWATCH_MIN_WIDTH)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */

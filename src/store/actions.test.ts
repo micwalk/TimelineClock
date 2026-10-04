@@ -38,6 +38,16 @@ describe('Timer and Stopwatch buttons', () => {
     expect(entities.nowSpanOf(end.id)?.visible).toBe(true)
     expect(spans().find(sp => !sp.endIsNow)).toMatchObject({ startInstantId: start.id, endInstantId: end.id, label: '13m timer', visible: true })
     expect(useQuick.getState().recentTimers).toEqual([13 * MINUTE])
+    // The view follows Now, zoomed so the end sits 80% of the way to the edge.
+    expect(view().viewFocusMode).toBe('now')
+    expect(view().timeWidth).toBeCloseTo((2 * 13 * MINUTE) / 0.8, -3)
+  })
+
+  it('a stopwatch zooms to show its run around Now', () => {
+    useView.setState({ timeWidth: 6 * HOUR })
+    act.startStopwatch()
+    expect(view().timeWidth).toBe(30_000)
+    expect(view().viewFocusMode).toBe('now')
   })
 
   it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {

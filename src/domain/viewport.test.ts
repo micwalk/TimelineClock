@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TargetInputs } from './viewport.ts'
-import { panCenterByPixels, posToTime, resolveViewTarget, timeToPos, visibleRange, zoomToFitRange } from './viewport.ts'
+import { panCenterByPixels, posToTime, resolveViewTarget, timeToPos, visibleRange, widthToShow, zoomToFitRange } from './viewport.ts'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { HOUR } from './time.ts'
 
@@ -96,5 +96,16 @@ describe('axis projection', () => {
   it('pan follows the finger', () => {
     expect(panCenterByPixels(mk(1), 100)).toBe(950)
     expect(panCenterByPixels(mk(-1), 100)).toBe(1050)
+  })
+})
+
+describe('widthToShow', () => {
+  it('puts the farthest time 80% of the way to the edge', () => {
+    expect(widthToShow(0, [0, 800], 0)).toBe(2000)
+    expect(widthToShow(1000, [200, 1100], 0)).toBe(2000)
+  })
+  it('never goes below the minimum', () => {
+    expect(widthToShow(0, [10], 500)).toBe(500)
+    expect(widthToShow(0, [], 500)).toBe(500)
   })
 })
