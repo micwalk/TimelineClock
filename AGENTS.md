@@ -15,7 +15,8 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - **PWA**: Vite PWA plugin with Workbox, installable manifest
 - **Icons**: @heroicons/react
 - **Testing**: Vitest (jsdom) + React Testing Library
-- **Optional**: Capacitor wrapper for precise alarms
+- **Android app** (docs/android.md): a Capacitor 8 shell that loads the live Netlify site, for alarms that ring with the app closed and live timer/stopwatch notifications. Native code in android/; its JS in src/services/native, loaded with a dynamic import only inside the app (src/services/nativeShell.ts), decisions in src/domain/nativeNotifications.ts. Android 16+ only, sideloaded from GitHub Releases
+- **Versioning**: one semver in package.json, shown in Help and Settings (`__APP_VERSION__`; inside the Android app also the app's own version)
 
 ## Timeline Rendering Rules
 - Never put per-frame values (pan position, zoom, the current time) in React state.
@@ -69,7 +70,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 ## Technical Requirements
 - **Performance**: 60fps timeline, <2s cold start, <500ms warm start
 - **Accuracy**: Use `performance.now()` for monotonic timing
-- **Notifications**: Local when app open, Web Push when backgrounded
+- **Notifications**: browser: local notifications while the page runs. Android app: exact native alarm notifications and live notifications (docs/android.md). No Web Push: the server stays static files on Netlify
 - **Accessibility**: Full keyboard support, screen reader friendly, prefers-reduced-motion
 - **Internationalization**: 12/24-hour, locale-aware formats, RTL support
 - **Bundle Size**: <500KB initial load, <1MB total with code splitting
@@ -84,6 +85,12 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - Use React.memo() for expensive timeline components
 - Keep components small; logic goes in domain/ or store/actions.ts
 
+## Versions and releases
+- Bump the version in package.json (semver) with each change that ships, and add a CHANGELOG.md entry for it.
+- Each entry says whether the Android app needs installing again: yes when anything native changes (android/, capacitor.config.ts, android-offline/, a Capacitor plugin), else "web only". Web changes reach the app by themselves.
+- Merging a new version to main makes the Android app workflow (.github/workflows/android.yml) publish GitHub Release v<version> with a signed APK. Signing comes only from repository secrets: never commit a key, keystore or password (the repo is public).
+- The app runs whatever Netlify serves from main, so web code the native side needs must ship first or together.
+
 ## File Organization
 - `/src/domain/` - Pure logic: time math, ticks, spans, navigation, alarms (with tests)
 - `/src/store/` - Zustand stores and actions.ts
@@ -94,3 +101,5 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - `/src/services/` - Alarm scheduler, audio, notifications
 - `/src/styles/` - Theme tokens and component CSS
 - `/public/` - Static assets and PWA files
+- `/android/` - The Android app's native project (Capacitor); `/android-offline/` - its "Can't reach the site" page
+- `/src/services/native/` - The Android app's JS side (only loaded inside the app)

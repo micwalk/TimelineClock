@@ -5,6 +5,7 @@ import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
+import { isNativeShell, requestNativeNotifications } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
 
 const IDLE_RECHECK_MS = 60_000
@@ -101,9 +102,11 @@ export function primeAudio() {
 /**
  * Asks for notification permission, once, the first time the user sets something that
  * will ring (a bell on an instant, a timer). Call it from that tap: browsers only allow
- * the prompt during a user gesture. Never asked up front.
+ * the prompt during a user gesture. Never asked up front in a browser (the Android app
+ * asks on its first start: services/native).
  */
 export async function primeNotifications() {
+  if (isNativeShell()) return requestNativeNotifications()
   try {
     if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission()
   } catch (err) {

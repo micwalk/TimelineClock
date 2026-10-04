@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Timeline Clock</string>
+    <string name="title_activity_main">Timeline Clock</string>
+    <string name="package_name">com.micwalk.timelineclock</string>
+    <string name="custom_url_scheme">com.micwalk.timelineclock</string>
+</resources>

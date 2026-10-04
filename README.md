@@ -60,6 +60,15 @@ and browser notifications need it.
 App icons are generated from `public/logo.svg`; run `npm run generate-pwa-assets`
 after changing it.
 
+## Android app
+
+A sideloaded Android app (Android 16+) wraps the live site so timers and alarms ring with
+the app closed, and shows running timers and the stopwatch in the notifications. Merging a
+new version to `main` publishes a signed APK under
+[Releases](https://github.com/micwalk/TimelineClock/releases). Install guide, signing setup
+and how updates work: [docs/android.md](./docs/android.md). Versions:
+[CHANGELOG.md](./CHANGELOG.md).
+
 ## Project structure
 
 ```
@@ -91,6 +100,7 @@ src/
 ## Documentation
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md): how rendering, state, gestures and styling work
+- [docs/android.md](./docs/android.md): the Android app (install, signing, updates); [CHANGELOG.md](./CHANGELOG.md)
 - [docs/handoffs/](./docs/handoffs/): what's next. Layout v2 (vertical layout, gestures and momentum, label overlap, Agenda dock or drawer, cursor arrow) and everything else
 - [PRD_english.md](./PRD_english.md), [docs/prd_alarms.md](./docs/prd_alarms.md): product requirements
 - [Ideas.md](./Ideas.md): running idea and bug list
@@ -106,7 +116,7 @@ src/
 
 ## Important constraints
 
-- PWA limitations for wake-up alarms (need Capacitor for precise alarms)
+- PWA limitations for wake-up alarms (the Android app's native alarms cover them: docs/android.md)
 - Handle device sleep, timezone changes, app backgrounding
 - Offline support and cross-browser compatibility
 

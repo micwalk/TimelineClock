@@ -1,0 +1,188 @@
+# Builds the Android app (docs/android.md) and, on main, publishes it as a GitHub Release.
+#
+# Signing: the key lives only in repository secrets (Settings > Secrets and variables >
+# Actions), never in the repo:
+#   ANDROID_KEYSTORE_BASE64    the keystore file, base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD  its password
+#   ANDROID_KEY_ALIAS          the key's alias in it
+#   ANDROID_KEY_PASSWORD       the key's password
+# Without them (pull requests from forks, or before they are added) the APK is built
+# unsigned: it proves the build works but can't be installed, so nothing signed with
+# another key can ever replace the installed app. Releases are only made from a signed build.
+name: Android app
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - 'android-offline/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'CHANGELOG.md'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'android-offline/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+  # Actions > Android app > Run workflow: e.g. on main after adding the signing secrets.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.apk.outputs.version }}
+      signed: ${{ steps.apk.outputs.signed }}
+      apk: ${{ steps.apk.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install
+        run: npm ci
+
+      - name: Copy the Capacitor config and plugins into the Android project
+        run: npx cap sync android
+
+      - name: Signing key (from secrets, if set)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No signing secrets: building an unsigned APK (it can't be installed). See docs/android.md."
+            exit 0
+          fi
+          keystore="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          {
+            echo "TC_SIGNING_KEYSTORE=$keystore"
+            echo "TC_SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "TC_SIGNING_KEY_ALIAS=$KEY_ALIAS"
+            echo "TC_SIGNING_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and lint
+        working-directory: android
+        run: ./gradlew assembleRelease :app:lintRelease --no-daemon --stacktrace
+
+      - name: Lint report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint
+          path: android/app/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+
+      - name: Name the APK
+        id: apk
+        run: |
+          version=$(node -p "require('./package.json').version")
+          out=android/app/build/outputs/apk/release
+          if [ -f "$out/app-release.apk" ]; then
+            name="timeline-clock-$version.apk"
+            cp "$out/app-release.apk" "$name"
+            signed=true
+            apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+            "$apksigner" verify --print-certs "$name" | tee signing.txt
+          else
+            name="timeline-clock-$version-UNSIGNED.apk"
+            cp "$out/app-release-unsigned.apk" "$name"
+            signed=false
+            echo "Unsigned build" > signing.txt
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "signed=$signed" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            ${{ steps.apk.outputs.name }}
+            signing.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is there a release for this version yet?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.build.outputs.version }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists: nothing to do."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Refuse to release an unsigned build
+        if: steps.check.outputs.exists == 'false' && needs.build.outputs.signed != 'true'
+        run: |
+          echo "::error::The APK was built without the signing secrets, so it can't be released. Add ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD (docs/android.md), then run this workflow on main again."
+          exit 1
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.exists == 'false'
+        with:
+          name: android-apk
+
+      - name: Publish the release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          APK: ${{ needs.build.outputs.apk }}
+        run: |
+          # This version's CHANGELOG section ("## 0.1.0 ..." up to the next "## ").
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
+          {
+            echo
+            echo "---"
+            echo "Install or update: see [docs/android.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/android.md). Updating keeps your data."
+            echo
+            echo '```'
+            grep -i "SHA-256" signing.txt || true
+            echo '```'
+          } >> notes.md
+          gh release create "v$VERSION" "$APK" --target "$GITHUB_SHA" --title "Timeline Clock $VERSION" --notes-file notes.md

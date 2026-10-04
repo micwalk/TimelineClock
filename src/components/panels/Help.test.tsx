@@ -14,6 +14,7 @@ describe('Help', () => {
     expect(screen.getByRole('dialog', { name: 'Timeline Clock' })).toBeInTheDocument()
     expect(screen.getByText(/stored only in this browser/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Michael Walker' })).toHaveAttribute('href', 'https://github.com/micwalk')
+    expect(screen.getByText(`Version ${__APP_VERSION__}`)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Close help' }))
     expect(screen.queryByRole('dialog')).toBeNull()
   })

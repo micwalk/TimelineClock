@@ -9,6 +9,8 @@ import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import * as act from '../../store/actions.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
+import { AppVersion } from './AppVersion.tsx'
+import { ShellStatus } from './ShellStatus.tsx'
 import { DataSettings } from './DataSettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 
@@ -157,6 +159,9 @@ export function SettingsPanel() {
               Test alarm (rings in 3s)
             </button>
           </section>
+
+          <AppVersion className="settings__version mono" />
+          <ShellStatus />
         </div>,
         document.body,
       )}

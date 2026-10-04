@@ -557,6 +557,12 @@
 }
 .help a { color: var(--c-cursor); }
 .help__credit { color: var(--ink-faint); font-size: 13px; }
+.help__version { margin-top: 4px; }
+.settings__version { margin-top: 10px; color: var(--ink-faint); font-size: 12px; }
+.shell-status { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12px; color: var(--ink-faint); }
+.shell-status .is-off { color: var(--ink); }
+.shell-status .is-off > span { color: var(--c-now); }
+.shell-status__fix { margin-left: 1.2em; color: var(--ink-faint); }
 @media (prefers-reduced-motion: reduce) {
   .help__scrim { animation: none; }
 }

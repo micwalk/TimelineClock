@@ -1,9 +1,12 @@
+import { isNativeShell } from './nativeShell.ts'
+
 /** Identifies this window to the service worker, so a notification click returns to the window that rang. */
 export const TAB_ID = Math.random().toString(36).slice(2, 11)
 
 export class NotificationService {
+	/** Not inside the Android app: its notifications are native (services/native). */
 	public isSupported(): boolean {
-		return typeof window !== 'undefined' && 'Notification' in window
+		return typeof window !== 'undefined' && 'Notification' in window && !isNativeShell()
 	}
 
 	public getPermission(): NotificationPermission | 'unsupported' {

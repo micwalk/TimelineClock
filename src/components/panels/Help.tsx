@@ -4,9 +4,11 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { QuestionMarkCircleIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { ui, useUi } from '../../store/ui.ts'
+import { AppVersion } from './AppVersion.tsx'
 
 const AUTHOR_URL = 'https://github.com/micwalk'
 const REPO_URL = 'https://github.com/micwalk/TimelineClock'
+const ANDROID_URL = `${REPO_URL}/blob/main/docs/android.md`
 
 const KEYS: [string[], string][] = [
   [['+', '='], 'Drop an instant (at Now, or at the cursor)'],
@@ -111,6 +113,7 @@ function HelpContent() {
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
+            <li>In a browser, alarms ring while the app is open. The <a href={ANDROID_URL} target="_blank" rel="noreferrer">Android app</a> also rings them when it’s closed, and shows a running timer or stopwatch in the notifications.</li>
             <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes.</li>
             <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>
             <li>The <b>eye</b> on a selected chip or an Agenda row hides an instant from the timeline; its spans stay. Tap the eye in the Agenda to show it again.</li>
@@ -137,6 +140,7 @@ function HelpContent() {
             Everything you save is stored only in this browser, on this device. Nothing is sent to a
             server or synced to a database, so it won’t appear on your other devices, and clearing
             this site’s data deletes it. To keep a copy or move it, use Settings › Data to export a backup.
+            The Android app keeps its own copy, separate from the browser’s: move data between them the same way.
           </p>
         </section>
 
@@ -145,6 +149,7 @@ function HelpContent() {
             Made by <a href={AUTHOR_URL} target="_blank" rel="noreferrer">Michael Walker</a> ·{' '}
             <a href={REPO_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
           </p>
+          <AppVersion className="help__version mono" />
         </section>
       </div>
     </>,
