@@ -15,7 +15,7 @@ import { InlineInput } from '../common/InlineInput.tsx'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
-import { isLiveLane, laneHasControls, liveLaneVariant } from './useBottomLanes.ts'
+import { isLiveLane, laneHasControls, liveLaneVariant, savedLaneVariant } from './useBottomLanes.ts'
 
 // ---------------------------------------------------------------------------
 // Shared bits
@@ -209,7 +209,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
           )
         }
         const r = lane.span
-        const variant: LaneVariant = live ? 'now' : r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
+        const variant: LaneVariant = live ? 'now' : savedLaneVariant(r)
         const controls = live || laneHasControls(lane, selectedSpanId)
         return (
           <SavedSpanLane key={lane.key} laneKey={lane.key} r={r} a={lane.a} b={lane.b} top={lane.top} index={lane.index}

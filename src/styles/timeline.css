@@ -769,3 +769,29 @@
 .popover--chip { z-index: 70; }
 .tl-col--label:has(.popover--chip) .tl-col__badge { display: none; }
 .timeline[data-orientation='vertical'] .popover--chip { left: 0; top: calc(100% + 8px); }
+
+/* Now flags (vertical): a box at the Now line for each saved span that contains Now. Its right
+   edge sits on the span's bar with no border there, so the bar runs on into the box. */
+.tl-nowflag {
+  position: absolute;
+  /* Hangs left of its bar (the transform shifts it by -100%); the bar is 3px wide, centered on the lane's x. */
+  left: -1.5px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px 0 8px;
+  border: 1.5px solid var(--accent);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--box-bg-strong);
+  box-shadow: 0 0 calc(4px * var(--glow)) color-mix(in srgb, var(--accent) 80%, transparent),
+    0 0 calc(12px * var(--glow)) color-mix(in srgb, var(--accent) 35%, transparent);
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  will-change: transform;
+}
+.tl-nowflag__name { font: 650 12px/1 var(--font-ui); color: var(--ink); }
+.tl-nowflag__left { font: 700 13px/1 var(--font-mono); color: var(--accent); }
+.tl-nowflag__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }

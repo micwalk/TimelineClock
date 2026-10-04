@@ -11,6 +11,7 @@ import { CursorTag, NowTag } from './LiveTags.tsx'
 import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
+import { NowFlags } from './NowFlags.tsx'
 import { isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
@@ -62,6 +63,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
+      {orientation === 'vertical' && <NowFlags lanes={lanes} />}
       <RotateButton />
     </section>
   )
