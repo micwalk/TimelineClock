@@ -1,0 +1,130 @@
+// Vertical layout: where every span lane's chip and label goes, computed once per frame and
+// shared. Saved-side lane chips (selected/focused saved spans and implied selection spans,
+// with their tools) go first, near the middle of their visible span; then live lanes' chips
+// (left side); then flags at Now for spans containing Now; then label boxes for the other
+// spans. None of them overlap (domain/nowFlags); flags also keep clear of saved instant chips.
+import type { Frame } from '../../engine/viewportEngine.ts'
+import type { InstantRecord } from '../../domain/entities.ts'
+import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
+import { layoutNowFlags } from '../../domain/nowFlags.ts'
+import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
+import type { SavedLayout } from './savedLayout.ts'
+import { CHIP_HEIGHT, CLUSTER_WIDTH, estimateChipWidth } from './savedLayout.ts'
+import { GEOMETRY_VERTICAL } from './geometry.ts'
+import type { BottomLane } from './useBottomLanes.ts'
+import { isLiveLane, laneHasControls } from './useBottomLanes.ts'
+
+/** A flag's height and the gap kept around boxes, px. */
+export const FLAG_SIZE = 26
+const GAP = 4
+/** A lane chip with its tools above and/or below it, px along the time axis. */
+const LANE_CHIP_SIZE = 32
+const LANE_TOOLS_SIZE = 36
+/** A flag's width before it has been measured, px. */
+const FLAG_WIDTH_GUESS = 150
+/** Lanes sit this far in from the right edge (matches .tl-lane in vertical). */
+const LANE_EDGE = 12
+
+export interface RightSideInputs {
+  lanes: readonly BottomLane[]
+  selectedSpanId: string | null
+  saved: SavedLayout
+  instants: readonly InstantRecord[]
+  widths: Readonly<Record<string, number>>
+  moving: string | null
+  /** Measured flag width, if the flag is in the DOM. */
+  flagWidth: (key: string) => number | undefined
+}
+
+export interface RightSidePlacement {
+  /** Lane key → center of its chip along the time axis, px (saved-side and live lanes). */
+  chips: Record<string, number>
+  /** Lane key → center of its flag, px. */
+  flags: Record<string, number>
+}
+
+let inputs: RightSideInputs | null = null
+let version = 0
+let cache: { frame: Frame; version: number; result: RightSidePlacement } | null = null
+
+/** NowFlags hands over the current lanes and chips (each render). */
+export function setRightSideInputs(next: RightSideInputs) {
+  inputs = next
+  version++
+}
+
+const EMPTY: RightSidePlacement = { chips: {}, flags: {} }
+
+/** Lanes that draw a chip with tools on the saved side (vertical). */
+const chipLane = (lane: BottomLane, selectedSpanId: string | null) =>
+  !isLiveLane(lane) && (lane.kind === 'secondary' || (lane.kind === 'saved' && laneHasControls(lane, selectedSpanId)))
+
+export function rightSideLayout(f: Frame): RightSidePlacement {
+  if (f.orientation !== 'vertical' || !inputs) return EMPTY
+  if (cache && cache.frame === f && cache.version === version) return cache.result
+  const c = inputs
+  const nowPos = f.pos(f.now)
+
+  // Saved instant chips (where their layout put them) and "+N" chips: flags keep off them.
+  const blockers: Interval[] = []
+  const byId = new Map(c.instants.map(i => [i.id, i]))
+  const posOf = (id: string) => {
+    const i = byId.get(id)
+    return !i ? null : id === c.moving ? f.mainSize / 2 : f.pos(i.tsEpochMs)
+  }
+  for (const id of c.saved.visibleIds) {
+    if (c.saved.rows[id] === undefined) continue
+    const p = posOf(id)
+    if (p === null) continue
+    const mid = p + (c.saved.shifts[id] ?? 0)
+    const xlo = GEOMETRY_VERTICAL.chipStart + (c.saved.crossOffsets[id] ?? 0)
+    blockers.push({ lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2, xlo, xhi: xlo + (c.widths[id] ?? estimateChipWidth(byId.get(id)?.label ?? '')) })
+  }
+  for (const k of c.saved.clusters) {
+    const ps = k.memberIds.map(posOf).filter((p): p is number => p !== null)
+    if (ps.length === 0) continue
+    const mid = ps.reduce((a, b) => a + b, 0) / ps.length
+    const xlo = GEOMETRY_VERTICAL.chipStart + k.crossOffset
+    blockers.push({ lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2, xlo, xhi: xlo + CLUSTER_WIDTH })
+  }
+
+  const chipItems: FlagItem[] = []
+  const liveItems: FlagItem[] = []
+  const running: FlagItem[] = []
+  const others: FlagItem[] = []
+  for (const lane of c.lanes) {
+    const pa = f.pos(resolveTimeRef(lane.a, f.now, f.center))
+    const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
+    const g = spanGeometry(pa, pb, f.mainSize)
+    if (!g.onScreen) continue
+    if (isLiveLane(lane)) {
+      liveItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid })
+      continue
+    }
+    const hasChip = chipLane(lane, c.selectedSpanId)
+    if (hasChip) chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid })
+    if (lane.kind !== 'saved') continue
+    const containsNow = Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
+    // Spans with their own chip only get a flag for Now; the chip already names them.
+    if (!containsNow && hasChip) continue
+    const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
+    const width = c.flagWidth(lane.key) || FLAG_WIDTH_GUESS
+    const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - width, xhi: laneX }
+    if (containsNow) running.push(item)
+    else others.push({ ...item, prefer: g.mid })
+  }
+
+  // Lane chips (with their tools) first: they are what you're working with. Lane chips draw
+  // over saved instant chips, so they don't avoid those; only each other.
+  const chipSize = LANE_CHIP_SIZE + 2 * LANE_TOOLS_SIZE
+  const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP)
+  const chipBoxes: Interval[] = Object.values(chips).map(mid => ({ lo: mid - chipSize / 2, hi: mid + chipSize / 2 }))
+  // Live lanes' chips (left side) next, clear of those: a wide selected chip reaches across the axis.
+  const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, chipBoxes)
+  Object.assign(chips, live)
+  // Then flags at Now (nearest Now), then the other labels, clear of chips and each other.
+  const flags = layoutNowFlags([...running, ...others], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes])
+  const result = { chips, flags }
+  cache = { frame: f, version, result }
+  return result
+}

@@ -149,6 +149,7 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       variant={variant}
       emphasis={emphasis}
       selected={isSelected || !!emphasis}
+      layoutKey={laneKey}
       live={live}
       toolsOpen={toolsOpen}
       onDismissTools={ui.closeLaneTools}
@@ -187,6 +188,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               top={lane.top}
               index={lane.index}
               variant={liveLaneVariant(lane)}
+              layoutKey={lane.key}
               live
               toolsOpen={toolsOpen}
               onDismissTools={ui.closeLaneTools}
@@ -210,6 +212,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               index={lane.index}
               variant="secondary"
               selected
+              layoutKey={lane.key}
               a={lane.a}
               b={lane.b}
               aTarget={instantTarget(p)}

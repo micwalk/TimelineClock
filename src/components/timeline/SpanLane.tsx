@@ -11,6 +11,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
+import { rightSideLayout } from './rightSideLayout.ts'
 
 /** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -51,6 +52,8 @@ export interface SpanLaneProps {
   below?: ReactNode
   /** Selected or focused: its chip, tools and endpoint arrows draw over everything else. */
   selected?: boolean
+  /** Vertical: key in the shared lane layout (rightSideLayout), which places the chip clear of other lane chips. */
+  layoutKey?: string
 }
 
 function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
@@ -68,7 +71,7 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, selected } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, selected, layoutKey } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
@@ -109,9 +112,11 @@ export function SpanLane(props: SpanLaneProps) {
       lineRef.current.style.transform = v ? `translate3d(0,${g.left}px,0)` : `translate3d(${g.left}px,0,0)`
       lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
-    if (anchorRef.current && !(Math.abs(g.mid - s.mid) <= 0.01)) {
-      s.mid = g.mid
-      anchorRef.current.style.transform = v ? `translate3d(0,${g.mid}px,0)` : `translate3d(${g.mid}px,0,0)`
+    // Vertical lane chips take their spot from the shared layout, so they never overlap each other.
+    const mid = v && layoutKey ? (rightSideLayout(f).chips[layoutKey] ?? g.mid) : g.mid
+    if (anchorRef.current && !(Math.abs(mid - s.mid) <= 0.01)) {
+      s.mid = mid
+      anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
     }
     // Endpoint arrows sit on the line at its visible ends.
     const place = (el: HTMLDivElement | null, pos: number) => { if (el) el.style.transform = v ? `translate3d(0,${pos}px,0)` : `translate3d(${pos}px,0,0)` }
