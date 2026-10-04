@@ -1,7 +1,12 @@
 # Stopwatch & Timer: quick UI over instants and spans — design
 
-**Status:** design for owner review (2026-10-03, rev 2). The model in §1 is the owner's;
-§2–§4 are proposals, and §5 lists what's still open. Nothing is built yet.
+**Status (2026-10-04): superseded by the owner's decision, now built.** The owner chose
+no separate clock UI: two **input-only buttons in the bottom bar** (Stopwatch: Start →
+Lap / Stop with live times → Reset; Timer: pick a length), as an on-ramp to instants and
+spans with fewer taps. What shipped is summarized in AGENTS.md ("Stopwatch / Timer
+buttons"); the code is `domain/quickCreate.ts`, `store/quick.ts`,
+`components/panels/QuickButtons.tsx`. The tracker strip (§2) and the "from instant"
+toggle (§3) were not built. The rest of this file is the rev 2 proposal, kept for history.
 
 Stopwatch and Timer aren't new kinds of entity. They are **quick controls that create
 ordinary instants and spans and track one span live**. Everything they create stays on the

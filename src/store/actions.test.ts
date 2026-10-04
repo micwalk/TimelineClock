@@ -9,6 +9,8 @@ import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
 import { useUi } from './ui.ts'
+import { useQuick } from './quick.ts'
+import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -19,6 +21,74 @@ beforeEach(() => {
 
 const instant = (id: string) => entities.getInstant(id)!
 const view = () => useView.getState()
+
+describe('Timer and Stopwatch buttons', () => {
+  beforeEach(() => useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] }))
+  const spans = () => useEntities.getState().spans
+  const sw = () => useQuick.getState().stopwatch
+
+  it('a timer is an instant at Now, an alarmed instant later tracked to Now, and the span between', () => {
+    const endId = act.startTimer(13 * MINUTE)
+    const now = engine.sample().now
+    const [start, end] = useEntities.getState().instants
+    expect(end.id).toBe(endId)
+    expect(start).toMatchObject({ label: '' })
+    expect(Math.abs(start.tsEpochMs - now)).toBeLessThan(1000)
+    expect(end).toMatchObject({ label: '13m timer', alarm: true, favorite: true, tsEpochMs: start.tsEpochMs + 13 * MINUTE })
+    expect(entities.nowSpanOf(end.id)?.visible).toBe(true)
+    expect(spans().find(sp => !sp.endIsNow)).toMatchObject({ startInstantId: start.id, endInstantId: end.id, label: '13m timer', visible: true })
+    expect(useQuick.getState().recentTimers).toEqual([13 * MINUTE])
+  })
+
+  it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {
+    act.startStopwatch()
+    const [s0] = sw().marks
+    expect(instant(s0)).toMatchObject({ label: 'Stopwatch', favorite: true })
+    expect(entities.nowSpanOf(s0)?.visible).toBe(true)
+
+    act.lapStopwatch()
+    const [, l1] = sw().marks
+    expect(instant(l1)).toMatchObject({ label: 'Lap 1', favorite: true })
+    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    expect(entities.nowSpanOf(l1)?.visible).toBe(true)
+    expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === l1)).toMatchObject({ label: 'Lap 1', visible: true })
+
+    act.stopStopwatch()
+    const [, , stop] = sw().marks
+    expect(sw().stopped).toBe(true)
+    expect(instant(stop).label).toBe('Stop')
+    expect(entities.nowSpanOf(l1)?.visible).toBe(false)
+    expect(spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toMatchObject({ label: 'Lap 2', visible: true })
+
+    // Lap and Stop do nothing once stopped; Reset stops tracking and keeps the history.
+    act.lapStopwatch()
+    expect(sw().marks).toHaveLength(3)
+    act.resetStopwatch()
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+    expect(useEntities.getState().instants).toHaveLength(3)
+  })
+
+  it('stopping without laps saves the whole run as "Stopwatch"', () => {
+    act.startStopwatch()
+    act.stopStopwatch()
+    const [s0, stop] = sw().marks
+    expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)?.label).toBe('Stopwatch')
+  })
+
+  it('reset while running stops tracking the current span', () => {
+    act.startStopwatch()
+    const [s0] = sw().marks
+    act.resetStopwatch()
+    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+  })
+
+  it('deleting the stopwatch\'s instants makes it idle', () => {
+    act.startStopwatch()
+    act.deleteInstant(sw().marks[0])
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+  })
+})
 
 describe('revealInstant (alarm notification click)', () => {
   it('focuses and selects the instant and shows a tab that lists it', () => {

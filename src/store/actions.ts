@@ -20,6 +20,10 @@ import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
+import { quick, useQuick } from './quick.ts'
+import {
+  closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
+} from '../domain/quickCreate.ts'
 
 const v = () => useView.getState()
 // Sample the viewport at the moment of the action (not the last, possibly idle-old, frame).
@@ -305,6 +309,67 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   if (opts.favorite) setFavorite(id, true)
   ui.markDropped(id)
   return id
+}
+
+// ---------------------------------------------------------------------------
+// Timer and Stopwatch buttons: quick ways to make instants and spans (domain/quickCreate)
+
+/**
+ * Timer: an instant at Now, an alarmed instant `ms` later (its live lane to Now counts
+ * down), and the saved span between them (the original length). Returns the end's id.
+ */
+export function startTimer(ms: number) {
+  const now = nowTime()
+  const label = `${formatTimerLength(ms)} timer`
+  const start = entities.createInstant(now, '')
+  const end = entities.createInstant(now + ms, label, { alarm: true })
+  entities.upsertNowSpan(end, true)
+  entities.createSpan(start, end, label, { visible: true })
+  quick.rememberTimer(ms)
+  ui.markDropped(end)
+  return end
+}
+
+const stopwatch = () => useQuick.getState().stopwatch
+
+/** Stopwatch start: an instant at Now, favorited, so its span to Now is tracked. */
+export function startStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'idle') return
+  const id = entities.createInstant(nowTime(), stopwatchStartLabel)
+  setFavorite(id, true)
+  ui.markDropped(id)
+  quick.setStopwatch({ marks: [id], stopped: false })
+}
+
+/** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
+function closeStopwatchSpan(stopping: boolean) {
+  const { marks } = stopwatch()
+  const prev = marks[marks.length - 1]
+  const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
+  entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
+  setFavorite(prev, false)
+  quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
+  return id
+}
+
+/** Lap: an instant at Now ends the current lap (saved as a span); tracking moves to the new lap. */
+export function lapStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'running') return
+  const id = closeStopwatchSpan(false)
+  setFavorite(id, true)
+}
+
+/** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
+export function stopStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'running') return
+  closeStopwatchSpan(true)
+}
+
+/** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
+export function resetStopwatch() {
+  const s = stopwatch()
+  if (stopwatchPhase(s) === 'running') setFavorite(s.marks[s.marks.length - 1], false)
+  quick.resetStopwatch()
 }
 
 export function setFavorite(id: string, favorite: boolean) {

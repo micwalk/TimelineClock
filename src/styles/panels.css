@@ -85,6 +85,44 @@
 .menu__item:hover { background: var(--surface-raised); color: var(--ink); }
 .menu__item.is-active { color: #fff; background: color-mix(in srgb, var(--c-selected) 40%, transparent); }
 
+/* Two-line buttons: the label, then a small live time (NOW / ＋ shows the clock, the stopwatch its readings). */
+.ctl-btn--stack { flex-direction: column; justify-content: center; gap: 2px; height: auto; min-height: 38px; padding-top: 4px; padding-bottom: 4px; }
+.ctl-btn__main { display: inline-flex; align-items: center; gap: 7px; }
+.ctl-btn__sub { font-size: 11px; font-weight: 600; letter-spacing: 0; line-height: 1; opacity: 0.85; }
+.ctl-btn--stack .ctl-btn__plus { font-size: 24px; }
+
+/* Stopwatch and Timer: always labelled (they are the way in for new users). */
+.controls__sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--ink-faint); opacity: 0.4; }
+.ctl-anchor { position: relative; display: inline-flex; }
+.ctl-pair { display: inline-flex; gap: 6px; }
+.ctl-btn--quick { --accent: var(--c-favorite); --halo: var(--c-favorite); }
+
+.timer-menu { width: 236px; }
+.timer-menu__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.timer-menu__grid--recent { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); }
+.timer-menu__choice {
+  --accent: var(--c-axis-glow);
+  padding: 8px 0;
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 650 14px/1 var(--font-mono);
+}
+.timer-menu__choice.is-recent { --accent: var(--c-favorite); --halo: var(--c-favorite); }
+.timer-menu__choice:hover { background: var(--surface-raised); }
+.timer-menu__custom { display: flex; gap: 6px; margin-top: 8px; }
+.timer-menu__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1.2 var(--font-mono);
+}
+.timer-menu__input.is-invalid { --accent: var(--c-danger); --halo: var(--c-danger); }
+.timer-menu__go { --accent: var(--c-favorite); padding: 0 12px; border-radius: 7px; background: var(--surface); color: var(--ink); font: 700 14px/1 var(--font-ui); }
+
 /* --- List panel --------------------------------------------------------- */
 
 .list-panel {
@@ -215,7 +253,7 @@
   .list-row--instant { grid-template-columns: 1fr auto; }
   .list-row--instant .list-row__dt { display: none; }
   .ctl-btn__text { display: none; }
-  .ctl-btn--now .ctl-btn__text, .ctl-split .ctl-btn__text { display: inline; }
+  .ctl-btn--now .ctl-btn__text, .ctl-split .ctl-btn__text, .ctl-btn--quick .ctl-btn__text { display: inline; }
 }
 
 /* --- Ringing alarms ------------------------------------------------------ */
@@ -434,7 +472,7 @@
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr 1fr;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.7fr;
   grid-template-rows: repeat(2, minmax(44px, auto));
   gap: 8px;
   padding: 8px 12px 10px;
@@ -445,6 +483,13 @@
 .controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
 .controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
 .controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
+/* Stopwatch over Timer in column 5: labels without icons; Lap / Stop share the cell, icons over their times. */
+.controls--vertical .ctl-btn--quick .ctl-btn__text { display: inline; font-size: 13px; }
+.controls--vertical .ctl-btn--quick:not(.ctl-btn--stack) .ctl-btn__icon { display: none; }
+.controls--vertical .ctl-anchor, .controls--vertical .ctl-pair { display: flex; min-width: 0; }
+.controls--vertical .ctl-anchor > .ctl-btn, .controls--vertical .ctl-pair > .ctl-btn,
+.controls--vertical .ctl-btn--quick { flex: 1 1 0; height: auto; min-height: 44px; min-width: 0; justify-content: center; padding: 0 4px; }
+.controls--vertical .ctl-pair .ctl-btn__text { display: none; }
 
 /* The big red button is a ＋ while following Now (drop an instant) and NOW otherwise. */
 .ctl-btn__plus { font: 400 30px/1 var(--font-ui); }

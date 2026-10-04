@@ -19,9 +19,10 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 
-Design (rev 2, owner model: quick UI over instants and spans) waiting on open questions:
-[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) (§5 lists the
-decisions). Build nothing from it until those are answered.
+Stopwatch and Timer buttons shipped 2026-10-04 (see AGENTS.md and the
+[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) status).
+Still open: a clearer countdown on the timer's live lane chip (it shows coarse "12m"),
+"timer from the selected instant", natural-language quick add.
 
 **What the owner asked for:** "I like your suggestion of stopwatch/timer/alarm buttons.
 Want to do another UX pass in general." Earlier: "agreed with like 95%", but "some of the

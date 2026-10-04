@@ -7,12 +7,17 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { useLayout } from '../../store/layout.ts'
 import { MINUTE } from '../../domain/time.ts'
+import { useQuick } from '../../store/quick.ts'
+import { useUi } from '../../store/ui.ts'
+import { IDLE_STOPWATCH } from '../../domain/quickCreate.ts'
 
 beforeEach(() => {
   useLayout.setState({ orientation: 'horizontal', dir: 1 })
   engine.cancelTransition()
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
+  useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] })
+  useUi.setState({ timerMenuOpen: false })
 })
 
 describe('the big red button', () => {
@@ -56,6 +61,8 @@ describe('the vertical bar', () => {
     expect(cellOf(byName(/^Back 30 minutes/))).toBe('1/3')
     expect(cellOf(byName(/^Focus Now/))).toBe('1/4')
     expect(byName(/^Focus Now/).style.gridRow).toBe('1 / span 2')
+    expect(cellOf(byName(/^Start a stopwatch/))).toBe('1/5')
+    expect(cellOf(byName(/^Start a timer/))).toBe('2/5')
     expect(cellOf(byName(/^Zoom in/))).toBe('2/1')
     expect(cellOf(byName(/^Next instant/))).toBe('2/2')
     expect(cellOf(byName(/^Forward 30 minutes/))).toBe('2/3')
@@ -123,5 +130,54 @@ describe('the horizontal bar', () => {
     expect(names[2]).toMatch(/^Back 30 minutes/)
     expect(byName(/^Previous instant/).dataset.nav).toBeUndefined()
     expect(byName(/^Back 30 minutes/)).toHaveTextContent('−30 minutes')
+  })
+})
+
+describe('Stopwatch and Timer buttons', () => {
+  it('the stopwatch button starts, turns into Lap / Stop, then Reset', () => {
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: 'Start a stopwatch' }))
+    expect(useEntities.getState().instants).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Lap' }))
+    expect(useEntities.getState().instants).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Stop the stopwatch' }))
+    expect(useEntities.getState().instants).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset the stopwatch' }))
+    expect(screen.getByRole('button', { name: 'Start a stopwatch' })).toBeTruthy()
+    expect(useEntities.getState().instants).toHaveLength(3)
+  })
+
+  it('the timer button asks for a length: a preset starts it', () => {
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Start a timer/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '10m' }))
+    const end = useEntities.getState().instants.find(i => i.alarm)!
+    expect(end.label).toBe('10m timer')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('a typed length starts it; a bad one is flagged and starts nothing', () => {
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Start a timer/ }))
+    const input = screen.getByRole('textbox', { name: 'Custom timer length' })
+    fireEvent.change(input, { target: { value: 'soon' } })
+    fireEvent.submit(input)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(useEntities.getState().instants).toHaveLength(0)
+    fireEvent.change(input, { target: { value: '13' } })
+    fireEvent.submit(input)
+    expect(useEntities.getState().instants.find(i => i.alarm)?.label).toBe('13m timer')
+  })
+
+  it('offers recent lengths first', () => {
+    useQuick.setState({ recentTimers: [13 * MINUTE] })
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Start a timer/ }))
+    expect(screen.getAllByRole('menuitem')[0].textContent).toBe('13m')
+  })
+
+  it('NOW / ＋ shows the time under it', () => {
+    render(<ControlBar />)
+    expect(screen.getByRole('button', { name: 'Drop an instant at Now' }).querySelector('.ctl-btn__sub')).toBeTruthy()
   })
 })

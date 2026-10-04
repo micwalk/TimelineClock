@@ -25,6 +25,8 @@ export interface UiState {
   agendaOpen: boolean
   /** The instant just dropped; its chip pulses once, then this clears. */
   droppedId: string | null
+  /** The Timer button's length picker (also opened by T). */
+  timerMenuOpen: boolean
 }
 
 export const useUi = create<UiState>(() => ({
@@ -34,6 +36,7 @@ export const useUi = create<UiState>(() => ({
   laneTools: null,
   agendaOpen: false,
   droppedId: null,
+  timerMenuOpen: false,
 }))
 
 export const DROP_HIGHLIGHT_MS = 900
@@ -52,6 +55,7 @@ export const ui = {
     dropTimer = setTimeout(() => { dropTimer = null; useUi.setState(s => (s.droppedId === id ? { droppedId: null } : s)) }, DROP_HIGHLIGHT_MS)
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
+  setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
   toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
   closeLaneTools: () => useUi.setState({ laneTools: null }),
 }

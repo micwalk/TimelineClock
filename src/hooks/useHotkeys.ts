@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import * as act from '../store/actions.ts'
 import { useView } from '../store/view.ts'
+import { ui, useUi } from '../store/ui.ts'
 
 const isTyping = (el: Element | null) =>
   !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable)
@@ -23,6 +24,7 @@ export function useHotkeys() {
         case 'a': case 'ArrowLeft': case 'ArrowUp': return run(() => act.goToAdjacentInstant(-1))
         case '+': case '=': return run(() => act.dropInstant())
         case 'v': return run(act.rotate)
+        case 't': return run(() => ui.setTimerMenu(!useUi.getState().timerMenuOpen))
         case 'q': return run(() => act.navigateFocusHistory(-1))
         case 'e': return run(() => act.navigateFocusHistory(1))
         case 'Escape': return run(act.escape)
