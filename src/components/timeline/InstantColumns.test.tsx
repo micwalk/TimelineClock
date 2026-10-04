@@ -181,7 +181,7 @@ describe('vertical chips', () => {
   it('start at chipStart plus the layout cross offset', () => {
     useLayout.setState({ orientation: 'vertical' })
     const id = entities.createInstant(twentyMinutesAgo(), 'Take Meds')
-    const layout: SavedLayout = { visibleIds: [id], rows: { [id]: 1 }, crossOffsets: { [id]: 40 }, folded: {}, foldCount: {}, clusters: [], rowsUsed: 2 }
+    const layout: SavedLayout = { visibleIds: [id], rows: { [id]: 1 }, crossOffsets: { [id]: 40 }, shifts: {}, folded: {}, foldCount: {}, clusters: [], rowsUsed: 2 }
     const { container } = render(<SavedInstantColumns layout={layout} />)
     const chip = container.querySelector('.tl-col__chip') as HTMLElement
     expect(chip.style.left).toBe('172px')

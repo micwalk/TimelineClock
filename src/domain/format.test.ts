@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, truncateText,
-  formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
+  formatLiveSpan, formatRelativeCoarse, formatRelativeShort, formatSignedDuration, livePrecision, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
@@ -157,5 +157,26 @@ describe('truncateText', () => {
     expect(truncateText('Cooking', 8)).toBe('Cooking')
     expect(truncateText('Making dinner', 8)).toBe('Making…')
     expect(truncateText('Making dinner', 8).length).toBeLessThanOrEqual(8)
+  })
+})
+
+describe('formatLiveSpan', () => {
+  const T = 26 * MINUTE + 13 * SECOND + 457
+  it('is coarse zoomed out', () => {
+    expect(formatLiveSpan(T, 10_000)).toBe('26m')
+    expect(formatLiveSpan(HOUR + 5 * MINUTE, 10_000)).toBe('1h 5m')
+  })
+  it('shows seconds, then tenths, then ms as you zoom in', () => {
+    expect(formatLiveSpan(T, 100)).toBe('26:13')
+    expect(formatLiveSpan(T, 5)).toBe('26:13.4')
+    expect(formatLiveSpan(T, 1)).toBe('26:13.457')
+    expect(formatLiveSpan(HOUR + 5 * MINUTE + 3 * SECOND, 100)).toBe('1:05:03')
+    expect(formatLiveSpan(4 * SECOND + 50, 1)).toBe('0:04.050')
+  })
+  it('picks precision from px per unit', () => {
+    expect(livePrecision(2000)).toBe(null)
+    expect(livePrecision(1000)).toBe(0)
+    expect(livePrecision(4)).toBe(1)
+    expect(livePrecision(3)).toBe(3)
   })
 })

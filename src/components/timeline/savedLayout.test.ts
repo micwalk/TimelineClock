@@ -83,6 +83,13 @@ describe('createSavedLayoutCache', () => {
 
   beforeEach(() => { useSettings.setState({ tunables: {} }) })
 
+  it('leaves hidden instants out unless selected', () => {
+    const compute = createSavedLayoutCache()
+    const all = [inst('a', 0), inst('h', 1000, { hidden: true })]
+    expect(compute(frame(0), inputs(all)).visibleIds).toEqual(['a'])
+    expect(compute(frame(0), inputs(all, { selected: 'h' })).visibleIds).toEqual(['a', 'h'])
+  })
+
   it('a pure pan reuses the cached layout without running the layout again', () => {
     const compute = createSavedLayoutCache()
     const inp = inputs(crowd(6))

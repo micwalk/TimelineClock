@@ -18,7 +18,9 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // The page decides when a new version takes over (services/pwaUpdate.ts registers the worker).
+      registerType: 'prompt',
+      injectRegister: false,
       // Icons are generated from public/logo.svg: `npm run generate-pwa-assets`
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
       manifest: {
@@ -41,6 +43,8 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Notification clicks and the update hand-over (public/sw-extras.js).
+        importScripts: ['sw-extras.js'],
       },
     })
   ],

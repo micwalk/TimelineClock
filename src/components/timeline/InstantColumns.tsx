@@ -1,10 +1,10 @@
 // Saved instant markers: a line plus one compact chip, moved along the time axis by the engine.
-import { memo, useMemo, useRef } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowsRightLeftIcon, CheckIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowsRightLeftIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
@@ -23,6 +23,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { Marker } from './Marker.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
+import { TimeEntry } from './TimeEntryPopover.tsx'
 import type { SavedLayout } from './savedLayout.ts'
 import { useChipWidth } from './savedLayout.ts'
 
@@ -49,6 +50,8 @@ interface ChipProps {
   row: number
   /** Vertical: px right of chip column 0 (from the overlap layout). */
   cross: number
+  /** px the chip slid along the time axis away from its line (overlap layout), to avoid a "+N". */
+  shift: number
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
@@ -59,7 +62,7 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
+function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
   const ts = inst.tsEpochMs
   const isPast = useFrameValue(f => ts < f.now)
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
@@ -74,6 +77,10 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   const showRelative = !focused && (!!inst.favorite || !!inst.alarm || selected)
   const withSeconds = fineSeconds || selected || focused
 
+  // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
+  const [typing, setTyping] = useState(false)
+  if (typing && !moving) setTyping(false)
+
   const zoomToFold = () => {
     const times = [ts, ...foldedIds.split(',').map(id => entities.getInstant(id)?.tsEpochMs).filter((t): t is number => typeof t === 'number')]
     act.zoomToTimes(times)
@@ -84,10 +91,13 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!inst.alarm && !isPast && <IconButton icon={BellOutline} label="Set alarm" color={bellColor} bare onClick={() => act.toggleAlarm(inst.id)} />}
       {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
+        color="var(--ink-dim)" bare onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
       <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
     </>
   ) : moving ? (
     <>
+      <IconButton icon={ClockIcon} label="Type the time" color="var(--c-cursor)" bare pressed={typing} onClick={() => setTyping(true)} />
       <IconButton icon={CheckIcon} label="Confirm move" color="var(--c-ok)" bare onClick={act.confirmMove} />
       <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
     </>
@@ -97,7 +107,7 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
 
   return (
-    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
+    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, '--shift': `${shift}px`, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
       <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
@@ -123,13 +133,14 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
             type="button"
             className="chip__main"
             title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click the name to rename, the time to focus`}
-            onClick={() => act.selectInstant(inst.id)}
+            onClick={() => (moving ? setTyping(true) : act.selectInstant(inst.id))}
           >
             {!unnamed && <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>}
             <span className="chip__time" onDoubleClick={() => act.focusInstant(inst.id)}>
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+            {moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(f.center - f.now)}`} />}
           </button>
           </>
         )}
@@ -146,13 +157,22 @@ function SavedChip({ inst, row, cross, foldCount, foldedIds, selected, focused, 
         </div>
       )}
       {!toolsBelow && tools}
+      {moving && typing && (
+        <TimeEntry
+          title={`Move ${displayName(inst.label, 'instant')} to`}
+          className="popover--chip"
+          clock={{ initialTs: act.cursorTime(), onSubmit: t => act.moveInstantToClock(t.h, t.m, t.s) }}
+          offset={{ initialMs: act.cursorTime() - act.nowTime(), from: 'Now', onSubmit: act.moveInstantFromNow }}
+          onCancel={() => setTyping(false)}
+        />
+      )}
     </div>
   )
 }
 
 /** The line is always drawn; the chip only when the layout gives it a row (folded and clustered instants have none). */
-const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
-  { inst: InstantRecord; row: number | undefined; cross: number; foldCount: number; foldedIds: string } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
+  { inst: InstantRecord; row: number | undefined; cross: number; shift: number; foldCount: number; foldedIds: string } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -161,7 +181,7 @@ const SavedMarker = memo(function SavedMarker({ inst, row, cross, foldCount, fol
   return (
     <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>
       {row !== undefined && (
-        <SavedChip inst={inst} row={row} cross={cross} foldCount={foldCount} foldedIds={foldedIds}
+        <SavedChip inst={inst} row={row} cross={cross} shift={shift} foldCount={foldCount} foldedIds={foldedIds}
           selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       )}
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
@@ -217,6 +237,7 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
             inst={inst}
             row={layout.rows[id]}
             cross={layout.crossOffsets[id] ?? 0}
+            shift={layout.shifts[id] ?? 0}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             selected={v.selected === id}

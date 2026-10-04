@@ -1,3 +1,6 @@
+/** Identifies this window to the service worker, so a notification click returns to the window that rang. */
+export const TAB_ID = Math.random().toString(36).slice(2, 11)
+
 export class NotificationService {
 	public isSupported(): boolean {
 		return typeof window !== 'undefined' && 'Notification' in window
@@ -25,7 +28,12 @@ export class NotificationService {
 		}
 	}
 
-	public async notifyAlarm(label: string): Promise<void> {
+	/**
+	 * The instant and TAB_ID ride along in the notification so a click (handled in
+	 * public/sw-extras.js) can bring back this window and go to the alarm. `onClick` is for
+	 * the fallback window notification, used when there is no service worker.
+	 */
+	public async notifyAlarm(label: string, target: { instantId: string; onClick: () => void }): Promise<void> {
 		const supported = this.isSupported()
 		const permission = supported ? Notification.permission : 'unsupported'
 		console.log('[Notif] notifyAlarm called:', { supported, permission, label })
@@ -54,7 +62,8 @@ export class NotificationService {
 				body,
 				icon: '/pwa-192x192.png',
 				badge: '/pwa-64x64.png',
-				tag: `alarm-${body}`,
+				tag: `alarm-${target.instantId}`,
+				data: { instantId: target.instantId, tabId: TAB_ID },
 				requireInteraction: true,
 				silent: false
 			}
@@ -77,6 +86,7 @@ export class NotificationService {
 			n.onclick = () => {
 				try { window.focus() } catch (err) { console.warn('window.focus failed', err) }
 				n.close()
+				target.onClick()
 			}
 		} catch (err) {
 			console.warn('Failed to show alarm notification', err)

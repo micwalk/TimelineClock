@@ -8,6 +8,9 @@ import { HOUR, MINUTE } from '../domain/time.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
+import { useUi } from './ui.ts'
+import { useQuick } from './quick.ts'
+import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -18,6 +21,160 @@ beforeEach(() => {
 
 const instant = (id: string) => entities.getInstant(id)!
 const view = () => useView.getState()
+
+describe('Timer and Stopwatch buttons', () => {
+  beforeEach(() => useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] }))
+  const spans = () => useEntities.getState().spans
+  const sw = () => useQuick.getState().stopwatch
+
+  it('a timer is an instant at Now, an alarmed instant later tracked to Now, and the span between', () => {
+    const endId = act.startTimer(13 * MINUTE)
+    const now = engine.sample().now
+    const [start, end] = useEntities.getState().instants
+    expect(end.id).toBe(endId)
+    expect(start).toMatchObject({ label: '' })
+    expect(Math.abs(start.tsEpochMs - now)).toBeLessThan(1000)
+    expect(end).toMatchObject({ label: '13m timer', alarm: true, favorite: true, tsEpochMs: start.tsEpochMs + 13 * MINUTE })
+    expect(entities.nowSpanOf(end.id)?.visible).toBe(true)
+    expect(spans().find(sp => !sp.endIsNow)).toMatchObject({ startInstantId: start.id, endInstantId: end.id, label: '13m timer', visible: true })
+    expect(useQuick.getState().recentTimers).toEqual([13 * MINUTE])
+    // The view follows Now, zoomed so the end sits 80% of the way to the edge.
+    expect(view().viewFocusMode).toBe('now')
+    expect(view().timeWidth).toBeCloseTo((2 * 13 * MINUTE) / 0.8, -3)
+  })
+
+  it('a stopwatch focuses and selects its span to Now, starting at a 30 s view', () => {
+    useView.setState({ timeWidth: 6 * HOUR })
+    act.startStopwatch()
+    const [s0] = sw().marks
+    const tracked = entities.nowSpanOf(s0)!
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: tracked.id, selectedSpanId: tracked.id, timeWidth: 30_000 })
+    // A lap keeps the whole run in view (the start's span to Now); Stop focuses the span it closed.
+    act.lapStopwatch()
+    const [, l1] = sw().marks
+    expect(view().focusedSpanId).toBe(tracked.id)
+    act.stopStopwatch()
+    const [, , stop] = sw().marks
+    const closed = spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)!
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: closed.id, selectedSpanId: closed.id })
+  })
+
+  it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {
+    act.startStopwatch()
+    const [s0] = sw().marks
+    expect(instant(s0)).toMatchObject({ label: 'Stopwatch', favorite: true })
+    expect(entities.nowSpanOf(s0)?.visible).toBe(true)
+
+    act.lapStopwatch()
+    const [, l1] = sw().marks
+    expect(instant(l1)).toMatchObject({ label: 'Lap 1', favorite: true })
+    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    expect(entities.nowSpanOf(l1)?.visible).toBe(true)
+    expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === l1)).toMatchObject({ label: 'Lap 1', visible: true })
+
+    act.stopStopwatch()
+    const [, , stop] = sw().marks
+    expect(sw().stopped).toBe(true)
+    expect(instant(stop).label).toBe('Stop')
+    expect(entities.nowSpanOf(l1)?.visible).toBe(false)
+    expect(spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toMatchObject({ label: 'Lap 2', visible: true })
+
+    // Lap and Stop do nothing once stopped; Reset stops tracking and keeps the history.
+    act.lapStopwatch()
+    expect(sw().marks).toHaveLength(3)
+    act.resetStopwatch()
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+    expect(useEntities.getState().instants).toHaveLength(3)
+  })
+
+  it('stopping without laps saves the whole run as "Stopwatch"', () => {
+    act.startStopwatch()
+    act.stopStopwatch()
+    const [s0, stop] = sw().marks
+    expect(spans().find(sp => sp.startInstantId === s0 && sp.endInstantId === stop)?.label).toBe('Stopwatch')
+  })
+
+  it('reset while running stops tracking the current span', () => {
+    act.startStopwatch()
+    const [s0] = sw().marks
+    act.resetStopwatch()
+    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+  })
+
+  it('deleting the stopwatch\'s instants makes it idle', () => {
+    act.startStopwatch()
+    act.deleteInstant(sw().marks[0])
+    expect(sw()).toEqual(IDLE_STOPWATCH)
+  })
+})
+
+describe('typing the time while moving an instant', () => {
+  it('puts the instant at an offset from Now and finishes the move', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Leave')
+    act.enterMove(id)
+    act.moveInstantFromNow(30 * MINUTE)
+    expect(Math.abs(instant(id).tsEpochMs - (engine.sample().now + 30 * MINUTE))).toBeLessThan(1000)
+    expect(view()).toMatchObject({ moveMode: null, viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('puts the instant at a clock time on the same day', () => {
+    const day = new Date(Date.now() + 2 * HOUR)
+    const id = entities.createInstant(day.getTime(), 'Leave')
+    act.enterMove(id)
+    act.moveInstantToClock(9, 15, 0)
+    const d = new Date(instant(id).tsEpochMs)
+    expect([d.getDate(), d.getHours(), d.getMinutes()]).toEqual([day.getDate(), 9, 15])
+  })
+})
+
+describe('hiding instants', () => {
+  it('hides an instant, keeps its spans, and lets go of it if selected or focused', () => {
+    const a = entities.createInstant(Date.now() - HOUR, 'A')
+    const b = entities.createInstant(Date.now() - 30 * MINUTE, 'B')
+    const sp = entities.createSpan(a, b, 'A→B', { visible: true })
+    act.focusInstant(a, false)
+    act.setInstantHidden(a, true)
+    expect(instant(a).hidden).toBe(true)
+    expect(entities.getSpan(sp)).toBeTruthy()
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: null })
+    act.setInstantHidden(a, false)
+    expect(instant(a).hidden).toBe(false)
+  })
+
+  it('previous / next skip hidden instants', () => {
+    const now = Date.now()
+    const a = entities.createInstant(now - 2 * HOUR, 'A')
+    const b = entities.createInstant(now - HOUR, 'B')
+    act.setInstantHidden(b, true)
+    act.focusNow(false)
+    act.goToAdjacentInstant(-1)
+    expect(view().focusedInstantId).toBe(a)
+  })
+})
+
+describe('revealInstant (alarm notification click)', () => {
+  it('focuses and selects the instant and shows a tab that lists it', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rice')
+    useUi.setState({ listTab: 'favorites' })
+    act.revealInstant(id, false)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id, currentSelectedInstantId: id, timeCenter: instant(id).tsEpochMs })
+    expect(useUi.getState().listTab).toBe('instants')
+  })
+
+  it('keeps the Favorites tab when the instant is a favorite', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rice', { favorite: true })
+    useUi.setState({ listTab: 'favorites' })
+    act.revealInstant(id, false)
+    expect(useUi.getState().listTab).toBe('favorites')
+  })
+
+  it('goes to Now when the instant is gone', () => {
+    act.focusCursorAt(Date.now() - HOUR, false)
+    act.revealInstant('missing', false)
+    expect(view().viewFocusMode).toBe('now')
+  })
+})
 
 describe('favorites and alarms', () => {
   it('favoriting adds a visible span to Now; unfavoriting hides it', () => {

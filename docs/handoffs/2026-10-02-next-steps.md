@@ -19,7 +19,12 @@ done and on branch `html-timeline`. Layout v2 has its own handoff:
 
 ## 2. Stopwatch / Timer / Alarm, and a general UX pass
 
-Not started; needs a full design pass (questions → approaches → spec) with the owner.
+Stopwatch and Timer buttons shipped 2026-10-04 (see AGENTS.md and the
+[quick-create design](../superpowers/specs/2026-10-03-quick-create-design.md) status).
+User journeys with tap counts and proposals (relative-to-instant tool, timer from an
+instant, editing a timer's length): [user journeys](../ux/2026-10-04-user-journeys.md),
+waiting on the owner's picks in its §4. Still open: a clearer countdown on the timer's live lane chip (it shows coarse "12m"),
+"timer from the selected instant", natural-language quick add.
 
 **What the owner asked for:** "I like your suggestion of stopwatch/timer/alarm buttons.
 Want to do another UX pass in general." Earlier: "agreed with like 95%", but "some of the
@@ -53,6 +58,10 @@ buttons may replace some of its buttons.
 - "rendering of spans as just rectangles", "first class spans".
 
 ## 4. Reliability (PRD M2)
+- Done 2026-10-03: installed apps pick up new versions (`services/pwaUpdate.ts`: checks on
+  resume and hourly; reloads right after opening/resuming or in the background, never under
+  a ringing alarm). Alarm notification clicks return to the window that rang and go to the
+  alarm's instant (`public/sw-extras.js`, `services/notificationClicks.ts`).
 - Alarms only ring while the page is open. Ringing with the app closed needs Web Push
   and a small backend; a Netlify Function plus scheduled pushes fits the hosting.
 - Screen Wake Lock while a timer runs (PRD).

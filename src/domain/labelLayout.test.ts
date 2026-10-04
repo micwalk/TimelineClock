@@ -25,17 +25,17 @@ function accounted(r: LabelLayoutResult): string[] {
 describe('layoutLabels: placement', () => {
   it('puts chips that do not overlap in the first slot', () => {
     const r = layoutLabels([chip('a', 0), chip('b', 200)], H)
-    expect(r.placed).toEqual({ a: { slot: 0, crossOffset: 0 }, b: { slot: 0, crossOffset: 0 } })
+    expect(r.placed).toEqual({ a: { slot: 0, crossOffset: 0, shift: 0 }, b: { slot: 0, crossOffset: 0, shift: 0 } })
   })
 
   it('moves an overlapping chip to the next row', () => {
     const r = layoutLabels([chip('a', 0, { priority: 1 }), chip('b', 50)], H)
-    expect(r.placed.b).toEqual({ slot: 1, crossOffset: 24 })
+    expect(r.placed.b).toEqual({ slot: 1, crossOffset: 24, shift: 0 })
   })
 
   it('reuses a free inner row', () => {
     const r = layoutLabels([chip('a', 0, { priority: 1 }), chip('b', 60, { priority: 2 }), chip('c', 120, { priority: 3 })], H)
-    expect(r.placed.c).toEqual({ slot: 0, crossOffset: 0 })
+    expect(r.placed.c).toEqual({ slot: 0, crossOffset: 0, shift: 0 })
   })
 
   it('counts the slot by depth, not by how many chips sit nearer the axis', () => {
@@ -67,7 +67,7 @@ describe('layoutLabels: placement', () => {
 
   it('packs vertical chips into columns after the blocking chip', () => {
     const r = layoutLabels([vchip('a', 0, { priority: 1 }), vchip('b', 10)], V)
-    expect(r.placed.b).toEqual({ slot: 1, crossOffset: 104 })
+    expect(r.placed.b).toEqual({ slot: 1, crossOffset: 104, shift: 0 })
   })
 
   it('respects the cross budget in vertical', () => {
@@ -222,5 +222,76 @@ describe('layoutLabels: centerPos optional', () => {
       expect(r.folded).toEqual(base.folded)
       expect(r.clusters.map(c => ({ ...c, pos: 0 }))).toEqual(base.clusters.map(c => ({ ...c, pos: 0 })))
     }
+  })
+})
+
+describe('layoutLabels: no one-chip clusters', () => {
+  it('a lone chip that does not fit joins the least important chip it hits ("+2", never "+1")', () => {
+    // Vertical, room for one 170-wide column: b fits, a does not.
+    const wide = { crossExtent: 170 }
+    const r = layoutLabels([vchip('a', 100, { ...wide, priority: 3 }), vchip('b', 105, { ...wide, priority: 2 })], V)
+    expect(r.clusters).toHaveLength(1)
+    expect(r.clusters[0].memberIds).toEqual(['a', 'b'])
+    expect(r.placed).toEqual({})
+    expect(accounted(r)).toEqual(['a', 'b'])
+  })
+
+  it('keeps a pinned chip and only then shows "+1"', () => {
+    const wide = { crossExtent: 170 }
+    const r = layoutLabels([vchip('a', 100, { ...wide, priority: 3 }), vchip('b', 105, { ...wide, priority: 2, pinned: true })], V)
+    expect(Object.keys(r.placed)).toEqual(['b'])
+    expect(r.clusters[0].memberIds).toEqual(['a'])
+  })
+
+  it('leaves clusters of two or more alone', () => {
+    const r = layoutLabels([chip('a', 0), chip('b', 10), chip('c', 20), chip('d', 30)], H)
+    expect(r.clusters.every(c => c.memberIds.length >= 2)).toBe(true)
+    expect(accounted(r)).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('layoutLabels: a lone chip always shows', () => {
+  it('places a chip with no neighbours next to the axis even when it is wider than the room', () => {
+    const r = layoutLabels([vchip('a', 100, { crossExtent: 400 })], V)
+    expect(r.placed).toEqual({ a: { slot: 0, crossOffset: 0, shift: 0 } })
+    expect(r.clusters).toEqual([])
+  })
+})
+
+describe('layoutLabels: sliding along the time axis', () => {
+  // Vertical, one 170-wide column of room, chips 20 tall with a 4px gap; slides up to 80px.
+  const S: LabelLayoutOptions = { ...V, maxShift: 80 }
+  const wide = (id: string, pos: number, extra: Partial<LabelItem> = {}) => vchip(id, pos, { crossExtent: 170, ...extra })
+
+  it('slides the less important of two colliding chips instead of clustering, keeping time order', () => {
+    // b is more important and stays put; a is earlier, so it goes above (before) b.
+    const r = layoutLabels([wide('a', 100, { priority: 3 }), wide('b', 105, { priority: 2 })], S)
+    expect(r.clusters).toEqual([])
+    expect(r.placed.b.shift).toBe(0)
+    expect(r.placed.a.shift).toBe(-19) // centre 81 = b.lo 95 - gap 4 - half 10, from a at 100
+    // The later chip goes after.
+    const r2 = layoutLabels([wide('a', 100, { priority: 2 }), wide('b', 105, { priority: 3 })], S)
+    expect(r2.placed.b.shift).toBe(19) // centre 124 = a.hi 110 + gap 4 + half 10, from b at 105
+  })
+
+  it('stacks three chips at about the same time in time order', () => {
+    const r = layoutLabels([wide('a', 100, { priority: 3 }), wide('b', 101, { priority: 1 }), wide('c', 102, { priority: 2 })], S)
+    expect(r.clusters).toEqual([])
+    const center = (id: string, pos: number) => pos + r.placed[id].shift
+    expect(center('a', 100)).toBeLessThan(center('b', 101))
+    expect(center('b', 101)).toBeLessThan(center('c', 102))
+  })
+
+  it('still clusters when the slide would be too far', () => {
+    const items = Array.from({ length: 12 }, (_, k) => wide(`i${k}`, 100 + k, { priority: k }))
+    const r = layoutLabels(items, S)
+    expect(Object.values(r.placed).every(p => Math.abs(p.shift) <= 80)).toBe(true)
+    expect(r.clusters.length).toBeGreaterThan(0)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('does not slide without maxShift', () => {
+    const r = layoutLabels([wide('a', 100, { priority: 3 }), wide('b', 105, { priority: 2 })], V)
+    expect(r.clusters).toHaveLength(1)
   })
 })

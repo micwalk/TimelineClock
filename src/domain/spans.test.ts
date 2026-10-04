@@ -60,3 +60,13 @@ describe('savedSpanLanes', () => {
     expect(savedSpanLanes({ ...all, favoriteLanes: 'always' }).map(s => s.span.id)).toContain('fn')
   })
 })
+
+describe('savedSpanLanes: tracked spans', () => {
+  it('always shows a tracked favorite span to Now, even when favorites show only when selected', () => {
+    const start = { id: 's', tsEpochMs: 0, label: 'Stopwatch', favorite: true }
+    const r = { span: { id: 'n', startInstantId: 's', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }, start }
+    const base = { resolved: [r], focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 1000, favoriteLanes: 'selected' as const }
+    expect(savedSpanLanes(base)).toHaveLength(0)
+    expect(savedSpanLanes({ ...base, trackedIds: new Set(['s']) })).toHaveLength(1)
+  })
+})

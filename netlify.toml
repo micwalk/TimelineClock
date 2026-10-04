@@ -33,6 +33,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/sw-extras.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/registerSW.js"
   [headers.values]
     Cache-Control = "no-cache"

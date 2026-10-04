@@ -18,6 +18,8 @@ const notifications = new NotificationService()
 
 let timer: ReturnType<typeof setTimeout> | null = null
 let started = false
+/** Goes to an alarm's instant when its notification is clicked (set by startAlarmScheduler). */
+let onNotificationClick: (instantId: string) => void = () => {}
 
 function hasRinging() {
   return useAlarms.getState().ringing.length > 0
@@ -41,7 +43,10 @@ function check() {
       ringing: [...s.ringing, ...due.map(i => ({ instantId: i.id, label: i.label, tsEpochMs: i.tsEpochMs, triggeredAt: now }))],
     }))
     audio.startAlarmSound(hasRinging)
-    for (const i of due) void notifications.notifyAlarm(i.label)
+    for (const i of due) {
+      const instantId = i.id
+      void notifications.notifyAlarm(i.label, { instantId, onClick: () => onNotificationClick(instantId) })
+    }
   }
   schedule()
 }
@@ -101,7 +106,8 @@ export async function primeNotifications() {
   }
 }
 
-export function startAlarmScheduler() {
+export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: string) => void } = {}) {
+  if (opts.onNotificationClick) onNotificationClick = opts.onNotificationClick
   if (started) return
   started = true
   // Reschedule whenever instants change (new alarm, moved alarm, deleted alarm).

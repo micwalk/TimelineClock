@@ -3,10 +3,10 @@
 import { engine } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
-import { panCenterByPixels, zoomToFitRange } from '../domain/viewport.ts'
+import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { MINUTE, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
+import { MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
@@ -15,11 +15,15 @@ import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
 import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
-import { ui } from './ui.ts'
+import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
 import { dismiss } from '../services/AlarmScheduler.ts'
+import { quick, useQuick } from './quick.ts'
+import {
+  closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
+} from '../domain/quickCreate.ts'
 
 const v = () => useView.getState()
 // Sample the viewport at the moment of the action (not the last, possibly idle-old, frame).
@@ -53,6 +57,18 @@ export function focusInstant(id: string, animate = true) {
   if (animate) engine.beginTransition()
   view.setFocus('instant', { instantId: id })
   view.setTimeCenter(inst.tsEpochMs)
+}
+
+/**
+ * Goes to an instant from outside the timeline (an alarm notification): focus and select it,
+ * and show the Agenda tab that lists it. Falls back to Now if it no longer exists.
+ */
+export function revealInstant(id: string, animate = true) {
+  const inst = entities.getInstant(id)
+  if (!inst) { focusNow(animate); return }
+  focusInstant(id, animate)
+  const tab = useUi.getState().listTab
+  if (tab === 'spans' || (tab === 'favorites' && !inst.favorite)) ui.setListTab('instants')
 }
 
 /** Free cursor at the given time (keeps zoom). */
@@ -140,7 +156,7 @@ function navItems(): NavTarget[] {
   const f = frame()
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
-  for (const i of useEntities.getState().instants) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
+  for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
@@ -295,6 +311,103 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   return id
 }
 
+// ---------------------------------------------------------------------------
+// Timer and Stopwatch buttons: quick ways to make instants and spans (domain/quickCreate)
+
+/**
+ * Timer: an instant at Now, an alarmed instant `ms` later (its live lane to Now counts
+ * down), and the saved span between them (the original length). Returns the end's id.
+ */
+export function startTimer(ms: number) {
+  const now = nowTime()
+  const label = `${formatTimerLength(ms)} timer`
+  const start = entities.createInstant(now, '')
+  const end = entities.createInstant(now + ms, label, { alarm: true })
+  entities.upsertNowSpan(end, true)
+  entities.createSpan(start, end, label, { visible: true })
+  quick.rememberTimer(ms)
+  ui.markDropped(end)
+  showAroundNow([now, now + ms])
+  return end
+}
+
+/** Narrowest view when showing a stopwatch's run: laps a few seconds apart still get their own chips. */
+const STOPWATCH_MIN_WIDTH = 30 * SECOND
+
+/**
+ * Follow Now, zoomed so all of `times` are on screen and far enough apart that their chips
+ * don't collapse into "+N". Used when a timer or stopwatch is set.
+ */
+function showAroundNow(times: readonly number[], minWidth = 0) {
+  engine.beginTransition()
+  view.setFocus('now')
+  view.setTimeWidth(widthToShow(nowTime(), times, minWidth))
+}
+
+const stopwatch = () => useQuick.getState().stopwatch
+
+/**
+ * Focus and select a stopwatch span. For a span to Now the view starts narrow and, being
+ * span focus, widens as the span grows, so the whole run stays in frame.
+ */
+function trackSpan(spanId: string | undefined, startWidth?: number) {
+  if (!spanId) return
+  engine.beginTransition()
+  if (startWidth) view.setTimeWidth(startWidth)
+  view.setFocus('span', { spanId })
+  view.selectSpan(spanId)
+}
+
+/** Stopwatch start: an instant at Now, favorited, so its span to Now is tracked (focused and selected). */
+export function startStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'idle') return
+  const id = entities.createInstant(nowTime(), stopwatchStartLabel)
+  setFavorite(id, true)
+  ui.markDropped(id)
+  quick.setStopwatch({ marks: [id], stopped: false })
+  trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
+}
+
+/** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
+function closeStopwatchSpan(stopping: boolean) {
+  const { marks } = stopwatch()
+  const prev = marks[marks.length - 1]
+  const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
+  entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
+  setFavorite(prev, false)
+  quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
+  return id
+}
+
+/** Lap: an instant at Now ends the current lap (saved as a span); tracking moves to the new lap, the view keeps the whole run. */
+export function lapStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'running') return
+  const id = closeStopwatchSpan(false)
+  setFavorite(id, true)
+  // Keep the whole run in view: focus the start's span to Now (it still exists, hidden as
+  // a favorite lane; focused, it shows as the run's total next to the current lap's lane).
+  trackSpan(entities.nowSpanOf(stopwatch().marks[0])?.id)
+}
+
+/** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
+export function stopStopwatch() {
+  if (stopwatchPhase(stopwatch()) !== 'running') return
+  const { marks } = stopwatch()
+  const stop = closeStopwatchSpan(true)
+  // The reading: the span the stop just closed.
+  const prev = marks[marks.length - 1]
+  const closed = useEntities.getState().spans.find(sp => sp.startInstantId === prev && sp.endInstantId === stop)
+  if (closed) focusSpan(closed.id)
+  if (closed) view.selectSpan(closed.id)
+}
+
+/** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
+export function resetStopwatch() {
+  const s = stopwatch()
+  if (stopwatchPhase(s) === 'running') setFavorite(s.marks[s.marks.length - 1], false)
+  quick.resetStopwatch()
+}
+
 export function setFavorite(id: string, favorite: boolean) {
   entities.setFavoriteFlag(id, favorite)
   // Favorites carry a visible span to Now; unfavoriting just hides it.
@@ -320,6 +433,24 @@ export function toggleAlarm(id: string) {
   }
   entities.setAlarmFlag(id, true)
   entities.upsertNowSpan(id, true) // alarms are favorites
+}
+
+/**
+ * Hides an instant from the timeline (or shows it again). Its spans stay; it stays in the
+ * Agenda. Hiding the selected or focused instant lets go of it so it actually disappears.
+ */
+export function setInstantHidden(id: string, hidden: boolean) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  entities.setHiddenFlag(id, hidden)
+  if (!hidden) return
+  const s = v()
+  if (s.viewFocusMode === 'instant' && s.focusedInstantId === id) focusCursorAt(inst.tsEpochMs, false)
+  const after = v()
+  useView.setState({
+    currentSelectedInstantId: after.currentSelectedInstantId === id ? null : after.currentSelectedInstantId,
+    secondarySelectedInstantId: after.secondarySelectedInstantId === id ? null : after.secondarySelectedInstantId,
+  })
 }
 
 export function renameInstant(id: string, label: string) {
@@ -365,6 +496,24 @@ export function confirmMove() {
   view.setMoveMode(null)
   focusInstant(mm.instantId, false)
 }
+
+/** Move mode, typed: put the moving instant at `ts` and finish the move. */
+export function moveInstantTo(ts: number) {
+  const mm = v().moveMode
+  if (!mm) return
+  view.setTimeCenter(ts)
+  entities.setInstantTime(mm.instantId, ts)
+  view.setMoveMode(null)
+  focusInstant(mm.instantId)
+}
+
+/** Move mode, typed as a clock time: same day as where the instant is being moved to. */
+export function moveInstantToClock(hours24: number, minutes: number, seconds: number) {
+  moveInstantTo(atClockTimeOnDay(frame().center, hours24, minutes, seconds))
+}
+
+/** Move mode, typed as an offset from Now. */
+export const moveInstantFromNow = (offsetMs: number) => moveInstantTo(nowTime() + offsetMs)
 
 export function cancelMove() {
   const mm = v().moveMode

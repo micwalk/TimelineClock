@@ -1,70 +1,72 @@
-// Time entry popovers: a signed hh:mm:ss duration, or a 12h wall-clock time.
-// Rendered inside the chip it edits, so it moves with the timeline.
-import { useEffect, useRef, useState } from 'react'
+// Time entry popovers: one hh:mm:ss box you type digits into (filling from the right, see
+// domain/timeDigits), as a clock time, an offset, or either with a switch between them.
+// Rendered inside the tag or chip it edits, so it moves with the timeline.
+import { useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
+import type { TimeParts } from '../../domain/timeDigits.ts'
+import { cleanDigits, clockFromParts, digitDisplay, digitsToParts, msToParts, partsDisplay, partsToMs } from '../../domain/timeDigits.ts'
+import { formatDurationForInput } from '../../domain/format.ts'
 
-interface FieldsProps {
-  values: string[]
-  maxes: number[]
-  onChange: (index: number, value: string) => void
+const UNITS = ['h', 'm', 's'] as const
+
+/**
+ * The hh:mm:ss box. Shows `initial` until the first digit is typed; then typed digits fill
+ * from the right and the untyped places stay dim. A real (invisible) input on top takes the
+ * keys, so phones bring up the number pad.
+ */
+function DigitField({ digits, onDigits, initial, label, invalid, onSubmit, onCancel }: {
+  digits: string
+  onDigits: (digits: string) => void
+  initial: TimeParts
+  label: string
+  invalid: boolean
   onSubmit: () => void
   onCancel: () => void
-  labels: string[]
-}
-
-function Fields({ values, maxes, onChange, onSubmit, onCancel, labels }: FieldsProps) {
-  const refs = useRef<(HTMLInputElement | null)[]>([])
-  useEffect(() => {
-    refs.current[0]?.focus()
-    refs.current[0]?.select()
-  }, [])
-  const focusField = (i: number) => {
-    const el = refs.current[i]
-    if (el) { el.focus(); el.select() }
-  }
-  const onKeyDown = (i: number) => (e: KeyboardEvent<HTMLInputElement>) => {
+}) {
+  const [focused, setFocused] = useState(false)
+  const shown = digits ? digitDisplay(digits) : partsDisplay(initial)
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation()
     if (e.key === 'Escape') { e.preventDefault(); onCancel() }
     else if (e.key === 'Enter') { e.preventDefault(); onSubmit() }
-    else if (e.key === 'Tab' && !e.shiftKey && i < values.length - 1) { e.preventDefault(); focusField(i + 1) }
-    else if (e.key === 'Tab' && e.shiftKey && i > 0) { e.preventDefault(); focusField(i - 1) }
-    else if (e.key === 'ArrowRight' && i < values.length - 1) focusField(i + 1)
-    else if (e.key === 'ArrowLeft' && i > 0) focusField(i - 1)
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault()
-      const n = (Number.parseInt(values[i] || '0', 10) + (e.key === 'ArrowUp' ? 1 : -1) + maxes[i] + 1) % (maxes[i] + 1)
-      onChange(i, n.toString().padStart(2, '0'))
-    }
   }
   return (
-    <>
-      {values.map((val, i) => (
-        <span key={i} className="time-entry__group">
-          {i > 0 && <span className="time-entry__sep">:</span>}
-          <input
-            ref={el => { refs.current[i] = el }}
-            className="time-entry__field glow-box"
-            inputMode="numeric"
-            aria-label={labels[i]}
-            value={val}
-            maxLength={2}
-            onChange={e => {
-              const digits = e.target.value.replace(/\D/g, '').slice(0, 2)
-              const clamped = digits === '' ? '' : Math.min(Number.parseInt(digits, 10), maxes[i]).toString()
-              onChange(i, digits.length === 2 ? clamped.padStart(2, '0') : clamped)
-              if (digits.length === 2 && i < values.length - 1) focusField(i + 1)
-            }}
-            onKeyDown={onKeyDown(i)}
-            onFocus={e => e.target.select()}
-          />
-        </span>
-      ))}
-    </>
+    <label className={`time-digits glow-box${focused ? ' is-focused' : ''}${digits ? '' : ' is-initial'}${invalid ? ' is-invalid' : ''}`}>
+      <input
+        className="time-digits__input"
+        inputMode="numeric"
+        autoComplete="off"
+        autoFocus
+        aria-label={`${label} (hh:mm:ss; type digits, e.g. 930 for 9:30)`}
+        aria-invalid={invalid}
+        value={digits}
+        onChange={e => onDigits(cleanDigits(e.target.value))}
+        onKeyDown={onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      <span className="time-digits__display" aria-hidden>
+        {UNITS.map((unit, pair) => (
+          <span key={unit} className="time-digits__group">
+            {pair > 0 && <span className="time-digits__sep">:</span>}
+            <span className="time-digits__pair">
+              <span className="time-digits__num">
+                {[0, 1].map(k => {
+                  const i = pair * 2 + k
+                  return <span key={k} className={shown.typed[i] ? 'is-typed' : ''}>{shown.chars[i]}</span>
+                })}
+              </span>
+              <span className="time-digits__unit">{unit}</span>
+            </span>
+          </span>
+        ))}
+        {focused && <span className="time-digits__caret" />}
+      </span>
+    </label>
   )
 }
 
-const pad2 = (n: number) => n.toString().padStart(2, '0')
 const stopAll = {
   onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
   onClick: (e: React.MouseEvent) => e.stopPropagation(),
@@ -72,38 +74,84 @@ const stopAll = {
   onWheel: (e: React.WheelEvent) => e.stopPropagation(),
 }
 
-/** Signed duration editor. `initialMs` seeds the fields; onSubmit gets "[-]hh:mm:ss". */
-export function DurationPopover({ initialMs, onSubmit, onCancel, title }: {
-  initialMs: number
-  onSubmit: (text: string) => void
-  onCancel: () => void
+/** 12-hour parts of a timestamp. */
+function clockParts(ts: number): { parts: TimeParts; pm: boolean } {
+  const d = new Date(ts)
+  const h = d.getHours()
+  return { parts: { h: h % 12 === 0 ? 12 : h % 12, m: d.getMinutes(), s: d.getSeconds() }, pm: h >= 12 }
+}
+
+type Mode = 'clock' | 'offset'
+
+export interface TimeEntryProps {
   title: string
-}) {
+  /** A wall-clock time; `onSubmit` gets 24-hour parts. */
+  clock?: { initialTs: number; onSubmit: (t: TimeParts) => void }
+  /** A signed offset from `from` ("Now", an instant's name). */
+  offset?: { initialMs: number; from: string; onSubmit: (ms: number) => void }
+  initialMode?: Mode
+  onCancel: () => void
+  className?: string
+}
+
+/** The popover: one or both modes (with a Time / From … switch when both are given). */
+export function TimeEntry({ title, clock, offset, initialMode, onCancel, className }: TimeEntryProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const abs = Math.abs(initialMs)
-  const [negative, setNegative] = useState(initialMs < 0)
-  const [values, setValues] = useState([
-    pad2(Math.min(99, Math.floor(abs / 3_600_000))),
-    pad2(Math.floor((abs % 3_600_000) / 60_000)),
-    pad2(Math.floor((abs % 60_000) / 1000)),
-  ])
+  const [mode, setMode] = useState<Mode>(initialMode ?? (clock ? 'clock' : 'offset'))
+  const [digits, setDigits] = useState('')
+  const [invalid, setInvalid] = useState(false)
+  const startClock = clock ? clockParts(clock.initialTs) : null
+  const [pm, setPm] = useState(startClock?.pm ?? false)
+  const [negative, setNegative] = useState((offset?.initialMs ?? 0) < 0)
   usePopoverDismiss(ref, onCancel)
-  const submit = () => onSubmit(`${negative ? '-' : ''}${values.map(v => (v || '0').padStart(2, '0')).join(':')}`)
+
+  const initial = mode === 'clock' && startClock ? startClock.parts : msToParts(offset?.initialMs ?? 0)
+  const switchTo = (m: Mode) => { setMode(m); setDigits(''); setInvalid(false) }
+  const submit = () => {
+    const parts = digits ? digitsToParts(digits) : initial
+    if (mode === 'clock' && clock) {
+      const t = clockFromParts(parts, pm)
+      if (!t) { setInvalid(true); return }
+      clock.onSubmit(t)
+    } else if (offset) {
+      offset.onSubmit((negative ? -1 : 1) * partsToMs(parts))
+    }
+  }
+
   return (
-    <div ref={ref} className="popover popover--below glow-box" data-no-pan role="dialog" aria-label={title} {...stopAll}>
+    <div ref={ref} className={`popover popover--below time-entry-pop glow-box${className ? ` ${className}` : ''}`} data-no-pan role="dialog" aria-label={title} {...stopAll}>
+      {clock && offset && (
+        <div className="time-entry__modes" role="tablist" aria-label="Enter as">
+          <button type="button" role="tab" aria-selected={mode === 'clock'} className={`time-entry__mode${mode === 'clock' ? ' is-on' : ''}`} onClick={() => switchTo('clock')}>Time</button>
+          <button type="button" role="tab" aria-selected={mode === 'offset'} className={`time-entry__mode${mode === 'offset' ? ' is-on' : ''}`} onClick={() => switchTo('offset')}>From {offset.from}</button>
+        </div>
+      )}
       <div className="time-entry">
-        <button type="button" className={`time-entry__toggle glow-box${negative ? ' is-on' : ''}`} onClick={() => setNegative(n => !n)} aria-label="Toggle sign">
-          {negative ? '−' : '+'}
-        </button>
-        <Fields
-          values={values}
-          maxes={[99, 59, 59]}
-          labels={['Hours', 'Minutes', 'Seconds']}
-          onChange={(i, val) => setValues(vs => vs.map((x, j) => (j === i ? val : x)))}
+        {mode === 'offset' && (
+          <button type="button" className={`time-entry__toggle glow-box${negative ? ' is-on' : ''}`} onClick={() => setNegative(n => !n)}
+            aria-label={negative ? `Before ${offset?.from} (tap for after)` : `After ${offset?.from} (tap for before)`}>
+            {negative ? '−' : '+'}
+          </button>
+        )}
+        <DigitField
+          key={mode}
+          digits={digits}
+          onDigits={d => { setDigits(d); setInvalid(false) }}
+          initial={initial}
+          label={mode === 'clock' ? 'Time' : `Offset from ${offset?.from}`}
+          invalid={invalid}
           onSubmit={submit}
           onCancel={onCancel}
         />
+        {mode === 'clock' && (
+          <button type="button" className={`time-entry__toggle glow-box${pm ? ' is-on' : ''}`} onClick={() => setPm(p => !p)} aria-label="Toggle AM/PM">
+            {pm ? 'PM' : 'AM'}
+          </button>
+        )}
       </div>
+      <p className="time-entry__hint">
+        {mode === 'clock' ? '930 → 9:30 · 1730 → 5:30 PM · 6 digits add seconds' : '13 → 13 min · 130 → 1h 30m · 6 digits add seconds'}
+      </p>
       <div className="time-entry__actions">
         <button type="button" className="time-entry__btn glow-box" style={{ '--accent': 'var(--ink-faint)' } as React.CSSProperties} onClick={onCancel}>Cancel</button>
         <button type="button" className="time-entry__btn time-entry__btn--primary glow-box" onClick={submit}>OK</button>
@@ -112,41 +160,31 @@ export function DurationPopover({ initialMs, onSubmit, onCancel, title }: {
   )
 }
 
-/** 12-hour wall-clock editor. */
+/** The longest offset the hh:mm:ss text form takes ("90" minutes typed as hours carries past 99h otherwise). */
+const MAX_OFFSET_MS = partsToMs({ h: 99, m: 59, s: 59 })
+
+/** Signed duration editor. `initialMs` seeds the field; onSubmit gets "[-]hh:mm:ss". */
+export function DurationPopover({ initialMs, onSubmit, onCancel, title, from = 'Now' }: {
+  initialMs: number
+  onSubmit: (text: string) => void
+  onCancel: () => void
+  title: string
+  from?: string
+}) {
+  return <TimeEntry title={title} offset={{ initialMs, from, onSubmit: ms => onSubmit(formatDurationForInput(Math.sign(ms) * Math.min(Math.abs(ms), MAX_OFFSET_MS))) }} onCancel={onCancel} />
+}
+
+/** Wall-clock editor; onSubmit gets 12-hour parts. */
 export function ClockPopover({ initialTs, onSubmit, onCancel }: {
   initialTs: number
   onSubmit: (hour12: number, minutes: number, seconds: number, pm: boolean) => void
   onCancel: () => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const d = new Date(initialTs)
-  const h = d.getHours()
-  const [pm, setPm] = useState(h >= 12)
-  const [values, setValues] = useState([pad2(h % 12 === 0 ? 12 : h % 12), pad2(d.getMinutes()), pad2(d.getSeconds())])
-  usePopoverDismiss(ref, onCancel)
-  const submit = () => {
-    const [hh, mm, ss] = values.map(v => Number.parseInt(v || '0', 10))
-    onSubmit(Math.max(1, Math.min(12, hh || 12)), mm, ss, pm)
-  }
   return (
-    <div ref={ref} className="popover popover--below glow-box" data-no-pan role="dialog" aria-label="Set cursor time" {...stopAll}>
-      <div className="time-entry">
-        <Fields
-          values={values}
-          maxes={[12, 59, 59]}
-          labels={['Hour', 'Minutes', 'Seconds']}
-          onChange={(i, val) => setValues(vs => vs.map((x, j) => (j === i ? val : x)))}
-          onSubmit={submit}
-          onCancel={onCancel}
-        />
-        <button type="button" className={`time-entry__toggle glow-box${pm ? ' is-on' : ''}`} onClick={() => setPm(p => !p)} aria-label="Toggle AM/PM">
-          {pm ? 'PM' : 'AM'}
-        </button>
-      </div>
-      <div className="time-entry__actions">
-        <button type="button" className="time-entry__btn glow-box" style={{ '--accent': 'var(--ink-faint)' } as React.CSSProperties} onClick={onCancel}>Cancel</button>
-        <button type="button" className="time-entry__btn time-entry__btn--primary glow-box" onClick={submit}>OK</button>
-      </div>
-    </div>
+    <TimeEntry
+      title="Set cursor time"
+      clock={{ initialTs, onSubmit: t => onSubmit(t.h % 12 === 0 ? 12 : t.h % 12, t.m, t.s, t.h >= 12) }}
+      onCancel={onCancel}
+    />
   )
 }

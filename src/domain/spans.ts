@@ -81,8 +81,10 @@ export function savedSpanLanes(opts: {
   selectedInstantId: string | null
   now: number
   favoriteLanes: 'selected' | 'always'
+  /** Instants whose span to Now always shows (a running stopwatch's current mark). */
+  trackedIds?: ReadonlySet<string>
 }): LaneSpan[] {
-  const { resolved, focusMode, focusedInstantId, focusedSpanId, selectedInstantId, now, favoriteLanes } = opts
+  const { resolved, focusMode, focusedInstantId, focusedSpanId, selectedInstantId, now, favoriteLanes, trackedIds } = opts
   const out: LaneSpan[] = []
   const focused: LaneSpan[] = []
   for (const r of resolved) {
@@ -97,7 +99,7 @@ export function savedSpanLanes(opts: {
     else if (r.span.visible) priority = 2
     // Favorites and alarms show time since/until on their chip; their lane to Now
     // appears only when selected or focused, unless the user wants it always.
-    if (priority === 2 && isFavoriteNowSpan(r) && favoriteLanes === 'selected') continue
+    if (priority === 2 && isFavoriteNowSpan(r) && favoriteLanes === 'selected' && !trackedIds?.has(r.span.startInstantId)) continue
     if (priority === -1) continue
     out.push({ ...r, priority, focused: false })
   }

@@ -86,3 +86,16 @@ export function zoomToFitRange(p: AxisProjection, aTs: number, bTs: number): { c
   if (hi - lo < 0.2 * p.mainSize) return { center: (early + late) / 2, width: 2 * (late - early) }
   return null
 }
+
+/** Share of the half-axis that `widthToShow` fills: the farthest time sits 80% of the way to the edge. */
+export const SHOW_FILL = 0.8
+
+/**
+ * The time width that shows every time in `times` with the view centered on `center`
+ * (the farthest at 80% of the way to the edge), and at least `minWidth`. Used to show a
+ * new timer or a stopwatch's run around Now, wide enough that their chips don't collapse.
+ */
+export function widthToShow(center: number, times: readonly number[], minWidth: number): number {
+  const reach = Math.max(0, ...times.map(t => Math.abs(t - center)))
+  return Math.max(minWidth, (2 * reach) / SHOW_FILL)
+}

@@ -17,6 +17,7 @@ const KEYS: [string[], string][] = [
   [['O', 'S'], 'Zoom out'],
   [['Q', 'E'], 'Back / forward through where you have been'],
   [['V'], 'Rotate the timeline'],
+  [['T'], 'Start a timer (pick a length)'],
   [['Esc'], 'Deselect, or cancel a move'],
   [['Enter'], 'Confirm a move'],
   [['?'], 'This help'],
@@ -109,6 +110,10 @@ function HelpContent() {
             <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
+            <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
+            <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes.</li>
+            <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>
+            <li>The <b>eye</b> on a selected chip or an Agenda row hides an instant from the timeline; its spans stay. Tap the eye in the Agenda to show it again.</li>
           </ul>
         </section>
 

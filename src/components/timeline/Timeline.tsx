@@ -1,5 +1,5 @@
 // The timeline: ticks, axis, span lanes and instant columns as plain DOM.
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { engine } from '../../engine/viewportEngine.ts'
 import { usePanZoom } from '../../hooks/usePanZoom.ts'
 import { useView } from '../../store/view.ts'
@@ -11,7 +11,9 @@ import { CursorTag, NowTag } from './LiveTags.tsx'
 import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { BottomLanes } from './Lanes.tsx'
-import { isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
+import { NowFlags } from './NowFlags.tsx'
+import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
+import type { LaneSlots } from './useBottomLanes.ts'
 import { useSavedLayout } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
@@ -26,7 +28,11 @@ export function Timeline() {
   const visibleLanes = useVisibleLanes()
   // Only saved-side lanes take width from the vertical chips; live lanes are on the left.
   const layout = useSavedLayout(useMemo(() => visibleLanes.filter(l => !isLiveLane(l)).length, [visibleLanes]))
-  const { lanes, height, liveCount } = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation), [visibleLanes, layout.rowsUsed, orientation])
+  // Lanes keep their slots from one placement to the next, so on-screen spans don't jump.
+  const lastSlots = useRef<LaneSlots>(NO_LANE_SLOTS)
+  const placed = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation, lastSlots.current), [visibleLanes, layout.rowsUsed, orientation])
+  useEffect(() => { lastSlots.current = placed.slots }, [placed])
+  const { lanes, height, liveCount } = placed
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
@@ -62,6 +68,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
+      {orientation === 'vertical' && <NowFlags lanes={lanes} layout={layout} />}
       <RotateButton />
     </section>
   )

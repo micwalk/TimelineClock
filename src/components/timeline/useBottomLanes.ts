@@ -8,9 +8,12 @@ import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
+import { useQuick } from '../../store/quick.ts'
+import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
+import { stableSlots } from '../../domain/laneSlots.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -52,6 +55,8 @@ export function useVisibleLanes(): BottomLane[] {
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
+  // A running stopwatch's lane to Now always shows.
+  const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -66,6 +71,7 @@ export function useVisibleLanes(): BottomLane[] {
       selectedInstantId: v.selectedId,
       now: Date.now(),
       favoriteLanes,
+      trackedIds: trackedId ? new Set([trackedId]) : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -97,7 +103,7 @@ export function useVisibleLanes(): BottomLane[] {
       })
     }
     return out
-  }, [instants, spans, v, favoriteLanes])
+  }, [instants, spans, v, favoriteLanes, trackedId])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
@@ -127,22 +133,32 @@ export function partitionLanes(lanes: BottomLane[]): { live: BottomLane[]; saved
   return { live, saved }
 }
 
+/** The slots lanes held last time, per side, so placeLanes can keep them (domain/laneSlots). */
+export interface LaneSlots { live: Record<string, number>; saved: Record<string, number> }
+export const NO_LANE_SLOTS: LaneSlots = { live: {}, saved: {} }
+
 /**
  * Places the lanes. Live lanes (index 0.. from the top of the horizontal live band, or from the left edge in vertical) come first;
  * saved lanes stack below the chip rows (horizontal, below the band) or from the right edge (vertical).
+ * A lane already on screen keeps its slot (`prev`, from the last call) when others come and go; new lanes take free slots.
  * `height` is the horizontal timeline's height; `liveCount` sizes the live band.
  */
-export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation): { lanes: BottomLane[]; height: number | undefined; liveCount: number } {
+export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation, prev: LaneSlots = NO_LANE_SLOTS):
+  { lanes: BottomLane[]; height: number | undefined; liveCount: number; slots: LaneSlots } {
   const { live, saved } = partitionLanes(visible)
-  const liveCount = orientation === 'vertical' ? 0 : live.length
-  const placedLive = live.map((c, index) => ({ ...c, index, top: liveLaneTop(index) }))
-  let y = lanesTop(rowsUsed, liveCount)
-  const placedSaved = saved.map((c, index) => {
-    const lane = { ...c, index, top: y + LANE_HEIGHT / 2 }
-    y += LANE_HEIGHT
-    return lane
-  })
-  return { lanes: [...placedLive, ...placedSaved], height: orientation === 'vertical' ? undefined : y + LANES_BOTTOM_PAD, liveCount }
+  const slots: LaneSlots = { live: stableSlots(prev.live, live.map(l => l.key)), saved: stableSlots(prev.saved, saved.map(l => l.key)) }
+  const span = (m: Record<string, number>) => Math.max(0, ...Object.values(m).map(v => v + 1))
+  const liveCount = orientation === 'vertical' ? 0 : span(slots.live)
+  const placedLive = live.map(c => ({ ...c, index: slots.live[c.key], top: liveLaneTop(slots.live[c.key]) }))
+  const y0 = lanesTop(rowsUsed, liveCount)
+  const placedSaved = saved.map(c => ({ ...c, index: slots.saved[c.key], top: y0 + slots.saved[c.key] * LANE_HEIGHT + LANE_HEIGHT / 2 }))
+  const height = orientation === 'vertical' ? undefined : y0 + span(slots.saved) * LANE_HEIGHT + LANES_BOTTOM_PAD
+  return { lanes: [...placedLive, ...placedSaved], height, liveCount, slots }
+}
+
+/** A saved-side lane's colour: the focused span, the selection's spans, or plain. */
+export function savedLaneVariant(r: LaneSpan): 'span' | 'focused' | 'selected' {
+  return r.focused ? 'span' : r.priority === 0 ? 'focused' : r.priority === 1 ? 'selected' : 'span'
 }
 
 /** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */

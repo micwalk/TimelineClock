@@ -133,6 +133,8 @@ export interface SavedLayout {
   rows: Record<string, number>
   /** Vertical only: px a chip sits right of chip column 0 (0 in horizontal). */
   crossOffsets: Record<string, number>
+  /** px a chip slid along the time axis from its marker to avoid clustering (absent = 0). */
+  shifts: Record<string, number>
   /** Folded snooze id → the chip showing it. */
   folded: Record<string, string>
   /** Chip id → snoozes it shows. */
@@ -153,7 +155,7 @@ const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<strin
 export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
-    sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) &&
+    sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
@@ -206,9 +208,10 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const margin = CULL_MARGIN_PX / f.pxPerMs
     const lo = f.start - margin
     const hi = f.end + margin
+    // Hidden instants show only while you're working with them (selected, focused, editing, moving).
     const isVisible = (i: InstantRecord) =>
       i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
-      (i.tsEpochMs >= lo && i.tsEpochMs <= hi)
+      (!i.hidden && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
     const prev = cache
 
     // Cheap probe: walk the instants once against the cached visible set, allocating nothing.
@@ -249,14 +252,17 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       maxSlots: vertical ? t.chipColumnsMax : t.chipRowsMax,
       cluster: vertical ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
       foldBadgeExtent: FOLD_BADGE_WIDTH,
+      maxShift: t.chipShiftMaxPx,
     })
     const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
     const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, vertical ? p.crossOffset : 0]))
+    const shifts = Object.fromEntries(Object.entries(r.placed).filter(([, p]) => p.shift !== 0).map(([id, p]) => [id, Math.round(p.shift)]))
     const deepest = Math.max(-1, ...Object.values(rows), ...r.clusters.map(k => k.slot))
     const next: SavedLayout = {
       visibleIds: visible.map(i => i.id),
       rows,
       crossOffsets,
+      shifts,
       folded: r.folded,
       foldCount: r.foldCount,
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, topPriority: k.topPriority })),

@@ -10,6 +10,8 @@ export interface InstantRecord {
   alarm?: boolean
   /** Set on snoozes: the alarm this snooze descends from. */
   snoozeOriginalId?: string
+  /** Hidden from the timeline (no line or chip) by the user; its spans and Agenda row stay. */
+  hidden?: boolean
 }
 
 export const NOW_SENTINEL = '__NOW__'
