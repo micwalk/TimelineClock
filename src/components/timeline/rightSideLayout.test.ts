@@ -3,8 +3,8 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import type { BottomLane } from './useBottomLanes.ts'
 import { rightSideLayout, setRightSideInputs } from './rightSideLayout.ts'
 
-const frame = (): Frame => ({
-  orientation: 'vertical', now: 0, center: 0, mainSize: 800, crossSize: 390, pxPerMs: 1,
+const frame = (crossSize = 390): Frame => ({
+  orientation: 'vertical', now: 0, center: 0, mainSize: 800, crossSize, pxPerMs: 1,
   pos: (t: number) => t + 400,
 } as unknown as Frame)
 
@@ -24,5 +24,25 @@ describe('rightSideLayout', () => {
     expect(Object.keys(chips).sort()).toEqual(['implied-secondary', 's1'])
     // Each chip block (chip plus its tools, 104px) clears the other.
     expect(Math.abs(chips.s1 - chips['implied-secondary'])).toBeGreaterThanOrEqual(104)
+  })
+  it('moves a live chip only when it would actually touch a right-side chip across the axis', () => {
+    // Selected span: y 0–500 (middle 250). Live span a → Now: y 100–400 (middle 250).
+    const a = inst('a', -300), b = inst('b', 100), start = inst('start', -400)
+    const selectedSpan: BottomLane = {
+      key: 's1', kind: 'saved', a: start.tsEpochMs, b: b.tsEpochMs, top: 0, index: 0,
+      span: { span: { id: 's1', startInstantId: 'start', endInstantId: 'b', label: 'Lap 1' }, start, end: b, priority: 1, focused: false },
+    }
+    const liveLane: BottomLane = {
+      key: 'n1', kind: 'saved', a: -300, b: 'now', top: 0, index: 0,
+      span: { span: { id: 'n1', startInstantId: 'a', endInstantId: '__NOW__', label: '', endIsNow: true }, start: a, priority: 1, focused: false },
+    }
+    setRightSideInputs({ lanes: [selectedSpan, liveLane], selectedSpanId: 's1', saved: savedLayout, instants: [a, b, start], widths: {}, moving: null, flagWidth: () => undefined })
+    // Wide screen: the right chip (x 208–368) and the live chip (x 18–178) don't meet, so both stay at y 250.
+    const wide = rightSideLayout(frame(390)).chips
+    expect(wide.s1).toBe(250)
+    expect(wide.n1).toBe(250)
+    // Narrow screen: the right chip reaches x 118, over the live chip, so the live chip moves aside.
+    const narrow = rightSideLayout(frame(300)).chips
+    expect(Math.abs(narrow.n1 - narrow.s1)).toBeGreaterThanOrEqual(52 + 16)
   })
 })

@@ -10,7 +10,8 @@ import { layoutNowFlags } from '../../domain/nowFlags.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
 import type { SavedLayout } from './savedLayout.ts'
 import { CHIP_HEIGHT, CLUSTER_WIDTH, estimateChipWidth } from './savedLayout.ts'
-import { GEOMETRY_VERTICAL } from './geometry.ts'
+import { GEOMETRY_VERTICAL, verticalLiveLaneX } from './geometry.ts'
+import { engine } from '../../engine/viewportEngine.ts'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls } from './useBottomLanes.ts'
 
@@ -24,6 +25,36 @@ const LANE_TOOLS_SIZE = 36
 const FLAG_WIDTH_GUESS = 150
 /** Lanes sit this far in from the right edge (matches .tl-lane in vertical). */
 const LANE_EDGE = 12
+/** Gap between a lane's bar and its chip (matches .tl-lane__chip-wrap in vertical). */
+const CHIP_OFFSET = 10
+/** A lane chip's width before it has been measured, px. */
+const CHIP_WIDTH_GUESS = 160
+/** The tools row under or over a saved-side chip (pencil, eye, trash / pin), px wide. */
+const TOOLS_WIDTH = 120
+
+// Measured lane chip widths, kept current by one ResizeObserver (no layout reads mid-frame).
+const chipWidths = new Map<string, number>()
+const observed = new Map<Element, string>()
+const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
+  for (const e of entries) {
+    const key = observed.get(e.target)
+    if (key === undefined) continue
+    const w = Math.round((e.target as HTMLElement).offsetWidth)
+    if (chipWidths.get(key) !== w) { chipWidths.set(key, w); version++ }
+  }
+  engine.requestFrame()
+})
+
+/** SpanLane registers its chip so the layout knows how wide it is; returns the cleanup. */
+export function observeLaneChip(key: string, el: HTMLElement): () => void {
+  observed.set(el, key)
+  resizeObserver?.observe(el)
+  return () => {
+    resizeObserver?.unobserve(el)
+    observed.delete(el)
+    if (![...observed.values()].includes(key)) chipWidths.delete(key)
+  }
+}
 
 export interface RightSideInputs {
   lanes: readonly BottomLane[]
@@ -97,29 +128,35 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
     const g = spanGeometry(pa, pb, f.mainSize)
     if (!g.onScreen) continue
+    // Across the axis: live chips sit right of their bar at the left; saved-side chips hang
+    // left of their bar at the right, with their tools row under or over them.
+    const width = chipWidths.get(lane.key) ?? CHIP_WIDTH_GUESS
     if (isLiveLane(lane)) {
-      liveItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid })
+      const x = verticalLiveLaneX(lane.index) + CHIP_OFFSET
+      liveItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, xlo: x, xhi: x + width })
       continue
     }
+    const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
     const hasChip = chipLane(lane, c.selectedSpanId)
-    if (hasChip) chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid })
+    if (hasChip) chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, xlo: laneX - CHIP_OFFSET - Math.max(width, TOOLS_WIDTH), xhi: laneX - CHIP_OFFSET })
     if (lane.kind !== 'saved') continue
     const containsNow = Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
     // Spans with their own chip only get a flag for Now; the chip already names them.
     if (!containsNow && hasChip) continue
-    const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
-    const width = c.flagWidth(lane.key) || FLAG_WIDTH_GUESS
-    const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - width, xhi: laneX }
+    const flagWidth = c.flagWidth(lane.key) || FLAG_WIDTH_GUESS
+    const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - flagWidth, xhi: laneX }
     if (containsNow) running.push(item)
     else others.push({ ...item, prefer: g.mid })
   }
 
   // Lane chips (with their tools) first: they are what you're working with. Lane chips draw
-  // over saved instant chips, so they don't avoid those; only each other.
+  // over saved instant chips, so they don't avoid those; only each other, where they meet
+  // across the axis too.
   const chipSize = LANE_CHIP_SIZE + 2 * LANE_TOOLS_SIZE
   const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP)
-  const chipBoxes: Interval[] = Object.values(chips).map(mid => ({ lo: mid - chipSize / 2, hi: mid + chipSize / 2 }))
-  // Live lanes' chips (left side) next, clear of those: a wide selected chip reaches across the axis.
+  const chipBoxes: Interval[] = chipItems.map(it => ({ lo: chips[it.key] - chipSize / 2, hi: chips[it.key] + chipSize / 2, xlo: it.xlo, xhi: it.xhi }))
+  // Live lanes' chips (left side) next, clear of those they would actually touch: a wide
+  // selected chip can reach across the axis.
   const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, chipBoxes)
   Object.assign(chips, live)
   // Then flags at Now (nearest Now), then the other labels, clear of chips and each other.

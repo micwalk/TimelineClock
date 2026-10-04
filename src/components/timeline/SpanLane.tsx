@@ -1,7 +1,7 @@
 // One span lane (a horizontal line, or a vertical bar at the right or, for live lanes, left edge): a glowing line between two times, off-screen chevrons,
 // endpoint arrows on the line at its visible ends, and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/react/20/solid'
 import { useFrameListener, useFrameValue } from '../../engine/hooks.ts'
@@ -11,7 +11,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
-import { rightSideLayout } from './rightSideLayout.ts'
+import { observeLaneChip, rightSideLayout } from './rightSideLayout.ts'
 
 /** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -80,6 +80,7 @@ export function SpanLane(props: SpanLaneProps) {
   const labelsRef = useRef<HTMLDivElement>(null)
   const startEndRef = useRef<HTMLDivElement>(null)
   const finishEndRef = useRef<HTMLDivElement>(null)
+  const chipWrapRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
   const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
@@ -126,6 +127,14 @@ export function SpanLane(props: SpanLaneProps) {
     if (g.rightOffscreen !== s.r) { s.r = g.rightOffscreen; rightChevRef.current?.classList.toggle('is-visible', s.r) }
   })
 
+  // The shared lane layout needs this chip's width (vertical) to tell what it would touch.
+  const hasChip = !(vertical && barOnly)
+  useEffect(() => {
+    const el = chipWrapRef.current
+    if (!layoutKey || !el || !hasChip) return
+    return observeLaneChip(layoutKey, el)
+  }, [layoutKey, hasChip])
+
   // Which endpoint is on the left only changes when a moving endpoint crosses the other.
   const aIsLeft = useFrameValue(f => resolveTimeRef(a, f.now, f.center) <= resolveTimeRef(b, f.now, f.center))
   const extra = showTools ? tools?.({ aIsLeft }) : undefined
@@ -152,7 +161,7 @@ export function SpanLane(props: SpanLaneProps) {
           </>
         )}
         <div ref={anchorRef} className="tl-lane__anchor">
-          {!(vertical && barOnly) && <div className="tl-lane__chip-wrap">
+          {!(vertical && barOnly) && <div ref={chipWrapRef} className="tl-lane__chip-wrap">
             <div className="tl-lane__tools tl-lane__tools--left">
               {extra?.left}
             </div>
