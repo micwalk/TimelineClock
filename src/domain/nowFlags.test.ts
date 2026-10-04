@@ -38,4 +38,12 @@ describe('layoutNowFlags', () => {
     expect(r.a).toBe(400)
     expect(Math.abs(r.b - 400)).toBe(30)
   })
+  it('with escape, a box whose span is too short to clear the others goes just past its span instead of on top', () => {
+    // A chip block covers most of a short span (300–420); the flag can't fit inside it.
+    const blocker = [{ lo: 310, hi: 414 }]
+    const stuck = layoutNowFlags([{ key: 'a', lo: 300, hi: 420, prefer: 360 }], 0, 26, 4, blocker)
+    expect(stuck.a).toBe(360) // on top: nothing better inside the span
+    const out = layoutNowFlags([{ key: 'a', lo: 300, hi: 420, prefer: 360 }], 0, 26, 4, blocker, { escape: true })
+    expect(out.a).toBe(293) // just above the blocker: 310 - 4 - 13
+  })
 })

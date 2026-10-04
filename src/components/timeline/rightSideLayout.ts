@@ -153,14 +153,15 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   // over saved instant chips, so they don't avoid those; only each other, where they meet
   // across the axis too.
   const chipSize = LANE_CHIP_SIZE + 2 * LANE_TOOLS_SIZE
-  const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP)
+  // A span too short to hold its box clear of the others lets it out past its ends (escape).
+  const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP, [], { escape: true })
   const chipBoxes: Interval[] = chipItems.map(it => ({ lo: chips[it.key] - chipSize / 2, hi: chips[it.key] + chipSize / 2, xlo: it.xlo, xhi: it.xhi }))
   // Live lanes' chips (left side) next, clear of those they would actually touch: a wide
   // selected chip can reach across the axis.
-  const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, chipBoxes)
+  const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, chipBoxes, { escape: true })
   Object.assign(chips, live)
   // Then flags at Now (nearest Now), then the other labels, clear of chips and each other.
-  const flags = layoutNowFlags([...running, ...others], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes])
+  const flags = layoutNowFlags([...running, ...others], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes], { escape: true })
   const result = { chips, flags }
   cache = { frame: f, version, result }
   return result

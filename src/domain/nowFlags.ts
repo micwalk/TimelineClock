@@ -26,7 +26,10 @@ const crossMeets = (a: CrossExtent, b: CrossExtent) =>
  * chips, lane chips) that it meets across the axis, with `gap` between; if there is no
  * free spot it sits at Now anyway (nothing disappears).
  */
-export function layoutNowFlags(items: readonly FlagItem[], nowPos: number, size: number, gap: number, blockers: readonly Interval[] = []): Record<string, number> {
+export function layoutNowFlags(
+  items: readonly FlagItem[], nowPos: number, size: number, gap: number, blockers: readonly Interval[] = [],
+  opts: { escape?: boolean } = {},
+): Record<string, number> {
   const taken: Interval[] = [...blockers]
   const out: Record<string, number> = {}
   const half = size / 2
@@ -38,7 +41,11 @@ export function layoutNowFlags(items: readonly FlagItem[], nowPos: number, size:
     const clamp = (c: number) => (min > max ? (it.lo + it.hi) / 2 : Math.min(max, Math.max(min, c)))
     const want = it.prefer ?? nowPos
     const candidates = [want, ...inWay.flatMap(t => [t.lo - gap - half, t.hi + gap + half])].map(clamp)
-    const best = candidates.filter(free).sort((a, b) => Math.abs(a - want) - Math.abs(b - want))[0]
+    const nearest = (cs: number[]) => cs.filter(free).sort((a, b) => Math.abs(a - want) - Math.abs(b - want))[0]
+    // `escape`: a span too short to hold the box clear of the others lets it out, to the
+    // nearest free spot past its ends, rather than stacking it on top.
+    const raw = [want, ...inWay.flatMap(t => [t.lo - gap - half, t.hi + gap + half])]
+    const best = nearest(candidates) ?? (opts.escape ? nearest(raw) : undefined)
     const c = best ?? clamp(want)
     out[it.key] = c
     taken.push({ lo: c - half, hi: c + half, xlo: it.xlo, xhi: it.xhi })
