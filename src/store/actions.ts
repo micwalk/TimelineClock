@@ -379,12 +379,14 @@ function closeStopwatchSpan(stopping: boolean) {
   return id
 }
 
-/** Lap: an instant at Now ends the current lap (saved as a span); tracking moves to the new lap. */
+/** Lap: an instant at Now ends the current lap (saved as a span); tracking moves to the new lap, the view keeps the whole run. */
 export function lapStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const id = closeStopwatchSpan(false)
   setFavorite(id, true)
-  trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
+  // Keep the whole run in view: focus the start's span to Now (it still exists, hidden as
+  // a favorite lane; focused, it shows as the run's total next to the current lap's lane).
+  trackSpan(entities.nowSpanOf(stopwatch().marks[0])?.id)
 }
 
 /** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
