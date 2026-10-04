@@ -345,16 +345,27 @@ function showAroundNow(times: readonly number[], minWidth = 0) {
 }
 
 const stopwatch = () => useQuick.getState().stopwatch
-const stopwatchStart = () => entities.getInstant(stopwatch().marks[0])?.tsEpochMs
 
-/** Stopwatch start: an instant at Now, favorited, so its span to Now is tracked. */
+/**
+ * Focus and select a stopwatch span. For a span to Now the view starts narrow and, being
+ * span focus, widens as the span grows, so the whole run stays in frame.
+ */
+function trackSpan(spanId: string | undefined, startWidth?: number) {
+  if (!spanId) return
+  engine.beginTransition()
+  if (startWidth) view.setTimeWidth(startWidth)
+  view.setFocus('span', { spanId })
+  view.selectSpan(spanId)
+}
+
+/** Stopwatch start: an instant at Now, favorited, so its span to Now is tracked (focused and selected). */
 export function startStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'idle') return
   const id = entities.createInstant(nowTime(), stopwatchStartLabel)
   setFavorite(id, true)
   ui.markDropped(id)
   quick.setStopwatch({ marks: [id], stopped: false })
-  showAroundNow([nowTime()], STOPWATCH_MIN_WIDTH)
+  trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
 }
 
 /** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
@@ -373,14 +384,19 @@ export function lapStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
   const id = closeStopwatchSpan(false)
   setFavorite(id, true)
-  showAroundNow([stopwatchStart() ?? nowTime(), nowTime()], STOPWATCH_MIN_WIDTH)
+  trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
 }
 
 /** Stop: an instant at Now ends the tracked span, which stays as the stopwatch's reading. */
 export function stopStopwatch() {
   if (stopwatchPhase(stopwatch()) !== 'running') return
-  closeStopwatchSpan(true)
-  showAroundNow([stopwatchStart() ?? nowTime(), nowTime()], STOPWATCH_MIN_WIDTH)
+  const { marks } = stopwatch()
+  const stop = closeStopwatchSpan(true)
+  // The reading: the span the stop just closed.
+  const prev = marks[marks.length - 1]
+  const closed = useEntities.getState().spans.find(sp => sp.startInstantId === prev && sp.endInstantId === stop)
+  if (closed) focusSpan(closed.id)
+  if (closed) view.selectSpan(closed.id)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */

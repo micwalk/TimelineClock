@@ -8,6 +8,8 @@ import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
+import { useQuick } from '../../store/quick.ts'
+import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
@@ -53,6 +55,8 @@ export function useVisibleLanes(): BottomLane[] {
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
+  // A running stopwatch's lane to Now always shows.
+  const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -67,6 +71,7 @@ export function useVisibleLanes(): BottomLane[] {
       selectedInstantId: v.selectedId,
       now: Date.now(),
       favoriteLanes,
+      trackedIds: trackedId ? new Set([trackedId]) : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -98,7 +103,7 @@ export function useVisibleLanes(): BottomLane[] {
       })
     }
     return out
-  }, [instants, spans, v, favoriteLanes])
+  }, [instants, spans, v, favoriteLanes, trackedId])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)

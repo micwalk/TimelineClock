@@ -43,11 +43,20 @@ describe('Timer and Stopwatch buttons', () => {
     expect(view().timeWidth).toBeCloseTo((2 * 13 * MINUTE) / 0.8, -3)
   })
 
-  it('a stopwatch zooms to show its run around Now', () => {
+  it('a stopwatch focuses and selects its span to Now, starting at a 30 s view', () => {
     useView.setState({ timeWidth: 6 * HOUR })
     act.startStopwatch()
-    expect(view().timeWidth).toBe(30_000)
-    expect(view().viewFocusMode).toBe('now')
+    const [s0] = sw().marks
+    const tracked = entities.nowSpanOf(s0)!
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: tracked.id, selectedSpanId: tracked.id, timeWidth: 30_000 })
+    // A lap moves focus to the new lap's span to Now; Stop focuses the span it closed.
+    act.lapStopwatch()
+    const [, l1] = sw().marks
+    expect(view().focusedSpanId).toBe(entities.nowSpanOf(l1)!.id)
+    act.stopStopwatch()
+    const [, , stop] = sw().marks
+    const closed = spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)!
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: closed.id, selectedSpanId: closed.id })
   })
 
   it('a stopwatch tracks its start, moves tracking to each lap, and keeps each lap as a span', () => {
