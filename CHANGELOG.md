@@ -14,13 +14,18 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - The Android app: the live site in an Android shell (Android 16+), so web updates still
   arrive by themselves.
 - Timers and alarms ring with the app closed or the phone asleep, on the lock screen too:
-  the time past the alarm, big ("−0:42"), under its name, ringing on the alarm volume until
+  the alarm's name and the time past it ("−0:42"), ringing on the alarm volume until
   **Dismiss** or **Snooze 5 min** on the notification (or the ring time runs out). A timer's
   countdown turns into its ringing alarm at zero.
-- A running timer counts down, and a running stopwatch counts up, in an ongoing notification
-  on the lock screen and in the shade, the time big and bold.
+- A running timer counts down, and a running stopwatch counts up, in a notification on the
+  lock screen and in the shade.
+- The timer, stopwatch and ringing alarm notifications are Live Updates: pinned at the top of
+  the lock screen and the shade, and a chip in the status bar. On Android 17 the time is the
+  notification's big main value; on Android 16 it is the timer in its header.
 - Tapping a notification opens the app at the stopwatch's run, a running timer's span, or an
-  alarm's overtime.
+  alarm's overtime. Tapping a ringing alarm also silences it (it stays until answered), and
+  Silence in the app silences the notification too.
+- Snooze in the app goes to the snooze: its span from the alarm is focused and selected.
 - Dismissing a timer's alarm unfavorites its end; the star on a favorite's lane chip
   unfavorites it.
 - TC Preview: a separate test app, published for pull requests, that loads a PR's Netlify
@@ -29,4 +34,4 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   it was "Timeline" for the web app).
 - Version numbers: Help and Settings show the version ("Web 0.1.0 · Android app 0.1.0"
   inside the Android app). Settings in the Android app also lists what Android allows
-  (notifications, alarm sound, exact alarms).
+  (notifications, alarm sound, exact alarms, Live Updates).

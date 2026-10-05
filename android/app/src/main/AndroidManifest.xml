@@ -9,6 +9,9 @@
     <!-- Exact alarms, granted at install (SCHEDULE_EXACT_ALARM is denied by default on Android 14+,
          and without exact alarms Android can delay a timer's notification by many minutes). -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Live Updates: the running timer / stopwatch and a ringing alarm pinned at the top of the
+         lock screen and the shade, and shown as a status-bar chip. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- Alarms are set again after a restart (AlarmReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

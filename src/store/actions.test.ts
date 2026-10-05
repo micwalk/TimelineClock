@@ -301,6 +301,15 @@ describe('favorites and alarms', () => {
     expect(instant(second).label).toBe('Snooze 2: Wake')
     expect(instant(second).snoozeOriginalId).toBe(id)
   })
+
+  it('snoozing goes to the snooze: its span from the alarm is focused and selected', () => {
+    const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
+    useAlarms.setState({ ringing: [{ instantId: id, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    const snoozed = act.snoozeAlarm(id, 5)!
+    const span = useEntities.getState().spans.find(s => s.startInstantId === id && s.endInstantId === snoozed)!
+    expect(span.visible).toBe(false)
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: span.id, selectedSpanId: span.id })
+  })
 })
 
 describe('dropInstant', () => {

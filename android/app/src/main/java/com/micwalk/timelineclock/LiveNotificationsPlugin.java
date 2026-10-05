@@ -1,5 +1,6 @@
 package com.micwalk.timelineclock;
 
+import android.app.Activity;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.service.notification.StatusBarNotification;
@@ -16,8 +17,9 @@ import org.json.JSONObject;
 
 /**
  * The running timer and stopwatch as ongoing notifications (src/services/native/liveSync.ts),
- * built by NotificationViews: the time big and bold, kept by Android's own chronometer so it is
- * right while the page is frozen. Also delivers taps on any of the app's notifications to the page.
+ * built by NotificationViews as Live Updates whose time Android keeps ticking while the page is
+ * frozen. Also handles taps on any of the app's notifications: a ringing alarm goes quiet, and
+ * the page is told what was tapped.
  *
  * Every method catches its own errors: nothing here may take the alarms down with it.
  */
@@ -29,6 +31,10 @@ public class LiveNotificationsPlugin extends Plugin {
     @Override
     public void load() {
         NotificationChannels.ensure(getContext());
+        // A tap that started the app: its intent is the launch intent, not a new one.
+        Activity a = getActivity();
+        Intent launch = a == null ? null : a.getIntent();
+        if (launch != null && (launch.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) handleTap(launch);
     }
 
     /**
@@ -85,8 +91,15 @@ public class LiveNotificationsPlugin extends Plugin {
     @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
+        handleTap(intent);
+    }
+
+    /** A tap on one of the app's notifications: a ringing alarm goes quiet; the page shows what was tapped. */
+    private void handleTap(Intent intent) {
         try {
             if (intent == null || !NotificationViews.ACTION_OPEN.equals(intent.getAction())) return;
+            int alarmId = intent.getIntExtra(NotificationViews.EXTRA_ALARM_ID, 0);
+            if (alarmId != 0) Alarms.silence(getContext(), alarmId);
             String instantId = intent.getStringExtra(NotificationViews.EXTRA_INSTANT_ID);
             if (instantId == null) return;
             JSObject data = new JSObject();

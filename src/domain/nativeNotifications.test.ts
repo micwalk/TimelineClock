@@ -252,4 +252,10 @@ describe('shellStatusItems', () => {
     expect(items[0].fix).toBeUndefined()
     expect(items[2].fix).toMatch(/Alarms & reminders/)
   })
+
+  it('lists Live Updates when the app reports them', () => {
+    const items = shellStatusItems({ notifications: true, alarmChannel: true, exactAlarms: true, liveUpdates: false })
+    expect(items.map(i => [i.label, i.ok])).toContainEqual(['Live Updates', false])
+    expect(items.at(-1)?.fix).toMatch(/Live Updates/)
+  })
 })

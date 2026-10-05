@@ -271,13 +271,22 @@ export interface ShellStatus {
   /** The "Alarms and timers" channel isn't turned off. */
   alarmChannel: boolean
   exactAlarms: boolean
+  /**
+   * Live Updates: the timer, stopwatch and ringing alarm pinned on the lock screen and as a
+   * status-bar chip. Missing from early test builds of the app.
+   */
+  liveUpdates?: boolean
 }
 
 /** Settings' checklist, with what to do about anything that's off. */
 export function shellStatusItems(status: ShellStatus): { label: string; ok: boolean; fix?: string }[] {
-  return [
+  const items = [
     { label: 'Notifications', ok: status.notifications, fix: 'Allow notifications for TimelineClock in Android Settings › Apps.' },
     { label: 'Alarm sound', ok: status.alarmChannel, fix: 'Turn on the “Alarms and timers” notification category.' },
     { label: 'Exact alarms', ok: status.exactAlarms, fix: 'Allow “Alarms & reminders” in the app’s Android settings.' },
-  ].map(item => (item.ok ? { label: item.label, ok: true } : item))
+  ]
+  if (status.liveUpdates !== undefined) {
+    items.push({ label: 'Live Updates', ok: status.liveUpdates, fix: 'Allow Live Updates in the app’s notification settings, to pin timers to the lock screen.' })
+  }
+  return items.map(item => (item.ok ? { label: item.label, ok: true } : item))
 }

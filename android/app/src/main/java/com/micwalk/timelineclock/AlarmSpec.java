@@ -32,6 +32,8 @@ final class AlarmSpec {
     boolean pendingAck;
     /** Snoozes from the notification since the page last caught up. */
     int snoozes;
+    /** Ringing without sound: its notification was tapped, or Silence in the app. */
+    boolean silenced;
 
     /** Same alarm as far as the page is concerned (it doesn't know about native state). */
     boolean samePageFields(AlarmSpec o) {
@@ -49,7 +51,8 @@ final class AlarmSpec {
             .put("state", state)
             .put("ringingSince", ringingSince)
             .put("pendingAck", pendingAck)
-            .put("snoozes", snoozes);
+            .put("snoozes", snoozes)
+            .put("silenced", silenced);
     }
 
     /** From the page's sync call or from storage; null if it isn't a usable alarm. */
@@ -66,6 +69,7 @@ final class AlarmSpec {
         s.ringingSince = o.optLong("ringingSince", 0);
         s.pendingAck = o.optBoolean("pendingAck", false);
         s.snoozes = o.optInt("snoozes", 0);
+        s.silenced = o.optBoolean("silenced", false);
         if (s.at <= 0 || s.instantId.isEmpty()) return null;
         return s;
     }

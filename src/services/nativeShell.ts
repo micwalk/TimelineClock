@@ -35,3 +35,13 @@ export async function requestNativeNotifications() {
     console.warn('[Native] Notification permission request failed', err)
   }
 }
+
+/** Silence in the app: the Android app's ringing alarm notifications go quiet too. */
+export async function silenceNativeAlarms() {
+  if (!isNativeShell()) return
+  try {
+    await (await loadNative()).silenceAlarms()
+  } catch (err) {
+    console.warn('[Native] Could not silence the alarms', err)
+  }
+}

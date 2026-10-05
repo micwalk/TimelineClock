@@ -1,5 +1,5 @@
-// The running timer (countdown) and stopwatch (count-up) as ongoing notifications on the lock
-// screen and in the shade, the time big and bold. Android draws the time, so they stay right
+// The running timer (countdown) and stopwatch (count-up) as Live Updates: pinned on the lock
+// screen and in the shade, and a status-bar chip. Android draws the time, so they stay right
 // while the page is frozen; at zero the native alarm replaces a timer's countdown with its
 // ringing notification. Decisions: domain/nativeNotifications.
 import { desiredLiveNotifications } from '../../domain/nativeNotifications.ts'

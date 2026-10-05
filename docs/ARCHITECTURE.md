@@ -196,8 +196,10 @@ it brings Android in line with the entities, using pure decisions from
   (`primeNotifications`).
 - **Live notifications** (`native/liveSync`, `LiveNotificationsPlugin`): a countdown for each
   future alarmed instant that ends a timer (`timerSpanFor`: a saved span that has started),
-  and a count-up for the running stopwatch, the time big and bold. Android's chronometer draws
-  it, so it stays right while the page is frozen.
+  and a count-up for the running stopwatch. They and the ringing alarms are Live Updates
+  (pinned on the lock screen, a status-bar chip); Android draws the time (Android 17:
+  MetricStyle's big value; 16: the header chronometer), so it stays right while the page is
+  frozen. A tap on a ringing alarm silences it; Silence in the app silences them all.
 - Taps go where `liveTapTarget` says: the stopwatch's span to Now, a running timer's span, or
   an alarm's overtime (its span to Now), focused and selected (`act.revealLive`), including a
   tap that starts the app.

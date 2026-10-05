@@ -33,7 +33,9 @@ def preview = project.hasProperty('tcPreview')
 
 android {
     namespace = "com.micwalk.timelineclock"
-    compileSdk = rootProject.ext.compileSdkVersion
+    // Android 17's SDK, for Notification.MetricStyle (the big time in the notifications, used only
+    // on Android 17+: NotificationViews.java). The app still targets and requires Android 16.
+    compileSdk = 37
     defaultConfig {
         applicationId "com.micwalk.timelineclock"
         minSdkVersion rootProject.ext.minSdkVersion

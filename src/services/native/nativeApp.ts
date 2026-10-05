@@ -39,6 +39,11 @@ export async function requestNotificationPermission() {
   syncAll(true)
 }
 
+/** Stops the ringing alarm notifications' sound (Silence in the app). */
+export async function silenceAlarms() {
+  await Alarms.silence()
+}
+
 export function startNativeApp() {
   if (started) return
   started = true

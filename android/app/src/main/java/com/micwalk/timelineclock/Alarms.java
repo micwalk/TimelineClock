@@ -72,7 +72,26 @@ final class Alarms {
                 schedule(c, s);
                 return;
             }
+            s.silenced = false;
             ring(c, s, now);
+        }
+    }
+
+    /**
+     * Stops the sound of alarm `id` (or of every ringing alarm, for 0) but keeps it ringing:
+     * still on the lock screen with Dismiss and Snooze, ending as usual when the ring time runs
+     * out. From a tap on its notification, or Silence in the app.
+     */
+    static void silence(Context c, int id) {
+        synchronized (AlarmStore.LOCK) {
+            for (AlarmSpec s : AlarmStore.alarms(c).values()) {
+                if ((id != 0 && s.id != id) || !AlarmSpec.RINGING.equals(s.state) || s.silenced) continue;
+                s.silenced = true;
+                AlarmStore.put(c, s);
+                // Cancelling is what stops an insistent sound for sure; the quiet copy replaces it.
+                NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
+                post(c, s);
+            }
         }
     }
 
@@ -118,6 +137,7 @@ final class Alarms {
             s.at = at;
             s.ringText = "Snoozed until " + clock(c, at);
             s.state = AlarmSpec.SCHEDULED;
+            s.silenced = false;
             s.pendingAck = true;
             s.snoozes++;
             AlarmStore.put(c, s);
@@ -164,12 +184,17 @@ final class Alarms {
         s.ringingSince = since;
         AlarmStore.put(c, s);
         if (s.liveId != 0) NotificationViews.cancel(c, NotificationViews.TAG_LIVE, s.liveId);
+        post(c, s);
+        setWhileIdle(c, AlarmReceiver.ACTION_RING_END, s.id, since + AlarmStore.ringMs(c));
+    }
+
+    /** The ringing notification for `s`, sounding unless it was silenced. */
+    private static void post(Context c, AlarmSpec s) {
         try {
-            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c)));
+            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced));
         } catch (RuntimeException e) {
             Log.e(TAG, "Could not post the ringing notification", e);
         }
-        setWhileIdle(c, AlarmReceiver.ACTION_RING_END, s.id, since + AlarmStore.ringMs(c));
     }
 
     /** Stops everything about `s`: its wake-ups and its ringing notification. */
@@ -186,7 +211,7 @@ final class Alarms {
         PendingIntent fire = NotificationViews.alarmBroadcast(c, AlarmReceiver.ACTION_FIRE, s.id);
         try {
             if (am.canScheduleExactAlarms()) {
-                PendingIntent show = NotificationViews.openApp(c, "alarm", s.instantId, s.id ^ 0x20000000);
+                PendingIntent show = NotificationViews.openApp(c, "alarm", s.instantId, s.id ^ 0x20000000, 0);
                 am.setAlarmClock(new AlarmManager.AlarmClockInfo(s.at, show), fire);
                 return;
             }

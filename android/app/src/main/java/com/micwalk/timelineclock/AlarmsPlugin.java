@@ -98,7 +98,19 @@ public class AlarmsPlugin extends Plugin {
         }
     }
 
-    /** What Android currently allows, for the Settings panel: { notifications, alarmChannel, exactAlarms }. */
+    /** Silence in the app: stops the sound of every ringing alarm; they stay on the lock screen until answered. */
+    @PluginMethod
+    public void silence(PluginCall call) {
+        try {
+            Alarms.silence(getContext(), 0);
+            call.resolve();
+        } catch (RuntimeException e) {
+            Log.e(TAG, "silence failed", e);
+            call.reject("silence failed: " + e.getMessage());
+        }
+    }
+
+    /** What Android currently allows, for the Settings panel: { notifications, alarmChannel, exactAlarms, liveUpdates }. */
     @PluginMethod
     public void getStatus(PluginCall call) {
         try {
@@ -117,6 +129,8 @@ public class AlarmsPlugin extends Plugin {
         result.put("alarmChannel", alarms != null && alarms.getImportance() != NotificationManager.IMPORTANCE_NONE);
         AlarmManager am = c.getSystemService(AlarmManager.class);
         result.put("exactAlarms", am != null && am.canScheduleExactAlarms());
+        // Live Updates: the timer, stopwatch and ringing alarm pinned on the lock screen and as a status-bar chip.
+        result.put("liveUpdates", NotificationManagerCompat.from(c).canPostPromotedNotifications());
         return result;
     }
 }

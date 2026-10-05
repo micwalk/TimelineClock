@@ -7,7 +7,7 @@ import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
-import { isNativeShell, requestNativeNotifications } from './nativeShell.ts'
+import { isNativeShell, requestNativeNotifications, silenceNativeAlarms } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
 
 const IDLE_RECHECK_MS = 60_000
@@ -107,9 +107,10 @@ export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number)
   return newId
 }
 
-/** Stops the sound but keeps alarms on screen. */
+/** Stops the sound but keeps alarms on screen (in the Android app, their notifications too). */
 export function silence() {
   audio.stopAlarmSound()
+  void silenceNativeAlarms()
 }
 
 export function primeAudio() {

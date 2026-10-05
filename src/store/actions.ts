@@ -22,7 +22,7 @@ import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { dismiss, primeNotifications } from '../services/AlarmScheduler.ts'
+import { SNOOZE_MINUTES, dismiss, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -630,8 +630,21 @@ function landCursorAt(ts: number) {
 export {
   dismiss as dismissAlarm,
   silence as silenceAlarms,
-  snooze as snoozeAlarm,
 } from '../services/AlarmScheduler.ts'
+
+/** Snooze from the app: the alarm rings again in `minutes`, and the view goes to the snooze (the span from the alarm to its next ring). */
+export function snoozeAlarm(instantId: string, minutes = SNOOZE_MINUTES): string | undefined {
+  const newId = snooze(instantId, minutes)
+  if (!newId) return
+  const sp = useEntities.getState().spans.find(s => s.startInstantId === instantId && s.endInstantId === newId)
+  if (sp) {
+    focusSpan(sp.id)
+    view.selectSpan(sp.id)
+  } else {
+    revealInstant(newId)
+  }
+  return newId
+}
 
 // ---------------------------------------------------------------------------
 // Backup: export and import

@@ -13,6 +13,8 @@ export interface AlarmsPlugin {
   /** Answers given from notifications since last asked (untrusted shape: sanitizeAlarmActions). */
   takeActions(): Promise<{ actions: unknown }>
   getStatus(): Promise<ShellStatus>
+  /** Stops the sound of every ringing alarm; they stay on the lock screen until answered. */
+  silence(): Promise<void>
   checkPermissions(): Promise<AlarmsPermissions>
   requestPermissions(): Promise<AlarmsPermissions>
   /** An answer was given from a notification while the page runs. */
