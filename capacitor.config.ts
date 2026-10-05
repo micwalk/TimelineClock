@@ -5,7 +5,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 const config: CapacitorConfig = {
   // Permanent once installed: Android treats a different id as a different app.
   appId: 'com.micwalk.timelineclock',
-  appName: 'Timeline Clock',
+  appName: 'TimelineClock',
   // Not dist: bundling the app would run it on a second origin with separate storage.
   // This folder holds only the page shown when the site can't be reached.
   webDir: 'android-offline',

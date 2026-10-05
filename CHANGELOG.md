@@ -21,6 +21,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   Android allows.
 - TC Preview: a separate test app, published for pull requests, that loads a PR's Netlify
   deploy preview (picked by PR number in the app), to try changes on the phone before merging.
+- The installed app is called **TimelineClock** under its icon (web app and Android app;
+  it was "Timeline" for the web app).
 - Version numbers: Help and Settings show the version ("Web 0.1.0 · Android app 0.1.0"
   inside the Android app). Settings in the Android app also lists what Android allows
   (notifications, alarm sound, exact alarms, Live Updates).

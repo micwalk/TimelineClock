@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         id: '/',
         name: 'Timeline Clock',
-        short_name: 'Timeline',
+        short_name: 'TimelineClock',
         description: 'A timeline-centric clock: stopwatch, timer, alarm and world clock on one zoomable timeline.',
         theme_color: '#0c1838',
         background_color: '#02040c',

@@ -114,7 +114,7 @@ Merge the pull request, wait until Netlify has deployed it, then install the app
    tap **Settings**, turn on **Allow from this source**, and go back.
 5. Tap **Install**. Google Play Protect may say the app is from an unknown developer or ask
    to scan it: let it scan, and if it still warns, choose **More details** › **Install anyway**.
-6. Open **Timeline Clock**. When Android asks whether it may send notifications, tap **Allow**.
+6. Open **TimelineClock**. When Android asks whether it may send notifications, tap **Allow**.
 
 You can turn **Allow from this source** off again afterwards; turn it back on when you
 install an update.
@@ -133,16 +133,16 @@ In the app, open **Settings** (the gear). At the bottom:
   (swipe it away in Recents) and open it again.
 - Below it, a checklist: **Notifications**, **Alarm sound**, **Exact alarms**, **Live
   Updates**, each with ✓. Anything with ✗ says what to turn on:
-  - Notifications: Android **Settings** › **Apps** › **Timeline Clock** › **Notifications** ›
+  - Notifications: Android **Settings** › **Apps** › **TimelineClock** › **Notifications** ›
     allow.
   - Alarm sound: same screen, the **Alarms and timers** category must be on.
-  - Exact alarms: **Settings** › **Apps** › **Timeline Clock** › **Alarms & reminders** (this
+  - Exact alarms: **Settings** › **Apps** › **TimelineClock** › **Alarms & reminders** (this
     is normally allowed automatically).
   - Live Updates (optional): in the app's notification settings, allow **Live Updates** /
     promoted notifications. Without it, the running timer still shows as a normal
     notification.
 
-Optional, if alarms ever come late: **Settings** › **Apps** › **Timeline Clock** › **App
+Optional, if alarms ever come late: **Settings** › **Apps** › **TimelineClock** › **App
 battery usage** › **Unrestricted**.
 
 ## Bring your data over from the browser app
@@ -217,7 +217,7 @@ Netlify builds for every pull request).
   the app icon › **Change preview**. If the preview can't be loaded (wrong number, or Netlify
   is still building it), it asks again. **Live site** loads the live site instead.
 - It is its own app (`com.micwalk.timelineclock.preview`, version `x.y.z-preview`): it
-  installs next to Timeline Clock, never replaces it, and has its own data, separate for each
+  installs next to TimelineClock, never replaces it, and has its own data, separate for each
   preview address. Use throwaway test timers there. Its notifications and Settings checklist
   work like the real app's.
 - A PR's **web** changes reach TC Preview through its deploy preview on every push; only
