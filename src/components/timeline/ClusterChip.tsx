@@ -27,7 +27,7 @@ export function ClusterChip({ cluster, members }: { cluster: ClusterInfo; member
 
   return (
     <div ref={ref} className={`tl-col tl-col--label tl-cluster ${accentClass(cluster.topPriority)}`}>
-      <div className="tl-col__chip" style={{ '--row': cluster.slot, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cluster.crossOffset } : {}) } as CSSProperties}>
+      <div className="tl-col__chip" style={{ '--row': cluster.slot, '--shift': `${cluster.shift}px`, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cluster.crossOffset } : {}) } as CSSProperties}>
         <button type="button" className="chip chip--cluster glow-box glow-text" aria-label={label} title={label}
           onClick={() => act.zoomToTimes(members.map(m => m.tsEpochMs))}>
           {hasAlarm && <BellIcon aria-hidden />}

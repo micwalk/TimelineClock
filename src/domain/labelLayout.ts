@@ -15,7 +15,9 @@
 //   3. Chips that don't fit collapse into "+N" clusters. A cluster with no room
 //      takes the place of the least important chip it overlaps, absorbing it, and
 //      so does a cluster that would hold a single chip ("+1" hides one chip to show
-//      a counter no smaller than the chip's own place).
+//      a counter no smaller than the chip's own place). With only pinned chips in its
+//      way it slides along the time axis like a chip, or else takes the place of the
+//      least important chip near it, rather than going off the edge.
 //
 // Nothing disappears: every item ends up placed, folded or in a cluster, and
 // markers are always drawn whatever happens to their chips.
@@ -69,6 +71,8 @@ export interface LabelCluster {
   memberIds: string[]
   /** Main-axis position of the cluster chip, px. */
   pos: number
+  /** How far the chip slid along the time axis from its members' mean position, px (see 3.). */
+  shift: number
   slot: number
   crossOffset: number
   /** Priority of the most important member, for the chip's color. */
@@ -277,17 +281,43 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
       take(victim)
       spot = findSpot(lo, hi, o.cluster.crossExtent, true)
     }
-    // Only pinned chips left in the way: overflow rather than hide the cluster. Without
-    // limits a spot always exists (past the outermost blocker).
-    spot ??= findSpot(lo, hi, o.cluster.crossExtent, false)!
     const id = `cluster:${run[0].id}`
-    boxes.push({ kind: 'cluster', id, lo, hi, crossStart: spot.offset, crossEnd: spot.offset + o.cluster.crossExtent, slot: spot.slot, priority: Infinity, pinned: true, pos })
+    // Only pinned chips left in the way (say a selected chip wider than the room): slide along
+    // the time axis next to them, as a chip would, so the cluster stays on screen.
+    let center = pos
+    if (!spot) {
+      const probe: LabelItem = { id, pos, mainExtent: o.cluster.mainExtent, crossExtent: o.cluster.crossExtent, priority: Infinity, pinned: false }
+      const moved = slide(probe, o.cluster.mainExtent, o.cluster.crossExtent)
+      if (moved) { center = moved.center; spot = moved.spot }
+    }
+    // Nor that (its neighbours fill every place in time order): take the place of the least
+    // important chip near it, absorbing it, so the cluster shows among them.
+    if (!spot) {
+      const reach = maxShift + o.cluster.mainExtent / 2
+      const mid = (b: Box) => (b.lo + b.hi) / 2
+      const near = boxes
+        .filter(b => b.kind === 'chip' && !b.pinned && mainOverlap(pos - reach, pos + reach, b.lo, b.hi))
+        .sort((a, b) => b.priority - a.priority || Math.abs(mid(a) - pos) - Math.abs(mid(b) - pos) || compareIds(a.id, b.id))
+      for (const v of near) {
+        take(v)
+        const c = mid(v)
+        const s2 = findSpot(c - o.cluster.mainExtent / 2, c + o.cluster.mainExtent / 2, o.cluster.crossExtent, true)
+        if (s2) { center = c; spot = s2; break }
+      }
+    }
+    // Still nowhere: overflow rather than hide the cluster. Without limits a spot always
+    // exists (past the outermost blocker).
+    spot ??= findSpot(lo, hi, o.cluster.crossExtent, false)!
+    const cLo = center - o.cluster.mainExtent / 2
+    const cHi = center + o.cluster.mainExtent / 2
+    boxes.push({ kind: 'cluster', id, lo: cLo, hi: cHi, crossStart: spot.offset, crossEnd: spot.offset + o.cluster.crossExtent, slot: spot.slot, priority: Infinity, pinned: true, pos })
 
     const members = [...memberIds].map(m => byId.get(m)!).sort(byPos)
     clusters.push({
       id,
       memberIds: members.map(m => m.id),
-      pos,
+      pos: center,
+      shift: center - pos,
       slot: spot.slot,
       crossOffset: spot.offset,
       topPriority: Math.min(...members.map(m => m.priority)),

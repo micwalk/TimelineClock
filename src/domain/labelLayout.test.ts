@@ -290,6 +290,56 @@ describe('layoutLabels: sliding along the time axis', () => {
     expect(accounted(r)).toEqual(items.map(i => i.id).sort())
   })
 
+  it('slides a cluster next to a pinned chip that leaves no room beside it, rather than off the edge', () => {
+    // The bug report: zoomed out, a selected chip wider than the room covers its time, and the
+    // "+N" for its neighbours had nowhere to go but past it, off screen.
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const items = [selected, ...Array.from({ length: 8 }, (_, k) => wide(`i${k}`, 92 + 2 * k, { priority: 5 + k }))]
+    const r = layoutLabels(items, S)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + S.cluster.crossExtent).toBeLessThanOrEqual(S.crossBudget)
+    // Next to the selected chip along the time axis, not on top of it.
+    const sel = { lo: 100 - 10, hi: 100 + 10 }
+    expect(c.pos + S.cluster.mainExtent / 2 <= sel.lo || c.pos - S.cluster.mainExtent / 2 >= sel.hi).toBe(true)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('keeps the cluster on screen when chips fill the places around a pinned chip', () => {
+    // The reported scene: chips placed before and after the selected chip, the overflow's
+    // times all between them, and no room beside the selected chip.
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const before = wide('before', 70, { priority: 3 })
+    const after = wide('after', 125, { priority: 3 })
+    const later = wide('later', 150, { priority: 3 })
+    const overflow = Array.from({ length: 5 }, (_, k) => wide(`o${k}`, 96 + 3 * k, { priority: 6 }))
+    const items = [selected, before, after, later, ...overflow]
+    const r = layoutLabels(items, S)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + S.cluster.crossExtent).toBeLessThanOrEqual(S.crossBudget)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('takes the place of the least important chip near it when no slide keeps time order', () => {
+    // Only one column of room and the selected chip at the overflow's own time: every place in
+    // time order is taken, so the cluster replaces a neighbour (absorbing it) instead of going
+    // past the selected chip, off screen.
+    const N: LabelLayoutOptions = { ...S, crossBudget: 180 }
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const before = wide('before', 72, { priority: 7 })
+    const after = wide('after', 126, { priority: 3 })
+    const overflow = Array.from({ length: 4 }, (_, k) => wide(`o${k}`, 97 + 2 * k, { priority: 6 }))
+    const items = [selected, before, after, ...overflow]
+    const r = layoutLabels(items, N)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + N.cluster.crossExtent).toBeLessThanOrEqual(N.crossBudget)
+    expect(c.memberIds).toContain('before')
+    expect(r.placed.before).toBeUndefined()
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
   it('does not slide without maxShift', () => {
     const r = layoutLabels([wide('a', 100, { priority: 3 }), wide('b', 105, { priority: 2 })], V)
     expect(r.clusters).toHaveLength(1)

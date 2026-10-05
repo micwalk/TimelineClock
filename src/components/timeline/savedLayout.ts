@@ -124,6 +124,8 @@ export interface ClusterInfo {
   memberIds: string[]
   slot: number
   crossOffset: number
+  /** px the chip slid along the time axis from its members' mean time. */
+  shift: number
   topPriority: number
 }
 
@@ -160,7 +162,7 @@ export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
       const d = b.clusters[k]
-      return c.id === d.id && c.slot === d.slot && c.crossOffset === d.crossOffset && c.topPriority === d.topPriority && sameStrings(c.memberIds, d.memberIds)
+      return c.id === d.id && c.slot === d.slot && c.crossOffset === d.crossOffset && c.shift === d.shift && c.topPriority === d.topPriority && sameStrings(c.memberIds, d.memberIds)
     })
 }
 
@@ -269,7 +271,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       shifts,
       folded: r.folded,
       foldCount: r.foldCount,
-      clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, topPriority: k.topPriority })),
+      clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
       rowsUsed: Math.max(1, deepest + 1),
     }
     // Keep the old object when nothing visible changed, so React skips the render.
