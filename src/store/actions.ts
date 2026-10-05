@@ -1,6 +1,7 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
 import { engine } from '../engine/viewportEngine.ts'
+import type { Frame } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
@@ -152,17 +153,15 @@ export function moveCursorByIncrement(direction: 1 | -1) {
   moveCursorBy(direction * incrementOption(v().timeIncrement).milliseconds)
 }
 
-function navItems(): NavTarget[] {
-  const f = frame()
+function navItems(f: Frame): NavTarget[] {
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
   for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
-function navAnchor(): number {
+function navAnchor(f: Frame): number {
   const s = v()
-  const f = frame()
   if (s.viewFocusMode === 'instant' && s.focusedInstantId) return entities.getInstant(s.focusedInstantId)?.tsEpochMs ?? f.now
   if (s.viewFocusMode === 'cursor') return f.center
   if (s.viewFocusMode === 'span') return f.center
@@ -170,7 +169,10 @@ function navAnchor(): number {
 }
 
 export function goToAdjacentInstant(direction: 1 | -1) {
-  const target = findAdjacent(navItems(), navAnchor(), direction)
+  // One clock reading for both: read twice, Now could land a millisecond before itself and
+  // "previous" would go to Now instead of the instant before it.
+  const f = frame()
+  const target = findAdjacent(navItems(f), navAnchor(f), direction)
   if (!target) return
   if (target.kind === 'saved') focusInstant(target.id)
   else if (target.kind === 'cursor') focusCursorAt(target.ts)

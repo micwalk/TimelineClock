@@ -206,6 +206,21 @@ describe('hiding instants', () => {
     act.goToAdjacentInstant(-1)
     expect(view().focusedInstantId).toBe(a)
   })
+
+  it('previous from Now reaches the instant even when the clock ticks mid-step', () => {
+    const now = engine.sample().now
+    const a = entities.createInstant(now - HOUR, 'A')
+    act.focusNow(false)
+    // Every clock read is 1 ms later than the last: Now must not drift past itself.
+    let t = Date.now()
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => ++t)
+    try {
+      act.goToAdjacentInstant(-1)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(view().focusedInstantId).toBe(a)
+  })
 })
 
 describe('revealInstant (alarm notification click)', () => {
