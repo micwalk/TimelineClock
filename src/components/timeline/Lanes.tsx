@@ -117,8 +117,24 @@ function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan;
         </>
       ) : null}
       {short ? <ShortDuration a={a} b={b} /> : <Duration a={a} b={b} />}
-      {isFavoriteNowSpan(r) && <StarSolid className="span-chip__star" aria-label="Favorite" />}
     </span>
+  )
+}
+
+/** A favorite's span to Now ends in its star; tapping the star unfavorites the instant (the lane goes). */
+function FavoriteStar({ instant }: { instant: InstantRecord }) {
+  const label = `Unfavorite ${endpointName(instant)}`
+  return (
+    <button
+      type="button"
+      className="span-chip__star-btn"
+      aria-label={label}
+      title={label}
+      onClick={e => { e.stopPropagation(); act.setFavorite(instant.id, false) }}
+      onDoubleClick={e => e.stopPropagation()}
+    >
+      <StarSolid className="span-chip__star" aria-hidden />
+    </button>
   )
 }
 
@@ -160,6 +176,7 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       arrows={controls}
       barOnly={!controls}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} short={live} />}
+      chipEnd={isFavoriteNowSpan(r) ? <FavoriteStar instant={r.start} /> : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} /> }) : undefined}

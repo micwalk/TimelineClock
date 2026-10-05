@@ -113,6 +113,7 @@ function HelpContent() {
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
+            <li>The <b>star</b> on a favorite’s lane unfavorites it. Dismissing a timer’s alarm unfavorites its end.</li>
             <li>In a browser, alarms ring while the app is open. The <a href={ANDROID_URL} target="_blank" rel="noreferrer">Android app</a> also rings them when it’s closed, and shows a running timer or stopwatch in the notifications.</li>
             <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes.</li>
             <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>

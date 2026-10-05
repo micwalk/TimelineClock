@@ -10,13 +10,19 @@ its native part changes; [CHANGELOG.md](../CHANGELOG.md) says when.
 
 What it adds:
 
-- **Alarm notifications** for every alarmed instant (timers and bells), exact to the second,
-  firing with the app closed, the phone idle, or after a restart. The sound plays on the
-  **alarm volume**. Tapping the notification opens the app at that alarm.
-- **Live notifications**: a running timer counts down, and a running stopwatch counts up,
-  on the lock screen and in the notification shade. Where Android allows it, they also
-  appear as a **Live Update** chip in the status bar.
-- The in-app ringing (Dismiss / Snooze) works as before whenever the app is open.
+- **Ringing alarms** for every alarmed instant (timers and bells), exact to the second, with
+  the app closed, the phone asleep, or after a restart. The notification shows the time past
+  the alarm, big ("−0:42", counting on), under its name ("5m timer"), and rings on the
+  **alarm volume** until you tap **Dismiss** or **Snooze 5 min** on it (they work from the
+  lock screen; swiping it away dismisses it) or the ring time in Settings runs out. Answers
+  given there reach the app the next time it runs.
+- **Live notifications**: a running timer counts down, and a running stopwatch counts up, the
+  time big and bold, on the lock screen and in the notification shade. At zero a timer's
+  countdown turns into its ringing alarm.
+- Tapping a notification opens the app at what it is about: the stopwatch's run, a running
+  timer's span, or an alarm's overtime.
+- With the app open, the alarm rings from the notification too; the app's own Dismiss /
+  Snooze stop it.
 
 It needs **Android 16 or newer** (it was made for a Pixel 10). It isn't on the Play Store;
 you install it from this repository's
@@ -131,16 +137,13 @@ In the app, open **Settings** (the gear). At the bottom:
 - The version line shows **"Web 0.1.0 · Android app 0.1.0"** (with the current numbers). If
   it shows only "Version …", the page isn't talking to the Android app: close the app fully
   (swipe it away in Recents) and open it again.
-- Below it, a checklist: **Notifications**, **Alarm sound**, **Exact alarms**, **Live
-  Updates**, each with ✓. Anything with ✗ says what to turn on:
+- Below it, a checklist: **Notifications**, **Alarm sound**, **Exact alarms**, each with ✓.
+  Anything with ✗ says what to turn on:
   - Notifications: Android **Settings** › **Apps** › **TimelineClock** › **Notifications** ›
     allow.
   - Alarm sound: same screen, the **Alarms and timers** category must be on.
   - Exact alarms: **Settings** › **Apps** › **TimelineClock** › **Alarms & reminders** (this
     is normally allowed automatically).
-  - Live Updates (optional): in the app's notification settings, allow **Live Updates** /
-    promoted notifications. Without it, the running timer still shows as a normal
-    notification.
 
 Optional, if alarms ever come late: **Settings** › **Apps** › **TimelineClock** › **App
 battery usage** › **Unrestricted**.
@@ -163,9 +166,10 @@ anything you add in the Android app (and vice versa).
 
 1. Start a **1m** timer (Timer button › 1m). A notification appears counting down.
 2. Lock the phone, or switch to another app, and wait.
-3. At zero the countdown disappears and an **alarm notification** rings (on the alarm
-   volume). Tap it: the app opens at the timer and rings in the app too; **Dismiss** there
-   clears the notification.
+3. At zero it turns into the ringing alarm, on the lock screen too: the time past zero
+   counting on ("−0:05"), on the alarm volume. Tap **Snooze 5 min** (it counts down again) or
+   **Dismiss**. Or tap the notification itself: the app opens at the timer's overtime, still
+   ringing, and its own Dismiss stops it.
 4. Start the **Stopwatch**: a notification counts up until you **Stop** or **Reset**.
 
 Try one alarm with the phone on vibrate or silent, to see how your phone handles the sound.
@@ -234,19 +238,28 @@ Netlify builds for every pull request).
   come from `package.json` (`versionCode` = major×10000 + minor×100 + patch). Release signing
   comes only from the `TC_SIGNING_*` environment variables (see `android/app/build.gradle`);
   without them the release APK is unsigned.
-  - `MainActivity.java` creates the notification channels and registers the app's plugin.
+  - `MainActivity.java` creates the notification channels and registers the app's plugins.
   - `NotificationChannels.java`: "Alarms and timers" (high importance, `res/raw/alarm.ogg` on
     the alarm stream) and "Running timers and stopwatch" (silent). Android keeps a channel's
     sound and importance once created, so changing them needs a new channel id.
-  - `LiveNotificationsPlugin.java`: ongoing chronometer notifications, Live Update requests,
-    tap events and a status check.
+  - `NotificationViews.java`: the notifications, the time big and bold in a custom layout
+    (`res/layout/notification_time*.xml`) around Android's Chronometer, which keeps ticking
+    while the page is frozen and goes negative past zero. Custom layouts can't be Live
+    Updates, so there is no status-bar chip.
+  - Native alarms: `AlarmsPlugin.java` (sync from the page, answers back, status,
+    permission), `Alarms.java` (schedule with `setAlarmClock`, ring with `FLAG_INSISTENT`,
+    Dismiss / Snooze, restore after a restart or update), `AlarmReceiver.java`,
+    `AlarmStore.java` (SharedPreferences), and the pure, unit-tested `AlarmPlan.java`.
+    Answers given from a notification are kept until the page replays them
+    (`replayAlarmActions`); until then a sync leaves those alarms alone.
+  - `LiveNotificationsPlugin.java`: the running timer / stopwatch notifications, and taps on
+    any of the app's notifications.
 - `src/services/nativeShell.ts` detects the shell (`window.Capacitor`, set by the shell before
   the page runs) and loads `src/services/native/` with a dynamic `import()`, so browsers never
   download it. The decisions are pure and tested in `src/domain/nativeNotifications.ts`.
-- Alarms are scheduled through `@capacitor/local-notifications` (exact,
-  `setExactAndAllowWhileIdle`; restored after a reboot). In Doze, Android lets each app's
-  while-idle alarms fire at most about once every 9 minutes, which only matters for alarms
-  minutes apart while the phone sleeps.
+- Alarms use `AlarmManager.setAlarmClock`: exact, wakes the phone, not held back by Doze,
+  and shown as the next alarm on the lock screen. The page plays no alarm sound inside the
+  app (the notification rings), unless Android won't show notifications.
 - Build locally: JDK 21 and the Android SDK (platform 36), then
   `npx cap sync android && cd android && ./gradlew assembleRelease` (add `-PtcPreview` for TC
   Preview; `:app:testReleaseUnitTest` runs the native unit tests). CI:

@@ -100,6 +100,20 @@ describe('live and saved lanes', () => {
     render(<BottomLanes lanes={live.map((l, i) => ({ ...l, top: 10 + i * 24, index: i }))} />)
     expect(screen.getAllByText('Long walk').length).toBeGreaterThan(0)
   })
+
+  it('a favorite’s span to Now ends in a star that unfavorites it, without opening the lane’s tools', () => {
+    const now = engine.getFrame().now
+    const a = entities.createInstant(now - 5 * MINUTE, 'Tea', { favorite: true })
+    entities.upsertNowSpan(a, true)
+    useView.setState({ currentSelectedInstantId: a })
+    const { result } = renderHook(() => useVisibleLanes())
+    const lanes = partitionLanes(result.current).live
+    render(<BottomLanes lanes={lanes.map((l, i) => ({ ...l, top: 10 + i * 24, index: i }))} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Unfavorite Tea' }))
+    expect(entities.getInstant(a)?.favorite).toBe(false)
+    expect(entities.nowSpanOf(a)?.visible).toBe(false)
+    expect(useUi.getState().laneTools).toBeNull()
+  })
 })
 
 describe('live lane placement', () => {

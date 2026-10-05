@@ -9,9 +9,7 @@
     <!-- Exact alarms, granted at install (SCHEDULE_EXACT_ALARM is denied by default on Android 14+,
          and without exact alarms Android can delay a timer's notification by many minutes). -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <!-- Live Updates: the running timer / stopwatch as a status-bar chip (Android 16). -->
-    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
-    <!-- Alarms are set again after a restart (the notifications plugin's boot receiver). -->
+    <!-- Alarms are set again after a restart (AlarmReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
@@ -35,6 +33,17 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Native alarms (Alarms.java): wake-ups, Dismiss / Snooze, and setting them again
+             after a restart or an app update. Not exported: only Android and the app reach it. -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

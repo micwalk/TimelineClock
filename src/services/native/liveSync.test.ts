@@ -9,7 +9,7 @@ vi.mock('./liveNotificationsPlugin.ts', () => ({
   LiveNotifications: {
     sync: vi.fn(async ({ items }: { items: LiveNotification[] }) => {
       fake.calls.push(items)
-      return { posted: items.length, notifications: true, alarmChannel: true, exactAlarms: true, liveUpdates: false }
+      return { posted: items.length }
     }),
   },
 }))
@@ -24,24 +24,22 @@ async function load(instants: InstantRecord[], spans: SpanRecord[]) {
   vi.resetModules()
   const { useEntities } = await import('../../store/entities.ts')
   useEntities.setState({ instants, spans })
-  const { useShell } = await import('../../store/shell.ts')
   const { useQuick } = await import('../../store/quick.ts')
   const { syncLive } = await import('./liveSync.ts')
-  return { useEntities, useShell, useQuick, syncLive }
+  return { useEntities, useQuick, syncLive }
 }
 
 beforeEach(() => { fake.calls = [] })
 
 describe('syncLive', () => {
-  it('shows a running timer and records what Android allows', async () => {
-    const { syncLive, useShell } = await load(
+  it('shows a running timer', async () => {
+    const { syncLive } = await load(
       [inst('start', -MINUTE), inst('end', 12 * MINUTE, { alarm: true, label: '13m timer' })],
       [span('start', 'end', '13m timer')],
     )
     await syncLive()
     expect(fake.calls).toHaveLength(1)
     expect(fake.calls[0]).toMatchObject([{ kind: 'countdown', title: '13m timer', whenMs: now + 12 * MINUTE, instantId: 'end' }])
-    expect(useShell.getState().status).toEqual({ notifications: true, alarmChannel: true, exactAlarms: true, liveUpdates: false })
   })
 
   it('posts again only when the list changes, or when forced', async () => {

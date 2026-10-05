@@ -1,9 +1,11 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
 import { findDueAlarms, nextAlarmTime, snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
+import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
+import { useShell } from '../store/shell.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
 import { isNativeShell, requestNativeNotifications } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
@@ -26,6 +28,13 @@ function hasRinging() {
   return useAlarms.getState().ringing.length > 0
 }
 
+/**
+ * Whether the page plays the alarm sound. Not inside the Android app: there the alarm
+ * notification rings (services/native), also with the app open, and Dismiss / Snooze in either
+ * place stops it. The page only rings there if Android won't show notifications.
+ */
+const pageRings = () => !isNativeShell() || useShell.getState().status?.notifications === false
+
 function check() {
   const now = Date.now()
   const { ringing, autoDismissMs, unattended } = useAlarms.getState()
@@ -43,7 +52,7 @@ function check() {
     useAlarms.setState(s => ({
       ringing: [...s.ringing, ...due.map(i => ({ instantId: i.id, label: i.label, tsEpochMs: i.tsEpochMs, triggeredAt: now }))],
     }))
-    audio.startAlarmSound(hasRinging)
+    if (pageRings()) audio.startAlarmSound(hasRinging)
     for (const i of due) {
       const instantId = i.id
       void notifications.notifyAlarm(i.label, { instantId, onClick: () => onNotificationClick(instantId) })
@@ -62,25 +71,34 @@ function schedule() {
   timer = setTimeout(check, wait)
 }
 
-/** Stops ringing and turns the alarm off on the instant. */
+/**
+ * Stops ringing and turns the alarm off on the instant. A timer's end is done with, so it also
+ * stops being a favorite (its span to Now goes).
+ */
 export function dismiss(instantId: string) {
   useAlarms.setState(s => ({ ringing: s.ringing.filter(r => r.instantId !== instantId) }))
   entities.setAlarmFlag(instantId, false)
+  const { instants, spans } = useEntities.getState()
+  if (timerSpanFor(instantId, instants, spans)) entities.setFavorite(instantId, false)
   if (!hasRinging()) audio.stopAlarmSound()
 }
 
+/** Snooze length (minutes); the Android app's Snooze button uses it too. */
+export const SNOOZE_MINUTES = 5
+
 /**
- * Dismisses a ringing alarm and sets a new one `minutes` from now, labelled
- * "Snooze N: <original>" and linked to the original alarm by a hidden span.
+ * Dismisses a ringing alarm and sets a new one `minutes` from now (or at `at`: a snooze from
+ * the Android app's notification), labelled "Snooze N: <original>" and linked to the original
+ * alarm by a hidden span.
  */
-export function snooze(instantId: string, minutes = 5): string | undefined {
+export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined {
   const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
-  if (!ringing) return
   const original = entities.getInstant(instantId)
+  if (!ringing && !original?.alarm) return
   const originalId = original?.snoozeOriginalId ?? instantId
-  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing.label
+  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing?.label ?? ''
   const count = entities.snoozeCount(originalId) + 1
-  const newId = entities.createInstant(Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
+  const newId = entities.createInstant(at ?? Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
     alarm: true,
     snoozeOriginalId: originalId,
   })
@@ -125,6 +143,6 @@ export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: st
   const onGesture = () => primeAudio()
   document.addEventListener('pointerdown', onGesture, { once: true })
   document.addEventListener('keydown', onGesture, { once: true })
-  if (hasRinging()) audio.startAlarmSound(hasRinging)
+  if (hasRinging() && pageRings()) audio.startAlarmSound(hasRinging)
   check()
 }

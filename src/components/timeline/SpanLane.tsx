@@ -50,6 +50,8 @@ export interface SpanLaneProps {
   tools?: (order: { aIsLeft: boolean }) => { left?: ReactNode; right?: ReactNode }
   /** Content rendered below the chip (e.g. a popover). */
   below?: ReactNode
+  /** A button drawn at the chip's right end, inside its box (e.g. the favorite star). */
+  chipEnd?: ReactNode
   /** Selected or focused: its chip, tools and endpoint arrows draw over everything else. */
   selected?: boolean
   /** Vertical: key in the shared lane layout (rightSideLayout), which places the chip clear of other lane chips. */
@@ -71,7 +73,7 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, selected, layoutKey } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, chipEnd, selected, layoutKey } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
@@ -165,16 +167,19 @@ export function SpanLane(props: SpanLaneProps) {
             <div className="tl-lane__tools tl-lane__tools--left">
               {extra?.left}
             </div>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={chipLabel}
-              className="span-chip glow-box glow-text"
-              onClick={onChipClick}
-              onDoubleClick={onChipDoubleClick}
-              onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
-            >
-              {chip}
+            <div className="tl-lane__chip-row">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={chipLabel}
+                className={`span-chip glow-box glow-text${chipEnd ? ' has-end' : ''}`}
+                onClick={onChipClick}
+                onDoubleClick={onChipDoubleClick}
+                onKeyDown={e => { if (e.key === 'Enter') onChipClick?.() }}
+              >
+                {chip}
+              </div>
+              {chipEnd && <div className="tl-lane__chip-end">{chipEnd}</div>}
             </div>
             <div className="tl-lane__tools tl-lane__tools--right">
               {extra?.right}

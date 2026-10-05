@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Before the bridge starts, so alarms scheduled by the page always have their channel.
         NotificationChannels.ensure(this);
+        registerPlugin(AlarmsPlugin.class);
         registerPlugin(LiveNotificationsPlugin.class);
 
         String site = null;

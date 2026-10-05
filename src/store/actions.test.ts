@@ -223,6 +223,30 @@ describe('hiding instants', () => {
   })
 })
 
+describe('revealLive (a tap on an Android notification)', () => {
+  beforeEach(() => useQuick.setState({ stopwatch: IDLE_STOPWATCH, recentTimers: [] }))
+
+  it('a running timer focuses and selects its span; past its end, its overtime', () => {
+    const end = act.startTimer(13 * MINUTE)
+    const timer = useEntities.getState().spans.find(sp => !sp.endIsNow)!
+    act.revealLive('countdown', end)
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: timer.id, selectedSpanId: timer.id })
+
+    entities.setInstantTime(end, engine.sample().now - MINUTE)
+    act.revealLive('alarm', end)
+    const overtime = entities.nowSpanOf(end)!
+    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: overtime.id, selectedSpanId: overtime.id })
+  })
+
+  it('the stopwatch focuses its run so far', () => {
+    act.startStopwatch()
+    const start = useQuick.getState().stopwatch.marks[0]
+    act.focusNow(false)
+    act.revealLive('stopwatch', start)
+    expect(view().focusedSpanId).toBe(entities.nowSpanOf(start)!.id)
+  })
+})
+
 describe('revealInstant (alarm notification click)', () => {
   it('focuses and selects the instant and shows a tab that lists it', () => {
     const id = entities.createInstant(Date.now() - MINUTE, 'Rice')

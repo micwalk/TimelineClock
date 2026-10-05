@@ -1,5 +1,5 @@
-// Inside the Android app: what Android allows (notifications, alarm sound, exact alarms,
-// Live Updates), with what to do about anything that's off. Nothing in a browser.
+// Inside the Android app: what Android allows (notifications, alarm sound, exact alarms),
+// with what to do about anything that's off. Nothing in a browser.
 import { shellStatusItems } from '../../domain/nativeNotifications.ts'
 import { useShell } from '../../store/shell.ts'
 

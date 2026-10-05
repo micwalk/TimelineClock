@@ -470,6 +470,22 @@
 }
 .span-chip .chip-input { height: 22px; font-size: 14px; }
 .span-chip__star { width: 16px; height: 16px; color: var(--c-favorite); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-favorite)); }
+/* A button at the chip's right end, drawn inside its box (the favorite star): the chip makes room for it. */
+.tl-lane__chip-row { position: relative; }
+.span-chip.has-end { padding-right: 32px; }
+.tl-lane__chip-end { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; }
+.span-chip__star-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.span-chip__star-btn:hover, .span-chip__star-btn:focus-visible { background: var(--box-bg-raised); }
 
 /* --- Popovers ----------------------------------------------------------- */
 

@@ -20,6 +20,8 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
+import type { NotificationKind } from '../domain/nativeNotifications.ts'
+import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { dismiss, primeNotifications } from '../services/AlarmScheduler.ts'
 import { quick, useQuick } from './quick.ts'
 import {
@@ -70,6 +72,19 @@ export function revealInstant(id: string, animate = true) {
   focusInstant(id, animate)
   const tab = useUi.getState().listTab
   if (tab === 'spans' || (tab === 'favorites' && !inst.favorite)) ui.setListTab('instants')
+}
+
+/**
+ * A tap on one of the Android app's notifications (domain/nativeNotifications liveTapTarget):
+ * the stopwatch's run, a running timer's span, or an alarm's overtime, focused and selected.
+ */
+export function revealLive(kind: NotificationKind, instantId: string) {
+  const { instants, spans } = useEntities.getState()
+  const target = liveTapTarget(kind, instantId, instants, spans, nowTime())
+  if (!target) { focusNow(); return }
+  if ('instantId' in target) { revealInstant(target.instantId); return }
+  focusSpan(target.spanId)
+  view.selectSpan(target.spanId)
 }
 
 /** Free cursor at the given time (keeps zoom). */
@@ -423,13 +438,7 @@ export function resetStopwatch() {
 }
 
 export function setFavorite(id: string, favorite: boolean) {
-  entities.setFavoriteFlag(id, favorite)
-  // Favorites carry a visible span to Now; unfavoriting just hides it.
-  if (favorite) entities.upsertNowSpan(id, true)
-  else {
-    const sp = entities.nowSpanOf(id)
-    if (sp) entities.setSpanVisible(sp.id, false)
-  }
+  entities.setFavorite(id, favorite)
 }
 
 export function toggleFavorite(id: string) {

@@ -1,131 +1,100 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstantRecord } from '../../domain/entities.ts'
-import { alarmNotificationIds } from '../../domain/nativeNotifications.ts'
+import type { InstantRecord, SpanRecord } from '../../domain/entities.ts'
+import type { NativeAlarm } from '../../domain/nativeNotifications.ts'
 import { MINUTE } from '../../domain/time.ts'
 
-// A fake LocalNotifications plugin: what is pending and what is showing.
+// A fake Alarms plugin: the last sync, waiting answers, and the permission.
 const fake = vi.hoisted(() => ({
   permission: 'granted' as string,
-  pending: [] as { id: number; title: string; body: string }[],
-  delivered: [] as { id: number; tag?: string; title: string; body: string }[],
-  scheduled: [] as { id: number; title: string; isExactNotification?: boolean; schedule?: { at?: Date; allowWhileIdle?: boolean }; extra?: { instantId: string }; channelId?: string }[],
+  synced: null as null | { alarms: NativeAlarm[]; ringMs: number; unattended: string; snoozeMinutes: number },
+  actions: [] as unknown[],
   requested: 0,
 }))
 
-vi.mock('@capacitor/local-notifications', () => ({
-  LocalNotifications: {
-    checkPermissions: vi.fn(async () => ({ display: fake.permission })),
-    requestPermissions: vi.fn(async () => { fake.requested++; return { display: fake.permission } }),
-    getPending: vi.fn(async () => ({ notifications: fake.pending })),
-    cancel: vi.fn(async ({ notifications }: { notifications: { id: number }[] }) => {
-      const ids = new Set(notifications.map(n => n.id))
-      fake.pending = fake.pending.filter(n => !ids.has(n.id))
-    }),
-    schedule: vi.fn(async ({ notifications }: { notifications: typeof fake.scheduled }) => {
-      fake.scheduled.push(...notifications)
-      const ids = new Set(notifications.map(n => n.id))
-      fake.pending = [...fake.pending.filter(n => !ids.has(n.id)), ...notifications.map(n => ({ id: n.id, title: n.title, body: '' }))]
-      return { notifications: notifications.map(n => ({ id: n.id })) }
-    }),
-    getDeliveredNotifications: vi.fn(async () => ({ notifications: fake.delivered })),
-    removeDeliveredNotificationsById: vi.fn(async ({ ids }: { ids: number[] }) => {
-      fake.delivered = fake.delivered.filter(n => !ids.includes(n.id))
-    }),
+const status = { notifications: true, alarmChannel: true, exactAlarms: true }
+
+vi.mock('./alarmsPlugin.ts', () => ({
+  Alarms: {
+    checkPermissions: vi.fn(async () => ({ notifications: fake.permission })),
+    requestPermissions: vi.fn(async () => { fake.requested++; return { notifications: fake.permission } }),
+    getStatus: vi.fn(async () => ({ ...status, notifications: fake.permission === 'granted' })),
+    takeActions: vi.fn(async () => { const actions = fake.actions; fake.actions = []; return { actions } }),
+    sync: vi.fn(async (opts: NonNullable<typeof fake.synced>) => { fake.synced = opts; return status }),
   },
 }))
 
 const now = Date.now()
 const inst = (id: string, offsetMs: number, opts: Partial<InstantRecord> = {}): InstantRecord =>
   ({ id, tsEpochMs: now + offsetMs, label: id, ...opts })
+const span = (id: string, a: string, b: string, label = ''): SpanRecord =>
+  ({ id, startInstantId: a, endInstantId: b, label, visible: true, endIsNow: false })
 
-// Fresh module state (what was scheduled) for each test.
-async function load(instants: InstantRecord[]) {
+// Fresh module state for each test.
+async function load(instants: InstantRecord[], spans: SpanRecord[] = []) {
   vi.resetModules()
-  const { useEntities } = await import('../../store/entities.ts')
-  useEntities.setState({ instants, spans: [] })
+  const { useEntities, entities } = await import('../../store/entities.ts')
+  useEntities.setState({ instants, spans })
+  const { useAlarms } = await import('../../store/alarms.ts')
+  useAlarms.setState({ ringing: [], autoDismissMs: 5 * MINUTE, unattended: 'dismiss' })
+  const { useShell } = await import('../../store/shell.ts')
   const { syncAlarms } = await import('./alarmSync.ts')
-  const sync = (exact = true) => syncAlarms(async () => exact)
-  return { useEntities, sync }
+  return { useEntities, entities, useShell, syncAlarms }
 }
 
 beforeEach(() => {
   fake.permission = 'granted'
-  fake.pending = []
-  fake.delivered = []
-  fake.scheduled = []
+  fake.synced = null
+  fake.actions = []
   fake.requested = 0
 })
 
 describe('syncAlarms', () => {
-  it('schedules future alarms exactly, allowed while idle, on the alarms channel', async () => {
-    const { sync } = await load([inst('tea', 5 * MINUTE, { alarm: true }), inst('plain', 5 * MINUTE), inst('past', -MINUTE, { alarm: true })])
-    await sync()
-    expect(fake.scheduled).toHaveLength(1)
-    expect(fake.scheduled[0]).toMatchObject({
-      title: 'tea', channelId: 'alarms', isExactNotification: true,
-      schedule: { at: new Date(now + 5 * MINUTE), allowWhileIdle: true }, extra: { instantId: 'tea' },
-    })
+  it('hands the native side the alarms and the ring settings, and records what Android allows', async () => {
+    const { syncAlarms, useShell } = await load([inst('tea', 5 * MINUTE, { alarm: true }), inst('plain', 5 * MINUTE)])
+    await syncAlarms()
+    expect(fake.synced).toMatchObject({ ringMs: 5 * MINUTE, unattended: 'dismiss', snoozeMinutes: 5 })
+    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual(['tea'])
+    expect(useShell.getState().status).toEqual(status)
   })
 
-  it('never asks for permission, and schedules nothing without it', async () => {
+  it('never asks for permission, and syncs nothing without it', async () => {
     fake.permission = 'prompt'
-    const { sync } = await load([inst('tea', 5 * MINUTE, { alarm: true })])
-    await sync()
+    const { syncAlarms, useShell } = await load([inst('tea', 5 * MINUTE, { alarm: true })])
+    await syncAlarms()
     expect(fake.requested).toBe(0)
-    expect(fake.scheduled).toEqual([])
+    expect(fake.synced).toBeNull()
+    expect(useShell.getState().status?.notifications).toBe(false)
   })
 
-  it('replaces whatever an earlier page left pending, then only changes what changed', async () => {
-    fake.pending = [{ id: 42, title: 'old', body: '' }]
-    const { sync, useEntities } = await load([inst('a', 5 * MINUTE, { alarm: true }), inst('b', 9 * MINUTE, { alarm: true })])
-    await sync()
-    expect(fake.pending.map(n => n.title).sort()).toEqual(['a', 'b'])
-
-    fake.scheduled = []
-    useEntities.setState(s => ({ instants: s.instants.map(i => (i.id === 'a' ? { ...i, tsEpochMs: now + 7 * MINUTE } : i)) }))
-    await sync()
-    expect(fake.scheduled.map(n => n.title)).toEqual(['a'])
-    expect(fake.pending.map(n => n.title).sort()).toEqual(['a', 'b'])
-
-    fake.scheduled = []
-    await sync()
-    expect(fake.scheduled).toEqual([])
+  it('replays a Dismiss from the notification before syncing, and a timer’s end stops being a favorite', async () => {
+    fake.actions = [{ type: 'dismiss', instantId: 'end', t: now }]
+    const { syncAlarms, entities } = await load(
+      [inst('start', -2 * MINUTE), inst('end', -MINUTE, { alarm: true, favorite: true })],
+      [span('timer', 'start', 'end', '1m timer'), { id: 'endNow', startInstantId: 'end', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }],
+    )
+    await syncAlarms()
+    expect(entities.getInstant('end')).toMatchObject({ alarm: false, favorite: false })
+    expect(entities.getSpan('endNow')?.visible).toBe(false)
+    expect(fake.synced?.alarms).toEqual([])
   })
 
-  it('cancels an alarm that was turned off or deleted', async () => {
-    const { sync, useEntities } = await load([inst('a', 5 * MINUTE, { alarm: true }), inst('b', 9 * MINUTE, { alarm: true })])
-    await sync()
-    useEntities.setState(s => ({ instants: s.instants.filter(i => i.id !== 'a').map(i => ({ ...i, alarm: false })) }))
-    await sync()
-    expect(fake.pending).toEqual([])
-  })
-
-  it('takes answered alarms out of the shade, and leaves ringing ones and live notifications', async () => {
-    const ringing = inst('ringing', -MINUTE, { alarm: true })
-    const answered = inst('answered', -MINUTE)
-    const ids = alarmNotificationIds([ringing, { ...answered, alarm: true }])
-    fake.delivered = [
-      { id: ids.get('ringing')!, title: 'ringing', body: '' },
-      { id: ids.get('answered')!, title: 'answered', body: '' },
-      { id: 7, tag: 'tc-live', title: 'Stopwatch', body: '' },
-    ]
-    const { sync } = await load([ringing, answered])
-    await sync()
-    expect(fake.delivered.map(n => n.title)).toEqual(['ringing', 'Stopwatch'])
-  })
-
-  it('asks only for inexact alarms when exact ones are not allowed', async () => {
-    const { sync } = await load([inst('tea', 5 * MINUTE, { alarm: true })])
-    await sync(false)
-    expect(fake.scheduled[0].isExactNotification).toBe(false)
+  it('replays a Snooze at the time the notification chose', async () => {
+    const at = now + 4 * MINUTE
+    fake.actions = [{ type: 'snooze', instantId: 'wake', at }]
+    const { syncAlarms, useEntities } = await load([inst('wake', -MINUTE, { alarm: true, label: 'Wake up' })])
+    await syncAlarms()
+    const snoozed = useEntities.getState().instants.find(i => i.snoozeOriginalId === 'wake')
+    expect(snoozed).toMatchObject({ tsEpochMs: at, label: 'Snooze 1: Wake up', alarm: true })
+    expect(useEntities.getState().instants.find(i => i.id === 'wake')?.alarm).toBe(false)
+    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([snoozed?.id])
   })
 
   it('runs overlapping calls one after another, the last one seeing the latest state', async () => {
-    const { sync, useEntities } = await load([inst('a', 5 * MINUTE, { alarm: true })])
-    const first = sync()
+    const { syncAlarms, useEntities } = await load([inst('a', 5 * MINUTE, { alarm: true })])
+    const first = syncAlarms()
     useEntities.setState(s => ({ instants: [...s.instants, inst('b', 6 * MINUTE, { alarm: true })] }))
-    const second = sync()
+    const second = syncAlarms()
     await Promise.all([first, second])
-    expect(fake.pending.map(n => n.title).sort()).toEqual(['a', 'b'])
+    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual(['a', 'b'])
   })
 })

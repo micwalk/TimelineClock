@@ -20,10 +20,6 @@ const config: CapacitorConfig = {
     SystemBars: {
       style: 'DARK',
     },
-    LocalNotifications: {
-      smallIcon: 'ic_stat_timeline',
-      iconColor: '#ff3b5c',
-    },
   },
 }
 

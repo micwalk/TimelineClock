@@ -1,13 +1,15 @@
-// The Android app's side of the page (loaded only inside it, by services/nativeShell): alarm
-// notifications, live timer/stopwatch notifications, notification taps, and the shell's
-// version. Each part fails on its own, so one problem can't stop the others.
+// The Android app's side of the page (loaded only inside it, by services/nativeShell): native
+// alarms, live timer/stopwatch notifications, notification taps, and the shell's version.
+// Each part fails on its own, so one problem can't stop the others.
 import { App } from '@capacitor/app'
-import { LocalNotifications } from '@capacitor/local-notifications'
-import { revealInstant } from '../../store/actions.ts'
+import type { NotificationKind } from '../../domain/nativeNotifications.ts'
+import { revealLive } from '../../store/actions.ts'
+import { useAlarms } from '../../store/alarms.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useQuick } from '../../store/quick.ts'
 import { useShell } from '../../store/shell.ts'
 import { syncAlarms } from './alarmSync.ts'
+import { Alarms } from './alarmsPlugin.ts'
 import { LiveNotifications } from './liveNotificationsPlugin.ts'
 import { syncLive } from './liveSync.ts'
 
@@ -19,16 +21,8 @@ let debounce: ReturnType<typeof setTimeout> | null = null
 
 const warn = (what: string) => (err: unknown) => console.warn(`[Native] ${what} failed`, err)
 
-async function refreshStatus() {
-  const { notifications, alarmChannel, exactAlarms, liveUpdates } = await LiveNotifications.getStatus()
-  useShell.setState({ status: { notifications, alarmChannel, exactAlarms, liveUpdates } })
-  return exactAlarms
-}
-
-const exactAllowed = () => refreshStatus().catch(() => true)
-
 function syncAll(force = false) {
-  void syncAlarms(exactAllowed)
+  void syncAlarms()
   void syncLive(force)
 }
 
@@ -37,15 +31,12 @@ function syncSoon() {
   debounce = setTimeout(() => { debounce = null; syncAll() }, DEBOUNCE_MS)
 }
 
-function reveal(instantId: unknown) {
-  if (typeof instantId === 'string' && instantId) revealInstant(instantId)
-}
+const KINDS: readonly NotificationKind[] = ['countdown', 'stopwatch', 'alarm']
 
 /** Asks for notification permission (from a tap, or once on the first start), then syncs. */
 export async function requestNotificationPermission() {
-  const { display } = await LocalNotifications.requestPermissions()
-  if (display === 'granted') syncAll(true)
-  await refreshStatus().catch(warn('Status'))
+  await Alarms.requestPermissions()
+  syncAll(true)
 }
 
 export function startNativeApp() {
@@ -56,16 +47,18 @@ export function startNativeApp() {
     .then(info => useShell.setState({ shellVersion: info.version }))
     .catch(warn('App info'))
 
-  // Taps go to the alarm's (or the timer's, or the stopwatch's) instant. Both plugins keep a
-  // tap that started the app until these listeners are added.
-  LocalNotifications.addListener('localNotificationActionPerformed', action => {
-    const extra: unknown = action.notification.extra
-    reveal(extra && typeof extra === 'object' ? (extra as { instantId?: unknown }).instantId : undefined)
-  }).catch(warn('Alarm tap listener'))
-  LiveNotifications.addListener('liveNotificationTapped', data => reveal(data.instantId)).catch(warn('Live tap listener'))
+  // A tap goes to the stopwatch's run, a running timer's span, or an alarm's overtime. The
+  // plugin keeps a tap that started the app until this listener is added.
+  LiveNotifications.addListener('notificationTapped', ({ instantId, kind }) => {
+    if (typeof instantId !== 'string' || !instantId) return
+    revealLive(KINDS.find(k => k === kind) ?? 'alarm', instantId)
+  }).catch(warn('Tap listener'))
+  // Dismiss / Snooze on a notification while the page runs: replay it now.
+  Alarms.addListener('actions', () => void syncAlarms()).catch(warn('Alarm answer listener'))
 
   useEntities.subscribe((s, prev) => { if (s.instants !== prev.instants || s.spans !== prev.spans) syncSoon() })
   useQuick.subscribe((s, prev) => { if (s.stopwatch !== prev.stopwatch) syncSoon() })
+  useAlarms.subscribe((s, prev) => { if (s.autoDismissMs !== prev.autoDismissMs || s.unattended !== prev.unattended) syncSoon() })
   App.addListener('resume', () => syncAll(true)).catch(warn('Resume listener'))
   // Leaving the app: don't wait out the debounce.
   document.addEventListener('visibilitychange', () => {
@@ -74,7 +67,7 @@ export function startNativeApp() {
 
   // The app exists to ring in the background, so it asks for notifications on its first
   // start. Once answered, only a bell or timer tap asks again (primeNotifications).
-  LocalNotifications.checkPermissions()
-    .then(({ display }) => (display === 'prompt' ? requestNotificationPermission() : syncAll(true)))
+  Alarms.checkPermissions()
+    .then(({ notifications }) => (notifications === 'prompt' ? requestNotificationPermission() : syncAll(true)))
     .catch(warn('Notification permission check'))
 }

@@ -14,7 +14,7 @@ import android.util.Log;
  */
 final class NotificationChannels {
 
-    /** Alarmed instants (timers and bells), posted by the LocalNotifications plugin (src/services/native). */
+    /** Ringing alarms (timers and bells), posted by Alarms.java. */
     static final String ALARMS = "alarms";
     /** The running timer and stopwatch: ongoing and silent (LiveNotificationsPlugin). */
     static final String LIVE = "live";

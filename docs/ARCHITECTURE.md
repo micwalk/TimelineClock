@@ -88,7 +88,7 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 | `useSettings`    | `timeline.settings.v1`  | Glow, tunables (Settings > Advanced), favorite lanes, layout version for one-time migrations (store/migrations.ts). |
 | `useUi`          | (not persisted)         | Agenda tab, `agendaOpen` (the drawer), open time-entry popover, `tagMenu` (which live tag's tools menu is open). Both popovers close when the orientation changes. |
 | `useLayout`      | (not persisted)         | Resolved layout, see below. |
-| `useShell`       | (not persisted)         | Inside the Android app: its version and what Android allows (notifications, exact alarms, Live Updates), for Settings. |
+| `useShell`       | (not persisted)         | Inside the Android app: its version and what Android allows (notifications, alarm sound, exact alarms), for Settings. |
 
 Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an offset
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans
@@ -186,19 +186,25 @@ chunk; browsers never fetch it). On start, on resume and on every entity change 
 it brings Android in line with the entities, using pure decisions from
 `domain/nativeNotifications`:
 
-- **Alarm notifications** (`native/alarmSync`): every future alarmed instant is an exact,
-  allowed-while-idle notification on the "alarms" channel (`@capacitor/local-notifications`).
-  Ids are stable 31-bit hashes of instant ids. Moved, renamed, turned-off or deleted alarms
-  are rescheduled or cancelled; a delivered notification leaves the shade once its alarm is
-  answered in the app. It never prompts: permission is asked on the app's first start and on
-  bell/timer taps (`primeNotifications`).
-- **Live notifications** (`native/liveSync`, the app's own `LiveNotificationsPlugin`): a
-  countdown for each future alarmed instant ending a saved span that has started (a timer),
-  and a count-up for the running stopwatch. Android's chronometer draws the time and a
-  countdown times out by itself, so they stay right while the page is frozen.
-- Taps on either kind go to the instant (`revealInstant`), including a tap that starts the app.
+- **Alarms** (`native/alarmSync`, the app's `AlarmsPlugin`): each sync first replays the
+  answers given from notifications while the page wasn't running (`replayAlarmActions`:
+  dismiss, or snooze at the time the notification chose), then hands the native side every
+  alarmed instant that is ahead or still within its ring time. The native side schedules them
+  (`setAlarmClock`), rings them as an insistent notification with Dismiss / Snooze (replacing a
+  timer's countdown), and stops what the page dropped. Ids are stable 31-bit hashes of instant
+  ids. It never prompts: permission is asked on the app's first start and on bell/timer taps
+  (`primeNotifications`).
+- **Live notifications** (`native/liveSync`, `LiveNotificationsPlugin`): a countdown for each
+  future alarmed instant that ends a timer (`timerSpanFor`: a saved span that has started),
+  and a count-up for the running stopwatch, the time big and bold. Android's chronometer draws
+  it, so it stays right while the page is frozen.
+- Taps go where `liveTapTarget` says: the stopwatch's span to Now, a running timer's span, or
+  an alarm's overtime (its span to Now), focused and selected (`act.revealLive`), including a
+  tap that starts the app.
 
-The in-app scheduler runs unchanged inside the app and rings whenever the page is running.
+Inside the app the in-app scheduler still rings (the ringing panel), but the notification
+makes the sound, so Dismiss / Snooze in either place stops it. Dismissing a timer's alarm also
+unfavorites its end.
 
 ## Testing
 

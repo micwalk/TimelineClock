@@ -1,14 +1,14 @@
-// The app's own native plugin (android/app/src/main/java/com/micwalk/timelineclock/LiveNotificationsPlugin.java).
+// The app's live notifications (android/app/src/main/java/com/micwalk/timelineclock/LiveNotificationsPlugin.java).
 import { registerPlugin } from '@capacitor/core'
 import type { PluginListenerHandle } from '@capacitor/core'
-import type { LiveNotification, ShellStatus } from '../../domain/nativeNotifications.ts'
+import type { LiveNotification } from '../../domain/nativeNotifications.ts'
 
 export interface LiveNotificationsPlugin {
   /** Shows exactly these live notifications (posts, updates, removes the rest). */
-  sync(options: { items: LiveNotification[] }): Promise<ShellStatus & { posted: number }>
+  sync(options: { items: LiveNotification[] }): Promise<{ posted: number }>
   cancelAll(): Promise<void>
-  getStatus(): Promise<ShellStatus>
-  addListener(eventName: 'liveNotificationTapped', listener: (data: { instantId: string }) => void): Promise<PluginListenerHandle>
+  /** A tap on any of the app's notifications (kind: "countdown", "stopwatch" or "alarm"). */
+  addListener(eventName: 'notificationTapped', listener: (data: { instantId: string; kind?: string }) => void): Promise<PluginListenerHandle>
 }
 
 export const LiveNotifications = registerPlugin<LiveNotificationsPlugin>('LiveNotifications')
