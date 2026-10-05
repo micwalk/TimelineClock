@@ -26,6 +26,11 @@ if (!signingMissing.isEmpty() && signingMissing.size() != signingEnv.size()) {
 }
 def hasReleaseKey = signingMissing.isEmpty()
 
+// `-PtcPreview`: the "TC Preview" app for testing a pull request before it reaches main. A
+// separate app (its own id and data) that asks which Netlify deploy preview to load, instead
+// of the live site (SiteChoice.java, docs/android.md).
+def preview = project.hasProperty('tcPreview')
+
 android {
     namespace = "com.micwalk.timelineclock"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -35,12 +40,23 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
         versionName appVersion
+        manifestPlaceholders = [appLabel: 'Timeline Clock']
+        buildConfigField 'boolean', 'PREVIEW', 'false'
+        if (preview) {
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-preview'
+            manifestPlaceholders = [appLabel: 'TC Preview']
+            buildConfigField 'boolean', 'PREVIEW', 'true'
+        }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+    }
+    buildFeatures {
+        buildConfig = true
     }
     signingConfigs {
         if (hasReleaseKey) {

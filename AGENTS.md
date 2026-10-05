@@ -90,6 +90,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - Each entry says whether the Android app needs installing again: yes when anything native changes (android/, capacitor.config.ts, android-offline/, a Capacitor plugin), else "web only". Web changes reach the app by themselves.
 - Merging a new version to main makes the Android app workflow (.github/workflows/android.yml) publish GitHub Release v<version> with a signed APK. Signing comes only from repository secrets: never commit a key, keystore or password (the repo is public).
 - The app runs whatever Netlify serves from main, so web code the native side needs must ship first or together.
+- To try a pull request on the phone before merging: TC Preview (docs/android.md#testing-a-pull-request-tc-preview), a separate app published as the "preview" pre-release for PRs that change native code; it loads the PR's Netlify deploy preview, chosen by PR number in the app.
 
 ## File Organization
 - `/src/domain/` - Pure logic: time math, ticks, spans, navigation, alarms (with tests)

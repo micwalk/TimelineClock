@@ -1,0 +1,74 @@
+# Shared by the jobs in .github/workflows/android.yml: toolchains, dependencies, the Capacitor
+# sync, and the signing key from the repository secrets (passed in as inputs; never committed).
+name: Android build setup
+description: Node, JDK 21, Gradle, npm ci, cap sync, and the release signing key if given.
+
+inputs:
+  keystore-base64:
+    description: secrets.ANDROID_KEYSTORE_BASE64
+    required: false
+    default: ''
+  keystore-password:
+    description: secrets.ANDROID_KEYSTORE_PASSWORD
+    required: false
+    default: ''
+  key-alias:
+    description: secrets.ANDROID_KEY_ALIAS
+    required: false
+    default: ''
+  key-password:
+    description: secrets.ANDROID_KEY_PASSWORD
+    required: false
+    default: ''
+
+outputs:
+  signed:
+    description: "'true' when the signing key was set up"
+    value: ${{ steps.key.outputs.signed }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+
+    - uses: gradle/actions/setup-gradle@v4
+
+    - name: Install
+      shell: bash
+      run: npm ci
+
+    - name: Copy the Capacitor config and plugins into the Android project
+      shell: bash
+      run: npx cap sync android
+
+    - name: Signing key (from secrets, if set)
+      id: key
+      shell: bash
+      env:
+        KEYSTORE_BASE64: ${{ inputs.keystore-base64 }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        KEY_ALIAS: ${{ inputs.key-alias }}
+        KEY_PASSWORD: ${{ inputs.key-password }}
+      run: |
+        if [ -z "$KEYSTORE_BASE64" ]; then
+          echo "::warning::No signing secrets: building an unsigned APK (it can't be installed). See docs/android.md."
+          echo "signed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        keystore="$RUNNER_TEMP/release.keystore"
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+        {
+          echo "TC_SIGNING_KEYSTORE=$keystore"
+          echo "TC_SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+          echo "TC_SIGNING_KEY_ALIAS=$KEY_ALIAS"
+          echo "TC_SIGNING_KEY_PASSWORD=$KEY_PASSWORD"
+        } >> "$GITHUB_ENV"
+        echo "signed=true" >> "$GITHUB_OUTPUT"

@@ -48,12 +48,19 @@ keytool -genkeypair -v -storetype PKCS12 -keystore timelineclock-release.jks \
 
 It asks for a password twice. Pick a strong one and save it in your password manager.
 
-### 2. Back it up
+### 2. Back it up (optional, but easy now)
 
-Save `timelineclock-release.jks` **and** its password somewhere safe (a password manager
-that takes files, or a private cloud folder). If the key is lost, future builds can't
-update the installed app; you would export your data, uninstall, install the new build and
-import (see "If you ever lose the key").
+GitHub never shows a secret again, so the secrets are not a backup. You don't need the file
+day to day either: every build signs with the secret for as long as it exists. A backup only
+matters if the secret is ever lost (deleted, or the repository moved). So, if it's handy, save
+`timelineclock-release.jks` **and** its password in a password manager that takes files; if
+not, delete the file once the secrets are in. Without a backup, losing the secret costs a new
+key and a reinstall, not your data (see "If you ever lose the key").
+
+Use a password made just for this key (a password manager can generate one), not one you use
+anywhere else. To check you typed it right, copy it from the password manager and run
+`keytool -list -keystore timelineclock-release.jks -storepass "$(pbpaste)"` (macOS): it lists
+the `timelineclock` entry, or says the password was incorrect.
 
 ### 3. Add the four secrets to GitHub
 
@@ -193,6 +200,30 @@ Then put the new key in the secrets (steps 1–3 above).
 
 ---
 
+## Testing a pull request (TC Preview)
+
+The real app loads the live site, built from `main`. To try a pull request on the phone
+before merging, use **TC Preview**: a separate test app that loads a PR's Netlify deploy
+preview instead (`https://deploy-preview-<PR number>--timelineclockapp.netlify.app`, which
+Netlify builds for every pull request).
+
+- **Get it** from the **preview** pre-release: on the phone, open
+  https://github.com/micwalk/TimelineClock/releases/download/preview/timeline-clock-preview.apk
+  and install it like the real app. CI publishes it for pull requests that change the native
+  side, signed with the same key; each build replaces the last one, at the same link.
+  (Actions › Android app › Run workflow with **preview** ticked builds one from any branch.)
+- **Pick the PR**: on its first start it asks *Which preview?*. Type the pull request's
+  number (or paste a preview address) and tap **Open**; it remembers it. To switch, long-press
+  the app icon › **Change preview**. If the preview can't be loaded (wrong number, or Netlify
+  is still building it), it asks again. **Live site** loads the live site instead.
+- It is its own app (`com.micwalk.timelineclock.preview`, version `x.y.z-preview`): it
+  installs next to Timeline Clock, never replaces it, and has its own data, separate for each
+  preview address. Use throwaway test timers there. Its notifications and Settings checklist
+  work like the real app's.
+- A PR's **web** changes reach TC Preview through its deploy preview on every push; only
+  **native** changes need a new build of TC Preview.
+- Uninstall it when you're done; nothing else depends on it.
+
 ## For developers
 
 - `capacitor.config.ts`: the shell (app id `com.micwalk.timelineclock`, permanent once
@@ -217,7 +248,12 @@ Then put the new key in the secrets (steps 1–3 above).
   while-idle alarms fire at most about once every 9 minutes, which only matters for alarms
   minutes apart while the phone sleeps.
 - Build locally: JDK 21 and the Android SDK (platform 36), then
-  `npx cap sync android && cd android && ./gradlew assembleRelease`. CI:
-  `.github/workflows/android.yml`.
+  `npx cap sync android && cd android && ./gradlew assembleRelease` (add `-PtcPreview` for TC
+  Preview; `:app:testReleaseUnitTest` runs the native unit tests). CI:
+  `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`.
+- TC Preview (`-PtcPreview`): `applicationIdSuffix ".preview"`, label "TC Preview",
+  `BuildConfig.PREVIEW`. `SiteChoice.java` saves the chosen address and starts the bridge with
+  the bundled config's `server.url` swapped for it; `SiteAddress.java` (unit tested) accepts
+  only the live site and its Netlify deploys (`<name>--timelineclockapp.netlify.app`).
 - **Merge order:** the app runs whatever Netlify serves from `main`, so web code the native
   side depends on must be deployed before (or with) the APK that needs it.

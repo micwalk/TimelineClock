@@ -1,4 +1,6 @@
 # Builds the Android app (docs/android.md) and, on main, publishes it as a GitHub Release.
+# On pull requests it also publishes "TC Preview", a separate test app that loads a PR's
+# Netlify deploy preview, as the "preview" pre-release.
 #
 # Signing: the key lives only in repository secrets (Settings > Secrets and variables >
 # Actions), never in the repo:
@@ -21,6 +23,7 @@ on:
       - 'package-lock.json'
       - 'CHANGELOG.md'
       - '.github/workflows/android.yml'
+      - '.github/actions/android-setup/**'
   pull_request:
     paths:
       - 'android/**'
@@ -29,8 +32,15 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android.yml'
-  # Actions > Android app > Run workflow: e.g. on main after adding the signing secrets.
+      - '.github/actions/android-setup/**'
+  # Actions > Android app > Run workflow: e.g. on main after adding the signing secrets, or
+  # on a branch to publish its TC Preview app.
   workflow_dispatch:
+    inputs:
+      preview:
+        description: Also publish this branch's TC Preview app (the "preview" pre-release)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,47 +60,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/android-setup
         with:
-          node-version: 22
-          cache: npm
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Install
-        run: npm ci
-
-      - name: Copy the Capacitor config and plugins into the Android project
-        run: npx cap sync android
-
-      - name: Signing key (from secrets, if set)
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::No signing secrets: building an unsigned APK (it can't be installed). See docs/android.md."
-            exit 0
-          fi
-          keystore="$RUNNER_TEMP/release.keystore"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
-          {
-            echo "TC_SIGNING_KEYSTORE=$keystore"
-            echo "TC_SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD"
-            echo "TC_SIGNING_KEY_ALIAS=$KEY_ALIAS"
-            echo "TC_SIGNING_KEY_PASSWORD=$KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
-
-      - name: Build and lint
+      - name: Build, test and lint
         working-directory: android
-        run: ./gradlew assembleRelease :app:lintRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease :app:testReleaseUnitTest :app:lintRelease --no-daemon --stacktrace
 
       - name: Lint report
         if: failure()
@@ -186,3 +165,70 @@ jobs:
             echo '```'
           } >> notes.md
           gh release create "v$VERSION" "$APK" --target "$GITHUB_SHA" --title "Timeline Clock $VERSION" --notes-file notes.md
+
+  # TC Preview (docs/android.md): a separate app ("com.micwalk.timelineclock.preview") that
+  # asks which pull request's Netlify deploy preview to load, so a PR can be tried on the
+  # phone before it reaches main. Published as the "preview" pre-release (never "latest"),
+  # replaced by each build, at a download link that stays the same. Same-repo pull requests
+  # only: forks get no secrets.
+  preview:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+      || (github.event_name == 'workflow_dispatch' && inputs.preview)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    concurrency:
+      group: android-preview-release
+      cancel-in-progress: false
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      BRANCH: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
+
+      - uses: ./.github/actions/android-setup
+        id: setup
+        with:
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Needs the signing key
+        if: steps.setup.outputs.signed != 'true'
+        run: |
+          echo "::error::TC Preview is only published signed: add the signing secrets (docs/android.md)."
+          exit 1
+
+      - name: Build TC Preview
+        working-directory: android
+        run: ./gradlew assembleRelease -PtcPreview --no-daemon --stacktrace
+
+      - name: Publish the "preview" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=timeline-clock-preview.apk
+          if [ -n "$PR_NUMBER" ]; then source="PR #$PR_NUMBER ($BRANCH)"; else source="$BRANCH"; fi
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$apksigner" verify --print-certs "$apk" | tee signing.txt
+          {
+            echo "**TC Preview**: a separate test app for trying a pull request on the phone before it reaches main. It installs next to Timeline Clock (its own data), and asks which PR's Netlify deploy preview to load; long-press its icon › **Change preview** to switch."
+            echo
+            echo "Built from $source at \`${HEAD_SHA:0:7}\`. Only native changes need a new build of this app; a PR's web changes show up in its deploy preview by themselves."
+            echo
+            echo "See [docs/android.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/android.md#testing-a-pull-request-tc-preview)."
+            echo
+            echo '```'
+            grep -i "SHA-256" signing.txt || true
+            echo '```'
+          } > notes.md
+          # Replace the previous one; the tag (and so the download link) keeps its name.
+          gh release delete preview --cleanup-tag --yes 2>/dev/null || true
+          gh release create preview "$apk" --prerelease --target "$HEAD_SHA" --title "TC Preview (test app)" --notes-file notes.md

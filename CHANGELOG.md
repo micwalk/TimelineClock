@@ -19,6 +19,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - A running timer counts down, and a running stopwatch counts up, in an ongoing notification
   on the lock screen and in the shade, promoted to a Live Update (status-bar chip) where
   Android allows.
+- TC Preview: a separate test app, published for pull requests, that loads a PR's Netlify
+  deploy preview (picked by PR number in the app), to try changes on the phone before merging.
 - Version numbers: Help and Settings show the version ("Web 0.1.0 · Android app 0.1.0"
   inside the Android app). Settings in the Android app also lists what Android allows
   (notifications, alarm sound, exact alarms, Live Updates).
