@@ -7,6 +7,8 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { layoutNowFlags } from '../../domain/nowFlags.ts'
+import type { LabelGroup } from '../../domain/labelGroups.ts'
+import { groupTrackLabels } from '../../domain/labelGroups.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
 import type { SavedLayout } from './savedLayout.ts'
 import { CHIP_HEIGHT, CLUSTER_WIDTH, chipToolsExtent, estimateChipWidth, savedLayoutAt } from './savedLayout.ts'
@@ -23,6 +25,8 @@ const LANE_CHIP_SIZE = 32
 const LANE_TOOLS_SIZE = 36
 /** A flag's width before it has been measured, px. */
 const FLAG_WIDTH_GUESS = 150
+/** An "N spans" box's width before it has been measured, px. */
+const GROUP_FLAG_WIDTH_GUESS = 80
 /** Lanes sit this far in from the right edge (matches .tl-lane in vertical). */
 const LANE_EDGE = 12
 /** Gap between a lane's bar and its chip (matches .tl-lane__chip-wrap in vertical). */
@@ -98,6 +102,11 @@ export function observeFlag(key: string, el: HTMLElement): () => void {
   }
 }
 
+/** A lane chip's measured width, if it has been measured. */
+export const laneChipWidth = (key: string): number | undefined => chipWidths.get(key)
+/** Changes whenever a measured width changes (for per-frame caches). */
+export const laneChipWidthsVersion = (): number => version
+
 /** SpanLane registers its chip so the layout knows how wide it is; returns the cleanup. */
 export function observeLaneChip(key: string, el: HTMLElement): () => void {
   observed.set(el, key)
@@ -125,6 +134,8 @@ export interface RightSideInputs {
 export interface RightSidePlacement {
   /** Lane key → center of its chip along the time axis, px (saved-side and live lanes). */
   chips: Record<string, number>
+  /** Labels on one bar that would crowd it, folded into one "N spans" box (its key is in `flags`). */
+  flagGroups: LabelGroup[]
   /** Lane key → center of its flag, px. */
   flags: Record<string, number>
 }
@@ -139,7 +150,7 @@ export function setRightSideInputs(next: RightSideInputs) {
   version++
 }
 
-const EMPTY: RightSidePlacement = { chips: {}, flags: {} }
+const EMPTY: RightSidePlacement = { chips: {}, flags: {}, flagGroups: [] }
 
 /** Lanes that draw a chip with tools on the saved side (vertical). */
 const chipLane = (lane: BottomLane, selectedSpanId: string | null) =>
@@ -187,7 +198,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   const chipItems: FlagItem[] = []
   const liveItems: FlagItem[] = []
   const running: FlagItem[] = []
-  const others: FlagItem[] = []
+  const others: (FlagItem & { track: number })[] = []
   for (const lane of c.lanes) {
     const pa = f.pos(resolveTimeRef(lane.a, f.now, f.center))
     const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
@@ -211,7 +222,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     const flagWidth = flagWidths.get(lane.key) || FLAG_WIDTH_GUESS
     const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - flagWidth, xhi: laneX }
     if (containsNow) running.push(item)
-    else others.push({ ...item, prefer: g.mid })
+    else others.push({ ...item, prefer: g.mid, track: lane.index })
   }
 
   // Lane chips (with their tools) first: they are what you're working with. Lane chips draw
@@ -245,8 +256,18 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, [...chipBoxes, ...onTop, ...tags], { escape: true })
   Object.assign(chips, live)
   // Then flags at Now (nearest Now), then the other labels, clear of chips and each other.
-  const flags = layoutNowFlags([...running, ...others], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes], { escape: true })
-  const result = { chips, flags }
+  // Labels on one bar (spans sharing a lane, like laps) that would touch fold into one box first.
+  const folded = groupTrackLabels(others.map(o => ({ key: o.key, track: o.track, want: o.prefer ?? (o.lo + o.hi) / 2, size: FLAG_SIZE })), { gap: GAP, groupSize: FLAG_SIZE })
+  const byKey = new Map(others.map(o => [o.key, o]))
+  const singles = others.filter(o => o.key in folded.shown).map(o => ({ ...o, prefer: folded.shown[o.key] }))
+  const groupItems: FlagItem[] = folded.groups.map(g => {
+    const ms = g.members.map(k => byKey.get(k)!)
+    const xhi = ms[0].xhi
+    const width = flagWidths.get(g.key) || GROUP_FLAG_WIDTH_GUESS
+    return { key: g.key, prefer: g.center, lo: Math.min(...ms.map(m => m.lo)), hi: Math.max(...ms.map(m => m.hi)), xlo: (xhi ?? 0) - width, xhi }
+  })
+  const flags = layoutNowFlags([...running, ...groupItems, ...singles], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes], { escape: true })
+  const result = { chips, flags, flagGroups: folded.groups }
   cache = { frame: f, version, result }
   return result
 }

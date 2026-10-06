@@ -110,3 +110,20 @@ describe('Timeline tap to deselect', () => {
     expect(useView.getState().currentSelectedInstantId).toBe(b)
   })
 })
+
+describe('crowded span names', () => {
+  it('put spans that follow each other on one lane, their names folded into "N spans" that zooms in', () => {
+    const c = engine.getFrame().center
+    const ids = [0, 1, 2, 3, 4].map(k => entities.createInstant(c + k * 2000, `Lap ${k}`))
+    for (let k = 0; k < 4; k++) entities.createSpan(ids[k], ids[k + 1], `Lap ${k + 1}`, { visible: true })
+    const { container } = render(<Timeline />)
+    const group = screen.getByRole('button', { name: /^4 spans: Lap 1, Lap 2, Lap 3, Lap 4/ })
+    expect(group).toHaveTextContent('4 spans')
+    // One lane for all four: every lane line sits at the same height.
+    const tops = new Set([...container.querySelectorAll<HTMLElement>('.tl-lane--lines')].map(l => l.style.top))
+    expect(tops.size).toBe(1)
+    const before = useView.getState().timeWidth
+    fireEvent.click(group)
+    expect(useView.getState().timeWidth).toBeLessThan(before)
+  })
+})

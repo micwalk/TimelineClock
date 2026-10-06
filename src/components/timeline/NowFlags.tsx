@@ -16,7 +16,10 @@ import { FLAG_SIZE, observeFlag, rightSideLayout, setRightSideInputs } from './r
 import { engine } from '../../engine/viewportEngine.ts'
 import * as act from '../../store/actions.ts'
 import type { BottomLane } from './useBottomLanes.ts'
-import { isLiveLane, savedLaneVariant } from './useBottomLanes.ts'
+import { isLiveLane, laneName, savedLaneVariant } from './useBottomLanes.ts'
+import { useFrameValue } from '../../engine/hooks.ts'
+import { sameLabelGroups } from '../../domain/labelGroups.ts'
+import { resolveTimeRef as resolveRef } from '../../domain/spans.ts'
 
 const NAME_MAX = 10
 
@@ -30,6 +33,9 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   const instants = useEntities(s => s.instants)
   const widths = useChipWidths(s => s.widths)
   const saved = lanes.filter((l): l is SavedLane => l.kind === 'saved' && !isLiveLane(l))
+  // Labels that would crowd a bar fold into "N spans" boxes.
+  const flagGroups = useFrameValue(f => rightSideLayout(f).flagGroups, sameLabelGroups)
+  const byKey = new Map<string, BottomLane>(lanes.map(l => [l.key, l]))
   const refs = useRef(new Map<string, HTMLDivElement>())
   const shown = useRef(new Map<string, number | null>())
   // One stable ref callback per lane, so a re-render doesn't re-observe the box.
@@ -65,12 +71,11 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   useFrameListener(f => {
     if (f.orientation !== 'vertical') return
     const placed = rightSideLayout(f).flags
-    for (const lane of saved) {
-      const el = refs.current.get(lane.key)
-      if (!el) continue
-      const y = placed[lane.key] ?? null
-      if (shown.current.get(lane.key) === y) continue
-      shown.current.set(lane.key, y)
+    // Each lane's box, and each "N spans" box standing in for several.
+    for (const [key, el] of refs.current) {
+      const y = placed[key] ?? null
+      if (shown.current.get(key) === y) continue
+      shown.current.set(key, y)
       el.style.display = y === null ? 'none' : ''
       if (y !== null) el.style.transform = `translate3d(-100%, ${y - FLAG_SIZE / 2}px, 0)`
     }
@@ -102,6 +107,33 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
                 ? formatDurationHMS(end(f) - f.now)
                 : formatLiveSpan(end(f) - start(f), 1 / f.pxPerMs))} />
               <LiveText className="tl-nowflag__total mono" compute={f => (start(f) <= f.now && f.now <= end(f) ? `/${formatDurationShort(end(f) - start(f))}` : '')} />
+            </div>
+          </div>
+        )
+      })}
+      {flagGroups.map(g => {
+        const members = g.members.map(k => byKey.get(k)).filter((l): l is BottomLane => !!l)
+        if (members.length < 2) return null
+        const label = `${members.length} spans: ${members.map(laneName).join(', ')}`
+        const zoom = () => {
+          const now = act.nowTime()
+          const center = act.cursorTime()
+          act.zoomToTimes(members.flatMap(l => [resolveRef(l.a, now, center), resolveRef(l.b, now, center)]))
+        }
+        return (
+          <div key={g.key} className="tl-lane tl-lane--span tl-lane--labels tl-nowflag-lane" style={{ '--i': g.track } as CSSProperties}>
+            <div
+              ref={refFor(g.key)}
+              className="tl-nowflag tl-nowflag--group glow-text"
+              style={{ display: 'none', height: FLAG_SIZE }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${label}. Zoom in to show them`}
+              title={label}
+              onClick={zoom}
+              onKeyDown={e => { if (e.key === 'Enter') zoom() }}
+            >
+              <span className="tl-nowflag__left">{members.length} spans</span>
             </div>
           </div>
         )

@@ -1,5 +1,5 @@
 // Span lanes below the timeline: implied spans for the selection, then saved spans (the focused one first).
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -18,6 +18,8 @@ import { SpanLane } from './SpanLane.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls, liveLaneVariant, savedLaneVariant } from './useBottomLanes.ts'
+import { setLaneChipInputs } from './laneChipLayout.ts'
+import { engine } from '../../engine/viewportEngine.ts'
 
 // ---------------------------------------------------------------------------
 // Shared bits
@@ -223,6 +225,11 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
 export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
   const selectedSpanId = useView(s => s.selectedSpanId)
   const laneTools = useUi(s => s.laneTools)
+  // Horizontal: the chips' shared layout (which fold into "N spans") reads the placed lanes.
+  useLayoutEffect(() => {
+    setLaneChipInputs({ lanes, selectedSpanId })
+    engine.requestFrame()
+  }, [lanes, selectedSpanId])
   return (
     <>
       {lanes.map(lane => {

@@ -5,7 +5,8 @@ import { shallowArrayEqual, useFrameValue } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { resolveSpan, resolveTimeRef, savedSpanLanes, spanGeometry } from '../../domain/spans.ts'
+import { endpointName, resolveSpan, resolveTimeRef, savedSpanLanes, spanEndName, spanGeometry, spanHeader } from '../../domain/spans.ts'
+import { displayName } from '../../domain/entities.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { useQuick } from '../../store/quick.ts'
@@ -13,7 +14,7 @@ import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
-import { nestSlots, stableSlots } from '../../domain/laneSlots.ts'
+import { nestPackedSlots, packSlots, stableSlots } from '../../domain/laneSlots.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -143,7 +144,7 @@ export const NO_LANE_SLOTS: LaneSlots = { live: {}, saved: {} }
  * Places the lanes. Live lanes (index 0.. from the top of the horizontal live band, or from the left edge in vertical) come first;
  * saved lanes stack below the chip rows (horizontal, below the band) or from the right edge (vertical).
  * A lane already on screen keeps its slot (`prev`, from the last call) when others come and go; new lanes take free slots;
- * a saved span that contains another moves outward past it.
+ * saved spans that don't overlap in time share a slot; a saved span that contains another moves outward past it.
  * `height` is the horizontal timeline's height; `liveCount` sizes the live band.
  */
 export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation, prev: LaneSlots = NO_LANE_SLOTS):
@@ -154,7 +155,9 @@ export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation:
     ? { lo: Math.min(l.a, l.b), hi: Math.max(l.a, l.b) } : undefined]))
   const slots: LaneSlots = {
     live: stableSlots(prev.live, live.map(l => l.key)),
-    saved: nestSlots(stableSlots(prev.saved, saved.map(l => l.key)), ranges),
+    // Spans that don't overlap in time share a track (a stopwatch's laps), so many spans
+    // don't mean many lanes.
+    saved: nestPackedSlots(packSlots(prev.saved, saved.map(l => l.key), ranges), ranges),
   }
   const span = (m: Record<string, number>) => Math.max(0, ...Object.values(m).map(v => v + 1))
   const liveCount = orientation === 'vertical' ? 0 : span(slots.live)
@@ -173,3 +176,10 @@ export function savedLaneVariant(r: LaneSpan): 'span' | 'focused' | 'selected' {
 /** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */
 export const laneHasControls = (lane: BottomLane, selectedSpanId: string | null): boolean =>
   lane.kind !== 'saved' || lane.span.focused || lane.span.priority <= 1 || selectedSpanId === lane.span.span.id
+
+/** What a lane is called where its own chip isn't shown (an "N spans" chip's list). */
+export function laneName(lane: BottomLane): string {
+  if (lane.kind === 'saved') return spanHeader(lane.span) ?? `${displayName(lane.span.start.label)} → ${spanEndName(lane.span)}`
+  if (lane.kind === 'secondary') return `${endpointName(lane.secondary)} → ${endpointName(lane.selected)}`
+  return endpointName(lane.selected)
+}

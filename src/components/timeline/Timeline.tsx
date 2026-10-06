@@ -13,6 +13,7 @@ import { RotateButton } from './RotateButton.tsx'
 import { PlusMorphLayer } from './PlusMorphLayer.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { NowFlags } from './NowFlags.tsx'
+import { LaneGroupChips } from './LaneGroupChips.tsx'
 import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import type { LaneSlots } from './useBottomLanes.ts'
 import { useSavedLayoutSource } from './savedLayout.ts'
@@ -69,7 +70,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
-      {orientation === 'vertical' && <NowFlags lanes={lanes} />}
+      {orientation === 'vertical' ? <NowFlags lanes={lanes} /> : <LaneGroupChips lanes={lanes} />}
       <RotateButton />
       <PlusMorphLayer />
     </section>

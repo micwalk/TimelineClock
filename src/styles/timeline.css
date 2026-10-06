@@ -549,6 +549,11 @@
 }
 .span-chip__star-btn:hover, .span-chip__star-btn:focus-visible { background: var(--box-bg-raised); }
 
+/* Span names that would crowd a lane fold into one "N spans" chip (LaneGroupChips, NowFlags). */
+.tl-lane__anchor.is-folded { visibility: hidden; }
+.span-chip--group { color: var(--accent); animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.span-chip--group .span-chip__text { font: 700 13.5px/1.1 var(--font-ui); color: var(--accent); }
+
 /* --- Popovers ----------------------------------------------------------- */
 
 .popover {
@@ -928,3 +933,4 @@
 .tl-nowflag__left { font: 700 13px/1 var(--font-mono); color: var(--accent); }
 .tl-nowflag__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
 .tl-nowflag__total:empty { display: none; }
+.tl-nowflag--group .tl-nowflag__left { font: 700 12px/1 var(--font-ui); }
