@@ -26,6 +26,8 @@ type SavedLane = Extract<BottomLane, { kind: 'saved' }>
 export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: SavedLayout }) {
   const selectedSpanId = useView(s => s.selectedSpanId)
   const moving = useView(s => s.moveMode?.instantId ?? null)
+  const selectedInstantId = useView(s => s.currentSelectedInstantId)
+  const focusedInstantId = useView(s => (s.viewFocusMode === 'instant' ? s.focusedInstantId : null))
   const instants = useEntities(s => s.instants)
   const widths = useChipWidths(s => s.widths)
   const saved = lanes.filter((l): l is SavedLane => l.kind === 'saved' && !isLiveLane(l))
@@ -34,9 +36,12 @@ export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: Saved
 
   // Hand the lanes and chips to the shared right-side layout (lane chips read it too).
   useLayoutEffect(() => {
-    setRightSideInputs({ lanes, selectedSpanId, saved: layout, instants, widths, moving, flagWidth: key => refs.current.get(key)?.offsetWidth })
+    setRightSideInputs({
+      lanes, selectedSpanId, saved: layout, instants, widths, moving, selectedInstantId, focusedInstantId,
+      flagWidth: key => refs.current.get(key)?.offsetWidth,
+    })
     engine.requestFrame()
-  }, [lanes, selectedSpanId, layout, instants, widths, moving])
+  }, [lanes, selectedSpanId, layout, instants, widths, moving, selectedInstantId, focusedInstantId])
 
   useFrameListener(f => {
     if (f.orientation !== 'vertical') return

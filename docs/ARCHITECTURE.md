@@ -11,7 +11,8 @@ time-dependent text, without re-rendering React.
  store/       Zustand stores + actions.ts (every user operation)            (unit tested)
  engine/      viewportEngine (frame scheduler) + React hooks
  components/  timeline/ (columns, lanes, ticks, popovers), panels/ (controls, list, alarms, settings)
- services/    AlarmScheduler, AlarmAudioManager, NotificationService
+ services/    AlarmScheduler, AlarmAudioManager, NotificationService,
+              nativeShell + native/ (the Android app only, loaded on demand)
  styles/      theme.css (tokens), timeline.css, panels.css
 ```
 
@@ -87,6 +88,7 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 | `useSettings`    | `timeline.settings.v1`  | Glow, tunables (Settings > Advanced), favorite lanes, layout version for one-time migrations (store/migrations.ts). |
 | `useUi`          | (not persisted)         | Agenda tab, `agendaOpen` (the drawer), open time-entry popover, `tagMenu` (which live tag's tools menu is open). Both popovers close when the orientation changes. |
 | `useLayout`      | (not persisted)         | Resolved layout, see below. |
+| `useShell`       | (not persisted)         | Inside the Android app: its version and what Android allows (notifications, alarm sound, exact alarms), for Settings. |
 
 Focus modes: `now` (follow the clock), `cursor` (free; optionally locked to an offset
 from Now), `instant` (centered on an instant), `span` (centered on a saved span; spans
@@ -176,6 +178,35 @@ are set) and rings any alarm that came due within the ring window. A window inst
 an exact-time match means throttled background timers can't skip an alarm. Ringing
 state is persisted, so a reload or HMR keeps it on screen; the audio manager is kept
 on `globalThis` across HMR.
+
+A browser freezes the page in the background, so the PWA can't ring until it is opened.
+The **Android app** ([android.md](android.md)) fixes that: it is a Capacitor shell around
+the live site, and inside it `services/nativeShell` loads `services/native/` (a separate
+chunk; browsers never fetch it). On start, on resume and on every entity change (debounced)
+it brings Android in line with the entities, using pure decisions from
+`domain/nativeNotifications`:
+
+- **Alarms** (`native/alarmSync`, the app's `AlarmsPlugin`): each sync first replays the
+  answers given from notifications while the page wasn't running (`replayAlarmActions`:
+  dismiss, or snooze at the time the notification chose), then hands the native side every
+  alarmed instant that is ahead or still within its ring time. The native side schedules them
+  (`setAlarmClock`), rings them as an insistent notification with Dismiss / Snooze (replacing a
+  timer's countdown), and stops what the page dropped. Ids are stable 31-bit hashes of instant
+  ids. It never prompts: permission is asked on the app's first start and on bell/timer taps
+  (`primeNotifications`).
+- **Live notifications** (`native/liveSync`, `LiveNotificationsPlugin`): a countdown for each
+  future alarmed instant that ends a timer (`timerSpanFor`: a saved span that has started),
+  and a count-up for the running stopwatch. They and the ringing alarms are Live Updates
+  (pinned on the lock screen, a status-bar chip); Android draws the time (Android 17:
+  MetricStyle's big value; 16: the header chronometer), so it stays right while the page is
+  frozen. A tap on a ringing alarm silences it; Silence in the app silences them all.
+- Taps go where `liveTapTarget` says: the stopwatch's span to Now, a running timer's span, or
+  an alarm's overtime (its span to Now), focused and selected (`act.revealLive`), including a
+  tap that starts the app.
+
+Inside the app the in-app scheduler still rings (the ringing panel), but the notification
+makes the sound, so Dismiss / Snooze in either place stops it. Dismissing a timer's alarm also
+unfavorites its end.
 
 ## Testing
 

@@ -70,6 +70,15 @@ describe('layoutLabels: placement', () => {
     expect(r.placed.b).toEqual({ slot: 1, crossOffset: 104, shift: 0 })
   })
 
+  it('keeps neighbours off a chip’s tools (its tail), but leaves the chip centered on its marker', () => {
+    // Selected chip at 0 (y -10..10) with a 30px tools row under it (to 40); b at 35 would sit on the tools.
+    const r = layoutLabels([vchip('sel', 0, { pinned: true, priority: 1, tail: 30 }), vchip('b', 35)], V)
+    expect(r.placed.sel).toEqual({ slot: 0, crossOffset: 0, shift: 0 })
+    expect(r.placed.b.slot === 0 && r.placed.b.shift === 0).toBe(false)
+    // Without the tools, b would have sat next to the axis right below it.
+    expect(layoutLabels([vchip('sel', 0, { pinned: true, priority: 1 }), vchip('b', 35)], V).placed.b).toEqual({ slot: 0, crossOffset: 0, shift: 0 })
+  })
+
   it('respects the cross budget in vertical', () => {
     const r = layoutLabels([vchip('a', 0, { priority: 1 }), vchip('b', 5, { priority: 2 }), vchip('c', 10, { priority: 3 })], V)
     expect(r.placed.c).toBeUndefined()
@@ -287,6 +296,56 @@ describe('layoutLabels: sliding along the time axis', () => {
     const r = layoutLabels(items, S)
     expect(Object.values(r.placed).every(p => Math.abs(p.shift) <= 80)).toBe(true)
     expect(r.clusters.length).toBeGreaterThan(0)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('slides a cluster next to a pinned chip that leaves no room beside it, rather than off the edge', () => {
+    // The bug report: zoomed out, a selected chip wider than the room covers its time, and the
+    // "+N" for its neighbours had nowhere to go but past it, off screen.
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const items = [selected, ...Array.from({ length: 8 }, (_, k) => wide(`i${k}`, 92 + 2 * k, { priority: 5 + k }))]
+    const r = layoutLabels(items, S)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + S.cluster.crossExtent).toBeLessThanOrEqual(S.crossBudget)
+    // Next to the selected chip along the time axis, not on top of it.
+    const sel = { lo: 100 - 10, hi: 100 + 10 }
+    expect(c.pos + S.cluster.mainExtent / 2 <= sel.lo || c.pos - S.cluster.mainExtent / 2 >= sel.hi).toBe(true)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('keeps the cluster on screen when chips fill the places around a pinned chip', () => {
+    // The reported scene: chips placed before and after the selected chip, the overflow's
+    // times all between them, and no room beside the selected chip.
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const before = wide('before', 70, { priority: 3 })
+    const after = wide('after', 125, { priority: 3 })
+    const later = wide('later', 150, { priority: 3 })
+    const overflow = Array.from({ length: 5 }, (_, k) => wide(`o${k}`, 96 + 3 * k, { priority: 6 }))
+    const items = [selected, before, after, later, ...overflow]
+    const r = layoutLabels(items, S)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + S.cluster.crossExtent).toBeLessThanOrEqual(S.crossBudget)
+    expect(accounted(r)).toEqual(items.map(i => i.id).sort())
+  })
+
+  it('takes the place of the least important chip near it when no slide keeps time order', () => {
+    // Only one column of room and the selected chip at the overflow's own time: every place in
+    // time order is taken, so the cluster replaces a neighbour (absorbing it) instead of going
+    // past the selected chip, off screen.
+    const N: LabelLayoutOptions = { ...S, crossBudget: 180 }
+    const selected = vchip('sel', 100, { crossExtent: 300, pinned: true, priority: 0 })
+    const before = wide('before', 72, { priority: 7 })
+    const after = wide('after', 126, { priority: 3 })
+    const overflow = Array.from({ length: 4 }, (_, k) => wide(`o${k}`, 97 + 2 * k, { priority: 6 }))
+    const items = [selected, before, after, ...overflow]
+    const r = layoutLabels(items, N)
+    expect(r.clusters).toHaveLength(1)
+    const [c] = r.clusters
+    expect(c.crossOffset + N.cluster.crossExtent).toBeLessThanOrEqual(N.crossBudget)
+    expect(c.memberIds).toContain('before')
+    expect(r.placed.before).toBeUndefined()
     expect(accounted(r)).toEqual(items.map(i => i.id).sort())
   })
 

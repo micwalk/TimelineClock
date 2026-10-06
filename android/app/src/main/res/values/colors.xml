@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The web app's background (theme.css), shown while the page loads and behind the system bars. -->
+    <color name="app_background">#02040C</color>
+    <!-- The Now line's red: notification accents. -->
+    <color name="now_red">#FF3B5C</color>
+</resources>

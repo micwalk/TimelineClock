@@ -88,6 +88,16 @@ export const entities = {
 
   nowSpanOf: (startInstantId: string) => get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow),
 
+  /** Favorites carry a visible span to Now; unfavoriting just hides it. */
+  setFavorite(id: string, favorite: boolean) {
+    entities.setFavoriteFlag(id, favorite)
+    if (favorite) entities.upsertNowSpan(id, true)
+    else {
+      const sp = entities.nowSpanOf(id)
+      if (sp) entities.setSpanVisible(sp.id, false)
+    }
+  },
+
   deleteSpan: (id: string) => set(s => ({ spans: s.spans.filter(sp => sp.id !== id) })),
   setSpanLabel: (id: string, label: string) => patchSpan(id, { label }),
   setSpanVisible: (id: string, visible: boolean) => patchSpan(id, { visible }),

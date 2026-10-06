@@ -1,7 +1,7 @@
 {
   "name": "timeline-clock-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "homepage": "https://timelineclockapp.netlify.app",
   "license": "MIT",
   "type": "module",
@@ -20,6 +20,9 @@
     "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
     "@headlessui/react": "^2.2.7",
     "@heroicons/react": "^2.2.0",
     "date-fns": "^4.1.0",
@@ -35,6 +38,7 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^9.33.0",
     "@tailwindcss/postcss": "^4.1.12",
     "@testing-library/jest-dom": "^6.7.0",

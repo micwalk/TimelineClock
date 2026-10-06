@@ -1,6 +1,7 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
 import { engine } from '../engine/viewportEngine.ts'
+import type { Frame } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
@@ -19,7 +20,9 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
-import { dismiss, primeNotifications } from '../services/AlarmScheduler.ts'
+import type { NotificationKind } from '../domain/nativeNotifications.ts'
+import { liveTapTarget } from '../domain/nativeNotifications.ts'
+import { SNOOZE_MINUTES, dismiss, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -59,6 +62,25 @@ export function focusInstant(id: string, animate = true) {
   view.setTimeCenter(inst.tsEpochMs)
 }
 
+export const isInstantFocused = (id: string) => v().viewFocusMode === 'instant' && v().focusedInstantId === id
+
+/**
+ * Double-tap on an instant's chip: focus it; once focused, rename it (as activateSpan does for
+ * spans). `wasFocused`: whether it was focused before the double-tap began (its first tap can
+ * focus a chip under the cursor).
+ */
+export function activateInstant(id: string, wasFocused = isInstantFocused(id)) {
+  if (v().moveMode) return
+  if (wasFocused) view.editInstant(id)
+  else focusInstant(id)
+}
+
+/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now with its name editor open. */
+export function activateNow() {
+  if (v().viewFocusMode !== 'now') { focusNow(); return }
+  view.editInstant(dropInstant())
+}
+
 /**
  * Goes to an instant from outside the timeline (an alarm notification): focus and select it,
  * and show the Agenda tab that lists it. Falls back to Now if it no longer exists.
@@ -69,6 +91,23 @@ export function revealInstant(id: string, animate = true) {
   focusInstant(id, animate)
   const tab = useUi.getState().listTab
   if (tab === 'spans' || (tab === 'favorites' && !inst.favorite)) ui.setListTab('instants')
+}
+
+/** A notification tap shows at least this much time, so a few seconds of overtime aren't blown up to fill the screen. */
+const REVEAL_MIN_WIDTH = 2 * MINUTE
+
+/**
+ * A tap on one of the Android app's notifications (domain/nativeNotifications liveTapTarget):
+ * the stopwatch's run, a running timer's span, or an alarm's overtime, focused and selected.
+ */
+export function revealLive(kind: NotificationKind, instantId: string) {
+  const { instants, spans } = useEntities.getState()
+  const target = liveTapTarget(kind, instantId, instants, spans, nowTime())
+  if (!target) { focusNow(); return }
+  if ('instantId' in target) { revealInstant(target.instantId); return }
+  focusSpan(target.spanId)
+  if (v().timeWidth < REVEAL_MIN_WIDTH) view.setTimeWidth(REVEAL_MIN_WIDTH)
+  view.selectSpan(target.spanId)
 }
 
 /** Free cursor at the given time (keeps zoom). */
@@ -152,17 +191,15 @@ export function moveCursorByIncrement(direction: 1 | -1) {
   moveCursorBy(direction * incrementOption(v().timeIncrement).milliseconds)
 }
 
-function navItems(): NavTarget[] {
-  const f = frame()
+function navItems(f: Frame): NavTarget[] {
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
   for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
-function navAnchor(): number {
+function navAnchor(f: Frame): number {
   const s = v()
-  const f = frame()
   if (s.viewFocusMode === 'instant' && s.focusedInstantId) return entities.getInstant(s.focusedInstantId)?.tsEpochMs ?? f.now
   if (s.viewFocusMode === 'cursor') return f.center
   if (s.viewFocusMode === 'span') return f.center
@@ -170,7 +207,10 @@ function navAnchor(): number {
 }
 
 export function goToAdjacentInstant(direction: 1 | -1) {
-  const target = findAdjacent(navItems(), navAnchor(), direction)
+  // One clock reading for both: read twice, Now could land a millisecond before itself and
+  // "previous" would go to Now instead of the instant before it.
+  const f = frame()
+  const target = findAdjacent(navItems(f), navAnchor(f), direction)
   if (!target) return
   if (target.kind === 'saved') focusInstant(target.id)
   else if (target.kind === 'cursor') focusCursorAt(target.ts)
@@ -421,13 +461,7 @@ export function resetStopwatch() {
 }
 
 export function setFavorite(id: string, favorite: boolean) {
-  entities.setFavoriteFlag(id, favorite)
-  // Favorites carry a visible span to Now; unfavoriting just hides it.
-  if (favorite) entities.upsertNowSpan(id, true)
-  else {
-    const sp = entities.nowSpanOf(id)
-    if (sp) entities.setSpanVisible(sp.id, false)
-  }
+  entities.setFavorite(id, favorite)
 }
 
 export function toggleFavorite(id: string) {
@@ -577,6 +611,21 @@ export function toggleSpanVisible(id: string) {
 }
 
 /** Double-click on a span: focus and fit it, or rename if it's already focused. */
+/**
+ * Types a saved span's length: its end moves to that far from its start (the same side as
+ * before). A timer's end is its alarm, so this sets the timer's length.
+ */
+export function setSpanLength(spanId: string, ms: number) {
+  const sp = entities.getSpan(spanId)
+  if (!sp || sp.endIsNow) return
+  const start = entities.getInstant(sp.startInstantId)
+  const end = entities.getInstant(sp.endInstantId)
+  if (!start || !end) return
+  const dir = end.tsEpochMs >= start.tsEpochMs ? 1 : -1
+  entities.setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
+  if (v().viewFocusMode === 'span' && v().focusedSpanId === spanId) focusSpan(spanId)
+}
+
 export function activateSpan(id: string) {
   const s = v()
   if (s.viewFocusMode === 'span' && s.focusedSpanId === id) view.editSpan(id)
@@ -619,8 +668,21 @@ function landCursorAt(ts: number) {
 export {
   dismiss as dismissAlarm,
   silence as silenceAlarms,
-  snooze as snoozeAlarm,
 } from '../services/AlarmScheduler.ts'
+
+/** Snooze from the app: the alarm rings again in `minutes`, and the view goes to the snooze (the span from the alarm to its next ring). */
+export function snoozeAlarm(instantId: string, minutes = SNOOZE_MINUTES): string | undefined {
+  const newId = snooze(instantId, minutes)
+  if (!newId) return
+  const sp = useEntities.getState().spans.find(s => s.startInstantId === instantId && s.endInstantId === newId)
+  if (sp) {
+    focusSpan(sp.id)
+    view.selectSpan(sp.id)
+  } else {
+    revealInstant(newId)
+  }
+  return newId
+}
 
 // ---------------------------------------------------------------------------
 // Backup: export and import

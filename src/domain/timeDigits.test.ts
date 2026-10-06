@@ -22,6 +22,20 @@ describe('digit entry', () => {
     expect(partsDisplay({ h: 1, m: 2, s: 3 }).chars).toBe('010203')
   })
 
+  it('starts a clock time with the hour: one or two digits are the hour', () => {
+    expect(digitsToParts('9', 'clock')).toEqual({ h: 9, m: 0, s: 0 })
+    expect(digitsToParts('11', 'clock')).toEqual({ h: 11, m: 0, s: 0 })
+    expect(digitsToParts('17', 'clock')).toEqual({ h: 17, m: 0, s: 0 })
+    // Not an hour: the hour and the minutes' first digit.
+    expect(digitsToParts('93', 'clock')).toEqual({ h: 9, m: 30, s: 0 })
+    // From three digits on, as before.
+    expect(digitsToParts('930', 'clock')).toEqual({ h: 9, m: 30, s: 0 })
+    expect(digitsToParts('1130', 'clock')).toEqual({ h: 11, m: 30, s: 0 })
+    expect(digitsToParts('93015', 'clock')).toEqual({ h: 9, m: 30, s: 15 })
+    expect(digitDisplay('9', 'clock')).toEqual({ chars: '090000', typed: [false, true, false, false, false, false] })
+    expect(digitDisplay('93', 'clock')).toEqual({ chars: '093000', typed: [false, true, true, false, false, false] })
+  })
+
   it('keeps digits only, at most six', () => {
     expect(cleanDigits('1a2:3 4567')).toBe('123456')
   })

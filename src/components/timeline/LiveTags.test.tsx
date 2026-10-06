@@ -29,13 +29,17 @@ describe('NowTag', () => {
     expect(screen.getByRole('button', { name: `NOW ${formatClockCompact(now, true)}` })).toBeInTheDocument()
   })
 
-  it('drops a nameless instant at Now on double-click, without opening an editor', () => {
+  it('on double-click goes to Now; there, drops an instant at Now and opens its name editor', () => {
+    useView.setState({ viewFocusMode: 'cursor' })
     render(<NowTag />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: /^now/i }))
+    expect(useView.getState().viewFocusMode).toBe('now')
+    expect(useEntities.getState().instants).toHaveLength(0)
     fireEvent.doubleClick(screen.getByRole('button', { name: /^now/i }))
     const [inst] = useEntities.getState().instants
     expect(inst).toBeDefined()
     expect(inst.label).toBe('')
-    expect(useView.getState().editingInstantId).toBeNull()
+    expect(useView.getState().editingInstantId).toBe(inst.id)
   })
 
   it('opens its tools on click: save as favorite, set a time', () => {

@@ -15,7 +15,9 @@
 //   3. Chips that don't fit collapse into "+N" clusters. A cluster with no room
 //      takes the place of the least important chip it overlaps, absorbing it, and
 //      so does a cluster that would hold a single chip ("+1" hides one chip to show
-//      a counter no smaller than the chip's own place).
+//      a counter no smaller than the chip's own place). With only pinned chips in its
+//      way it slides along the time axis like a chip, or else takes the place of the
+//      least important chip near it, rather than going off the edge.
 //
 // Nothing disappears: every item ends up placed, folded or in a cluster, and
 // markers are always drawn whatever happens to their chips.
@@ -28,6 +30,11 @@ export interface LabelItem {
   mainExtent: number
   /** Chip size across the time axis. */
   crossExtent: number
+  /**
+   * Room kept after the chip along the time axis, px: its tools (vertical: the row under it;
+   * horizontal: beside it). The chip itself stays centered on `pos`.
+   */
+  tail?: number
   /** Lower is more important. */
   priority: number
   /** Snooze group: the id of the original alarm. */
@@ -69,6 +76,8 @@ export interface LabelCluster {
   memberIds: string[]
   /** Main-axis position of the cluster chip, px. */
   pos: number
+  /** How far the chip slid along the time axis from its members' mean position, px (see 3.). */
+  shift: number
   slot: number
   crossOffset: number
   /** Priority of the most important member, for the chip's color. */
@@ -90,6 +99,8 @@ interface Box {
   id: string
   lo: number
   hi: number
+  /** Where the chip itself is centered (lo..hi also holds its tail). */
+  center: number
   crossStart: number
   crossEnd: number
   slot: number
@@ -150,9 +161,10 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
   // A badge widens the chip: along the time axis in horizontal, across it in vertical.
   const extents = (it: LabelItem) => {
     const badge = foldCount[it.id] ? o.foldBadgeExtent : 0
+    const tail = it.tail ?? 0
     return o.orientation === 'horizontal'
-      ? { main: it.mainExtent + badge, cross: it.crossExtent }
-      : { main: it.mainExtent, cross: it.crossExtent + badge }
+      ? { main: it.mainExtent + badge, cross: it.crossExtent, tail }
+      : { main: it.mainExtent, cross: it.crossExtent + badge, tail }
   }
 
   // --- 2. Place chips ----------------------------------------------------------
@@ -179,20 +191,20 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
    * A spot for `it` slid along the time axis by at most maxShift, right before or after a
    * box in its way, keeping time order with every box it shares a column (row) with.
    */
-  const slide = (it: LabelItem, main: number, cross: number) => {
+  const slide = (it: LabelItem, main: number, cross: number, tail = 0) => {
     if (maxShift <= 0) return null
-    const reach = maxShift + main / 2
+    const reach = maxShift + main / 2 + tail
     const near = boxes.filter(b => mainOverlap(it.pos - reach, it.pos + reach, b.lo, b.hi))
     const centers = near
-      .flatMap(b => [b.lo - o.slotGap - main / 2, b.hi + o.slotGap + main / 2])
+      .flatMap(b => [b.lo - o.slotGap - main / 2 - tail, b.hi + o.slotGap + main / 2])
       .filter(c => Math.abs(c - it.pos) <= maxShift)
       .sort((a, b) => Math.abs(a - it.pos) - Math.abs(b - it.pos) || a - b)
     for (const center of centers) {
-      const spot = findSpot(center - main / 2, center + main / 2, cross, !it.pinned)
+      const spot = findSpot(center - main / 2, center + main / 2 + tail, cross, !it.pinned)
       if (!spot) continue
       const inOrder = near.every(b => {
         const sharesColumn = b.crossStart < spot.offset + cross && spot.offset < b.crossEnd
-        return !sharesColumn || b.pos === it.pos || sign(center - (b.lo + b.hi) / 2) === sign(it.pos - b.pos)
+        return !sharesColumn || b.pos === it.pos || sign(center - b.center) === sign(it.pos - b.pos)
       })
       if (inOrder) return { center, spot }
     }
@@ -201,21 +213,21 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
 
   const unplaced: LabelItem[] = []
   for (const it of items.filter(i => !folded[i.id]).sort(importance)) {
-    const { main, cross } = extents(it)
+    const { main, cross, tail } = extents(it)
     const lo = it.pos - main / 2
-    const hi = it.pos + main / 2
+    const hi = it.pos + main / 2 + tail
     // A chip with nothing beside it always shows next to the axis, even if it is wider
     // than the room (it overhangs); only chips that collide with others collapse.
     const alone = (s: { offset: number; slot: number } | null) => (s && s.slot === 0 ? s : null)
     const spot = findSpot(lo, hi, cross, !it.pinned) ?? alone(findSpot(lo, hi, cross, false))
     if (spot) {
-      boxes.push({ kind: 'chip', id: it.id, lo, hi, crossStart: spot.offset, crossEnd: spot.offset + cross, slot: spot.slot, priority: it.priority, pinned: it.pinned, pos: it.pos })
+      boxes.push({ kind: 'chip', id: it.id, lo, hi, center: it.pos, crossStart: spot.offset, crossEnd: spot.offset + cross, slot: spot.slot, priority: it.priority, pinned: it.pinned, pos: it.pos })
       continue
     }
-    const moved = slide(it, main, cross)
+    const moved = slide(it, main, cross, tail)
     if (moved) {
       const { center, spot: s2 } = moved
-      boxes.push({ kind: 'chip', id: it.id, lo: center - main / 2, hi: center + main / 2, crossStart: s2.offset, crossEnd: s2.offset + cross, slot: s2.slot, priority: it.priority, pinned: it.pinned, pos: it.pos })
+      boxes.push({ kind: 'chip', id: it.id, lo: center - main / 2, hi: center + main / 2 + tail, center, crossStart: s2.offset, crossEnd: s2.offset + cross, slot: s2.slot, priority: it.priority, pinned: it.pinned, pos: it.pos })
       continue
     }
     unplaced.push(it)
@@ -277,17 +289,43 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
       take(victim)
       spot = findSpot(lo, hi, o.cluster.crossExtent, true)
     }
-    // Only pinned chips left in the way: overflow rather than hide the cluster. Without
-    // limits a spot always exists (past the outermost blocker).
-    spot ??= findSpot(lo, hi, o.cluster.crossExtent, false)!
     const id = `cluster:${run[0].id}`
-    boxes.push({ kind: 'cluster', id, lo, hi, crossStart: spot.offset, crossEnd: spot.offset + o.cluster.crossExtent, slot: spot.slot, priority: Infinity, pinned: true, pos })
+    // Only pinned chips left in the way (say a selected chip wider than the room): slide along
+    // the time axis next to them, as a chip would, so the cluster stays on screen.
+    let center = pos
+    if (!spot) {
+      const probe: LabelItem = { id, pos, mainExtent: o.cluster.mainExtent, crossExtent: o.cluster.crossExtent, priority: Infinity, pinned: false }
+      const moved = slide(probe, o.cluster.mainExtent, o.cluster.crossExtent)
+      if (moved) { center = moved.center; spot = moved.spot }
+    }
+    // Nor that (its neighbours fill every place in time order): take the place of the least
+    // important chip near it, absorbing it, so the cluster shows among them.
+    if (!spot) {
+      const reach = maxShift + o.cluster.mainExtent / 2
+      const mid = (b: Box) => b.center
+      const near = boxes
+        .filter(b => b.kind === 'chip' && !b.pinned && mainOverlap(pos - reach, pos + reach, b.lo, b.hi))
+        .sort((a, b) => b.priority - a.priority || Math.abs(mid(a) - pos) - Math.abs(mid(b) - pos) || compareIds(a.id, b.id))
+      for (const v of near) {
+        take(v)
+        const c = mid(v)
+        const s2 = findSpot(c - o.cluster.mainExtent / 2, c + o.cluster.mainExtent / 2, o.cluster.crossExtent, true)
+        if (s2) { center = c; spot = s2; break }
+      }
+    }
+    // Still nowhere: overflow rather than hide the cluster. Without limits a spot always
+    // exists (past the outermost blocker).
+    spot ??= findSpot(lo, hi, o.cluster.crossExtent, false)!
+    const cLo = center - o.cluster.mainExtent / 2
+    const cHi = center + o.cluster.mainExtent / 2
+    boxes.push({ kind: 'cluster', id, lo: cLo, hi: cHi, center, crossStart: spot.offset, crossEnd: spot.offset + o.cluster.crossExtent, slot: spot.slot, priority: Infinity, pinned: true, pos })
 
     const members = [...memberIds].map(m => byId.get(m)!).sort(byPos)
     clusters.push({
       id,
       memberIds: members.map(m => m.id),
-      pos,
+      pos: center,
+      shift: center - pos,
       slot: spot.slot,
       crossOffset: spot.offset,
       topPriority: Math.min(...members.map(m => m.priority)),
@@ -296,7 +334,7 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
 
   const placed: Record<string, LabelPlacement> = {}
   for (const b of boxes) {
-    if (b.kind === 'chip') placed[b.id] = { slot: b.slot, crossOffset: b.crossStart, shift: (b.lo + b.hi) / 2 - b.pos }
+    if (b.kind === 'chip') placed[b.id] = { slot: b.slot, crossOffset: b.crossStart, shift: b.center - b.pos }
   }
   return { placed, folded, foldCount, clusters }
 }

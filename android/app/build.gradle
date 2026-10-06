@@ -1,0 +1,112 @@
+import groovy.json.JsonSlurper
+
+apply plugin: 'com.android.application'
+
+// One version for the web app and this shell: package.json's (semver, no pre-release tag).
+// versionCode = major×10000 + minor×100 + patch, so every bump installs over the last build.
+def appVersion = new JsonSlurper().parse(rootProject.file('../package.json')).version as String
+def versionMatch = appVersion =~ /^(\d+)\.(\d+)\.(\d+)$/
+if (!versionMatch.matches()) {
+    throw new GradleException("package.json version '${appVersion}' must be plain major.minor.patch")
+}
+def (major, minor, patch) = (1..3).collect { versionMatch.group(it) as int }
+if (minor > 99 || patch > 99) {
+    throw new GradleException("package.json version '${appVersion}': minor and patch must stay below 100 for versionCode")
+}
+def appVersionCode = major * 10000 + minor * 100 + patch
+
+// Release signing comes only from the environment (CI secrets; see docs/android.md). The key
+// is never committed: the repo is public. Without it, release builds come out unsigned, which
+// Android refuses to install, so a build signed with any other key can't replace the app.
+def signingEnv = ['TC_SIGNING_KEYSTORE', 'TC_SIGNING_STORE_PASSWORD', 'TC_SIGNING_KEY_ALIAS', 'TC_SIGNING_KEY_PASSWORD']
+    .collectEntries { [(it): System.getenv(it)] }
+def signingMissing = signingEnv.findAll { !it.value }.keySet()
+if (!signingMissing.isEmpty() && signingMissing.size() != signingEnv.size()) {
+    throw new GradleException("Release signing is half set up: missing ${signingMissing.join(', ')}")
+}
+def hasReleaseKey = signingMissing.isEmpty()
+
+// `-PtcPreview`: the "TC Preview" app for testing a pull request before it reaches main. A
+// separate app (its own id and data) that asks which Netlify deploy preview to load, instead
+// of the live site (SiteChoice.java, docs/android.md).
+def preview = project.hasProperty('tcPreview')
+
+android {
+    namespace = "com.micwalk.timelineclock"
+    // Android 17's SDK, for Notification.MetricStyle (the big time in the notifications, used only
+    // on Android 17+: NotificationViews.java). The app still targets and requires Android 16.
+    compileSdk = 37
+    defaultConfig {
+        applicationId "com.micwalk.timelineclock"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersion
+        manifestPlaceholders = [appLabel: 'TimelineClock']
+        buildConfigField 'boolean', 'PREVIEW', 'false'
+        if (preview) {
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-preview'
+            manifestPlaceholders = [appLabel: 'TC Preview']
+            buildConfigField 'boolean', 'PREVIEW', 'true'
+        }
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildFeatures {
+        buildConfig = true
+    }
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile file(signingEnv.TC_SIGNING_KEYSTORE)
+                storePassword signingEnv.TC_SIGNING_STORE_PASSWORD
+                keyAlias signingEnv.TC_SIGNING_KEY_ALIAS
+                keyPassword signingEnv.TC_SIGNING_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseKey) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    // The real org.json for unit tests (Android's is a stub off-device).
+    testImplementation "org.json:json:20250517"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

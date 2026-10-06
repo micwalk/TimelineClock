@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Timeline Clock</title>
+  <style>
+    /* Shown by the Android app when it can't load the site (first start offline, or the site is down). */
+    :root { --bg: #02040c; --ink: #e2e8f0; --faint: #94a3b8; --accent: #ff3b5c; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid; place-items: center; padding: 24px 16px;
+      background: var(--bg); color: var(--ink);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center;
+    }
+    main { max-width: 420px; }
+    h1 { font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 12px; }
+    p { color: var(--faint); margin: 0 0 20px; }
+    button {
+      font: 700 16px/1 inherit; color: var(--ink); background: #0c1838;
+      border: 1px solid var(--accent); border-radius: 999px; padding: 14px 28px; min-width: 140px;
+      box-shadow: 0 0 12px rgba(255, 59, 92, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Can't reach the site</h1>
+    <p>Timeline Clock loads from timelineclockapp.netlify.app. Check your connection, then try again.
+      Alarms you already set still ring.</p>
+    <button type="button" id="retry">Retry</button>
+  </main>
+  <script>
+    document.getElementById('retry').addEventListener('click', function () {
+      window.location.href = 'https://timelineclockapp.netlify.app/'
+    })
+  </script>
+</body>
+</html>
