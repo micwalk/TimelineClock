@@ -41,10 +41,14 @@ function useScrollFocused(container: React.RefObject<HTMLElement | null>, focusK
 // ---------------------------------------------------------------------------
 // Instants
 
+/** A saved time's relative text changes only with the clock's second, never with a pan or zoom. */
+const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
+
 function Relative({ ts }: { ts: number | 'now' | 'center' }) {
   return (
     <LiveText
       className="list-row__rel mono"
+      watch={typeof ts === 'number' ? bySecond : undefined}
       compute={f => {
         if (ts === 'now') return '00:00'
         return formatRelativeCoarse((ts === 'center' ? f.center : ts) - f.now)
@@ -59,8 +63,7 @@ function pick(focus: () => void) {
   if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
 }
 
-const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: InstantRecord; focused: boolean; selected: boolean }) {
-  const isPast = useFrameValue(f => inst.tsEpochMs < f.now)
+const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { inst: InstantRecord; focused: boolean; selected: boolean; isPast: boolean }) {
   return (
     <div
       data-key={inst.id}
@@ -124,7 +127,9 @@ function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
   const showLive = !favoritesOnly
   const showCursor = showLive && v.mode === 'cursor'
   // Where Now and the Cursor slot into the sorted list; changes only when they cross an instant.
-  const nowIdx = useFrameValue(f => (showLive ? lowerBound(sorted, f.now) : -1))
+  // Rows before Now are past (one value for the list, rather than one per row every frame).
+  const pastCount = useFrameValue(f => lowerBound(sorted, f.now))
+  const nowIdx = showLive ? pastCount : -1
   const cursorIdx = useFrameValue(f => (showCursor ? lowerBound(sorted, f.center) : -1))
 
   const rows: { key: string; node: React.ReactNode }[] = []
@@ -136,7 +141,7 @@ function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
     pushLive(i)
     rows.push({
       key: inst.id,
-      node: <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} />,
+      node: <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} isPast={i < pastCount} />,
     })
   })
   pushLive(sorted.length)

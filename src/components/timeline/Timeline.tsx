@@ -14,7 +14,7 @@ import { BottomLanes } from './Lanes.tsx'
 import { NowFlags } from './NowFlags.tsx'
 import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import type { LaneSlots } from './useBottomLanes.ts'
-import { useSavedLayout } from './savedLayout.ts'
+import { useSavedLayoutSource } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -27,10 +27,10 @@ export function Timeline() {
   const orientation = useLayout(s => s.orientation)
   const visibleLanes = useVisibleLanes()
   // Only saved-side lanes take width from the vertical chips; live lanes are on the left.
-  const layout = useSavedLayout(useMemo(() => visibleLanes.filter(l => !isLiveLane(l)).length, [visibleLanes]))
+  const rowsUsed = useSavedLayoutSource(useMemo(() => visibleLanes.filter(l => !isLiveLane(l)).length, [visibleLanes]))
   // Lanes keep their slots from one placement to the next, so on-screen spans don't jump.
   const lastSlots = useRef<LaneSlots>(NO_LANE_SLOTS)
-  const placed = useMemo(() => placeLanes(visibleLanes, layout.rowsUsed, orientation, lastSlots.current), [visibleLanes, layout.rowsUsed, orientation])
+  const placed = useMemo(() => placeLanes(visibleLanes, rowsUsed, orientation, lastSlots.current), [visibleLanes, rowsUsed, orientation])
   useEffect(() => { lastSlots.current = placed.slots }, [placed])
   const { lanes, height, liveCount } = placed
   const nowFocused = useView(s => s.viewFocusMode === 'now')
@@ -64,11 +64,11 @@ export function Timeline() {
       <AgendaButton />
       <LiveText className="tl-date glow-text" compute={f => formatDateRange(f.start, f.end, f.now)} />
       <div className="tl-axis" />
-      <SavedInstantColumns layout={layout} />
+      <SavedInstantColumns />
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
-      {orientation === 'vertical' && <NowFlags lanes={lanes} layout={layout} />}
+      {orientation === 'vertical' && <NowFlags lanes={lanes} />}
       <RotateButton />
     </section>
   )

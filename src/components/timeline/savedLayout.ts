@@ -1,6 +1,6 @@
 // Overlap layout for the saved-instant chips: builds layout inputs from the visible
 // instants and chip widths, and exposes the structural result to React.
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo } from 'react'
 import type { RefObject } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -78,6 +78,21 @@ export const useChipWidths = create<ChipWidthsState>(set => ({
   }),
 }))
 
+// One ResizeObserver for every chip. It reports border-box sizes after layout, so measuring
+// never forces a layout in the middle of a frame (a mount used to read getBoundingClientRect,
+// which during a zoom, when chips come and go every few frames, cost a fifth of the frame).
+const chipIds = new Map<Element, string>()
+const chipObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
+  for (const e of entries) {
+    const id = chipIds.get(e.target)
+    if (id === undefined) continue
+    const box = e.borderBoxSize?.[0]
+    // Untransformed width: a pulsing (scaled) chip still reports its real size.
+    const w = Math.ceil(box ? box.inlineSize : (e.target as HTMLElement).offsetWidth)
+    if (w > 0) useChipWidths.getState().setWidth(id, w)
+  }
+})
+
 /**
  * Reports the element's width into the widths store. Entries outlive the element: a
  * chip that folds or clusters unmounts, and the layout must still know how wide it was.
@@ -85,15 +100,13 @@ export const useChipWidths = create<ChipWidthsState>(set => ({
 export function useChipWidth(ref: RefObject<HTMLElement | null>, id: string) {
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const report = () => {
-      const w = Math.ceil(el.getBoundingClientRect().width)
-      if (w > 0) useChipWidths.getState().setWidth(id, w)
+    if (!el || !chipObserver) return
+    chipIds.set(el, id)
+    chipObserver.observe(el)
+    return () => {
+      chipObserver.unobserve(el)
+      chipIds.delete(el)
     }
-    report()
-    const ro = new ResizeObserver(report)
-    ro.observe(el)
-    return () => ro.disconnect()
   }, [ref, id])
 }
 
@@ -197,6 +210,9 @@ export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
     })
 }
 
+/** A zoom change smaller than this (relative) reuses the last layout. */
+export const ZOOM_REUSE = 0.005
+
 /** Counts real layout runs (cache misses); tests use it to prove a pan reuses the result. */
 export const layoutStats = { runs: 0 }
 
@@ -233,7 +249,7 @@ interface CacheEntry {
 /**
  * The layout as a function of the frame, memoized. Positions are taken relative to the
  * earliest visible instant, so a pure pan changes nothing the layout reads: the cache key
- * is the visible set (and which alarms are still upcoming), zoom, cross size and the inputs.
+ * is the visible set (and which alarms are still upcoming), zoom (within ZOOM_REUSE), cross size and the inputs.
  * A moving instant rides the screen center, which a pan does move relative to the others,
  * so that mode skips the cache.
  */
@@ -252,7 +268,9 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const prev = cache
 
     // Cheap probe: walk the instants once against the cached visible set, allocating nothing.
-    if (prev && prev.inputs === c && c.moving === null && prev.pxPerMs === f.pxPerMs && prev.crossSize === f.crossSize) {
+    // A zoom step too small to matter (the tail of zoom smoothing) reuses the layout too: chips
+    // glide to their spots anyway, so being off by a pixel or two for a frame doesn't show.
+    if (prev && prev.inputs === c && c.moving === null && Math.abs(f.pxPerMs / prev.pxPerMs - 1) < ZOOM_REUSE && prev.crossSize === f.crossSize) {
       let n = 0
       let same = true
       for (const i of c.instants) {
@@ -319,8 +337,82 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
   }
 }
 
-/** `laneCount`: span lanes on screen, which take width from the chips in vertical. */
-export function useSavedLayout(laneCount = 0): SavedLayout {
+// ---------------------------------------------------------------------------
+// Per frame: chips, lines and lane labels read their geometry from savedLayoutAt(frame);
+// React sees only the structure, so a zoom (which moves chips every frame) re-renders
+// nothing until a chip actually appears, disappears or joins a "+N".
+
+/**
+ * What React renders from: which chips exist and what the "+N" and "⟲N" chips hold. Lines
+ * (every visible instant, which changes all the time while zooming) are drawn per frame.
+ */
+export interface SavedLayoutStructure {
+  /** Instants that show a chip (the layout placed them), in time-sorted visible order. */
+  chipIds: string[]
+  folded: Record<string, string>
+  foldCount: Record<string, number>
+  clusters: { id: string; memberIds: string[]; topPriority: number }[]
+  rowsUsed: number
+}
+
+const sameKeys = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<string, unknown>>) => {
+  const ka = Object.keys(a)
+  return ka.length === Object.keys(b).length && ka.every(k => k in b)
+}
+
+/** Same structure: the same chips, folds and clusters, wherever they sit. */
+export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
+  if (a === b) return true
+  return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
+    sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
+    a.clusters.length === b.clusters.length &&
+    a.clusters.every((c, k) => {
+      const d = b.clusters[k]
+      return c.id === d.id && c.topPriority === d.topPriority && sameStrings(c.memberIds, d.memberIds)
+    })
+}
+
+export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
+  chipIds: l.visibleIds.filter(id => l.rows[id] !== undefined),
+  folded: l.folded,
+  foldCount: l.foldCount,
+  clusters: l.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, topPriority: c.topPriority })),
+  rowsUsed: l.rowsUsed,
+})
+
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], rowsUsed: 1 }
+
+const source: {
+  compute: ReturnType<typeof createSavedLayoutCache>
+  inputs: SavedLayoutInputs | null
+  last: { f: FrameLike; inputs: SavedLayoutInputs; result: SavedLayout } | null
+} = { compute: createSavedLayoutCache(), inputs: null, last: null }
+
+/** The saved chips' layout for a frame, computed once per frame from the latest inputs. */
+export function savedLayoutAt(f: FrameLike): SavedLayout {
+  const inputs = source.inputs
+  if (!inputs) return EMPTY_LAYOUT
+  const last = source.last
+  if (last && last.f === f && last.inputs === inputs) return last.result
+  const result = source.compute(f, inputs)
+  source.last = { f, inputs, result }
+  return result
+}
+
+/** Where a cluster is this frame (by id), from the layout's cluster list. */
+const clusterIndex = new WeakMap<SavedLayout, Map<string, ClusterInfo>>()
+export function clusterAt(l: SavedLayout, id: string): ClusterInfo | undefined {
+  let m = clusterIndex.get(l)
+  if (!m) { m = new Map(l.clusters.map(c => [c.id, c])); clusterIndex.set(l, m) }
+  return m.get(id)
+}
+
+/**
+ * Feeds the saved chips' layout its inputs (call it in the Timeline, above every reader) and
+ * returns how many chip rows are in use. `laneCount`: span lanes on screen, which take width
+ * from the chips in vertical.
+ */
+export function useSavedLayoutSource(laneCount = 0): number {
   const orientation = useLayout(s => s.orientation)
   const dir = useLayout(s => s.dir)
   const instants = useEntities(s => s.instants)
@@ -342,10 +434,20 @@ export function useSavedLayout(laneCount = 0): SavedLayout {
   const widths = useChipWidths(s => s.widths)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
-  const compute = useRef(createSavedLayoutCache()).current
   const inputs = useMemo<SavedLayoutInputs>(
     () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount, revealIds }),
     [orientation, dir, instants, v, ringing, widths, tunables, laneCount, revealIds],
   )
-  return useFrameValue((f: Frame) => compute(f, inputs), layoutEqual)
+  // Set during render so the children rendering next (the chips) read these inputs.
+  source.inputs = inputs
+  return useFrameValue((f: Frame) => {
+    source.inputs = inputs
+    return savedLayoutAt(f).rowsUsed
+  })
+}
+
+/** The chips' structure, re-rendering only when a chip appears, goes or joins a "+N" (not when chips move). */
+export function useSavedLayoutStructure(): SavedLayoutStructure {
+  const layout = useFrameValue((f: Frame) => savedLayoutAt(f), layoutStructureEqual)
+  return useMemo(() => structureOf(layout), [layout])
 }

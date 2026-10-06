@@ -115,6 +115,16 @@
   width: 0;
   will-change: transform;
 }
+/* The saved instants' lines share one "world" layer that moves as a whole when panning
+   (InstantLines.tsx); the lines inside it are painted into that one layer, not each its own. */
+.tl-world {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-lines);
+  pointer-events: none;
+  will-change: transform;
+}
+.tl-world > .tl-col { will-change: auto; }
 /* Layers (tokens in theme.css): the line half of a marker sits in the lines layer; the label half
    (chip, tag, badge) above it, ordered among labels by state. */
 .tl-col--line { z-index: var(--z-lines); }
@@ -169,14 +179,13 @@
 
 /* Icons beside the label, outside the centered chip */
 
-/* Saved instants: one chip under the axis, in a row chosen by the overlap layout */
+/* Saved instants: one chip under the axis. Its row and its slide along time (overlap layout)
+   are part of the label's transform, written per frame and animated (chipPlacement.ts). */
 .tl-col__chip {
   position: absolute;
   left: 0;
-  top: calc(var(--tl-chip-top) + var(--row, 0) * var(--tl-chip-row));
+  top: var(--tl-chip-top);
   transform: translateX(-50%);
-  /* Slid along the time axis by the overlap layout (time order kept) instead of collapsing into "+N". */
-  translate: var(--shift, 0px) 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -640,7 +649,6 @@
   left: var(--tl-chip-start);
   top: 0;
   transform: translateY(-50%);
-  translate: 0 var(--shift, 0px);
 }
 .timeline[data-orientation='vertical'] .tl-col__chip.has-fold { transform: translateY(-50%); }
 .timeline[data-orientation='vertical'] .tl-col__badge {

@@ -11,9 +11,8 @@ import { formatDurationHMS, formatDurationShort, formatLiveSpan, truncateText } 
 import { resolveTimeRef } from '../../domain/spans.ts'
 import { useView } from '../../store/view.ts'
 import { useEntities } from '../../store/entities.ts'
-import type { SavedLayout } from './savedLayout.ts'
 import { useChipWidths } from './savedLayout.ts'
-import { FLAG_SIZE, rightSideLayout, setRightSideInputs } from './rightSideLayout.ts'
+import { FLAG_SIZE, observeFlag, rightSideLayout, setRightSideInputs } from './rightSideLayout.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import * as act from '../../store/actions.ts'
 import type { BottomLane } from './useBottomLanes.ts'
@@ -23,7 +22,7 @@ const NAME_MAX = 10
 
 type SavedLane = Extract<BottomLane, { kind: 'saved' }>
 
-export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: SavedLayout }) {
+export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   const selectedSpanId = useView(s => s.selectedSpanId)
   const moving = useView(s => s.moveMode?.instantId ?? null)
   const selectedInstantId = useView(s => s.currentSelectedInstantId)
@@ -33,15 +32,35 @@ export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: Saved
   const saved = lanes.filter((l): l is SavedLane => l.kind === 'saved' && !isLiveLane(l))
   const refs = useRef(new Map<string, HTMLDivElement>())
   const shown = useRef(new Map<string, number | null>())
+  // One stable ref callback per lane, so a re-render doesn't re-observe the box.
+  const refFns = useRef(new Map<string, (el: HTMLDivElement | null) => void>())
+  const refFor = (key: string) => {
+    let fn = refFns.current.get(key)
+    if (!fn) {
+      let off: (() => void) | null = null
+      fn = el => {
+        if (el) {
+          refs.current.set(key, el)
+          off = observeFlag(key, el)
+        } else {
+          refs.current.delete(key)
+          shown.current.delete(key)
+          off?.()
+          off = null
+          refFns.current.delete(key)
+        }
+      }
+      refFns.current.set(key, fn)
+    }
+    return fn
+  }
 
-  // Hand the lanes and chips to the shared right-side layout (lane chips read it too).
+  // Hand the lanes to the shared right-side layout (lane chips read it too); it reads the
+  // saved chips' positions per frame.
   useLayoutEffect(() => {
-    setRightSideInputs({
-      lanes, selectedSpanId, saved: layout, instants, widths, moving, selectedInstantId, focusedInstantId,
-      flagWidth: key => refs.current.get(key)?.offsetWidth,
-    })
+    setRightSideInputs({ lanes, selectedSpanId, instants, widths, moving, selectedInstantId, focusedInstantId })
     engine.requestFrame()
-  }, [lanes, selectedSpanId, layout, instants, widths, moving, selectedInstantId, focusedInstantId])
+  }, [lanes, selectedSpanId, instants, widths, moving, selectedInstantId, focusedInstantId])
 
   useFrameListener(f => {
     if (f.orientation !== 'vertical') return
@@ -68,7 +87,7 @@ export function NowFlags({ lanes, layout }: { lanes: BottomLane[]; layout: Saved
         return (
           <div key={lane.key} className={`tl-lane tl-lane--${savedLaneVariant(r)} tl-lane--labels tl-nowflag-lane`} style={{ '--i': lane.index } as CSSProperties}>
             <div
-              ref={el => { if (el) refs.current.set(lane.key, el); else { refs.current.delete(lane.key); shown.current.delete(lane.key) } }}
+              ref={refFor(lane.key)}
               className="tl-nowflag glow-text"
               style={{ display: 'none', height: FLAG_SIZE }}
               role="button"

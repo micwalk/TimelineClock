@@ -85,7 +85,7 @@ export function SpanLane(props: SpanLaneProps) {
   const chipWrapRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null })
 
   useFrameListener(f => {
     const pa = f.pos(resolveTimeRef(a, f.now, f.center))
@@ -117,7 +117,8 @@ export function SpanLane(props: SpanLaneProps) {
     }
     // Vertical lane chips take their spot from the shared layout, so they never overlap each other.
     const mid = v && layoutKey ? (rightSideLayout(f).chips[layoutKey] ?? g.mid) : g.mid
-    if (anchorRef.current && !(Math.abs(mid - s.mid) <= 0.01)) {
+    if (anchorRef.current && (anchorRef.current !== s.anchor || !(Math.abs(mid - s.mid) <= 0.01))) {
+      s.anchor = anchorRef.current
       s.mid = mid
       anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
     }
@@ -162,8 +163,9 @@ export function SpanLane(props: SpanLaneProps) {
             <div ref={finishEndRef} className="tl-lane__end">{arrowFor(rightTarget, 'right', vertical)}</div>
           </>
         )}
-        <div ref={anchorRef} className="tl-lane__anchor">
-          {!(vertical && barOnly) && <div ref={chipWrapRef} className="tl-lane__chip-wrap">
+        {/* A bar-only lane has no chip: no anchor either (each one is a composited layer). */}
+        {hasChip && <div ref={anchorRef} className="tl-lane__anchor">
+          <div ref={chipWrapRef} className="tl-lane__chip-wrap">
             <div className="tl-lane__tools tl-lane__tools--left">
               {extra?.left}
             </div>
@@ -185,8 +187,8 @@ export function SpanLane(props: SpanLaneProps) {
               {extra?.right}
             </div>
             {below}
-          </div>}
-        </div>
+          </div>
+        </div>}
       </div>
     </>
   )

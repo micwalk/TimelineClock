@@ -1,8 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SavedInstantColumns } from './InstantColumns.tsx'
-import type { SavedLayout } from './savedLayout.ts'
-import { useSavedLayout } from './savedLayout.ts'
+import { savedLayoutAt, useSavedLayoutSource } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useSettings } from '../../store/settings.ts'
 import { engine } from '../../engine/viewportEngine.ts'
@@ -14,7 +13,8 @@ import { formatClockCompact } from '../../domain/format.ts'
 import { MINUTE } from '../../domain/time.ts'
 
 function Columns() {
-  return <SavedInstantColumns layout={useSavedLayout()} />
+  useSavedLayoutSource()
+  return <SavedInstantColumns />
 }
 
 beforeEach(() => {
@@ -132,9 +132,11 @@ describe('saved instant chips', () => {
 })
 
 const rowOf = (name: string) => {
-  const chip = screen.getByText(name).closest('.tl-col__chip') as HTMLElement
-  return chip.style.getPropertyValue('--row')
+  const id = useEntities.getState().instants.find(i => i.label === name)!.id
+  return String(savedLayoutAt(engine.getFrame()).rows[id])
 }
+/** The saved instants' lines (one per instant on screen, whatever happens to its chip). */
+const lines = (container: HTMLElement) => container.querySelectorAll('.tl-world .tl-col--line')
 
 describe('overlap layout', () => {
   it('stacks chips that would overlap into rows', () => {
@@ -151,12 +153,12 @@ describe('overlap layout', () => {
     entities.createInstant(t, 'Rice')
     entities.createInstant(t + 1000, 'Beans')
     entities.createInstant(t + 2000, 'Corn')
-    render(<Columns />)
+    const { container } = render(<Columns />)
     const more = screen.getByRole('button', { name: /^3 more instants: .*Rice/ })
     expect(more).toHaveTextContent('+3')
     expect(screen.queryByText('Rice')).not.toBeInTheDocument()
     // Members keep their lines.
-    expect(screen.getAllByRole('group', { name: /^Instant / })).toHaveLength(3)
+    expect(lines(container)).toHaveLength(3)
     const before = useView.getState().timeWidth
     fireEvent.click(more)
     expect(useView.getState().viewFocusMode).toBe('cursor')
@@ -167,8 +169,8 @@ describe('overlap layout', () => {
     const t = twentyMinutesAgo()
     const orig = entities.createInstant(t, 'Wake', { alarm: true })
     entities.createInstant(t + 1000, 'Snooze 1: Wake', { alarm: true, snoozeOriginalId: orig })
-    render(<Columns />)
-    expect(screen.getAllByRole('group', { name: /^Instant / })).toHaveLength(2)
+    const { container } = render(<Columns />)
+    expect(lines(container)).toHaveLength(2)
     expect(screen.queryByText('Wake ⟲1')).not.toBeInTheDocument()
     const badge = screen.getByRole('button', { name: /1 snooze/ })
     expect(badge).toHaveTextContent('⟲1')
@@ -180,13 +182,17 @@ describe('overlap layout', () => {
 })
 
 describe('vertical chips', () => {
-  it('start at chipStart plus the layout cross offset', () => {
+  it('start at chipStart, moved across by the layout cross offset', () => {
     useLayout.setState({ orientation: 'vertical' })
-    const id = entities.createInstant(twentyMinutesAgo(), 'Take Meds')
-    const layout: SavedLayout = { visibleIds: [id], rows: { [id]: 1 }, crossOffsets: { [id]: 40 }, shifts: {}, folded: {}, foldCount: {}, clusters: [], rowsUsed: 2 }
-    const { container } = render(<SavedInstantColumns layout={layout} />)
-    const chip = container.querySelector('.tl-col__chip') as HTMLElement
-    expect(chip.style.left).toBe('192px')
+    entities.createInstant(twentyMinutesAgo(), 'Take Meds')
+    entities.createInstant(twentyMinutesAgo() + 1000, 'Rice')
+    const { container } = render(<Columns />)
+    const chips = [...container.querySelectorAll('.tl-col__chip')] as HTMLElement[]
+    expect(chips.map(c => c.style.left)).toEqual(['152px', '152px'])
+    // Side by side: the layout moves one of them right of column 0 (the label's transform carries it).
+    const cross = Object.values(savedLayoutAt(engine.getFrame()).crossOffsets)
+    expect(Math.min(...cross)).toBe(0)
+    expect(Math.max(...cross)).toBeGreaterThan(0)
   })
 })
 
@@ -196,6 +202,7 @@ describe('layering', () => {
     const { container } = render(<Columns />)
     const line = container.querySelector('.tl-col--line') as HTMLElement
     const label = screen.getByRole('group', { name: 'Instant Rice' })
+    expect(line.closest('.tl-world')).not.toBeNull()
     expect(line.querySelector('.tl-col__line')).not.toBeNull()
     expect(line.contains(label)).toBe(false)
     expect(label.contains(line)).toBe(false)

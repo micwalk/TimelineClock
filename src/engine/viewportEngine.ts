@@ -18,6 +18,8 @@ import { clamp, easeInOutCubic, lerp } from '../domain/time.ts'
 export interface Frame extends AxisProjection {
   /** Wall clock for this frame; use it instead of Date.now() for consistency. */
   now: number
+  /** Monotonic time of this frame (performance.now()), for animations. */
+  perf: number
   orientation: Orientation
   /** Size across the time axis, px (the timeline's height when horizontal). */
   crossSize: number
@@ -47,8 +49,17 @@ const RAF_THRESHOLD_MS = 20
 const scheduleAnimationFrame: (cb: () => void) => unknown =
   typeof requestAnimationFrame === 'function' ? cb => requestAnimationFrame(cb) : cb => setTimeout(cb, 16)
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+let reducedMotionQuery: MediaQueryList | null | undefined
+/** The user asked for less motion (live; cheap enough to call every frame). */
+export function reducedMotion(): boolean {
+  if (reducedMotionQuery === undefined) {
+    reducedMotionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)') ?? null
+      : null
+  }
+  return !!reducedMotionQuery?.matches
+}
+const prefersReducedMotion = reducedMotion
 
 class ViewportEngine {
   private listeners: [Set<FrameListener>, Set<FrameListener>] = [new Set(), new Set()]
@@ -199,6 +210,7 @@ class ViewportEngine {
     return {
       ...p,
       now,
+      perf,
       orientation,
       crossSize: horizontal ? this.size.h : this.size.w,
       pxPerMs: pxPerMs(p),

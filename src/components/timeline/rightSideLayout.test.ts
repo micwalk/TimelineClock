@@ -19,7 +19,7 @@ describe('rightSideLayout', () => {
       span: { span: { id: 's1', startInstantId: 'a', endInstantId: 'b', label: 'Lap 1' }, start: a, end: b, priority: 1, focused: false },
     }
     const implied: BottomLane = { key: 'implied-secondary', kind: 'secondary', selected: b, secondary: c, a: c.tsEpochMs, b: b.tsEpochMs, top: 0, index: 1 }
-    setRightSideInputs({ lanes: [selectedSpan, implied], selectedSpanId: 's1', saved: savedLayout, instants: [a, b, c], widths: {}, moving: null, flagWidth: () => undefined })
+    setRightSideInputs({ lanes: [selectedSpan, implied], selectedSpanId: 's1', savedAt: () => savedLayout, instants: [a, b, c], widths: {}, moving: null })
     const { chips } = rightSideLayout(frame())
     expect(Object.keys(chips).sort()).toEqual(['implied-secondary', 's1'])
     // Each chip block (chip plus its tools, 104px) clears the other.
@@ -33,7 +33,7 @@ describe('rightSideLayout', () => {
       span: { span: { id: 's1', startInstantId: 'a', endInstantId: 'b', label: 'Lap 1' }, start: a, end: b, priority: 1, focused: false },
     }
     const saved = { ...savedLayout, visibleIds: ['b'], rows: { b: 0 }, crossOffsets: { b: 0 } }
-    const inputs = { lanes: [selectedSpan], selectedSpanId: 's1', saved, instants: [a, b], widths: { b: 300 }, moving: null, flagWidth: () => undefined }
+    const inputs = { lanes: [selectedSpan], selectedSpanId: 's1', savedAt: () => saved, instants: [a, b], widths: { b: 300 }, moving: null }
     // A chip too big for its span leaves it, and then keeps clear of instant chips: b's spans y 386–414.
     setRightSideInputs(inputs)
     const free = rightSideLayout(frame()).chips.s1
@@ -56,7 +56,7 @@ describe('rightSideLayout', () => {
       key: 'n1', kind: 'saved', a: -300, b: 'now', top: 0, index: 0,
       span: { span: { id: 'n1', startInstantId: 'a', endInstantId: '__NOW__', label: '', endIsNow: true }, start: a, priority: 1, focused: false },
     }
-    setRightSideInputs({ lanes: [selectedSpan, liveLane], selectedSpanId: 's1', saved: savedLayout, instants: [a, b, start], widths: {}, moving: null, flagWidth: () => undefined })
+    setRightSideInputs({ lanes: [selectedSpan, liveLane], selectedSpanId: 's1', savedAt: () => savedLayout, instants: [a, b, start], widths: {}, moving: null })
     // Wide screen: the right chip (x 208–368) and the live chip (x 18–178) don't meet, so both stay at y 250.
     const wide = rightSideLayout(frame(390)).chips
     expect(wide.s1).toBe(250)

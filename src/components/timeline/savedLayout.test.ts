@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { LayoutContext, SavedLayoutInputs } from './savedLayout.ts'
-import { createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats, useChipWidths } from './savedLayout.ts'
+import { ZOOM_REUSE, createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats, useChipWidths } from './savedLayout.ts'
 import { useSettings } from '../../store/settings.ts'
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
@@ -126,9 +126,22 @@ describe('createSavedLayoutCache', () => {
 
   it('a stable layout keeps its identity across a re-run', () => {
     const compute = createSavedLayoutCache()
+    const list = crowd(3)
+    const first = compute(frame(1000), inputs(list))
+    const runs = layoutStats.runs
+    expect(compute(frame(1000), inputs(list))).toBe(first) // new inputs object: a real re-run
+    expect(layoutStats.runs).toBe(runs + 1)
+  })
+
+  it('reuses the layout for a zoom step under ZOOM_REUSE, and re-runs past it', () => {
+    const compute = createSavedLayoutCache()
     const inp = inputs(crowd(3))
-    const first = compute(frame(1000), inp)
-    expect(compute(frame(1000, { pxPerMs: PX * 1.0001 }), inp)).toBe(first)
+    compute(frame(1000), inp)
+    const runs = layoutStats.runs
+    compute(frame(1000, { pxPerMs: PX * (1 + ZOOM_REUSE / 2) }), inp)
+    expect(layoutStats.runs).toBe(runs)
+    compute(frame(1000, { pxPerMs: PX * (1 + ZOOM_REUSE * 2) }), inp)
+    expect(layoutStats.runs).toBe(runs + 1)
   })
 
   it('uses chipColumnsMax in vertical and chipRowsMax in horizontal', () => {

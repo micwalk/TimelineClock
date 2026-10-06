@@ -9,7 +9,7 @@ import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { layoutNowFlags } from '../../domain/nowFlags.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
 import type { SavedLayout } from './savedLayout.ts'
-import { CHIP_HEIGHT, CLUSTER_WIDTH, chipToolsExtent, estimateChipWidth } from './savedLayout.ts'
+import { CHIP_HEIGHT, CLUSTER_WIDTH, chipToolsExtent, estimateChipWidth, savedLayoutAt } from './savedLayout.ts'
 import { GEOMETRY_VERTICAL, verticalLiveLaneX } from './geometry.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import type { BottomLane } from './useBottomLanes.ts'
@@ -72,6 +72,32 @@ export function observeTag(key: 'now' | 'cursor', el: HTMLElement): () => void {
   }
 }
 
+// Lane label boxes (NowFlags), measured the same way: reading their width mid-frame forced a
+// layout every frame.
+const flagWidths = new Map<string, number>()
+const observedFlags = new Map<Element, string>()
+const flagObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
+  for (const e of entries) {
+    const key = observedFlags.get(e.target)
+    if (key === undefined) continue
+    const box = e.borderBoxSize?.[0]
+    const w = Math.round(box ? box.inlineSize : (e.target as HTMLElement).offsetWidth)
+    if (w > 0 && flagWidths.get(key) !== w) { flagWidths.set(key, w); version++ }
+  }
+  engine.requestFrame()
+})
+
+/** A lane label box registers itself while it is mounted; returns the cleanup. */
+export function observeFlag(key: string, el: HTMLElement): () => void {
+  observedFlags.set(el, key)
+  flagObserver?.observe(el)
+  return () => {
+    flagObserver?.unobserve(el)
+    observedFlags.delete(el)
+    if (![...observedFlags.values()].includes(key)) flagWidths.delete(key)
+  }
+}
+
 /** SpanLane registers its chip so the layout knows how wide it is; returns the cleanup. */
 export function observeLaneChip(key: string, el: HTMLElement): () => void {
   observed.set(el, key)
@@ -86,15 +112,14 @@ export function observeLaneChip(key: string, el: HTMLElement): () => void {
 export interface RightSideInputs {
   lanes: readonly BottomLane[]
   selectedSpanId: string | null
-  saved: SavedLayout
   instants: readonly InstantRecord[]
   widths: Readonly<Record<string, number>>
   moving: string | null
   /** The selected and focused instants: their chips (and tools) draw over the lanes, so lane chips keep clear of them. */
   selectedInstantId?: string | null
   focusedInstantId?: string | null
-  /** Measured flag width, if the flag is in the DOM. */
-  flagWidth: (key: string) => number | undefined
+  /** The saved chips' layout per frame (default: the timeline's, savedLayoutAt). */
+  savedAt?: (f: Frame) => SavedLayout
 }
 
 export interface RightSidePlacement {
@@ -124,6 +149,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   if (f.orientation !== 'vertical' || !inputs) return EMPTY
   if (cache && cache.frame === f && cache.version === version) return cache.result
   const c = inputs
+  const saved = (c.savedAt ?? savedLayoutAt)(f)
   const nowPos = f.pos(f.now)
 
   // Saved instant chips (where their layout put them, with their tools) and "+N" chips: flags
@@ -135,13 +161,13 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     const i = byId.get(id)
     return !i ? null : id === c.moving ? f.mainSize / 2 : f.pos(i.tsEpochMs)
   }
-  for (const id of c.saved.visibleIds) {
-    if (c.saved.rows[id] === undefined) continue
+  for (const id of saved.visibleIds) {
+    if (saved.rows[id] === undefined) continue
     const p = posOf(id)
     const inst = byId.get(id)
     if (p === null || !inst) continue
-    const mid = p + (c.saved.shifts[id] ?? 0)
-    const xlo = GEOMETRY_VERTICAL.chipStart + (c.saved.crossOffsets[id] ?? 0)
+    const mid = p + (saved.shifts[id] ?? 0)
+    const xlo = GEOMETRY_VERTICAL.chipStart + (saved.crossOffsets[id] ?? 0)
     const selected = id === c.selectedInstantId
     const focused = id === c.focusedInstantId
     const { tail, toolsWidth } = chipToolsExtent(inst, { selected, focused, moving: id === c.moving, editing: false, now: f.now, vertical: true })
@@ -149,7 +175,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     blockers.push(box)
     if (selected || focused || id === c.moving) onTop.push(box)
   }
-  for (const k of c.saved.clusters) {
+  for (const k of saved.clusters) {
     const ps = k.memberIds.map(posOf).filter((p): p is number => p !== null)
     if (ps.length === 0) continue
     // Where the "+N" chip is drawn: its members' mean time, slid as the layout slid it.
@@ -182,7 +208,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     const containsNow = Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
     // Spans with their own chip only get a flag for Now; the chip already names them.
     if (!containsNow && hasChip) continue
-    const flagWidth = c.flagWidth(lane.key) || FLAG_WIDTH_GUESS
+    const flagWidth = flagWidths.get(lane.key) || FLAG_WIDTH_GUESS
     const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - flagWidth, xhi: laneX }
     if (containsNow) running.push(item)
     else others.push({ ...item, prefer: g.mid })

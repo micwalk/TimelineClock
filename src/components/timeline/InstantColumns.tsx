@@ -1,11 +1,12 @@
-// Saved instant markers: a line plus one compact chip, moved along the time axis by the engine.
+// Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
+// placed along the time axis each frame with its animated layout offsets (chipPlacement).
 import { memo, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowsRightLeftIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { useFrameValue } from '../../engine/hooks.ts'
+import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
@@ -21,14 +22,19 @@ import { GEOMETRY_VERTICAL } from './geometry.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
-import { Marker } from './Marker.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
-import type { SavedLayout } from './savedLayout.ts'
-import { useChipWidth, useChipWidths } from './savedLayout.ts'
+import { useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
+import { InstantLines } from './InstantLines.tsx'
+import type { ChipOffsets } from './chipPlacement.ts'
+import { useChipPlacement } from './chipPlacement.ts'
+import type { Frame } from '../../engine/viewportEngine.ts'
 
 /** Vertical: the tools row under a chip stays this far in from the right edge, px. */
 const TOOLS_EDGE = 6
+
+/** Text about a fixed time changes only with the clock's second, not with pans or zooms. */
+const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
 
 const starColor = 'var(--c-favorite)'
 const bellColor = 'var(--c-alarm)'
@@ -49,12 +55,6 @@ interface SavedFlags {
 
 interface ChipProps {
   inst: InstantRecord
-  /** Row from the overlap layout (0 = next to the axis). */
-  row: number
-  /** Vertical: px right of chip column 0 (from the overlap layout). */
-  cross: number
-  /** px the chip slid along the time axis away from its line (overlap layout), to avoid a "+N". */
-  shift: number
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
@@ -65,9 +65,10 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds }: ChipProps) {
+function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
-  const isPast = useFrameValue(f => ts < f.now)
+  // Only an alarm's bell and a selected chip's tools care whether it is past: others don't watch the clock.
+  const isPast = useFrameValueWhile(!!inst.alarm || selected, f => ts < f.now, false)
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
   const chipRef = useRef<HTMLDivElement>(null)
   useChipWidth(chipRef, inst.id)
@@ -115,12 +116,9 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
   // Vertical: tools sit in a row under the chip so none lies on the marker line. Horizontal: beside the chip.
   const toolsBelow = vertical && toolButtons !== null
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
-  // A chip wider than the room runs off the right edge: pull its tools row back on screen.
-  const chipWidth = useChipWidths(s => s.widths[inst.id])
-  const toolsPull = useFrameValue(f => (toolsBelow && chipWidth ? Math.max(0, GEOMETRY_VERTICAL.chipStart + cross + chipWidth - (f.crossSize - TOOLS_EDGE)) : 0))
 
   return (
-    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, '--shift': `${shift}px`, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
+    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
       <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
@@ -153,7 +151,7 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
             <span className="chip__time">
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
-            {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+            {showRelative && !moving && <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
             {moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(f.center - f.now)}`} />}
           </button>
           </>
@@ -165,7 +163,7 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
         </button>
       )}
       {(editing || toolsBelow) && (
-        <div className="tl-col__below" style={toolsPull > 0 ? { transform: `translateX(${-toolsPull}px)` } : undefined}>
+        <div ref={belowRef} className="tl-col__below">
           {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
           {toolsBelow && tools}
         </div>
@@ -184,31 +182,41 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
   )
 }
 
-/** The line is always drawn; the chip only when the layout gives it a row (folded and clustered instants have none). */
-const SavedMarker = memo(function SavedMarker({ inst, row, cross, shift, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
-  { inst: InstantRecord; row: number | undefined; cross: number; shift: number; foldCount: number; foldedIds: string } & SavedFlags) {
+/**
+ * A chip that the layout placed: moved along the time axis to its line each frame, plus its
+ * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
+ */
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const dropped = useUi(s => s.droppedId === inst.id)
   const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}`
+  const ref = useRef<HTMLDivElement>(null)
+  const belowRef = useRef<HTMLDivElement>(null)
+  // Vertical: a chip wider than the room runs off the right edge; pull its tools row back on screen.
+  const chipWidth = useChipWidths(s => s.widths[inst.id])
+  const pullTools = (f: Frame, target: ChipOffsets) => {
+    const el = belowRef.current
+    if (!el) return
+    const pull = f.orientation === 'vertical' && chipWidth
+      ? Math.max(0, GEOMETRY_VERTICAL.chipStart + target.cross + chipWidth - (f.crossSize - TOOLS_EDGE)) : 0
+    const transform = pull > 0 ? `translateX(${-pull}px)` : ''
+    if (el.style.transform !== transform) el.style.transform = transform
+  }
+  useChipPlacement(ref, inst.id, false, moving ? f => f.mainSize / 2 : f => f.pos(ts), pullTools)
 
   return (
-    <Marker className={stateClass} ariaLabel={`Instant ${name}`} getPos={moving ? f => f.mainSize / 2 : f => f.pos(ts)}>
-      {row !== undefined && (
-        <SavedChip inst={inst} row={row} cross={cross} shift={shift} foldCount={foldCount} foldedIds={foldedIds}
-          selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
-      )}
+    <div ref={ref} className={`tl-col tl-col--label ${stateClass}`} role="group" aria-label={`Instant ${name}`}>
+      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} belowRef={belowRef}
+        selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
-    </Marker>
+    </div>
   )
 })
 
-/** Faint marker at the original position of an instant being moved. */
-function GhostColumn({ ts }: { ts: number }) {
-  return <Marker className="is-ghost" getPos={f => f.pos(ts)} />
-}
-
-export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
+export function SavedInstantColumns() {
+  const layout = useSavedLayoutStructure()
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -231,6 +239,18 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
 
   const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
   const moving = v.moving ? byId.get(v.moving) : undefined
+  const focusedId = v.mode === 'instant' ? v.focusedInstantId : null
+
+  // Line colours, by state (the same order of precedence as the chips).
+  const lineClass = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const id of spanEnds) out[id] = 'is-span-end'
+    if (v.secondary) out[v.secondary] = 'is-secondary'
+    if (v.selected) out[v.selected] = 'is-selected'
+    if (focusedId) out[focusedId] = 'is-focused'
+    if (v.moving) out[v.moving] = 'is-moving'
+    return out
+  }, [spanEnds, v.secondary, v.selected, focusedId, v.moving])
 
   // Snooze ids per chip that shows them.
   const foldedIds = useMemo(() => {
@@ -241,21 +261,18 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
 
   return (
     <>
-      {moving && <GhostColumn ts={moving.tsEpochMs} />}
-      {layout.visibleIds.map(id => {
+      <InstantLines instants={instants} lineClass={lineClass} movingId={v.moving} ghostTs={moving ? moving.tsEpochMs : null} />
+      {layout.chipIds.map(id => {
         const inst = byId.get(id)
         if (!inst) return null
         return (
           <SavedMarker
             key={id}
             inst={inst}
-            row={layout.rows[id]}
-            cross={layout.crossOffsets[id] ?? 0}
-            shift={layout.shifts[id] ?? 0}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             selected={v.selected === id}
-            focused={v.mode === 'instant' && v.focusedInstantId === id}
+            focused={focusedId === id}
             secondary={v.secondary === id}
             spanEnd={spanEnds.has(id)}
             editing={v.editing === id}
@@ -267,7 +284,8 @@ export function SavedInstantColumns({ layout }: { layout: SavedLayout }) {
       {layout.clusters.map(c => (
         <ClusterChip
           key={c.id}
-          cluster={c}
+          id={c.id}
+          topPriority={c.topPriority}
           members={c.memberIds.map(m => byId.get(m)).filter((i): i is InstantRecord => !!i)}
         />
       ))}
