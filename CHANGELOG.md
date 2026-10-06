@@ -7,6 +7,26 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.2.0 — 2026-10-06
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- Smoother on phones, zooming especially: about 50% more frames per second when zooming and
+  10–25% more when panning on a slowed-down CPU, and more with many instants and spans. The
+  saved instants' lines now pan as one layer, chips no longer make the whole timeline redraw
+  while zooming, and nothing measures the page in the middle of a frame.
+- Tapping the Cursor tag's round **＋** drops an instant and opens its name: the ＋ swoops
+  across the axis and stretches into the new chip. Type a name, or just tap elsewhere or move
+  on to leave it unnamed; the ＋ then pulls back out of the chip. (Double-tap the Cursor tag, or
+  +, to drop one without naming it.) In vertical the ＋ steps aside past a chip on the cursor line.
+- Chips glide out of each other's way instead of jumping, and slide quickly when they have to
+  pop to another row; new chips fade in. Colours ease as things are selected, and tools pop in.
+- **Hide the cursor**: the eye badge on the Cursor tag (or H) folds the tag into its arrowhead
+  and hides its line, to look around without it; tap the arrowhead (or H) to bring it back.
+- Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
+  one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
+- While naming a chip, the time shown under it no longer covers the chip below.
+
 ## 0.1.0 — 2026-10-04
 
 **Android app: new.** Install it from this release (docs/android.md).

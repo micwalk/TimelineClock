@@ -174,9 +174,10 @@ function draw(f: Frame) {
 export function dropFromPlus(button: HTMLElement) {
   const f = engine.sample()
   const from = reducedMotion() ? null : measure(button, f, null)
-  const id = act.dropAndName()
-  if (!from) { ui.setPlusMorph(null); return }
   if (run) finish()
+  const id = act.dropAndName()
+  if (!from) return // no animation: the chip just appears, named in place
+  ui.setPlusMorph({ id, phase: 'in' })
   start({ kind: 'in', id, from, to: null, t0: null, waited: 0, thenOut: false })
 }
 

@@ -1,6 +1,6 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
-import { engine, reducedMotion as engineReducedMotion } from '../engine/viewportEngine.ts'
+import { engine } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
@@ -370,7 +370,6 @@ export function dropAndName(): string {
   const ts = cursorTime()
   const id = entities.createInstant(ts, '')
   view.editInstant(id)
-  ui.setPlusMorph({ id, phase: engineReducedMotion() ? 'editing' : 'in' })
   return id
 }
 

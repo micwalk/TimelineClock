@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { Frame } from './viewportEngine.ts'
 import { engine } from './viewportEngine.ts'
 import { useFrameListener } from './hooks.ts'
@@ -19,6 +19,8 @@ export function LiveText({ compute, className, watch }: { compute: (f: Frame, ct
   const ref = useRef<HTMLSpanElement>(null)
   const last = useRef<string | null>(null)
   const watched = useRef<number | null>(null)
+  // A re-render may bring a new compute (say, a moved instant): recompute on the next frame.
+  useLayoutEffect(() => { watched.current = null })
   useFrameListener(f => {
     if (watch) {
       const w = watch(f)

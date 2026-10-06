@@ -1,7 +1,7 @@
 {
   "name": "timeline-clock-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://timelineclockapp.netlify.app",
   "license": "MIT",
   "type": "module",

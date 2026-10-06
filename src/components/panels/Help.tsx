@@ -19,6 +19,7 @@ const KEYS: [string[], string][] = [
   [['O', 'S'], 'Zoom out'],
   [['Q', 'E'], 'Back / forward through where you have been'],
   [['V'], 'Rotate the timeline'],
+  [['H'], 'Hide or show the cursor'],
   [['T'], 'Start a timer (pick a length)'],
   [['Esc'], 'Deselect, or cancel a move'],
   [['Enter'], 'Confirm a move'],
@@ -93,11 +94,11 @@ function HelpContent() {
             <dt className="help__now">Now</dt>
             <dd>The red line. It follows the clock.</dd>
             <dt className="help__cursor">Cursor</dt>
-            <dd>The centre of the timeline when you move away from Now. Its tag shows the time there and how far it is from Now.</dd>
+            <dd>The centre of the timeline when you move away from Now. Its tag shows the time there and how far it is from Now. Its eye badge folds it into a small arrowhead (and hides its line) while you just look around; tap the arrowhead to bring it back.</dd>
             <dt>Instant</dt>
             <dd>A saved point in time, shown as a chip. Drop one with no name; later, tap it and then its “name…” hint. Star it as a favorite, or give a future one an alarm.</dd>
             <dt>Span</dt>
-            <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one.</dd>
+            <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one. Spans that follow each other share a lane (a stopwatch’s laps); names that would crowd it fold into “N spans”, which zooms in when tapped.</dd>
             <dt>Agenda</dt>
             <dd>The list of every instant, your favorites, and your saved spans. Tap a row to go there.</dd>
           </dl>
@@ -110,6 +111,7 @@ function HelpContent() {
             <li><b>Pinch</b> or <b>Ctrl + wheel</b> to zoom. The wheel zooms (horizontal) or scrolls (vertical).</li>
             <li><b>Tap</b> a chip to select it and show its tools; <b>double-tap</b> it to focus it, and again to rename it. The same goes for a span’s chip; once a span is focused, double-tap its length (or its clock tool) to type a new length.</li>
             <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span. Double-tap the Now tag to go to Now, and again to add an instant there and name it.</li>
+            <li>The round <b>＋</b> beside the Cursor tag drops an instant at the cursor and opens its name: type one, or just tap elsewhere or move on to leave it unnamed. Double-tap the Cursor tag to drop one without naming it.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>

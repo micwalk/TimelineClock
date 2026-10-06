@@ -24,6 +24,7 @@ time-dependent text, without re-rendering React.
 | Position along the time axis (pan, zoom, Now) | `usePositionMain`, `useFrameListener` | engine writes `transform: translate3d()` |
 | Text that depends on time or the cursor | `<LiveText compute={f => …} />` | engine writes `textContent`                 |
 | Coarse facts derived from the viewport (which items are on screen, whether an instant is past) | `useFrameValue(selector)` | re-renders only when the value changes |
+| Saved chips' layout (row, slide) and the lines of every instant on screen | `savedLayoutAt(frame)` read in frame listeners | chips write their transform per frame; React sees only the structure (`useSavedLayoutStructure`) |
 
 **Layers: lines never draw over text or boxes.** Everything that is a line (marker lines, span-lane bars and chevrons, the axis, tick marks) lives in a low layer; everything that is text or a box (saved, cluster and fold chips, Now/Cursor tags, menus and popovers, span-lane chips and tools, tick labels, the date label, buttons) sits above it on an opaque background. So a `Marker` renders two sibling elements (`.tl-col--line` and `.tl-col--label`, both moved by `usePositionMain`), `SpanLane` renders `.tl-lane--lines` and `.tl-lane--labels`, and `TickLayer` keeps tick marks and tick labels in two containers. The order is the `--z-lines < --z-ticks-labels < --z-chips < --z-lane-chips < --z-controls < --z-tags < --z-popovers` token ladder in `theme.css`; never put a line in the same element as its label, and never give a box a translucent background (use `--box-bg*`).
 
@@ -31,6 +32,10 @@ Rules of thumb:
 
 - **Never put per-frame values in React state.** If it changes while panning or as the clock
   ticks, use one of the hooks above.
+- **Never read layout in a frame.** `offsetWidth` or `getBoundingClientRect` inside a frame
+  listener, after other listeners wrote transforms, forces a full style and layout pass every
+  frame (it once cost a quarter of each zoom frame). Measure with a ResizeObserver and cache the
+  size (`useChipWidth`, `observeLaneChip`, `observeFlag`, `observeTag`).
 - **Use `frame.now`, not `Date.now()`, when drawing**, so everything in a frame agrees.
   In actions (responding to input) use `engine.sample()`, which is current to the
   millisecond. The last frame can be up to a second old while idle.
@@ -60,6 +65,40 @@ Frames are scheduled on demand:
 
 `engine.beginTransition()` animates from what's on screen to whatever the state says
 next. Call it *before* changing focus/zoom state.
+
+## The camera: lines in one world layer (`components/timeline/InstantLines.tsx`)
+
+While panning, everything on the timeline is fixed relative to everything else except the
+cursor. So the saved instants' lines live in one container, `.tl-world`, laid out at offsets from
+an origin time: a pan moves only the container (one transform, one composited layer); the lines
+are rewritten only when the zoom changes (and the origin re-bases when the container drifts
+far). Lines are a pool of plain elements managed by a frame listener, like the ticks, so instants
+entering or leaving the view mount nothing in React; only lines on screen are drawn. Inside the
+container lines still move by transform: a left/top change makes the browser re-record their
+paint, which measured three times the paint work while zooming.
+
+## Chips: structure in React, geometry per frame (`savedLayout.ts`, `chipPlacement.ts`)
+
+The overlap layout (`domain/labelLayout.ts`) runs from `savedLayoutAt(frame)`, once per frame at
+most and reused for pans and for zoom steps under 0.5% (`ZOOM_REUSE`). The Timeline feeds it
+(`useSavedLayoutSource`, which returns the rows in use); `SavedInstantColumns` subscribes to its
+*structure* only (which chips exist, "+N" and "⟲N" contents), so a zoom re-renders nothing until
+a chip appears, goes or joins a cluster. Each chip (and "+N" chip) places itself every frame:
+its line's position plus the layout's slide and cross offset, both on critically damped springs
+(`domain/spring.ts`: 220ms along time, 160ms for a pop to another row), so chips are pushed aside
+smoothly and never teleport. Springs ask for frames only while they move.
+
+## Motion
+
+- **Cursor ＋ morph** (`plusMorph.ts`, `PlusMorphLayer.tsx`): one shell element, drawn per frame
+  while a morph runs. Its ends are measured once (the ＋ button, the new chip); the chip end then
+  follows the time axis, so a pan mid-morph keeps it attached. `useUi.plusMorph` (`in` →
+  `editing` → `out`) hides the ＋ and the chip at the right moments. Naming ends through
+  `act.endNaming` (pans, steps and wheel call it), which blurs the name box so it commits.
+- **Hiding the cursor**: CSS only (`.is-collapsed` on the Cursor marker): the tag scales into its
+  arrowhead, pivoting on the arrow's tip, and the line fades.
+- State changes ease in CSS (colours, tools popping in, the timeline's height), never on
+  properties the engine writes (transforms).
 
 ## Adding something to the timeline
 
@@ -123,6 +162,12 @@ recent instant undo itself.
   unchanged, so a pure pan costs a cheap probe per frame and no layout. While an instant is
   being moved the cache is skipped. The limits are the `chipRowsMax` (horizontal) and
   `chipColumnsMax` (vertical) tunables.
+- **Lane packing and crowded names.** Saved-side lanes are packed (`domain/laneSlots.packSlots`):
+  spans that don't overlap in time share a slot, a span's containers are placed just before it
+  so it sits inside them, and a lane keeps its slot while it still fits. Names on one slot that
+  would touch fold into an "N spans" chip (`domain/labelGroups`; horizontal: `laneChipLayout.ts`
+  and `LaneGroupChips.tsx`, read per frame by `SpanLane`; vertical: the label boxes in
+  `rightSideLayout.ts` / `NowFlags.tsx`).
 - **Live side vs saved side lanes (`useBottomLanes.ts`: `isLiveLane`, `partitionLanes`, `placeLanes`).** A lane with an endpoint at Now or the cursor is *live*: saved spans ending at Now, the implied Selected→Now lane and the implied Selected→Cursor lane. (A span whose endpoint is the instant being moved is not live; it follows the cursor but stays saved.) Live lanes draw on the live side: horizontal, a band above the tags with lanes at y = 10 + i × 24 (`geometry.ts` `liveBandHeight`; the axis, tags, chip rows and saved lanes shift down by the band, written as `--tl-axis` / `--tl-chip-top`, so with no live lanes the geometry is unchanged); vertical, thin bars stacked inward from the left edge (x = 8 + i × 12, in the lines layer) with the chip on the inner side. Their chips are short and colour-coded (`formatDurationShort`; a name is cut to 8 characters; `now` variant red, `cursor` variant the cursor accent) and their arrows and tools (pin, rename/visibility/delete) show only after a tap on the chip (`useUi.laneTools`, dismissed by an outside tap or Escape). Saved-side lanes (below the chips, or the right edge in vertical) hold only spans between two saved instants, and only they count against the vertical chip budget.
 - **Control bar (`components/panels/ControlBar.tsx`).** Horizontal: one row. Vertical: still the bottom bar, laid out as a two-row grid that follows the screen: zoom out, ▲, step up | NOW/＋ (spanning both rows) on row 1, and zoom in, ▼, step down on row 2. `useLayout.dir` decides what up means: with the future down (dir 1) ▲ is the previous instant and step up is the earlier step (−30m); with the future up (dir −1) they are the next instant and the later step (+30m). Steps use compact labels ("−30m") and keep the split caret / long-press menu, which places itself above or below by the available room.
 - **Momentum (`hooks/glide.ts`, `domain/glide.ts`).** A flicked drag keeps panning from engine
@@ -218,7 +263,28 @@ runs them before every build.
 
 ## Performance
 
-Measured in headless Edge, 40 instants, on the main thread (layout v2 numbers from the
+Frame rate in headless Chromium with the CPU throttled (to stand in for a phone), production
+build, about 140 instants over five days with a stopwatch's laps, a running timer and a dozen
+spans; a continuous zoom (ctrl+wheel every frame) or drag for 4 s (scratch harness: CDP
+`Emulation.setCPUThrottlingRate`, `Performance.getMetrics`, tracing with invalidation tracking):
+
+| Scenario (fps; runs vary by ±3) | Before (0.1.0), 4× | 0.2.0, 4× | 0.2.0, 2× |
+|----------------|--------------------|-----------|-----------|
+| Zoom, 412×915 vertical   | 23.6 | 35–37 | 52–58 |
+| Zoom, 915×412 horizontal | 24.6 | 34–37 | 53–54 |
+| Pan, vertical            | 43.5 | 51–56 | 59–60 |
+| Pan, horizontal          | 47.8 | 50–57 | 59–60 |
+
+With 400 instants and 40 random spans (4×): zoom 14.9 → 20.4 (horizontal), 16.8 → 24.6
+(vertical); pan 20.4 → 31.5, 26.1 → 36.1. What it took: no layout reads in frames (the span
+labels' widths and the chips' mount-time measuring were forcing a layout every frame), the
+Timeline no longer re-rendering on every zoom frame (the chip structure is separate from the
+culled set of visible instants), lines in one panned layer, ticks and lines laid out only a
+little past the screen while zooming, no label elements for unlabeled ticks, no empty lane anchor
+layers, and one-pass lane packing. What remains is mostly the browser's own style, layout and
+paint work for what moves.
+
+Earlier measurements, in headless Edge, 40 instants, on the main thread (layout v2 numbers from the
 Vite dev server):
 
 | Phase | Canvas (before) | DOM (after) | Layout v2, 1400×900 horizontal | Layout v2, 390×844 vertical |
@@ -229,6 +295,6 @@ Vite dev server):
 
 The overlap layout is pan-invariant and cached; before the cache, pan cost 19.5%.
 
-Per-frame cost while zooming is about 5–6ms (style recalc, ticks, paint), within budget
-for 60fps. If phones struggle, the next levers are fewer tick nodes at extreme zoom
-levels and fewer composited layers (`will-change` on columns).
+Next levers, if phones still struggle: fewer composited layers for chips (a world container
+for unselected chips, the selected one outside it for its z-order), and lane lines that don't
+change width while zooming.
