@@ -91,17 +91,18 @@ describe('saved instant chips', () => {
     expect(screen.queryByText('· 20m ago')).toBeNull()
   })
 
-  it('select on click, rename on double-clicking the name, focus on double-clicking the time', () => {
+  it('select on click; a double-click focuses, the next one renames', () => {
     const t = twentyMinutesAgo()
     const id = entities.createInstant(t, 'Tea')
     render(<Columns />)
     fireEvent.click(screen.getByText('Tea'))
     expect(useView.getState().currentSelectedInstantId).toBe(id)
-    fireEvent.doubleClick(screen.getByText('Tea'))
+    // A double-click: two clicks, then dblclick.
+    const doubleClick = (el: HTMLElement) => { fireEvent.click(el, { detail: 1 }); fireEvent.click(el, { detail: 2 }); fireEvent.doubleClick(el) }
+    doubleClick(screen.getByText(formatClockCompact(t, true)))
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id, editingInstantId: null })
+    doubleClick(screen.getByText('Tea'))
     expect(useView.getState().editingInstantId).toBe(id)
-    act(() => useView.setState({ editingInstantId: null }))
-    fireEvent.doubleClick(screen.getByText(formatClockCompact(t, true)))
-    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
   it('offer tools when selected, including delete', () => {

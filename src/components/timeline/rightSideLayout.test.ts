@@ -25,6 +25,23 @@ describe('rightSideLayout', () => {
     // Each chip block (chip plus its tools, 104px) clears the other.
     expect(Math.abs(chips.s1 - chips['implied-secondary'])).toBeGreaterThanOrEqual(104)
   })
+  it('keeps a selected span’s chip off the selected instant’s chip, which draws over it', () => {
+    // A one-second span (too short to hold its chip): its chip wants y 400, right on the selected instant's chip.
+    const a = inst('a', -1), b = inst('b', 0)
+    const selectedSpan: BottomLane = {
+      key: 's1', kind: 'saved', a: a.tsEpochMs, b: b.tsEpochMs, top: 0, index: 0,
+      span: { span: { id: 's1', startInstantId: 'a', endInstantId: 'b', label: 'Lap 1' }, start: a, end: b, priority: 1, focused: false },
+    }
+    const saved = { ...savedLayout, visibleIds: ['b'], rows: { b: 0 }, crossOffsets: { b: 0 } }
+    const inputs = { lanes: [selectedSpan], selectedSpanId: 's1', saved, instants: [a, b], widths: { b: 300 }, moving: null, flagWidth: () => undefined }
+    setRightSideInputs(inputs)
+    expect(rightSideLayout(frame()).chips.s1).toBeCloseTo(399.5)
+    setRightSideInputs({ ...inputs, selectedInstantId: 'b' })
+    const y = rightSideLayout(frame()).chips.s1
+    // Chip block 104px tall; the instant's chip (28px) plus its tools row (30px) spans y 386–444.
+    expect(y + 52 <= 386 || y - 52 >= 444).toBe(true)
+  })
+
   it('moves a live chip only when it would actually touch a right-side chip across the axis', () => {
     // Selected span: y 0–500 (middle 250). Live span a → Now: y 100–400 (middle 250).
     const a = inst('a', -300), b = inst('b', 100), start = inst('start', -400)

@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -25,7 +27,25 @@ final class Alarms {
 
     private static final String TAG = "Alarms";
 
+    /** The app is on screen (MainActivity resumed): alarms ring without a pop-up over it. */
+    static volatile boolean appOpen;
+
+    /** Work started on the main thread (notification taps) runs here, off it. */
+    private static final ExecutorService WORK = Executors.newSingleThreadExecutor();
+
     private Alarms() {}
+
+    /** Silences alarm `id` off the main thread (it reads and writes storage). */
+    static void silenceLater(Context c, int id) {
+        Context app = c.getApplicationContext();
+        WORK.execute(() -> {
+            try {
+                silence(app, id);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Could not silence " + id, e);
+            }
+        });
+    }
 
     // ---------------------------------------------------------------------------------------
     // From the page
@@ -191,7 +211,7 @@ final class Alarms {
     /** The ringing notification for `s`, sounding unless it was silenced. */
     private static void post(Context c, AlarmSpec s) {
         try {
-            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced));
+            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced, appOpen));
         } catch (RuntimeException e) {
             Log.e(TAG, "Could not post the ringing notification", e);
         }

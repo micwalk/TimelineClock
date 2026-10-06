@@ -47,6 +47,18 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        Alarms.appOpen = true;
+    }
+
+    @Override
+    public void onPause() {
+        Alarms.appOpen = false;
+        super.onPause();
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (BuildConfig.PREVIEW && intent != null && SiteChoice.ACTION_CHOOSE.equals(intent.getAction())) chooseSite();

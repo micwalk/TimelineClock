@@ -12,8 +12,8 @@ What it adds:
 
 - **Ringing alarms** for every alarmed instant (timers and bells), exact to the second, with
   the app closed, the phone asleep, or after a restart. The notification shows its name
-  ("5m timer") and the time past the alarm, counting on ("−0:42"), and rings on the **alarm
-  volume** until you tap **Dismiss** or **Snooze 5 min** on it (they work from the lock
+  ("5m timer") and how long it has been ringing, counting up ("0:42", also in the status-bar
+  chip), and rings on the **alarm volume** until you tap **Dismiss** or **Snooze 5 min** on it (they work from the lock
   screen; swiping it away dismisses it) or the ring time in Settings runs out. Tapping the
   notification itself silences it and opens the app; it stays until answered. Answers given
   there reach the app the next time it runs.
@@ -26,8 +26,9 @@ What it adds:
   the notification's header (and the chip).
 - Tapping a notification opens the app at what it is about: the stopwatch's run, a running
   timer's span, or an alarm's overtime.
-- With the app open, the alarm rings from the notification too; the app's own Dismiss /
-  Snooze / Silence stop it. Snooze in the app goes to the snooze's span.
+- With the app open, the alarm rings without a pop-up over the app, which shows its own
+  ringing panel (the notification is still in the shade); the panel's Dismiss / Snooze /
+  Silence stop it. Snooze goes to the snooze's span, which stays on the timeline.
 
 It needs **Android 16 or newer** (it was made for a Pixel 10). It isn't on the Play Store;
 you install it from this repository's
@@ -142,11 +143,12 @@ In the app, open **Settings** (the gear). At the bottom:
 - The version line shows **"Web 0.1.0 · Android app 0.1.0"** (with the current numbers). If
   it shows only "Version …", the page isn't talking to the Android app: close the app fully
   (swipe it away in Recents) and open it again.
-- Below it, a checklist: **Notifications**, **Alarm sound**, **Exact alarms**, **Live
+- Below it, the Android version ("Android 16"), then a checklist: **Notifications**, **Alarm sound**, **Exact alarms**, **Live
   Updates**, each with ✓. Anything with ✗ says what to turn on:
   - Notifications: Android **Settings** › **Apps** › **TimelineClock** › **Notifications** ›
     allow.
-  - Alarm sound: same screen, the **Alarms and timers** category must be on.
+  - Alarm sound: same screen, both **Alarms and timers** categories must be on (one is for
+    when the app is open).
   - Exact alarms: **Settings** › **Apps** › **TimelineClock** › **Alarms & reminders** (this
     is normally allowed automatically).
   - Live Updates: the app's **Notifications** screen, **Live updates** on. Without it, the
@@ -248,7 +250,9 @@ Netlify builds for every pull request).
   without them the release APK is unsigned.
   - `MainActivity.java` creates the notification channels and registers the app's plugins.
   - `NotificationChannels.java`: "Alarms and timers" (high importance, `res/raw/alarm.ogg` on
-    the alarm stream) and "Running timers and stopwatch" (silent). Android keeps a channel's
+    the alarm stream), "Alarms and timers (app open)" (the same sound at default importance,
+    which leaves out the heads-up pop-up: used while `MainActivity` is resumed, as the page
+    shows its own ringing panel) and "Running timers and stopwatch" (silent). Android keeps a channel's
     sound and importance once created, so changing them needs a new channel id.
   - `NotificationViews.java`: the notifications, all Live Updates (promoted ongoing:
     `setRequestPromotedOngoing`, the `POST_PROMOTED_NOTIFICATIONS` permission). Promotion

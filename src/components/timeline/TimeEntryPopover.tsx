@@ -1,10 +1,11 @@
-// Time entry popovers: one hh:mm:ss box you type digits into (filling from the right, see
-// domain/timeDigits), as a clock time, an offset, or either with a switch between them.
+// Time entry popovers: one hh:mm:ss box you type digits into (filling from the right; a clock
+// time starts with the hour; see domain/timeDigits), as a clock time, an offset, or either
+// with a switch between them.
 // Rendered inside the tag or chip it edits, so it moves with the timeline.
 import { useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
-import type { TimeParts } from '../../domain/timeDigits.ts'
+import type { DigitMode, TimeParts } from '../../domain/timeDigits.ts'
 import { cleanDigits, clockFromParts, digitDisplay, digitsToParts, msToParts, partsDisplay, partsToMs } from '../../domain/timeDigits.ts'
 import { formatDurationForInput } from '../../domain/format.ts'
 
@@ -15,8 +16,9 @@ const UNITS = ['h', 'm', 's'] as const
  * from the right and the untyped places stay dim. A real (invisible) input on top takes the
  * keys, so phones bring up the number pad.
  */
-function DigitField({ digits, onDigits, initial, label, invalid, onSubmit, onCancel }: {
+function DigitField({ digits, mode, onDigits, initial, label, invalid, onSubmit, onCancel }: {
   digits: string
+  mode: DigitMode
   onDigits: (digits: string) => void
   initial: TimeParts
   label: string
@@ -25,7 +27,7 @@ function DigitField({ digits, onDigits, initial, label, invalid, onSubmit, onCan
   onCancel: () => void
 }) {
   const [focused, setFocused] = useState(false)
-  const shown = digits ? digitDisplay(digits) : partsDisplay(initial)
+  const shown = digits ? digitDisplay(digits, mode) : partsDisplay(initial)
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation()
     if (e.key === 'Escape') { e.preventDefault(); onCancel() }
@@ -38,7 +40,7 @@ function DigitField({ digits, onDigits, initial, label, invalid, onSubmit, onCan
         inputMode="numeric"
         autoComplete="off"
         autoFocus
-        aria-label={`${label} (hh:mm:ss; type digits, e.g. 930 for 9:30)`}
+        aria-label={`${label} (hh:mm:ss; type digits, e.g. ${mode === 'clock' ? '9 for 9:00, ' : ''}930 for 9:30)`}
         aria-invalid={invalid}
         value={digits}
         onChange={e => onDigits(cleanDigits(e.target.value))}
@@ -87,8 +89,8 @@ export interface TimeEntryProps {
   title: string
   /** A wall-clock time; `onSubmit` gets 24-hour parts. */
   clock?: { initialTs: number; onSubmit: (t: TimeParts) => void }
-  /** A signed offset from `from` ("Now", an instant's name). */
-  offset?: { initialMs: number; from: string; onSubmit: (ms: number) => void }
+  /** A signed offset from `from` ("Now", an instant's name); `unsigned`: a length, with no before/after switch. */
+  offset?: { initialMs: number; from: string; unsigned?: boolean; onSubmit: (ms: number) => void }
   initialMode?: Mode
   onCancel: () => void
   className?: string
@@ -108,7 +110,7 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
   const initial = mode === 'clock' && startClock ? startClock.parts : msToParts(offset?.initialMs ?? 0)
   const switchTo = (m: Mode) => { setMode(m); setDigits(''); setInvalid(false) }
   const submit = () => {
-    const parts = digits ? digitsToParts(digits) : initial
+    const parts = digits ? digitsToParts(digits, mode === 'clock' ? 'clock' : 'duration') : initial
     if (mode === 'clock' && clock) {
       const t = clockFromParts(parts, pm)
       if (!t) { setInvalid(true); return }
@@ -127,7 +129,7 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
         </div>
       )}
       <div className="time-entry">
-        {mode === 'offset' && (
+        {mode === 'offset' && !offset?.unsigned && (
           <button type="button" className={`time-entry__toggle glow-box${negative ? ' is-on' : ''}`} onClick={() => setNegative(n => !n)}
             aria-label={negative ? `Before ${offset?.from} (tap for after)` : `After ${offset?.from} (tap for before)`}>
             {negative ? '−' : '+'}
@@ -136,9 +138,10 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
         <DigitField
           key={mode}
           digits={digits}
+          mode={mode === 'clock' ? 'clock' : 'duration'}
           onDigits={d => { setDigits(d); setInvalid(false) }}
           initial={initial}
-          label={mode === 'clock' ? 'Time' : `Offset from ${offset?.from}`}
+          label={mode === 'clock' ? 'Time' : offset?.unsigned ? 'Length' : `Offset from ${offset?.from}`}
           invalid={invalid}
           onSubmit={submit}
           onCancel={onCancel}
@@ -150,7 +153,7 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
         )}
       </div>
       <p className="time-entry__hint">
-        {mode === 'clock' ? '930 → 9:30 · 1730 → 5:30 PM · 6 digits add seconds' : '13 → 13 min · 130 → 1h 30m · 6 digits add seconds'}
+        {mode === 'clock' ? '9 → 9:00 · 930 → 9:30 · 1730 → 5:30 PM · 6 digits add seconds' : '13 → 13 min · 130 → 1h 30m · 6 digits add seconds'}
       </p>
       <div className="time-entry__actions">
         <button type="button" className="time-entry__btn glow-box" style={{ '--accent': 'var(--ink-faint)' } as React.CSSProperties} onClick={onCancel}>Cancel</button>

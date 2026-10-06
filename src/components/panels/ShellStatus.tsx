@@ -8,6 +8,7 @@ export function ShellStatus() {
   if (!status) return null
   return (
     <ul className="shell-status" aria-label="Android permissions">
+      {status.android && <li className="shell-status__os">Android {status.android}</li>}
       {shellStatusItems(status).map(item => (
         <li key={item.label} className={item.ok ? 'is-ok' : 'is-off'}>
           <span aria-hidden>{item.ok ? '✓' : '✗'}</span> {item.label}{item.ok ? '' : ' (off)'}

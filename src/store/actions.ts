@@ -62,6 +62,25 @@ export function focusInstant(id: string, animate = true) {
   view.setTimeCenter(inst.tsEpochMs)
 }
 
+export const isInstantFocused = (id: string) => v().viewFocusMode === 'instant' && v().focusedInstantId === id
+
+/**
+ * Double-tap on an instant's chip: focus it; once focused, rename it (as activateSpan does for
+ * spans). `wasFocused`: whether it was focused before the double-tap began (its first tap can
+ * focus a chip under the cursor).
+ */
+export function activateInstant(id: string, wasFocused = isInstantFocused(id)) {
+  if (v().moveMode) return
+  if (wasFocused) view.editInstant(id)
+  else focusInstant(id)
+}
+
+/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now with its name editor open. */
+export function activateNow() {
+  if (v().viewFocusMode !== 'now') { focusNow(); return }
+  view.editInstant(dropInstant())
+}
+
 /**
  * Goes to an instant from outside the timeline (an alarm notification): focus and select it,
  * and show the Agenda tab that lists it. Falls back to Now if it no longer exists.
@@ -74,6 +93,9 @@ export function revealInstant(id: string, animate = true) {
   if (tab === 'spans' || (tab === 'favorites' && !inst.favorite)) ui.setListTab('instants')
 }
 
+/** A notification tap shows at least this much time, so a few seconds of overtime aren't blown up to fill the screen. */
+const REVEAL_MIN_WIDTH = 2 * MINUTE
+
 /**
  * A tap on one of the Android app's notifications (domain/nativeNotifications liveTapTarget):
  * the stopwatch's run, a running timer's span, or an alarm's overtime, focused and selected.
@@ -84,6 +106,7 @@ export function revealLive(kind: NotificationKind, instantId: string) {
   if (!target) { focusNow(); return }
   if ('instantId' in target) { revealInstant(target.instantId); return }
   focusSpan(target.spanId)
+  if (v().timeWidth < REVEAL_MIN_WIDTH) view.setTimeWidth(REVEAL_MIN_WIDTH)
   view.selectSpan(target.spanId)
 }
 
@@ -588,6 +611,21 @@ export function toggleSpanVisible(id: string) {
 }
 
 /** Double-click on a span: focus and fit it, or rename if it's already focused. */
+/**
+ * Types a saved span's length: its end moves to that far from its start (the same side as
+ * before). A timer's end is its alarm, so this sets the timer's length.
+ */
+export function setSpanLength(spanId: string, ms: number) {
+  const sp = entities.getSpan(spanId)
+  if (!sp || sp.endIsNow) return
+  const start = entities.getInstant(sp.startInstantId)
+  const end = entities.getInstant(sp.endInstantId)
+  if (!start || !end) return
+  const dir = end.tsEpochMs >= start.tsEpochMs ? 1 : -1
+  entities.setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
+  if (v().viewFocusMode === 'span' && v().focusedSpanId === spanId) focusSpan(spanId)
+}
+
 export function activateSpan(id: string) {
   const s = v()
   if (s.viewFocusMode === 'span' && s.focusedSpanId === id) view.editSpan(id)

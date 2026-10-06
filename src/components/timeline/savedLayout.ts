@@ -21,6 +21,34 @@ import { verticalCrossBudget } from './geometry.ts'
 export const CULL_MARGIN_PX = 400
 
 export const CHIP_HEIGHT = 28
+/** A chip's tool buttons (InstantColumns: .icon-btn 26px, 3px apart), and the gap to the chip: under it in vertical, beside it in horizontal. */
+const TOOL_SIZE = 26
+const TOOL_GAP = 3
+const TOOLS_GAP_VERTICAL = 4
+const TOOLS_GAP_HORIZONTAL = 6
+
+/** How many tool buttons a chip shows (as InstantColumns draws them): selected, or moving. */
+export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number }): number {
+  if (o.moving) return 3 // type the time, confirm, cancel
+  if (!o.selected) return 0
+  return Number(!i.favorite) + Number(!i.alarm && i.tsEpochMs >= o.now) + Number(o.focused) + 2 // + hide, delete
+}
+
+/**
+ * The room a chip's tools take: `tail` along the time axis after the chip (a row under it in
+ * vertical, also the time while renaming; beside it in horizontal) and the row's width.
+ */
+export function chipToolsExtent(
+  i: InstantRecord,
+  o: { selected: boolean; focused: boolean; moving: boolean; editing: boolean; now: number; vertical: boolean },
+): { tail: number; toolsWidth: number } {
+  const tools = chipToolCount(i, o)
+  const toolsWidth = tools > 0 ? tools * TOOL_SIZE + (tools - 1) * TOOL_GAP : 0
+  const tail = o.vertical
+    ? (tools > 0 || o.editing ? TOOLS_GAP_VERTICAL + TOOL_SIZE : 0)
+    : (tools > 0 ? TOOLS_GAP_HORIZONTAL + toolsWidth : 0)
+  return { tail, toolsWidth }
+}
 export const CLUSTER_WIDTH = 46
 export const FOLD_BADGE_WIDTH = 34
 
@@ -103,12 +131,15 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
     const width = c.widths[i.id] ?? estimateChipWidth(i.label)
     const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
       : i.alarm && i.tsEpochMs > c.now ? 4 : i.favorite ? 5 : 6
+    // Its tools take room too, so neighbours keep clear of them.
+    const { tail, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical })
     return {
       id: i.id,
       // A moving instant follows the cursor at the center of the view.
       pos: moving ? c.mainSize / 2 : c.pos(i.tsEpochMs),
       mainExtent: vertical ? CHIP_HEIGHT : width,
-      crossExtent: vertical ? width : CHIP_HEIGHT,
+      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT,
+      ...(tail > 0 ? { tail } : {}),
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),
       pinned: focused || selected || secondary || moving || editing || ringing,

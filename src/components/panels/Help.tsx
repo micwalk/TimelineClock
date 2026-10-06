@@ -108,14 +108,14 @@ function HelpContent() {
           <ul className="help__list">
             <li><b>Drag</b> to move through time; <b>flick</b> to glide.</li>
             <li><b>Pinch</b> or <b>Ctrl + wheel</b> to zoom. The wheel zooms (horizontal) or scrolls (vertical).</li>
-            <li><b>Tap</b> a chip to select it and show its tools; <b>double-tap</b> its name to rename it.</li>
-            <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span.</li>
+            <li><b>Tap</b> a chip to select it and show its tools; <b>double-tap</b> it to focus it, and again to rename it. The same goes for a span’s chip; once a span is focused, double-tap its length (or its clock tool) to type a new length.</li>
+            <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span. Double-tap the Now tag to go to Now, and again to add an instant there and name it.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
             <li>The <b>star</b> on a favorite’s lane unfavorites it. Dismissing a timer’s alarm unfavorites its end.</li>
             <li>In a browser, alarms ring while the app is open. The <a href={ANDROID_URL} target="_blank" rel="noreferrer">Android app</a> also rings them when it’s closed, and shows a running timer or stopwatch in the notifications.</li>
-            <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes.</li>
+            <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes. A clock time starts with the hour: <b>9</b> is 9:00.</li>
             <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>
             <li>The <b>eye</b> on a selected chip or an Agenda row hides an instant from the timeline; its spans stay. Tap the eye in the Agenda to show it again.</li>
           </ul>

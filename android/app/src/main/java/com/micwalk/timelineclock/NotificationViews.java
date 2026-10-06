@@ -112,13 +112,16 @@ final class NotificationViews {
     }
 
     /**
-     * A ringing alarm: its name, the time past it (a countdown past zero shows "−0:42" in the
-     * header; Android 17 shows it big as "over"), Dismiss and Snooze. On the alarm channel,
-     * sounding over and over (FLAG_INSISTENT) until answered or the ring time runs out, unless
-     * `silent` (after a tap on it). Swiping it away dismisses it.
+     * A ringing alarm: its name, the time since it came due counting up (Android shows a
+     * chronometer in the status-bar chip only while it is positive; Android 17 also shows it
+     * big, as "over"), Dismiss and Snooze. Sounds over and over (FLAG_INSISTENT) until answered
+     * or the ring time runs out, unless `silent` (after a tap on it, or Silence in the app).
+     * `appOpen`: on the channel without a pop-up, as the app shows its own ringing panel.
+     * Swiping it away dismisses it.
      */
-    static Notification ringing(Context c, AlarmSpec s, int snoozeMinutes, boolean silent) {
-        NotificationCompat.Builder b = base(c, NotificationChannels.ALARMS, s.at, true, s.title, s.ringText)
+    static Notification ringing(Context c, AlarmSpec s, int snoozeMinutes, boolean silent, boolean appOpen) {
+        String channel = appOpen ? NotificationChannels.ALARMS_IN_APP : NotificationChannels.ALARMS;
+        NotificationCompat.Builder b = base(c, channel, s.at, false, s.title, s.ringText)
             // Its own request code range, so it never shares a PendingIntent with a live notification.
             .setContentIntent(openApp(c, "alarm", s.instantId, s.id ^ 0x40000000, s.id))
             .setDeleteIntent(alarmBroadcast(c, AlarmReceiver.ACTION_DISMISS, s.id))

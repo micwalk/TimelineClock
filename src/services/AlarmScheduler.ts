@@ -89,7 +89,7 @@ export const SNOOZE_MINUTES = 5
 /**
  * Dismisses a ringing alarm and sets a new one `minutes` from now (or at `at`: a snooze from
  * the Android app's notification), labelled "Snooze N: <original>" and linked to the original
- * alarm by a hidden span.
+ * alarm by a span, shown like any saved span.
  */
 export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined {
   const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
@@ -102,7 +102,7 @@ export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number)
     alarm: true,
     snoozeOriginalId: originalId,
   })
-  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: false })
+  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: true })
   dismiss(instantId)
   return newId
 }

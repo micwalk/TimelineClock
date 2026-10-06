@@ -276,13 +276,15 @@ export interface ShellStatus {
    * status-bar chip. Missing from early test builds of the app.
    */
   liveUpdates?: boolean
+  /** Android's version ("16"). Missing from early test builds of the app. */
+  android?: string
 }
 
 /** Settings' checklist, with what to do about anything that's off. */
 export function shellStatusItems(status: ShellStatus): { label: string; ok: boolean; fix?: string }[] {
   const items = [
     { label: 'Notifications', ok: status.notifications, fix: 'Allow notifications for TimelineClock in Android Settings › Apps.' },
-    { label: 'Alarm sound', ok: status.alarmChannel, fix: 'Turn on the “Alarms and timers” notification category.' },
+    { label: 'Alarm sound', ok: status.alarmChannel, fix: 'Turn on both “Alarms and timers” notification categories.' },
     { label: 'Exact alarms', ok: status.exactAlarms, fix: 'Allow “Alarms & reminders” in the app’s Android settings.' },
   ]
   if (status.liveUpdates !== undefined) {

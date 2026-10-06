@@ -1,5 +1,6 @@
 // Span lanes below the timeline: implied spans for the selection, then saved spans (the focused one first).
-import { EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
+import { useState } from 'react'
+import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDurationHMS, formatLiveSpan, livePrecision, truncateText } from '../../domain/format.ts'
@@ -14,6 +15,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
+import { TimeEntry } from './TimeEntryPopover.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls, liveLaneVariant, savedLaneVariant } from './useBottomLanes.ts'
 
@@ -83,10 +85,11 @@ function PinButton({ a, b }: { a: TimeRef; b: TimeRef }) {
   return <IconButton icon={MapPinIcon} label="Save this span" className="glow-box" onClick={() => act.saveSpanRefs(a, b)} />
 }
 
-function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean }) {
+function SavedSpanTools({ spanId, visible, onTypeLength }: { spanId: string; visible: boolean; onTypeLength?: () => void }) {
   return (
     <>
       <IconButton icon={PencilIcon} label="Rename span" color="#a3e635" bare onClick={() => view.editSpan(spanId)} />
+      {onTypeLength && <IconButton icon={ClockIcon} label="Type the length" color="var(--c-cursor)" bare onClick={onTypeLength} />}
       <IconButton icon={visible ? EyeIcon : EyeSlashIcon} label={visible ? 'Hide span' : 'Show span'} color="var(--ink)" bare
         pressed={visible} onClick={() => act.toggleSpanVisible(spanId)} />
       <IconButton icon={TrashIcon} label="Delete span" color="var(--c-danger)" bare onClick={() => act.deleteSpan(spanId)} />
@@ -94,7 +97,16 @@ function SavedSpanTools({ spanId, visible }: { spanId: string; visible: boolean 
   )
 }
 
-function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan; a: TimeRef; b: TimeRef; editing: boolean; expanded: boolean; short?: boolean }) {
+function SavedSpanChip({ r, a, b, editing, expanded, short, onLengthDoubleClick }: {
+  r: ResolvedSpan
+  a: TimeRef
+  b: TimeRef
+  editing: boolean
+  expanded: boolean
+  short?: boolean
+  /** Double-tap on the length (a focused span): type it, rather than rename the span. */
+  onLengthDoubleClick?: () => void
+}) {
   const header = spanHeader(r)
   const ends = `${displayName(r.start.label)} → ${spanEndName(r)}`
   // Live chips (spans to Now) name the span, else the instant it runs from.
@@ -116,7 +128,9 @@ function SavedSpanChip({ r, a, b, editing, expanded, short }: { r: ResolvedSpan;
           <span className="span-chip__sep" aria-hidden>·</span>
         </>
       ) : null}
-      {short ? <ShortDuration a={a} b={b} /> : <Duration a={a} b={b} />}
+      {short ? <ShortDuration a={a} b={b} /> : onLengthDoubleClick ? (
+        <span className="span-chip__len" onDoubleClick={e => { e.stopPropagation(); onLengthDoubleClick() }}><Duration a={a} b={b} /></span>
+      ) : <Duration a={a} b={b} />}
     </span>
   )
 }
@@ -157,7 +171,25 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
 }) {
   const editing = useView(s => s.editingSpanId === r.span.id)
   const isSelected = useView(s => s.selectedSpanId === r.span.id)
+  const focused = useView(s => s.viewFocusMode === 'span' && s.focusedSpanId === r.span.id)
   const expanded = isSelected && !live
+  // A span between two instants can have its length typed (its end moves): a tool, or a double-tap on the length once focused.
+  const [typingLength, setTypingLength] = useState(false)
+  const lengthTypable = !!r.end && !live
+  const typeLength = lengthTypable ? () => setTypingLength(true) : undefined
+  const lengthEntry = typingLength && r.end ? (
+    <TimeEntry
+      title={`Length of ${spanHeader(r) ?? 'span'}`}
+      className="popover--chip"
+      offset={{
+        initialMs: Math.abs(r.end.tsEpochMs - r.start.tsEpochMs),
+        from: endpointName(r.start),
+        unsigned: true,
+        onSubmit: ms => { act.setSpanLength(r.span.id, ms); setTypingLength(false) },
+      }}
+      onCancel={() => setTypingLength(false)}
+    />
+  ) : undefined
   return (
     <SpanLane
       top={top}
@@ -175,11 +207,12 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       barOnly={!controls}
-      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} short={live} />}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
       chipEnd={isFavoriteNowSpan(r) ? <FavoriteStar instant={r.start} /> : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
-      tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} /> }) : undefined}
+      tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength} /> }) : undefined}
+      below={lengthEntry}
     />
   )
 }

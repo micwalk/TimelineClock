@@ -5,6 +5,7 @@ import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.os.Build;
 import android.util.Log;
 import androidx.core.app.NotificationManagerCompat;
 import com.getcapacitor.JSArray;
@@ -110,7 +111,7 @@ public class AlarmsPlugin extends Plugin {
         }
     }
 
-    /** What Android currently allows, for the Settings panel: { notifications, alarmChannel, exactAlarms, liveUpdates }. */
+    /** What Android currently allows, for the Settings panel: { notifications, alarmChannel, exactAlarms, liveUpdates, android }. */
     @PluginMethod
     public void getStatus(PluginCall call) {
         try {
@@ -121,16 +122,21 @@ public class AlarmsPlugin extends Plugin {
         }
     }
 
+    private static boolean channelOn(NotificationManager nm, String id) {
+        NotificationChannel ch = nm != null ? nm.getNotificationChannel(id) : null;
+        return ch != null && ch.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
     static JSObject status(Context c) {
         JSObject result = new JSObject();
         result.put("notifications", NotificationViews.canPost(c));
         NotificationManager nm = c.getSystemService(NotificationManager.class);
-        NotificationChannel alarms = nm != null ? nm.getNotificationChannel(NotificationChannels.ALARMS) : null;
-        result.put("alarmChannel", alarms != null && alarms.getImportance() != NotificationManager.IMPORTANCE_NONE);
+        result.put("alarmChannel", channelOn(nm, NotificationChannels.ALARMS) && channelOn(nm, NotificationChannels.ALARMS_IN_APP));
         AlarmManager am = c.getSystemService(AlarmManager.class);
         result.put("exactAlarms", am != null && am.canScheduleExactAlarms());
         // Live Updates: the timer, stopwatch and ringing alarm pinned on the lock screen and as a status-bar chip.
         result.put("liveUpdates", NotificationManagerCompat.from(c).canPostPromotedNotifications());
+        result.put("android", Build.VERSION.RELEASE);
         return result;
     }
 }

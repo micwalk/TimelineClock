@@ -238,6 +238,13 @@ describe('revealLive (a tap on an Android notification)', () => {
     expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: overtime.id, selectedSpanId: overtime.id })
   })
 
+  it('a few seconds of overtime still shows a couple of minutes around it', () => {
+    const end = act.startTimer(MINUTE)
+    entities.setInstantTime(end, engine.sample().now - 3000)
+    act.revealLive('alarm', end)
+    expect(view().timeWidth).toBeGreaterThanOrEqual(2 * MINUTE)
+  })
+
   it('the stopwatch focuses its run so far', () => {
     act.startStopwatch()
     const start = useQuick.getState().stopwatch.marks[0]
@@ -307,8 +314,48 @@ describe('favorites and alarms', () => {
     useAlarms.setState({ ringing: [{ instantId: id, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
     const snoozed = act.snoozeAlarm(id, 5)!
     const span = useEntities.getState().spans.find(s => s.startInstantId === id && s.endInstantId === snoozed)!
-    expect(span.visible).toBe(false)
+    expect(span.visible).toBe(true)
     expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: span.id, selectedSpanId: span.id })
+  })
+})
+
+describe('double-taps', () => {
+  it('an instant chip: the first focuses it, the next renames it', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Rice')
+    act.activateInstant(id, false)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id, editingInstantId: null })
+    act.activateInstant(id, true)
+    expect(view().editingInstantId).toBe(id)
+  })
+
+  it('the Now tag: the first goes to Now, the next drops an instant at Now and opens its name', () => {
+    useView.setState({ viewFocusMode: 'cursor' })
+    const before = useEntities.getState().instants.length
+    act.activateNow()
+    expect(view().viewFocusMode).toBe('now')
+    expect(useEntities.getState().instants).toHaveLength(before)
+    act.activateNow()
+    const added = useEntities.getState().instants.at(-1)!
+    expect(useEntities.getState().instants).toHaveLength(before + 1)
+    expect(view().editingInstantId).toBe(added.id)
+  })
+})
+
+describe('setSpanLength', () => {
+  it('moves the span’s end to that far from its start (a timer’s alarm moves with it)', () => {
+    const end = act.startTimer(13 * MINUTE)
+    const timer = useEntities.getState().spans.find(sp => !sp.endIsNow && sp.endInstantId === end)!
+    const start = instant(timer.startInstantId).tsEpochMs
+    act.setSpanLength(timer.id, 5 * MINUTE)
+    expect(instant(end)).toMatchObject({ tsEpochMs: start + 5 * MINUTE, alarm: true })
+  })
+
+  it('leaves spans to Now alone', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Rice', { favorite: true })
+    act.setFavorite(id, true)
+    const toNow = entities.nowSpanOf(id)!
+    act.setSpanLength(toNow.id, MINUTE)
+    expect(instant(id).tsEpochMs).toBeLessThan(Date.now() - 50 * MINUTE)
   })
 })
 

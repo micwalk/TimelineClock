@@ -70,6 +70,15 @@ describe('layoutLabels: placement', () => {
     expect(r.placed.b).toEqual({ slot: 1, crossOffset: 104, shift: 0 })
   })
 
+  it('keeps neighbours off a chip’s tools (its tail), but leaves the chip centered on its marker', () => {
+    // Selected chip at 0 (y -10..10) with a 30px tools row under it (to 40); b at 35 would sit on the tools.
+    const r = layoutLabels([vchip('sel', 0, { pinned: true, priority: 1, tail: 30 }), vchip('b', 35)], V)
+    expect(r.placed.sel).toEqual({ slot: 0, crossOffset: 0, shift: 0 })
+    expect(r.placed.b.slot === 0 && r.placed.b.shift === 0).toBe(false)
+    // Without the tools, b would have sat next to the axis right below it.
+    expect(layoutLabels([vchip('sel', 0, { pinned: true, priority: 1 }), vchip('b', 35)], V).placed.b).toEqual({ slot: 0, crossOffset: 0, shift: 0 })
+  })
+
   it('respects the cross budget in vertical', () => {
     const r = layoutLabels([vchip('a', 0, { priority: 1 }), vchip('b', 5, { priority: 2 }), vchip('c', 10, { priority: 3 })], V)
     expect(r.placed.c).toBeUndefined()

@@ -25,7 +25,10 @@ import { Marker } from './Marker.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
 import type { SavedLayout } from './savedLayout.ts'
-import { useChipWidth } from './savedLayout.ts'
+import { useChipWidth, useChipWidths } from './savedLayout.ts'
+
+/** Vertical: the tools row under a chip stays this far in from the right edge, px. */
+const TOOLS_EDGE = 6
 
 const starColor = 'var(--c-favorite)'
 const bellColor = 'var(--c-alarm)'
@@ -79,6 +82,13 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
   const [typing, setTyping] = useState(false)
+  // Whether the chip was focused when a double-tap began (its first tap may focus it).
+  const firstTap = useRef<{ wasFocused: boolean } | null>(null)
+  const onTap = (e: React.MouseEvent) => {
+    if (e.detail <= 1) firstTap.current = { wasFocused: act.isInstantFocused(inst.id) }
+    if (moving) setTyping(true)
+    else act.selectInstant(inst.id)
+  }
   if (typing && !moving) setTyping(false)
 
   const zoomToFold = () => {
@@ -105,6 +115,9 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
   // Vertical: tools sit in a row under the chip so none lies on the marker line. Horizontal: beside the chip.
   const toolsBelow = vertical && toolButtons !== null
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
+  // A chip wider than the room runs off the right edge: pull its tools row back on screen.
+  const chipWidth = useChipWidths(s => s.widths[inst.id])
+  const toolsPull = useFrameValue(f => (toolsBelow && chipWidth ? Math.max(0, GEOMETRY_VERTICAL.chipStart + cross + chipWidth - (f.crossSize - TOOLS_EDGE)) : 0))
 
   return (
     <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={{ '--row': row, '--shift': `${shift}px`, ...(vertical ? { left: GEOMETRY_VERTICAL.chipStart + cross } : {}) } as CSSProperties}>
@@ -132,11 +145,12 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
           <button
             type="button"
             className="chip__main"
-            title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click the name to rename, the time to focus`}
-            onClick={() => (moving ? setTyping(true) : act.selectInstant(inst.id))}
+            title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click to focus, then again to rename`}
+            onClick={onTap}
+            onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
-            {!unnamed && <span className="chip__name" onDoubleClick={() => view.editInstant(inst.id)}>{name}</span>}
-            <span className="chip__time" onDoubleClick={() => act.focusInstant(inst.id)}>
+            {!unnamed && <span className="chip__name">{name}</span>}
+            <span className="chip__time">
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
@@ -151,7 +165,7 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
         </button>
       )}
       {(editing || toolsBelow) && (
-        <div className="tl-col__below">
+        <div className="tl-col__below" style={toolsPull > 0 ? { transform: `translateX(${-toolsPull}px)` } : undefined}>
           {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
           {toolsBelow && tools}
         </div>

@@ -1,5 +1,6 @@
-// Now and the Cursor as arrow tags on the live side of the axis. A tap opens the
-// tag's tools; a double-tap drops a nameless instant there (the Cursor tag also has a ＋ button).
+// Now and the Cursor as arrow tags on the live side of the axis. A tap opens the tag's tools.
+// A double-tap on the Cursor tag drops a nameless instant there (it also has a ＋ button); on
+// the Now tag it goes to Now, then drops an instant at Now with its name editor open.
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
@@ -49,10 +50,11 @@ export function NowTag() {
   return (
     <Marker className={`is-now${focused ? ' is-focused' : ''}${menuOpen || clockOpen ? ' has-popover' : ''}`} ariaLabel="Now" getPos={f => f.pos(f.now)}>
       <ArrowTag
-        hint="Tap for tools; double-tap to drop an instant at Now"
+        hint={focused ? 'Tap for tools; double-tap to add a named instant at Now' : 'Tap for tools; double-tap to go to Now'}
+        measure="now"
         slot={0}
         onClick={() => ui.toggleTagMenu('now')}
-        onDoubleClick={() => { ui.closeTagMenu(); act.dropInstant() }}
+        onDoubleClick={() => { ui.closeTagMenu(); act.activateNow() }}
         menuOpen={menuOpen}
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Now tools" items={items} onClose={ui.closeTagMenu} />}
@@ -126,6 +128,7 @@ export function CursorTag() {
     <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}>
       <ArrowTag
         srName="Cursor"
+        measure="cursor"
         hint={onInstant ? 'Tap for tools' : 'Tap for tools; double-tap to drop an instant here'}
         action={onInstant ? undefined : { label: 'Drop an instant at the cursor', onClick: () => act.dropInstant() }}
         slot={slot}

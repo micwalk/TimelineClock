@@ -1,6 +1,8 @@
 // The time entry field: digits typed into one hh:mm:ss box, filling from the right.
 // Up to four digits mean hours and minutes ("930" → 09:30, "13" → 13 minutes); five or
-// six add seconds ("93015" → 09:30:15). Pure; the field is components/timeline/TimeEntryPopover.
+// six add seconds ("93015" → 09:30:15). A clock time starts with the hour instead: one or
+// two digits are the hour ("9" → 9:00, "17" → 17:00; "93" → 9:30, as 93 isn't an hour).
+// Pure; the field is components/timeline/TimeEntryPopover.
 import { HOUR, MINUTE, SECOND } from './time.ts'
 
 export const MAX_TIME_DIGITS = 6
@@ -13,8 +15,19 @@ export interface DigitDisplay { chars: string; typed: boolean[] }
 /** Keeps digits only, at most six. */
 export const cleanDigits = (text: string) => text.replace(/\D/g, '').slice(0, MAX_TIME_DIGITS)
 
-export function digitDisplay(digits: string): DigitDisplay {
+/** 'duration' fills from the right ("13" is 13 minutes); 'clock' starts with the hour ("9" is 9:00). */
+export type DigitMode = 'duration' | 'clock'
+
+export function digitDisplay(digits: string, mode: DigitMode = 'duration'): DigitDisplay {
   const d = cleanDigits(digits)
+  if (mode === 'clock' && d.length > 0 && d.length <= 2) {
+    // The hour: "9" → 09, "17" → 17; two digits that can't be an hour are the hour and the
+    // minutes' first digit ("93" → 09:30).
+    const hour = d.length === 1 || Number(d) <= 23
+    const chars = hour ? `${d.padStart(2, '0')}0000` : `0${d}000`
+    const typed = hour ? [d.length === 2, true, false, false, false, false] : [false, true, true, false, false, false]
+    return { chars, typed }
+  }
   const width = d.length <= 4 ? 4 : 6
   const filled = d.padStart(width, '0')
   const chars = width === 4 ? `${filled}00` : filled
@@ -22,8 +35,8 @@ export function digitDisplay(digits: string): DigitDisplay {
   return { chars, typed }
 }
 
-export function digitsToParts(digits: string): TimeParts {
-  const { chars } = digitDisplay(digits)
+export function digitsToParts(digits: string, mode: DigitMode = 'duration'): TimeParts {
+  const { chars } = digitDisplay(digits, mode)
   return { h: Number(chars.slice(0, 2)), m: Number(chars.slice(2, 4)), s: Number(chars.slice(4, 6)) }
 }
 
