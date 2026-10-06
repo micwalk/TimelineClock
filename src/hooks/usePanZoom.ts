@@ -10,6 +10,7 @@ import { glide } from './glide.ts'
 import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
 import { useLayout } from '../store/layout.ts'
 import { getTunables } from '../store/settings.ts'
+import { noteDragMove, setDragging } from '../engine/gesture.ts'
 
 const WHEEL_ZOOM_PER_PX = 0.001 // a 100px mouse-wheel notch ≈ 10%
 
@@ -85,6 +86,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
         // Capture only once dragging, so plain clicks still reach chips and buttons.
         el.setPointerCapture(e.pointerId)
         el.classList.add('is-panning')
+        setDragging(true, drag.touch)
         beginPan()
         panByPixels(main(e) - drag.start)
         drag.last = main(e)
@@ -92,6 +94,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
         sample(main(e))
         return
       }
+      noteDragMove(main(e) - drag.last)
       panByPixels(main(e) - drag.last)
       drag.last = main(e)
       sample(main(e))
@@ -103,6 +106,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (drag && e.pointerId === drag.id) {
         if (drag.moved) {
           el.classList.remove('is-panning')
+          setDragging(false)
           const t = getTunables()
           const landing = drag.touch ? t.landingTouchPx : t.landingMousePx
           const v = pointers.size === 0 && drag.id === e.pointerId && e.type === 'pointerup'
@@ -151,6 +155,7 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       glide.stop()
+      setDragging(false)
       el.removeEventListener('pointerdown', onPointerDown)
       el.removeEventListener('pointermove', onPointerMove)
       el.removeEventListener('pointerup', onPointerUp)

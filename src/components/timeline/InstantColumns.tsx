@@ -29,6 +29,7 @@ import { InstantLines } from './InstantLines.tsx'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
 import { useMorphChip } from './plusMorph.ts'
+import { captureAt } from './capture.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 
 /** Vertical: the tools row under a chip stays this far in from the right edge, px. */
@@ -188,14 +189,14 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const dropped = useUi(s => s.droppedId === inst.id)
   // The Cursor tag's ＋ is still growing into this chip: the chip shows once it arrives.
   const morphTarget = useUi(s => s.plusMorph?.id === inst.id && s.plusMorph.phase === 'in')
-  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}${morphTarget ? ' is-morph-target' : ''}`
+  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : captured ? 'is-capture' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}${morphTarget ? ' is-morph-target' : ''}`
   const ref = useRef<HTMLDivElement>(null)
   const belowRef = useRef<HTMLDivElement>(null)
   // Vertical: a chip wider than the room runs off the right edge; pull its tools row back on screen.
@@ -244,6 +245,8 @@ export function SavedInstantColumns() {
   const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
   const moving = v.moving ? byId.get(v.moving) : undefined
   const focusedId = v.mode === 'instant' ? v.focusedInstantId : null
+  // The instant a held drag is about to land on (it lights up like a focused one).
+  const capturedId = useFrameValue(f => { const c = captureAt(f); return c?.preview ? c.id : null })
 
   // Line colours, by state (the same order of precedence as the chips).
   const lineClass = useMemo(() => {
@@ -251,10 +254,11 @@ export function SavedInstantColumns() {
     for (const id of spanEnds) out[id] = 'is-span-end'
     if (v.secondary) out[v.secondary] = 'is-secondary'
     if (v.selected) out[v.selected] = 'is-selected'
+    if (capturedId) out[capturedId] = 'is-focused'
     if (focusedId) out[focusedId] = 'is-focused'
     if (v.moving) out[v.moving] = 'is-moving'
     return out
-  }, [spanEnds, v.secondary, v.selected, focusedId, v.moving])
+  }, [spanEnds, v.secondary, v.selected, capturedId, focusedId, v.moving])
 
   // Snooze ids per chip that shows them.
   const foldedIds = useMemo(() => {
@@ -282,6 +286,7 @@ export function SavedInstantColumns() {
             editing={v.editing === id}
             moving={v.moving === id}
             fineSeconds={fineSeconds}
+            captured={capturedId === id}
           />
         )
       })}

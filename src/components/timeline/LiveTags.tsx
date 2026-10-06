@@ -1,8 +1,7 @@
 // Now and the Cursor as arrow tags on the live side of the axis. A tap opens the tag's tools.
 // A double-tap on the Cursor tag drops a nameless instant there (it also has a ＋ button); on
 // the Now tag it goes to Now, then drops an instant at Now with its name editor open.
-import { useMemo, useRef } from 'react'
-import type { CSSProperties } from 'react'
+import { useRef } from 'react'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
@@ -20,37 +19,17 @@ import type { TagMenuItem } from './TagMenu.tsx'
 import { ClockPopover, DurationPopover } from './TimeEntryPopover.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { dropFromPlus, usePlusButton } from './plusMorph.ts'
-import { CHIP_HEIGHT, estimateChipWidth, savedLayoutAt, useChipWidths } from './savedLayout.ts'
+import { captureAt } from './capture.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
-import type { InstantRecord } from '../../domain/entities.ts'
+import { engine, reducedMotion } from '../../engine/viewportEngine.ts'
+import type { SpringState } from '../../domain/spring.ts'
+import { omegaFor, springSettled, stepSpring } from '../../domain/spring.ts'
 
-/** Vertical: the Cursor tag's ＋ (30px round) starts this far right of the axis (.tl-tag__drop). */
-const PLUS_LEFT = GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow + 1 + 2 * GEOMETRY_VERTICAL.tagArrow + 4
-const PLUS_SIZE = 30
-
-/**
- * Vertical: how far the ＋ steps right to clear the chips on the cursor line (it sits on the
- * saved side, where a chip dropped at the cursor lands), so it never covers one: it comes to
- * rest just past the chip it was pulled out of.
- */
-function plusPush(f: Frame, byId: ReadonlyMap<string, InstantRecord>): number {
-  if (f.orientation !== 'vertical') return 0
-  const l = savedLayoutAt(f)
-  const widths = useChipWidths.getState().widths
-  const y = f.mainSize / 2
-  let right = PLUS_LEFT
-  for (const id of l.visibleIds) {
-    if (l.rows[id] === undefined) continue
-    const inst = byId.get(id)
-    if (!inst) continue
-    const mid = f.pos(inst.tsEpochMs) + (l.shifts[id] ?? 0)
-    if (Math.abs(mid - y) >= (CHIP_HEIGHT + PLUS_SIZE) / 2) continue
-    const left = GEOMETRY_VERTICAL.chipStart + (l.crossOffsets[id] ?? 0)
-    const end = left + (widths[id] ?? estimateChipWidth(inst.label))
-    if (left < right + PLUS_SIZE && end + 6 > right) right = end + 6
-  }
-  return Math.round(right - PLUS_LEFT)
-}
+/** The cursor glides onto an instant it is about to land on, ms to settle. */
+const MAGNET_SETTLE_MS = 140
+const OMEGA_MAGNET = omegaFor(MAGNET_SETTLE_MS)
+/** The farthest the cursor leans toward an instant, px (past the landing radius it lets go). */
+const MAGNET_MAX_PX = 24
 
 /** The Cursor tag moves out a slot when it would overlap the Now tag (spec C14). */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -122,17 +101,50 @@ export function CursorTag() {
     }
     return liveTagsCollide(now, cursor, GEOMETRY.tagClearance) ? 1 : 0
   })
+  /** The time the tag shows: where the cursor would land (an instant it is about to land on), else the cursor's. */
+  const shownTime = (f: Frame) => {
+    const cap = captureAt(f)
+    return cap?.preview ? cap.ts : f.center
+  }
   // The selected-offset line only shows once the selected instant is a second or more from the cursor (never "+00:00.000" under it).
   const selectedTs = selected?.tsEpochMs
-  const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(f.center - selectedTs) >= SECOND)
-  // The ＋ is hidden while it is (morphing into) a chip being named.
+  const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(shownTime(f) - selectedTs) >= SECOND)
+  // The ＋ never moves. While the cursor is on an instant it is inside that instant's chip
+  // (plusMorph.ts): still here, measurable, but not drawn.
   const plusRef = useRef<HTMLButtonElement>(null)
-  const morphing = useUi(s => s.plusMorph !== null)
-  usePlusButton(plusRef, freeCursor)
-  const instants = useEntities(s => s.instants)
-  const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
-  const push = useFrameValue(f => (freeCursor ? plusPush(f, byId) : 0))
+  const plusAway = useUi(s => s.plusHidden)
   const hidden = useUi(s => s.cursorHidden)
+  usePlusButton(plusRef, visible && !hidden)
+  // About to land on an instant (a drag held near it): the tag takes the on-instant look and shows
+  // where it would land, and the cursor glides onto that instant's line.
+  const magnet = useRef<{ seq: number; perf: number; s: SpringState; id: string | null; engaged: boolean; pinned: string }>({ seq: -1, perf: NaN, s: { x: 0, v: 0 }, id: null, engaged: false, pinned: '' })
+  const cursorPos = (f: Frame) => {
+    const m = magnet.current
+    if (m.seq !== f.seq) {
+      const cap = captureAt(f)
+      // It leans only toward an instant held by a free cursor (and keeps to it as it lands
+      // there, or as a drag pulls away from it); a jump to another instant (Next) moves the view, not the cursor.
+      const id = cap?.id ?? null
+      if (id !== m.id) { m.id = id; m.engaged = !!cap?.preview }
+      else if (cap?.preview) m.engaged = true
+      const lean = cap && m.engaged ? f.pos(cap.ts) - f.mainSize / 2 : 0
+      const target = Math.abs(lean) <= MAGNET_MAX_PX ? lean : 0
+      if (reducedMotion()) m.s = { x: target, v: 0 }
+      else {
+        const dt = Number.isNaN(m.perf) ? 16 : Math.min(32, Math.max(0, f.perf - m.perf))
+        m.s = stepSpring(m.s, target, dt, OMEGA_MAGNET)
+        if (springSettled(m.s, target, 0.05)) m.s = { x: target, v: 0 }
+        else engine.requestFrame()
+      }
+      m.seq = f.seq
+      m.perf = f.perf
+      // The ＋ never moves: it stays put while the tag leans.
+      const plus = plusRef.current
+      const pin = m.s.x ? (f.orientation === 'horizontal' ? `${(-m.s.x).toFixed(2)}px 0` : `0 ${(-m.s.x).toFixed(2)}px`) : ''
+      if (plus && (pin !== m.pinned || plus.style.translate !== pin)) { m.pinned = pin; plus.style.translate = pin }
+    }
+    return f.mainSize / 2 + m.s.x
+  }
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''
@@ -167,8 +179,8 @@ export function CursorTag() {
   }
 
   return (
-    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}${hidden ? ' is-collapsed' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}
-      style={push ? ({ '--plus-push': `${push}px` } as CSSProperties) : undefined}>
+    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}${hidden ? ' is-collapsed' : ''}`}
+      ariaLabel="Cursor" getPos={cursorPos} frameClass={f => (!onInstant && captureAt(f)?.preview ? 'is-capturing' : null)}>
       {/* Folded away: the arrowhead stays on the axis, and tapping it brings the tag back. */}
       {hidden && (
         <button type="button" className="tl-tag__show" data-no-pan aria-label="Show the cursor" title="Show the cursor (H)"
@@ -186,10 +198,10 @@ export function CursorTag() {
         srName="Cursor"
         measure="cursor"
         hint={onInstant ? 'Tap for tools' : 'Tap for tools; double-tap to drop an instant here'}
-        action={onInstant ? undefined : {
+        action={{
           label: 'Drop an instant at the cursor and name it',
           ref: plusRef,
-          hidden: morphing,
+          hidden: plusAway || !!onInstant,
           onClick: () => (plusRef.current ? dropFromPlus(plusRef.current) : act.dropAndName()),
         }}
         slot={slot}
@@ -207,14 +219,14 @@ export function CursorTag() {
           </>
         ) : (
           <>
-            <LiveText compute={f => formatClockCompact(f.center, true)} />{' '}
-            <LiveText className="tl-tag__sub" compute={f => offsetText('Now', f.center - f.now)} />
+            <LiveText compute={f => formatClockCompact(shownTime(f), true)} />{' '}
+            <LiveText className="tl-tag__sub" compute={f => offsetText('Now', shownTime(f) - f.now)} />
           </>
         )}
         {!onInstant && selected && selectedAway && (
           <>
             {' '}
-            <LiveText className="tl-tag__sub" compute={f => offsetText(name, f.center - selected.tsEpochMs)} />
+            <LiveText className="tl-tag__sub" compute={f => offsetText(name, shownTime(f) - selected.tsEpochMs)} />
           </>
         )}
       </ArrowTag>

@@ -17,8 +17,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   while zooming, and nothing measures the page in the middle of a frame.
 - Tapping the Cursor tag's round **＋** drops an instant and opens its name: the ＋ swoops
   across the axis and stretches into the new chip. Type a name, or just tap elsewhere or move
-  on to leave it unnamed; the ＋ then pulls back out of the chip. (Double-tap the Cursor tag, or
-  +, to drop one without naming it.) In vertical the ＋ steps aside past a chip on the cursor line.
+  on to leave it unnamed; named in place, the cursor lands on it. (Double-tap the Cursor tag, or
+  +, to drop one without naming it.)
+- Dragging slowly over an instant shows where you'll land before you let go: the cursor glides
+  onto its line and shows its time, and its chip lights up. While the cursor is on an instant,
+  the ＋ flows into that instant's chip like a drop of liquid, and is pulled back out when you
+  move on (the ＋ itself never moves).
 - Chips glide out of each other's way instead of jumping, and slide quickly when they have to
   pop to another row; new chips fade in. Colours ease as things are selected, and tools pop in.
 - **Hide the cursor**: the eye badge on the Cursor tag (or H) folds the tag into its arrowhead

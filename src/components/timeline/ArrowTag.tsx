@@ -25,7 +25,7 @@ export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, m
   hint: string
   /**
    * A round glowing button beside the box (right of it, or below it when vertical). `hidden`
-   * keeps its place but doesn't draw it (while it is morphing into a chip); `ref` gets the button.
+   * keeps its place but doesn't draw it (while it is inside a chip); `ref` gets the button.
    */
   action?: { label: string; onClick: () => void; hidden?: boolean; ref?: RefObject<HTMLButtonElement | null> }
   /** Horizontal: 0 or 1 steps up. Vertical: -1, 0 or 1 steps along the time axis, away from the other tag. */
@@ -75,7 +75,8 @@ export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, m
         </button>
         {action && (
           <button ref={action.ref} type="button" className={`tl-tag__drop glow-box glow-text${action.hidden ? ' is-morphing' : ''}`} data-no-pan
-            aria-label={action.label} title={action.label} onClick={action.onClick}>
+            aria-label={action.label} title={action.label} onClick={action.onClick}
+            aria-hidden={action.hidden || undefined} tabIndex={action.hidden ? -1 : undefined}>
             <PlusIcon aria-hidden />
           </button>
         )}

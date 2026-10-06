@@ -140,7 +140,8 @@
 .tl-col--label.is-focused { z-index: calc(var(--z-chips) + 7); }
 .tl-col.is-cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); }
 .tl-col--label.is-cursor { z-index: calc(var(--z-tags) + 7); }
-.tl-col.is-cursor.is-on-instant { --accent: var(--c-cursor-on); --halo: var(--c-cursor-on-glow); }
+.tl-col.is-cursor.is-on-instant,
+.tl-col.is-cursor.is-capturing { --accent: var(--c-cursor-on); --halo: var(--c-cursor-on-glow); }
 .tl-col.is-now { --accent: var(--c-now); --halo: var(--c-now); }
 .tl-col--label.is-now { z-index: calc(var(--z-tags) + 2); }
 .tl-col--label.is-now.is-focused { z-index: calc(var(--z-tags) + 9); }
@@ -551,7 +552,7 @@
 
 /* Span names that would crowd a lane fold into one "N spans" chip (LaneGroupChips, NowFlags). */
 .tl-lane__anchor.is-folded { visibility: hidden; }
-.span-chip--group { color: var(--accent); animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.span-chip--group { color: var(--accent); animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 .span-chip--group .span-chip__text { font: 700 13.5px/1.1 var(--font-ui); color: var(--accent); }
 
 /* --- Popovers ----------------------------------------------------------- */
@@ -825,7 +826,7 @@
 @keyframes chip-enter {
   from { opacity: 0; scale: 0.82; }
 }
-.tl-col--label[role='group'] .chip--saved { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.tl-col--label[role='group'] .chip--saved { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 
 /* The Cursor tag's ＋ morphing into a new chip and back (plusMorph.ts): one glowing shell,
    the ＋'s colour while round, the instant's as a chip. Position, size and radius are written per frame. */
@@ -862,6 +863,36 @@
 .tl-col--label > .tl-col__chip { transition: opacity 140ms ease-out; }
 .tl-col--label.is-morph-target > .tl-col__chip { opacity: 0; transition: none; }
 
+/* The instant the cursor is about to land on (a drag held near it) lights up like a focused one. */
+.tl-col.is-capture { --accent: var(--c-focused); --halo: var(--c-focused); }
+.tl-col--label.is-capture { z-index: calc(var(--z-chips) + 7); }
+.tl-col--label.is-capture .chip--saved { scale: 1.05; transition: scale 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background 120ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease; }
+
+/* The ＋ flowing into the chip of the instant the cursor is on, and back out (plusMorph.ts): a
+   2D metaball. Outlines under fills, so only the blob's outer edge shows; over the saved chips
+   (the fill covers a chip's outline where the neck joins it) and under the tags, like the ＋. */
+.tl-blob {
+  --mix: 100%;
+  --accent: color-mix(in srgb, var(--c-cursor) var(--mix), var(--c-focused));
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: calc(var(--z-lane-chips) - 1);
+  display: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.tl-blob.is-on { display: block; }
+.tl-blob__stroke path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+.tl-blob__stroke { filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--accent)) drop-shadow(0 0 calc(10px * var(--glow)) color-mix(in srgb, var(--accent) 45%, transparent)); }
+.tl-blob__fill path { fill: var(--surface-solid); }
+.tl-blob__glyph { fill: var(--accent); }
+
 /* A freshly dropped instant pulses once so you can see where it landed. */
 @keyframes drop-pulse {
   0% { transform: scale(0.8); filter: brightness(2.2); }
@@ -894,11 +925,8 @@
   /* The tag ends an arrow short of the axis; clear the arrow and the axis glow. */
   left: calc(100% + 2 * var(--tl-tag-arrow) + 4px);
   margin: 0;
-  /* Stay on the cursor line when the tag is shifted out of Now's way; step right past a chip
-     on the cursor line (--plus-push, from LiveTags). */
+  /* Stay on the cursor line when the tag is shifted out of Now's way. */
   transform: translateY(calc(-50% - var(--slot, 0) * var(--tl-tag-slot-v)));
-  translate: var(--plus-push, 0px) 0;
-  transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   z-index: 2;
 }
 
@@ -944,5 +972,5 @@
 @keyframes tools-in {
   from { opacity: 0; scale: 0.8; }
 }
-.tl-col__tools, .tl-lane__tools > *, .tl-lane__end > *, .chip__name-hint { animation: tools-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.tl-col__tools, .tl-lane__tools > *, .tl-lane__end > *, .chip__name-hint { animation: tools-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 .timeline:not([data-orientation='vertical']) { transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1); }

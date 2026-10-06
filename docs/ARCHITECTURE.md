@@ -90,11 +90,20 @@ smoothly and never teleport. Springs ask for frames only while they move.
 
 ## Motion
 
-- **Cursor ＋ morph** (`plusMorph.ts`, `PlusMorphLayer.tsx`): one shell element, drawn per frame
-  while a morph runs. Its ends are measured once (the ＋ button, the new chip); the chip end then
-  follows the time axis, so a pan mid-morph keeps it attached. `useUi.plusMorph` (`in` →
-  `editing` → `out`) hides the ＋ and the chip at the right moments. Naming ends through
-  `act.endNaming` (pans, steps and wheel call it), which blurs the name box so it commits.
+- **Capture** (`domain/capture.ts`, `components/timeline/capture.ts`, `engine/gesture.ts`):
+  `captureAt(frame)` is the instant the cursor is on: the focused one, or for a free cursor one
+  within the landing radius while a drag is held slowly (`gesture`: held, touch or mouse, and its
+  smoothed speed from usePanZoom), or right under it at rest; it holds a little past the radius.
+  The Cursor tag leans onto it on a spring (`getPos`) and shows its time; its chip lights up.
+- **Cursor ＋** (`plusMorph.ts`, `PlusMorphLayer.tsx`): the drop is one shell element, drawn per
+  frame while it runs; its ends are measured once (the ＋, the new chip) and the chip end follows
+  the time axis, so a pan mid-morph keeps it attached. While the cursor is on an instant, the ＋
+  is inside its chip: one spring (0 at the ＋, 1 inside the chip) drives a metaball drawn as SVG
+  paths (`domain/metaball.ts`: two circles and the gooey neck between them, outlines under fills),
+  so it reverses smoothly mid-way and costs nothing at rest. `useUi.plusHidden` hides the real ＋
+  while it is away. The ＋ is pinned against the tag's lean, so it never moves and is measured
+  once per flow. Naming ends through `act.endNaming` (pans, steps and wheel call it), which blurs
+  the name box so it commits; ended in place, the cursor lands on the new instant.
 - **Hiding the cursor**: CSS only (`.is-collapsed` on the Cursor marker): the tag scales into its
   arrowhead, pivoting on the arrow's tip, and the line fades.
 - State changes ease in CSS (colours, tools popping in, the timeline's height), never on
