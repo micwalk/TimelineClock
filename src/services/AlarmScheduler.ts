@@ -6,6 +6,7 @@ import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
+import { view } from '../store/view.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
 import { isNativeShell, requestNativeNotifications, silenceNativeAlarms } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
@@ -79,7 +80,11 @@ export function dismiss(instantId: string) {
   useAlarms.setState(s => ({ ringing: s.ringing.filter(r => r.instantId !== instantId) }))
   entities.setAlarmFlag(instantId, false)
   const { instants, spans } = useEntities.getState()
-  if (timerSpanFor(instantId, instants, spans)) entities.setFavorite(instantId, false)
+  if (timerSpanFor(instantId, instants, spans)) {
+    const nowSpan = entities.nowSpanOf(instantId)
+    if (nowSpan) view.forgetSpan(nowSpan.id)
+    entities.setFavorite(instantId, false)
+  }
   if (!hasRinging()) audio.stopAlarmSound()
 }
 

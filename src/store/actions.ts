@@ -20,6 +20,7 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
+import { syncFavorites } from '../domain/entities.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, dismiss, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
@@ -394,7 +395,7 @@ export function startTimer(ms: number) {
   const label = `${formatTimerLength(ms)} timer`
   const start = entities.createInstant(now, '')
   const end = entities.createInstant(now + ms, label, { alarm: true })
-  entities.upsertNowSpan(end, true)
+  entities.setFavorite(end, true) // its span to Now is the countdown
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
@@ -491,7 +492,10 @@ export function resetStopwatch() {
   quick.resetStopwatch()
 }
 
+/** A favorite is an instant whose span to Now is tracked: unfavoriting deletes that span. */
 export function setFavorite(id: string, favorite: boolean) {
+  const sp = favorite ? undefined : entities.nowSpanOf(id)
+  if (sp) view.forgetSpan(sp.id)
   entities.setFavorite(id, favorite)
 }
 
@@ -509,7 +513,6 @@ export function toggleAlarm(id: string) {
     return
   }
   entities.setAlarmFlag(id, true)
-  entities.upsertNowSpan(id, true) // alarms are favorites
   void primeNotifications() // the first bell asks for notification permission
 }
 
@@ -638,7 +641,10 @@ export function deleteSpan(id: string) {
 
 export function toggleSpanVisible(id: string) {
   const sp = entities.getSpan(id)
-  if (sp) entities.setSpanVisible(id, !sp.visible)
+  if (!sp) return
+  // A span to Now is shown exactly while its instant is a favorite.
+  if (sp.endIsNow) setFavorite(sp.startInstantId, !sp.visible)
+  else entities.setSpanVisible(id, !sp.visible)
 }
 
 /** Double-click on a span: focus and fit it, or rename if it's already focused. */
@@ -760,7 +766,8 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
   }
   if (choice.data && backup.data) {
     const before = useEntities.getState()
-    const next = importedData(before, backup.data, choice.mode)
+    const merged = importedData(before, backup.data, choice.mode)
+    const next = syncFavorites(merged.instants, merged.spans)
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

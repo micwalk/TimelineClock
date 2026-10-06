@@ -97,7 +97,7 @@ export function savedSpanLanes(opts: {
     if (focusMode === 'instant' && focusedInstantId) priority = involves(focusedInstantId) ? 0 : r.span.visible ? 2 : -1
     else if (selectedInstantId) priority = involves(selectedInstantId) ? 1 : r.span.visible ? 2 : -1
     else if (r.span.visible) priority = 2
-    // Favorites and alarms show time since/until on their chip; their lane to Now
+    // Favorites show time since/until on their chip; their lane to Now
     // appears only when selected or focused, unless the user wants it always.
     if (priority === 2 && isFavoriteNowSpan(r) && favoriteLanes === 'selected' && !trackedIds?.has(r.span.startInstantId)) continue
     if (priority === -1) continue

@@ -76,7 +76,8 @@ describe('saved instant chips', () => {
   })
 
   it('show time since on favorites, and the star unfavorites', () => {
-    const id = entities.createInstant(twentyMinutesAgo(), 'Rice', { favorite: true })
+    const id = entities.createInstant(twentyMinutesAgo(), 'Rice')
+    entities.setFavorite(id, true)
     render(<Columns />)
     expect(screen.getByText('· 20m ago')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Unfavorite' }))

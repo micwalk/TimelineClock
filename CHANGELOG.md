@@ -31,6 +31,10 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
   one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
 - While naming a chip, the time shown under it no longer covers the chip below.
+- A favorite now means its span to Now is tracked: unfavoriting deletes that span (it used to
+  stay, hidden), and hiding a span to Now unfavorites its instant. Setting an alarm no longer
+  makes the instant a favorite (a timer's end still is: its span to Now is the countdown).
+  Saved data is brought into line when it loads.
 - TC Preview (the test app) is updated in place on each build instead of deleted and made
   again, which failed when the old release was still there. It can also be published as
   another release (`preview_tag` in Run workflow, or the `TC_PREVIEW_TAG` repository variable;

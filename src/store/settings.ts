@@ -6,7 +6,7 @@ import type { AgendaSetting, OrientationSetting } from '../domain/layoutMode.ts'
 import type { TunableKey, Tunables } from '../domain/tunables.ts'
 import { clampTunable, resolveTunables, sanitizeTunableOverrides } from '../domain/tunables.ts'
 
-/** When favorites and alarms get a lane to Now: only while selected (default), or always. */
+/** When favorites get their lane to Now: only while selected (default), or always. */
 export type FavoriteLanes = 'selected' | 'always'
 
 export type VerticalDir = 'down' | 'up'
