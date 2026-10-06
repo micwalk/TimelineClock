@@ -901,14 +901,16 @@
 }
 .tl-col--label.is-dropped .chip--saved { animation: drop-pulse 900ms ease-out 1; }
 
-/* Round ＋ beside the Cursor tag's box: right of it (horizontal), or across the axis on the
-   saved side, where the dropped instant appears (vertical). */
+/* Round ＋ across the axis from the Cursor tag, on the saved side where the dropped instant
+   appears, on the cursor line: below the axis (horizontal), right of it (vertical). */
 .tl-tag__drop {
   position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 6px;
+  /* Across the axis, on the cursor line: the tag ends an arrow short of the axis, so clear the
+     arrow and the axis glow; stay on the axis side when the tag is lifted out of Now's way. */
+  left: 50%;
+  top: calc(100% + 2 * var(--tl-tag-arrow) + 4px + var(--slot, 0) * var(--tl-tag-slot));
+  transform: translateX(-50%);
+  z-index: 2;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -922,12 +924,10 @@
 .tl-tag__drop:hover { background: var(--box-bg-raised); }
 .tl-tag__drop > svg { width: 20px; height: 20px; }
 .timeline[data-orientation='vertical'] .tl-tag__drop {
-  /* The tag ends an arrow short of the axis; clear the arrow and the axis glow. */
   left: calc(100% + 2 * var(--tl-tag-arrow) + 4px);
-  margin: 0;
+  top: 50%;
   /* Stay on the cursor line when the tag is shifted out of Now's way. */
   transform: translateY(calc(-50% - var(--slot, 0) * var(--tl-tag-slot-v)));
-  z-index: 2;
 }
 
 /* The move-mode time entry opens under the moving chip in both orientations. */

@@ -24,7 +24,7 @@ export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, m
   /** Tooltip: what tapping and double-tapping do. */
   hint: string
   /**
-   * A round glowing button beside the box (right of it, or below it when vertical). `hidden`
+   * A round glowing button across the axis from the box, on its line (the saved side). `hidden`
    * keeps its place but doesn't draw it (while it is inside a chip); `ref` gets the button.
    */
   action?: { label: string; onClick: () => void; hidden?: boolean; ref?: RefObject<HTMLButtonElement | null> }

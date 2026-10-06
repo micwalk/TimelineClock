@@ -111,7 +111,7 @@ function HelpContent() {
             <li><b>Pinch</b> or <b>Ctrl + wheel</b> to zoom. The wheel zooms (horizontal) or scrolls (vertical).</li>
             <li><b>Tap</b> a chip to select it and show its tools; <b>double-tap</b> it to focus it, and again to rename it. The same goes for a span’s chip; once a span is focused, double-tap its length (or its clock tool) to type a new length.</li>
             <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span. Double-tap the Now tag to go to Now, and again to add an instant there and name it.</li>
-            <li>The round <b>＋</b> beside the Cursor tag drops an instant at the cursor and opens its name: type one, or just tap elsewhere or move on to leave it unnamed. Double-tap the Cursor tag to drop one without naming it.</li>
+            <li>The round <b>＋</b> across the axis from the Cursor tag drops an instant at the cursor and opens its name: type one, or just tap elsewhere or move on to leave it unnamed. Double-tap the Cursor tag to drop one without naming it.</li>
             <li>Drag slowly over an instant and the cursor catches it: it glides onto its line and shows its time, so you can see where it will land when you let go. While the cursor is on an instant, the ＋ tucks into that instant’s chip, and comes back out when you move on.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>

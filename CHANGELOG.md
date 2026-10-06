@@ -15,8 +15,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   10–25% more when panning on a slowed-down CPU, and more with many instants and spans. The
   saved instants' lines now pan as one layer, chips no longer make the whole timeline redraw
   while zooming, and nothing measures the page in the middle of a frame.
-- Tapping the Cursor tag's round **＋** drops an instant and opens its name: the ＋ swoops
-  across the axis and stretches into the new chip. Type a name, or just tap elsewhere or move
+- The Cursor tag's round **＋** now sits across the axis from the tag in horizontal too (below
+  it, where new chips appear), as it already did in vertical. Tapping it drops an instant and
+  opens its name: the ＋ stretches into the new chip. Type a name, or just tap elsewhere or move
   on to leave it unnamed; named in place, the cursor lands on it. (Double-tap the Cursor tag, or
   +, to drop one without naming it.)
 - Dragging slowly over an instant shows where you'll land before you let go: the cursor glides

@@ -1,7 +1,7 @@
 // The Cursor tag's ＋ and the instant the cursor is on (its two shapes: PlusMorphLayer).
 //
-// Dropping: tap ＋ and one glowing shell starts as the ＋ circle, swoops across the axis to
-// where the new chip lands while stretching into its pill (the name box opens inside it), and
+// Dropping: tap ＋ and one glowing shell starts as the ＋ circle and stretches into the pill of
+// the new chip, which lands right there on the cursor line (the name box opens inside it), and
 // cross-fades into the chip. The ＋ is now inside that chip.
 //
 // Capture: whenever the cursor is on an instant (focused, or about to land on it: capture.ts),
@@ -139,8 +139,8 @@ function drawIn(f: Frame) {
   const a = at(r.from, f)
   const b = at(r.to, f)
   const horizontal = f.orientation === 'horizontal'
-  // A curved path that never sweeps over the Cursor tag's readout: it drops across the axis
-  // first and then slides along time into place.
+  // A slightly curved path: across the axis first, then along time into place (the chip may sit
+  // in another row, or slid along time by the overlap layout).
   const along = easeInOutCubic(p)
   const across = easeOutCubic(p)
   const kx = horizontal ? along : across
