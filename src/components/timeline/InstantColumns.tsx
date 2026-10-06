@@ -28,6 +28,7 @@ import { useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLay
 import { InstantLines } from './InstantLines.tsx'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
+import { useMorphChip } from './plusMorph.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 
 /** Vertical: the tools row under a chip stays this far in from the right edge, px. */
@@ -72,6 +73,7 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
   const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
   const chipRef = useRef<HTMLDivElement>(null)
   useChipWidth(chipRef, inst.id)
+  useMorphChip(chipRef, inst.id)
   const name = chipName(inst.label)
   const vertical = useLayout(s => s.orientation === 'vertical')
   const unnamed = !inst.label
@@ -191,7 +193,9 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, sele
   const ts = inst.tsEpochMs
   const name = chipName(inst.label)
   const dropped = useUi(s => s.droppedId === inst.id)
-  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}`
+  // The Cursor tag's ＋ is still growing into this chip: the chip shows once it arrives.
+  const morphTarget = useUi(s => s.plusMorph?.id === inst.id && s.plusMorph.phase === 'in')
+  const stateClass = `${moving ? 'is-moving' : focused ? 'is-focused' : selected ? 'is-selected' : spanEnd ? 'is-span-end' : secondary ? 'is-secondary' : ''}${dropped ? ' is-dropped' : ''}${morphTarget ? ' is-morph-target' : ''}`
   const ref = useRef<HTMLDivElement>(null)
   const belowRef = useRef<HTMLDivElement>(null)
   // Vertical: a chip wider than the room runs off the right edge; pull its tools row back on screen.

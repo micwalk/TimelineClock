@@ -3,14 +3,16 @@
 // together by the engine) so the line can live in the low "lines" layer while the
 // content (chips, tags, badges) sits in the "labels" layer above every line.
 import { useRef } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { usePositionMain } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 
-export function Marker({ className, getPos, ariaLabel, children }: {
+export function Marker({ className, getPos, ariaLabel, style, children }: {
   className: string
   getPos: (f: Frame) => number
   ariaLabel?: string
+  /** Inline style for the label half (custom properties for its content). */
+  style?: CSSProperties
   children?: ReactNode
 }) {
   const lineRef = useRef<HTMLDivElement>(null)
@@ -24,7 +26,7 @@ export function Marker({ className, getPos, ariaLabel, children }: {
         <div className="tl-col__line" />
       </div>
       {hasLabel && (
-        <div ref={labelRef} className={`tl-col tl-col--label ${className}`} role={ariaLabel ? 'group' : undefined} aria-label={ariaLabel} aria-hidden={ariaLabel ? undefined : true}>
+        <div ref={labelRef} className={`tl-col tl-col--label ${className}`} style={style} role={ariaLabel ? 'group' : undefined} aria-label={ariaLabel} aria-hidden={ariaLabel ? undefined : true}>
           {children}
         </div>
       )}

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { CursorTag, NowTag, liveTagsCollide } from './LiveTags.tsx'
+import * as actions from '../../store/actions.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
@@ -109,20 +110,29 @@ describe('CursorTag', () => {
     expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
   })
 
-  it('has a round + button that drops an instant at the cursor', () => {
+  it('has a round + button that drops an instant at the cursor with its name box open', () => {
     cursorMode()
     render(<CursorTag />)
     const center = useView.getState().timeCenter
-    fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at the cursor' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at the cursor and name it' }))
     const [inst] = useEntities.getState().instants
     expect(inst.label).toBe('')
     expect(Math.abs(inst.tsEpochMs - center)).toBeLessThan(2000)
-    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: null })
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: inst.id, currentSelectedInstantId: null })
+  })
+
+  it('ends naming when the cursor moves away, keeping the instant unnamed', () => {
+    cursorMode()
+    render(<CursorTag />)
+    fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at the cursor and name it' }))
+    act(() => actions.moveCursorBy(60_000))
+    expect(useView.getState().editingInstantId).toBeNull()
+    expect(useEntities.getState().instants[0].label).toBe('')
   })
 
   it('has no + button while following Now', () => {
     render(<CursorTag />)
-    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor and name it' })).toBeNull()
   })
 
   it('Save as favorite from the cursor menu keeps the cursor and drops a nameless favorite', () => {
@@ -159,7 +169,7 @@ describe('CursorTag on a focused instant', () => {
   it('has no + button and ignores double-click', () => {
     focusOn()
     render(<CursorTag />)
-    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Drop an instant at the cursor and name it' })).toBeNull()
     fireEvent.doubleClick(screen.getByRole('button', { name: /^Cursor/ }))
     expect(useEntities.getState().instants).toHaveLength(1)
   })

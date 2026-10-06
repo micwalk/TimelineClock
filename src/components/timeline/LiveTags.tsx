@@ -1,6 +1,8 @@
 // Now and the Cursor as arrow tags on the live side of the axis. A tap opens the tag's tools.
 // A double-tap on the Cursor tag drops a nameless instant there (it also has a ＋ button); on
 // the Now tag it goes to Now, then drops an instant at Now with its name editor open.
+import { useMemo, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
@@ -17,6 +19,38 @@ import { TagMenu } from './TagMenu.tsx'
 import type { TagMenuItem } from './TagMenu.tsx'
 import { ClockPopover, DurationPopover } from './TimeEntryPopover.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
+import { dropFromPlus, usePlusButton } from './plusMorph.ts'
+import { CHIP_HEIGHT, estimateChipWidth, savedLayoutAt, useChipWidths } from './savedLayout.ts'
+import type { Frame } from '../../engine/viewportEngine.ts'
+import type { InstantRecord } from '../../domain/entities.ts'
+
+/** Vertical: the Cursor tag's ＋ (30px round) starts this far right of the axis (.tl-tag__drop). */
+const PLUS_LEFT = GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow + 1 + 2 * GEOMETRY_VERTICAL.tagArrow + 4
+const PLUS_SIZE = 30
+
+/**
+ * Vertical: how far the ＋ steps right to clear the chips on the cursor line (it sits on the
+ * saved side, where a chip dropped at the cursor lands), so it never covers one: it comes to
+ * rest just past the chip it was pulled out of.
+ */
+function plusPush(f: Frame, byId: ReadonlyMap<string, InstantRecord>): number {
+  if (f.orientation !== 'vertical') return 0
+  const l = savedLayoutAt(f)
+  const widths = useChipWidths.getState().widths
+  const y = f.mainSize / 2
+  let right = PLUS_LEFT
+  for (const id of l.visibleIds) {
+    if (l.rows[id] === undefined) continue
+    const inst = byId.get(id)
+    if (!inst) continue
+    const mid = f.pos(inst.tsEpochMs) + (l.shifts[id] ?? 0)
+    if (Math.abs(mid - y) >= (CHIP_HEIGHT + PLUS_SIZE) / 2) continue
+    const left = GEOMETRY_VERTICAL.chipStart + (l.crossOffsets[id] ?? 0)
+    const end = left + (widths[id] ?? estimateChipWidth(inst.label))
+    if (left < right + PLUS_SIZE && end + 6 > right) right = end + 6
+  }
+  return Math.round(right - PLUS_LEFT)
+}
 
 /** The Cursor tag moves out a slot when it would overlap the Now tag (spec C14). */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -91,6 +125,13 @@ export function CursorTag() {
   // The selected-offset line only shows once the selected instant is a second or more from the cursor (never "+00:00.000" under it).
   const selectedTs = selected?.tsEpochMs
   const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(f.center - selectedTs) >= SECOND)
+  // The ＋ is hidden while it is (morphing into) a chip being named.
+  const plusRef = useRef<HTMLButtonElement>(null)
+  const morphing = useUi(s => s.plusMorph !== null)
+  usePlusButton(plusRef, freeCursor)
+  const instants = useEntities(s => s.instants)
+  const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
+  const push = useFrameValue(f => (freeCursor ? plusPush(f, byId) : 0))
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''
@@ -125,12 +166,18 @@ export function CursorTag() {
   }
 
   return (
-    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}>
+    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}
+      style={push ? ({ '--plus-push': `${push}px` } as CSSProperties) : undefined}>
       <ArrowTag
         srName="Cursor"
         measure="cursor"
         hint={onInstant ? 'Tap for tools' : 'Tap for tools; double-tap to drop an instant here'}
-        action={onInstant ? undefined : { label: 'Drop an instant at the cursor', onClick: () => act.dropInstant() }}
+        action={onInstant ? undefined : {
+          label: 'Drop an instant at the cursor and name it',
+          ref: plusRef,
+          hidden: morphing,
+          onClick: () => (plusRef.current ? dropFromPlus(plusRef.current) : act.dropAndName()),
+        }}
         slot={slot}
         onClick={() => ui.toggleTagMenu('cursor')}
         onDoubleClick={() => { if (onInstant) return; ui.closeTagMenu(); act.dropInstant() }}

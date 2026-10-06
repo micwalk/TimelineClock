@@ -15,6 +15,13 @@ export type TimeInputTarget =
 /** A live tag whose tools menu is open. */
 export type TagMenu = 'now' | 'cursor'
 
+/**
+ * The Cursor tag's ＋ turning into a new instant's chip and back (components/timeline/plusMorph):
+ * `in` while the circle grows into the chip, `editing` while it is being named, `out` while
+ * the circle pulls back out of it. The ＋ button is hidden until it is over.
+ */
+export interface PlusMorph { id: string; phase: 'in' | 'editing' | 'out' }
+
 export interface UiState {
   listTab: ListTab
   timeInput: TimeInputTarget | null
@@ -29,6 +36,7 @@ export interface UiState {
   timerMenuOpen: boolean
   /** The Help / About dialog. */
   helpOpen: boolean
+  plusMorph: PlusMorph | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -40,6 +48,7 @@ export const useUi = create<UiState>(() => ({
   droppedId: null,
   timerMenuOpen: false,
   helpOpen: false,
+  plusMorph: null,
 }))
 
 export const DROP_HIGHLIGHT_MS = 900
@@ -64,4 +73,5 @@ export const ui = {
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
   toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
   closeLaneTools: () => useUi.setState({ laneTools: null }),
+  setPlusMorph: (plusMorph: PlusMorph | null) => useUi.setState({ plusMorph }),
 }

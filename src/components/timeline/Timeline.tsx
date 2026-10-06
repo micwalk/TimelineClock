@@ -10,6 +10,7 @@ import { SavedInstantColumns } from './InstantColumns.tsx'
 import { CursorTag, NowTag } from './LiveTags.tsx'
 import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
+import { PlusMorphLayer } from './PlusMorphLayer.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { NowFlags } from './NowFlags.tsx'
 import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
@@ -70,6 +71,7 @@ export function Timeline() {
       <BottomLanes lanes={lanes} />
       {orientation === 'vertical' && <NowFlags lanes={lanes} />}
       <RotateButton />
+      <PlusMorphLayer />
     </section>
   )
 }

@@ -1,6 +1,6 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
-import { engine } from '../engine/viewportEngine.ts'
+import { engine, reducedMotion as engineReducedMotion } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
@@ -142,6 +142,7 @@ export function focusSpan(spanId: string, zoomToFit = true) {
 
 export function moveCursorBy(deltaMs: number) {
   engine.stopMomentum()
+  endNaming()
   view.setTimeCenter(frame().center + deltaMs)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
   refreshLock()
@@ -245,6 +246,7 @@ export const zoomOut = () => zoomBy(1 + ZOOM_STEP)
 /** Start of a drag: detach from whatever was followed, keeping the current on-screen center. */
 export function beginPan() {
   engine.cancelTransition()
+  endNaming()
   const f = frame()
   view.setTimeCenter(f.center)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
@@ -258,6 +260,7 @@ export function panByPixels(dx: number) {
 
 /** Mouse wheel / trackpad scroll along the time axis: pans like a drag, without the landing snap. */
 export function wheelPan(dPx: number) {
+  endNaming()
   if (v().viewFocusMode !== 'cursor') beginPan()
   panByPixels(-dPx)
 }
@@ -349,6 +352,28 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   if (opts.favorite) setFavorite(id, true)
   ui.markDropped(id)
   return id
+}
+
+/**
+ * The Cursor tag's ＋: drop an unnamed instant at the cursor with its name box open (the ＋
+ * turns into its chip). Leaving it empty keeps it unnamed; moving the cursor or tapping
+ * elsewhere ends naming. Returns the new id.
+ */
+export function dropAndName(): string {
+  const ts = cursorTime()
+  const id = entities.createInstant(ts, '')
+  view.editInstant(id)
+  ui.setPlusMorph({ id, phase: engineReducedMotion() ? 'editing' : 'in' })
+  return id
+}
+
+/** Ends naming an instant (keeping what was typed): moving the cursor away does this. */
+export function endNaming() {
+  if (!v().editingInstantId) return
+  const el = typeof document !== 'undefined' ? document.activeElement : null
+  // The name box commits on blur.
+  if (el instanceof HTMLInputElement && el.closest('.chip--saved')) el.blur()
+  else view.editInstant(null)
 }
 
 // ---------------------------------------------------------------------------

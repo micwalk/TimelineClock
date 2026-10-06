@@ -15,12 +15,14 @@ import { useView } from '../../store/view.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
-import { verticalCrossBudget } from './geometry.ts'
+import { GEOMETRY, verticalCrossBudget } from './geometry.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
 
 export const CHIP_HEIGHT = 28
+/** Horizontal: a chip being named shows its time in a box under it (.tl-col__below), this much taller. */
+export const EDIT_TIME_EXTRA = 26
 /** A chip's tool buttons (InstantColumns: .icon-btn 26px, 3px apart), and the gap to the chip: under it in vertical, beside it in horizontal. */
 const TOOL_SIZE = 26
 const TOOL_GAP = 3
@@ -151,7 +153,7 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
       // A moving instant follows the cursor at the center of the view.
       pos: moving ? c.mainSize / 2 : c.pos(i.tsEpochMs),
       mainExtent: vertical ? CHIP_HEIGHT : width,
-      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT,
+      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT + (editing ? EDIT_TIME_EXTRA : 0),
       ...(tail > 0 ? { tail } : {}),
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),
@@ -177,7 +179,7 @@ export interface SavedLayout {
   visibleIds: string[]
   /** Chip row (0 = next to the axis) of every chip that is shown. */
   rows: Record<string, number>
-  /** Vertical only: px a chip sits right of chip column 0 (0 in horizontal). */
+  /** px a chip sits from the first row (horizontal: below it) or column (vertical: right of it). */
   crossOffsets: Record<string, number>
   /** px a chip slid along the time axis from its marker to avoid clustering (absent = 0). */
   shifts: Record<string, number>
@@ -310,9 +312,16 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       maxShift: t.chipShiftMaxPx,
     })
     const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
-    const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, vertical ? p.crossOffset : 0]))
+    const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.crossOffset]))
     const shifts = Object.fromEntries(Object.entries(r.placed).filter(([, p]) => p.shift !== 0).map(([id, p]) => [id, Math.round(p.shift)]))
-    const deepest = Math.max(-1, ...Object.values(rows), ...r.clusters.map(k => k.slot))
+    // Rows in use: in horizontal, as many row pitches as the deepest box reaches (a chip being
+    // named is taller: its time shows under it).
+    const crossOf = new Map(items.map(it => [it.id, it.crossExtent]))
+    const deepestEnd = Math.max(0, ...Object.entries(r.placed).map(([id, p]) => p.crossOffset + (crossOf.get(id) ?? CHIP_HEIGHT)),
+      ...r.clusters.map(k => k.crossOffset + CHIP_HEIGHT))
+    const deepest = vertical
+      ? Math.max(-1, ...Object.values(rows), ...r.clusters.map(k => k.slot))
+      : Math.ceil((deepestEnd + t.chipGapPx) / GEOMETRY.chipRow) - 1
     const next: SavedLayout = {
       visibleIds: visible.map(i => i.id),
       rows,

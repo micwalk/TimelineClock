@@ -10,7 +10,6 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import { engine, reducedMotion } from '../../engine/viewportEngine.ts'
 import type { SpringState } from '../../domain/spring.ts'
 import { omegaFor, springSettled, stepSpring } from '../../domain/spring.ts'
-import { GEOMETRY } from './geometry.ts'
 import { clusterAt, savedLayoutAt } from './savedLayout.ts'
 
 /** Sliding along time (pushed by a neighbour), ms to settle. */
@@ -35,14 +34,12 @@ export interface ChipOffsets {
 /** The layout's offsets for a chip (`cluster`: a "+N" chip, by cluster id) this frame, or null once it has none. */
 export function layoutOffsets(f: Frame, id: string, cluster: boolean): ChipOffsets | null {
   const l = savedLayoutAt(f)
-  const vertical = f.orientation === 'vertical'
   if (cluster) {
     const c = clusterAt(l, id)
-    return c ? { shift: c.shift, cross: vertical ? c.crossOffset : c.slot * GEOMETRY.chipRow } : null
+    return c ? { shift: c.shift, cross: c.crossOffset } : null
   }
-  const row = l.rows[id]
-  if (row === undefined) return null
-  return { shift: l.shifts[id] ?? 0, cross: vertical ? (l.crossOffsets[id] ?? 0) : row * GEOMETRY.chipRow }
+  if (l.rows[id] === undefined) return null
+  return { shift: l.shifts[id] ?? 0, cross: l.crossOffsets[id] ?? 0 }
 }
 
 /**
