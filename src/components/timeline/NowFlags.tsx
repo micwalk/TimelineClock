@@ -1,14 +1,13 @@
-// Vertical layout: label boxes for the saved span lanes on the right, against their bar.
-// A span that contains Now (a running timer, a span you're in) gets its box at the Now line
-// with the time left (the original length small); any other span without its own chip gets
-// one at its middle with its name and length. One frame listener places all of them so
+// Vertical layout: label boxes for the saved span lanes on the right, against their bar, for
+// spans without their own chip (the selected or focused span's chip reads the same). A span
+// that contains Now (a running timer, a span you're in) gets its box at the Now line with the
+// time left (the original length small); any other span gets one at its middle with its name
+// and length (SpanReading). One frame listener places all of them so
 // they never overlap (domain/nowFlags).
 import { useLayoutEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { useFrameListener } from '../../engine/hooks.ts'
-import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS, formatDurationShort, formatLiveSpan, truncateText } from '../../domain/format.ts'
-import { resolveTimeRef } from '../../domain/spans.ts'
+import { SpanReading } from './SpanReading.tsx'
 import { useView } from '../../store/view.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useChipWidths } from './savedLayout.ts'
@@ -20,8 +19,6 @@ import { isLiveLane, laneName, savedLaneVariant } from './useBottomLanes.ts'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { sameLabelGroups } from '../../domain/labelGroups.ts'
 import { resolveTimeRef as resolveRef } from '../../domain/spans.ts'
-
-const NAME_MAX = 10
 
 type SavedLane = Extract<BottomLane, { kind: 'saved' }>
 
@@ -86,14 +83,11 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
       {saved.map(lane => {
         const r = lane.span
         const name = r.span.label
-        // The later end is where the time left runs to.
-        const end = (f: { now: number; center: number }) => Math.max(resolveTimeRef(lane.a, f.now, f.center), resolveTimeRef(lane.b, f.now, f.center))
-        const start = (f: { now: number; center: number }) => Math.min(resolveTimeRef(lane.a, f.now, f.center), resolveTimeRef(lane.b, f.now, f.center))
         return (
           <div key={lane.key} className={`tl-lane tl-lane--${savedLaneVariant(r)} tl-lane--labels tl-nowflag-lane`} style={{ '--i': lane.index } as CSSProperties}>
             <div
               ref={refFor(lane.key)}
-              className="tl-nowflag glow-text"
+              className="tl-nowflag span-read glow-text"
               style={{ display: 'none', height: FLAG_SIZE }}
               role="button"
               tabIndex={0}
@@ -101,12 +95,7 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
               onClick={() => act.selectSpan(r.span.id)}
               onKeyDown={e => { if (e.key === 'Enter') act.selectSpan(r.span.id) }}
             >
-              {name && <span className="tl-nowflag__name">{truncateText(name, NAME_MAX)}</span>}
-              {/* Containing Now: time left, big, and the length small. Otherwise: the length. */}
-              <LiveText className="tl-nowflag__left mono" compute={f => (start(f) <= f.now && f.now <= end(f)
-                ? formatDurationHMS(end(f) - f.now)
-                : formatLiveSpan(end(f) - start(f), 1 / f.pxPerMs))} />
-              <LiveText className="tl-nowflag__total mono" compute={f => (start(f) <= f.now && f.now <= end(f) ? `/${formatDurationShort(end(f) - start(f))}` : '')} />
+              <SpanReading name={name} a={lane.a} b={lane.b} />
             </div>
           </div>
         )
@@ -133,7 +122,7 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
               onClick={zoom}
               onKeyDown={e => { if (e.key === 'Enter') zoom() }}
             >
-              <span className="tl-nowflag__left">{members.length} spans</span>
+              <span className="span-read__value">{members.length} spans</span>
             </div>
           </div>
         )

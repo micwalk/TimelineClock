@@ -28,10 +28,10 @@ function savedLane(label = ''): { lane: BottomLane; spanId: string } {
 }
 
 describe('span chips', () => {
-  it('show only the duration', () => {
+  it('show only the length, as precise as the zoom allows', () => {
     const { lane } = savedLane()
-    render(<BottomLanes lanes={[lane]} />)
-    expect(screen.getByText('26:13')).toBeInTheDocument()
+    const { container } = render(<BottomLanes lanes={[lane]} />)
+    expect(container.querySelector('.span-read__value')?.textContent).toMatch(/^26(m|:13)/)
     expect(screen.queryByText(/Rice/)).toBeNull()
   })
 
@@ -41,24 +41,19 @@ describe('span chips', () => {
     expect(screen.getByText('Cooking')).toBeInTheDocument()
   })
 
-  it('show the endpoints when selected', () => {
-    const { lane, spanId } = savedLane()
-    render(<BottomLanes lanes={[lane]} />)
-    act(() => useView.setState({ selectedSpanId: spanId }))
-    expect(screen.getByText('Rice → Done')).toBeInTheDocument()
-  })
-
-  it('keep the name first when selected: "name: Start → End"', () => {
+  it('read the same when selected: no endpoints spelled out, no second chip', () => {
     const { lane, spanId } = savedLane('beach')
-    render(<BottomLanes lanes={[lane]} />)
+    const { container } = render(<BottomLanes lanes={[lane]} />)
     act(() => useView.setState({ selectedSpanId: spanId }))
-    expect(screen.getByText('beach: Rice → Done')).toBeInTheDocument()
-    expect(screen.getByText('26:13')).toBeInTheDocument()
+    expect(screen.getByText('beach')).toBeInTheDocument()
+    expect(screen.queryByText(/Rice → Done/)).toBeNull()
+    expect(container.querySelectorAll('.span-chip')).toHaveLength(1)
+    expect(container.querySelector('.span-read__value')?.textContent).toMatch(/^26/)
   })
 
   it('are named by their visible text', () => {
     render(<BottomLanes lanes={[savedLane().lane]} />)
-    expect(screen.getByRole('button', { name: /26:13/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /26/ })).toBeInTheDocument()
   })
 
   it('are named by the span name when named', () => {

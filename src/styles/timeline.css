@@ -766,7 +766,7 @@
 /* Span lanes: vertical bars stacked inward from the right edge */
 .timeline[data-orientation='vertical'] .tl-lane {
   left: auto;
-  right: calc(12px + var(--i, 0) * var(--tl-lane-gap));
+  right: calc(var(--tl-lane-edge) + var(--i, 0) * var(--tl-lane-gap));
   top: 0;
   bottom: 0;
   width: 0;
@@ -787,8 +787,16 @@
 }
 .timeline[data-orientation='vertical'] .tl-lane__chev--left { top: 0; right: auto; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .timeline[data-orientation='vertical'] .tl-lane__chev--right { top: auto; bottom: 0; left: -8px; right: auto; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-/* The chip sits on the bar's inner (left) side, centered on the visible part; its tools go above and below it */
-.timeline[data-orientation='vertical'] .tl-lane__chip-wrap { transform: translate(calc(-100% - 10px), -50%); }
+/* The chip sits on the bar's inner (left) side and runs into it like a label box (no border
+   there), centered on the visible part or at Now; its tools go above and below it */
+.timeline[data-orientation='vertical'] .tl-lane__chip-wrap { transform: translate(calc(-100% - 1.5px), -50%); }
+.timeline[data-orientation='vertical'] .tl-lane:not(.tl-lane--live) .span-chip {
+  min-height: 26px;
+  padding: 0 7px 0 8px;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--box-bg-strong);
+}
 .timeline[data-orientation='vertical'] .tl-lane__tools { right: 0; left: auto; transform: none; margin: 0; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--left { top: auto; bottom: 100%; margin-bottom: 4px; flex-direction: row-reverse; }
 .timeline[data-orientation='vertical'] .tl-lane__tools--right { top: 100%; margin-top: 4px; }
@@ -967,11 +975,15 @@
   cursor: pointer;
   will-change: transform;
 }
-.tl-nowflag__name { font: 650 12px/1 var(--font-ui); color: var(--ink); }
-.tl-nowflag__left { font: 700 13px/1 var(--font-mono); color: var(--accent); }
-.tl-nowflag__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
-.tl-nowflag__total:empty { display: none; }
-.tl-nowflag--group .tl-nowflag__left { font: 700 12px/1 var(--font-ui); }
+/* A saved span's reading (SpanReading), the same on label boxes and chips: name, then the time
+   left in the lane's colour (or the length) and the whole length small. */
+.span-read { display: flex; align-items: center; gap: 5px; }
+.span-read__name { min-width: 0; font: 650 12px/1 var(--font-ui); color: var(--ink); }
+.span-read__time { display: inline-flex; align-items: baseline; gap: 3px; }
+.span-read__value { font: 700 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--accent); }
+.span-read__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
+.span-read__total:empty { display: none; }
+.tl-nowflag--group .span-read__value { font: 700 12px/1 var(--font-ui); }
 
 /* --- Motion -----------------------------------------------------------------
    State changes ease instead of snapping: colours as something is selected or focused, tools

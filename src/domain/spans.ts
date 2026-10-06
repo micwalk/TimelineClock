@@ -1,6 +1,6 @@
 // Pure span logic: label text, on-screen geometry, and which saved spans get a lane.
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { chipName, formatClockCompact } from './format.ts'
+import { chipName, formatClockCompact, formatDurationHMS, formatDurationShort, formatLiveSpan } from './format.ts'
 
 /** A time that may be fixed or follow the live clock / the view center (cursor). */
 export type TimeRef = number | 'now' | 'center'
@@ -104,4 +104,26 @@ export function savedSpanLanes(opts: {
   }
   const mid = (s: LaneSpan) => (s.start.tsEpochMs + spanEndTs(s, now)) / 2
   return [...focused, ...out.sort((x, y) => x.priority - y.priority || mid(x) - mid(y))]
+}
+
+/** The span's ends in time order (an endpoint may be Now or the cursor). */
+const orderedEnds = (a: TimeRef, b: TimeRef, now: number, center: number): [number, number] => {
+  const ta = resolveTimeRef(a, now, center)
+  const tb = resolveTimeRef(b, now, center)
+  return ta <= tb ? [ta, tb] : [tb, ta]
+}
+
+/**
+ * A saved span's reading (components/timeline/SpanReading): the time left while it contains
+ * Now ("01:58"), else its length as precise as the zoom allows (formatLiveSpan).
+ */
+export function spanReadingValue(a: TimeRef, b: TimeRef, f: { now: number; center: number; pxPerMs: number }): string {
+  const [start, end] = orderedEnds(a, b, f.now, f.center)
+  return start <= f.now && f.now <= end ? formatDurationHMS(end - f.now) : formatLiveSpan(end - start, 1 / f.pxPerMs)
+}
+
+/** Beside the time left, the whole length small ("/3m"); nothing when the span doesn't contain Now. */
+export function spanReadingTotal(a: TimeRef, b: TimeRef, f: { now: number; center: number }): string {
+  const [start, end] = orderedEnds(a, b, f.now, f.center)
+  return start <= f.now && f.now <= end ? `/${formatDurationShort(end - start)}` : ''
 }

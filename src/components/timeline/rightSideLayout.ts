@@ -27,10 +27,10 @@ const LANE_TOOLS_SIZE = 36
 const FLAG_WIDTH_GUESS = 150
 /** An "N spans" box's width before it has been measured, px. */
 const GROUP_FLAG_WIDTH_GUESS = 80
-/** Lanes sit this far in from the right edge (matches .tl-lane in vertical). */
-const LANE_EDGE = 12
-/** Gap between a lane's bar and its chip (matches .tl-lane__chip-wrap in vertical). */
+/** Gap between a live lane's bar and its chip (matches .tl-lane--live .tl-lane__chip-wrap in vertical). */
 const CHIP_OFFSET = 10
+/** A saved-side chip runs into its bar, like a label box (matches .tl-lane__chip-wrap in vertical). */
+const SAVED_CHIP_OFFSET = 1.5
 /** A lane chip's width before it has been measured, px. */
 const CHIP_WIDTH_GUESS = 160
 /** The tools row under or over a saved-side chip (pencil, eye, trash / pin), px wide. */
@@ -212,13 +212,15 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
       liveItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, xlo: x, xhi: x + width })
       continue
     }
-    const laneX = f.crossSize - LANE_EDGE - lane.index * GEOMETRY_VERTICAL.laneGap
-    const hasChip = chipLane(lane, c.selectedSpanId)
-    if (hasChip) chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, xlo: laneX - CHIP_OFFSET - Math.max(width, TOOLS_WIDTH), xhi: laneX - CHIP_OFFSET })
+    const laneX = f.crossSize - GEOMETRY_VERTICAL.laneEdge - lane.index * GEOMETRY_VERTICAL.laneGap
+    const containsNow = lane.kind === 'saved' && Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
+    // A span with its own chip (selected or focused) gets no label box: the chip reads the same
+    // (SpanReading), at the same spot (at Now while it contains Now).
+    if (chipLane(lane, c.selectedSpanId)) {
+      chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: containsNow ? nowPos : g.mid, xlo: laneX - SAVED_CHIP_OFFSET - Math.max(width, TOOLS_WIDTH), xhi: laneX - SAVED_CHIP_OFFSET })
+      continue
+    }
     if (lane.kind !== 'saved') continue
-    const containsNow = Math.min(pa, pb) <= nowPos && nowPos <= Math.max(pa, pb) && nowPos >= 0 && nowPos <= f.mainSize
-    // Spans with their own chip only get a flag for Now; the chip already names them.
-    if (!containsNow && hasChip) continue
     const flagWidth = flagWidths.get(lane.key) || FLAG_WIDTH_GUESS
     const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - flagWidth, xhi: laneX }
     if (containsNow) running.push(item)

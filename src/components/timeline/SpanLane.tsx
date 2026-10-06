@@ -59,6 +59,9 @@ export interface SpanLaneProps {
   layoutKey?: string
 }
 
+/** An endpoint arrow's center stays this far from the screen's ends (half its 26px button, and a margin). */
+const ARROW_INSET = 16
+
 function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
   if (!target || target.kind === 'cursor') return null
   const onClick = target.kind === 'now' ? () => focusNow() : () => focusInstant(target.id)
@@ -136,8 +139,12 @@ export function SpanLane(props: SpanLaneProps) {
       s.mid = mid
       anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
     }
-    // Endpoint arrows sit on the line at its visible ends.
-    const place = (el: HTMLDivElement | null, pos: number) => { if (el) el.style.transform = v ? `translate3d(0,${pos}px,0)` : `translate3d(${pos}px,0,0)` }
+    // Endpoint arrows sit on the line at its visible ends, kept whole on screen.
+    const place = (el: HTMLDivElement | null, pos: number) => {
+      if (!el) return
+      const p = Math.min(f.mainSize - ARROW_INSET, Math.max(ARROW_INSET, pos))
+      el.style.transform = v ? `translate3d(0,${p}px,0)` : `translate3d(${p}px,0,0)`
+    }
     place(startEndRef.current, g.left)
     place(finishEndRef.current, g.right)
     if (g.leftOffscreen !== s.l) { s.l = g.leftOffscreen; leftChevRef.current?.classList.toggle('is-visible', s.l) }

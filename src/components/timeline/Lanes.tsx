@@ -15,6 +15,7 @@ import { InlineInput } from '../common/InlineInput.tsx'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
+import { SpanReading } from './SpanReading.tsx'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls, liveLaneVariant, savedLaneVariant } from './useBottomLanes.ts'
 import { setLaneChipInputs } from './laneChipLayout.ts'
@@ -98,40 +99,45 @@ function SavedSpanTools({ spanId, visible, onTypeLength }: { spanId: string; vis
   )
 }
 
-function SavedSpanChip({ r, a, b, editing, expanded, short, onLengthDoubleClick }: {
+function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
   r: ResolvedSpan
   a: TimeRef
   b: TimeRef
   editing: boolean
-  expanded: boolean
   short?: boolean
   /** Double-tap on the length (a focused span): type it, rather than rename the span. */
   onLengthDoubleClick?: () => void
 }) {
   const header = spanHeader(r)
-  const ends = `${endpointName(r.start)} → ${spanEndName(r)}`
+  const nameBox = editing ? (
+    <InlineInput
+      initial={r.span.label}
+      ariaLabel="Span name"
+      placeholder="Span name"
+      onCommit={v => act.renameSpan(r.span.id, v)}
+      onCancel={() => view.editSpan(null)}
+    />
+  ) : undefined
+  if (!short) {
+    // Saved side: the same reading as the span's label box (name, time left and length, or length).
+    return (
+      <span className="span-chip__text span-read" title={`${endpointName(r.start)} → ${spanEndName(r)}`}>
+        <SpanReading name={header ?? ''} a={a} b={b} nameSlot={nameBox} onValueDoubleClick={onLengthDoubleClick} />
+      </span>
+    )
+  }
   // Live chips (spans to Now) name the span, else the instant it runs from.
   const liveName = header ?? (r.span.endIsNow ? endpointName(r.start) : undefined)
-  const name = short ? (liveName ? truncateText(liveName, LIVE_NAME_MAX) : undefined) : expanded ? (header ? `${header}: ${ends}` : ends) : header
+  const name = liveName ? truncateText(liveName, LIVE_NAME_MAX) : undefined
   return (
     <span className="span-chip__text">
-      {editing ? (
-        <InlineInput
-          initial={r.span.label}
-          ariaLabel="Span name"
-          placeholder="Span name"
-          onCommit={v => act.renameSpan(r.span.id, v)}
-          onCancel={() => view.editSpan(null)}
-        />
-      ) : name ? (
+      {nameBox ?? (name ? (
         <>
-          <span className="span-chip__name" title={short ? liveName : name}>{name}</span>
+          <span className="span-chip__name" title={liveName}>{name}</span>
           <span className="span-chip__sep" aria-hidden>·</span>
         </>
-      ) : null}
-      {short ? <ShortDuration a={a} b={b} /> : onLengthDoubleClick ? (
-        <span className="span-chip__len" onDoubleClick={e => { e.stopPropagation(); onLengthDoubleClick() }}><Duration a={a} b={b} /></span>
-      ) : <Duration a={a} b={b} />}
+      ) : null)}
+      <ShortDuration a={a} b={b} />
     </span>
   )
 }
@@ -173,7 +179,6 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
   const editing = useView(s => s.editingSpanId === r.span.id)
   const isSelected = useView(s => s.selectedSpanId === r.span.id)
   const focused = useView(s => s.viewFocusMode === 'span' && s.focusedSpanId === r.span.id)
-  const expanded = isSelected && !live
   // A span between two instants can have its length typed (its end moves): a tool, or a double-tap on the length once focused.
   const [typingLength, setTypingLength] = useState(false)
   const lengthTypable = !!r.end && !live
@@ -208,7 +213,7 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       barOnly={!controls}
-      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} expanded={expanded} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
       chipEnd={isFavoriteNowSpan(r) ? <FavoriteStar instant={r.start} /> : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}

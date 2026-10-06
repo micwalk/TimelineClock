@@ -34,6 +34,6 @@ describe('timeline geometry', () => {
     const base = 390 - GEOMETRY_VERTICAL.chipStart - 8
     expect(verticalCrossBudget(390, 0)).toBe(base)
     // Only the bars cost width; lane chips draw over the saved chips, so selecting never reflows them.
-    expect(verticalCrossBudget(390, 2)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap)
+    expect(verticalCrossBudget(390, 2)).toBe(base - (GEOMETRY_VERTICAL.laneEdge - 12) - 2 * GEOMETRY_VERTICAL.laneGap)
   })
 })

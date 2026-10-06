@@ -31,6 +31,13 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
   one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
 - While naming a chip, the time shown under it no longer covers the chip below.
+- Span chips read like the label boxes beside the lanes in vertical, in both orientations: the
+  name, then while the span contains Now the time left (big, in the lane's colour) and its
+  length small ("3m timer 01:58 /3m"), otherwise its length. Selecting a span no longer adds a
+  second chip spelling out its ends: its label box turns into the chip, with its tools, in the
+  same spot (at Now while it contains Now).
+- A selected span's end arrows stay whole on screen; in vertical the lanes sit a little further
+  in from the edge.
 - Hiding the cursor hides its lane too (from the selected instant to the cursor).
 - In horizontal, a selected chip's tools sit in a row under it, as in vertical.
 - The name box of a new instant no longer sits on a dark box after the ＋ turns into it.
