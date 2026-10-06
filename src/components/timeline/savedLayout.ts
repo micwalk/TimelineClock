@@ -23,11 +23,11 @@ export const CULL_MARGIN_PX = 400
 export const CHIP_HEIGHT = 28
 /** Horizontal: a chip being named shows its time in a box under it (.tl-col__below), this much taller. */
 export const EDIT_TIME_EXTRA = 26
-/** A chip's tool buttons (InstantColumns: .icon-btn 26px, 3px apart), and the gap to the chip: under it in vertical, beside it in horizontal. */
+/** A chip's tool buttons (InstantColumns: .icon-btn 26px, 3px apart), and the gap to the chip: a row under it (beside it while moving in horizontal). */
 const TOOL_SIZE = 26
 const TOOL_GAP = 3
-const TOOLS_GAP_VERTICAL = 4
-const TOOLS_GAP_HORIZONTAL = 6
+const TOOLS_GAP_BELOW = 4
+const TOOLS_GAP_BESIDE = 6
 
 /** How many tool buttons a chip shows (as InstantColumns draws them): selected, or moving. */
 export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number }): number {
@@ -36,20 +36,23 @@ export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused:
   return Number(!i.favorite) + Number(!i.alarm && i.tsEpochMs >= o.now) + Number(o.focused) + 2 // + hide, delete
 }
 
+/** Whether a chip's tools sit in the row under it (.tl-col__below): always, but beside a moving chip in horizontal (its "Moving" badge is under it). */
+export const chipToolsBelow = (o: { moving: boolean; vertical: boolean }) => o.vertical || !o.moving
+
 /**
- * The room a chip's tools take: `tail` along the time axis after the chip (a row under it in
- * vertical, also the time while renaming; beside it in horizontal) and the row's width.
+ * The room a chip's tools take: the row under the chip (the tools, and the time while renaming)
+ * is `tail` along the time axis in vertical and `below` across it in horizontal; tools beside a
+ * moving chip in horizontal are `tail`. `toolsWidth` is the tools' own width.
  */
 export function chipToolsExtent(
   i: InstantRecord,
   o: { selected: boolean; focused: boolean; moving: boolean; editing: boolean; now: number; vertical: boolean },
-): { tail: number; toolsWidth: number } {
+): { tail: number; below: number; toolsWidth: number } {
   const tools = chipToolCount(i, o)
   const toolsWidth = tools > 0 ? tools * TOOL_SIZE + (tools - 1) * TOOL_GAP : 0
-  const tail = o.vertical
-    ? (tools > 0 || o.editing ? TOOLS_GAP_VERTICAL + TOOL_SIZE : 0)
-    : (tools > 0 ? TOOLS_GAP_HORIZONTAL + toolsWidth : 0)
-  return { tail, toolsWidth }
+  const row = tools > 0 && chipToolsBelow(o) ? TOOLS_GAP_BELOW + TOOL_SIZE : o.editing ? (o.vertical ? TOOLS_GAP_BELOW + TOOL_SIZE : EDIT_TIME_EXTRA) : 0
+  if (o.vertical) return { tail: row, below: 0, toolsWidth }
+  return { tail: tools > 0 && !chipToolsBelow(o) ? TOOLS_GAP_BESIDE + toolsWidth : 0, below: row, toolsWidth }
 }
 export const CLUSTER_WIDTH = 46
 export const FOLD_BADGE_WIDTH = 34
@@ -147,13 +150,14 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
     const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
       : i.alarm && i.tsEpochMs > c.now ? 4 : i.favorite ? 5 : 6
     // Its tools take room too, so neighbours keep clear of them.
-    const { tail, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical })
+    const { tail, below, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical })
+    const rowWidth = below > 0 ? toolsWidth : 0
     return {
       id: i.id,
       // A moving instant follows the cursor at the center of the view.
       pos: moving ? c.mainSize / 2 : c.pos(i.tsEpochMs),
-      mainExtent: vertical ? CHIP_HEIGHT : width,
-      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT + (editing ? EDIT_TIME_EXTRA : 0),
+      mainExtent: vertical ? CHIP_HEIGHT : Math.max(width, rowWidth),
+      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT + below,
       ...(tail > 0 ? { tail } : {}),
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),

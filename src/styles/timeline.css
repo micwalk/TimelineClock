@@ -218,17 +218,23 @@
   gap: 3px;
 }
 
-/* Under the chip: the time while renaming, and (vertical) the tools, right-aligned so none sits on the marker line. */
+/* Under the chip: the time while renaming, and the tools. Horizontal: centered under the chip,
+   on an opaque box so the marker line doesn't run through them. */
 .tl-col__below {
   position: absolute;
   top: 100%;
-  left: 0;
-  min-width: 100%;
+  left: 50%;
+  transform: translateX(-50%);
   width: max-content;
   margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.timeline:not([data-orientation='vertical']) .tl-col__below .tl-col__tools {
+  padding: 0 2px;
+  border-radius: var(--radius-chip);
+  background: var(--box-bg-strong);
 }
 /* The temporary time reads as its own small box. */
 .tl-col__below .chip__time {
@@ -237,10 +243,14 @@
   background: var(--box-bg);
   color: var(--ink);
 }
-.tl-col__below .tl-col__tools { position: static; transform: none; margin: 0 0 0 auto; }
-/* While renaming, the input is the one box: the chip around it draws nothing. */
-.chip--editing { background: none; padding: 0; cursor: default; }
-.chip--editing:hover { background: none; }
+.tl-col__below .tl-col__tools { position: static; transform: none; margin: 0; }
+/* Vertical: the row starts at the chip's left edge, tools right-aligned, so none sits on the marker line. */
+.timeline[data-orientation='vertical'] .tl-col__below { left: 0; transform: none; min-width: 100%; }
+.timeline[data-orientation='vertical'] .tl-col__below .tl-col__tools { margin-left: auto; }
+/* While renaming, the input is the one box: the chip around it draws nothing, hovered or not
+   (a tap leaves a sticky hover on phones). Doubled class: .chip's rules come later. */
+.chip.chip--editing,
+.chip.chip--editing:hover { background: none; padding: 0; cursor: default; }
 .chip--editing .chip-input { margin: 0; }
 
 /* "⟲N": snoozes folded into this chip. The chip shifts left so chip + badge (34px) stay centered on the line. */

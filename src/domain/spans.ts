@@ -1,6 +1,5 @@
 // Pure span logic: label text, on-screen geometry, and which saved spans get a lane.
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { displayName } from './entities.ts'
 import { chipName, formatClockCompact } from './format.ts'
 
 /** A time that may be fixed or follow the live clock / the view center (cursor). */
@@ -54,10 +53,10 @@ export const isFavoriteNowSpan = (r: ResolvedSpan) => !!r.span.endIsNow && !!r.s
 export const spanHeader = (r: ResolvedSpan): string | undefined =>
   isFavoriteNowSpan(r) || !r.span.label ? undefined : r.span.label
 
-/** An endpoint's name in an implied lane's chip: its name, else its compact time ("8:53a"), never "?". */
+/** An instant's name wherever it is named in text (lane chips, the Agenda, menus): its name, else its compact time ("8:53a"), never "?". */
 export const endpointName = (i: InstantRecord): string => (i.label ? chipName(i.label) : formatClockCompact(i.tsEpochMs, false))
 
-export const spanEndName = (r: ResolvedSpan) => (r.span.endIsNow ? 'Now' : displayName(r.end?.label))
+export const spanEndName = (r: ResolvedSpan) => (r.span.endIsNow || !r.end ? 'Now' : endpointName(r.end))
 
 /** 0 = involves the focused instant, 1 = involves the selected instant, 2 = merely visible. */
 export type SpanPriority = 0 | 1 | 2

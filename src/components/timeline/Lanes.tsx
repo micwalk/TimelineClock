@@ -5,7 +5,6 @@ import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDurationHMS, formatLiveSpan, livePrecision, truncateText } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
-import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
 import { useView, view } from '../../store/view.ts'
@@ -110,7 +109,7 @@ function SavedSpanChip({ r, a, b, editing, expanded, short, onLengthDoubleClick 
   onLengthDoubleClick?: () => void
 }) {
   const header = spanHeader(r)
-  const ends = `${displayName(r.start.label)} → ${spanEndName(r)}`
+  const ends = `${endpointName(r.start)} → ${spanEndName(r)}`
   // Live chips (spans to Now) name the span, else the instant it runs from.
   const liveName = header ?? (r.span.endIsNow ? endpointName(r.start) : undefined)
   const name = short ? (liveName ? truncateText(liveName, LIVE_NAME_MAX) : undefined) : expanded ? (header ? `${header}: ${ends}` : ends) : header

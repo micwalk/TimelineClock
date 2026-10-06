@@ -7,7 +7,8 @@ import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, Plus
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SECOND } from '../../domain/time.ts'
-import { chipName, formatClockCompact, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
+import { formatClockCompact, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
+import { endpointName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
@@ -147,7 +148,7 @@ export function CursorTag() {
   }
   if (!visible) return null
 
-  const name = selected ? shortName(chipName(selected.label)) : ''
+  const name = selected ? shortName(endpointName(selected)) : ''
   const onInstant = !freeCursor && focusedInst ? focusedInst : null
   const items: TagMenuItem[] = onInstant ? [
     { label: 'Save span to Now', icon: MapPinIcon, onSelect: () => act.saveSpanRefs(onInstant.tsEpochMs, 'now') },

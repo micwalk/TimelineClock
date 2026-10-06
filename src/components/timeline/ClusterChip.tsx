@@ -3,7 +3,7 @@
 import { memo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { BellIcon, StarIcon } from '@heroicons/react/24/solid'
-import { chipName } from '../../domain/format.ts'
+import { endpointName } from '../../domain/spans.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
@@ -28,7 +28,7 @@ export const ClusterChip = memo(function ClusterChip({ id, topPriority, members 
 
   const hasAlarm = members.some(m => m.alarm)
   const hasFavorite = members.some(m => m.favorite)
-  const label = `${members.length} more instants: ${members.map(m => chipName(m.label)).join(', ')}`
+  const label = `${members.length} more instants: ${members.map(m => endpointName(m)).join(', ')}`
 
   return (
     <div ref={ref} className={`tl-col tl-col--label tl-cluster ${accentClass(topPriority)}`}>

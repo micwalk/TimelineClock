@@ -31,6 +31,11 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
   one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
 - While naming a chip, the time shown under it no longer covers the chip below.
+- Hiding the cursor hides its lane too (from the selected instant to the cursor).
+- In horizontal, a selected chip's tools sit in a row under it, as in vertical.
+- The name box of a new instant no longer sits on a dark box after the ＋ turns into it.
+- Unnamed instants are named by their time wherever a name is shown (lane chips, the Agenda,
+  menus), never "?".
 - A favorite now means its span to Now is tracked: unfavoriting deletes that span (it used to
   stay, hidden), and hiding a span to Now unfavorites its instant. Setting an alarm no longer
   makes the instant a favorite (a timer's end still is: its span to Now is the countdown).

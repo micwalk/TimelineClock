@@ -6,12 +6,12 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, resolveSpan, resolveTimeRef, savedSpanLanes, spanEndName, spanGeometry, spanHeader } from '../../domain/spans.ts'
-import { displayName } from '../../domain/entities.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { useQuick } from '../../store/quick.ts'
 import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
+import { useUi } from '../../store/ui.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
 import { packSlots, stableSlots } from '../../domain/laneSlots.ts'
@@ -56,6 +56,7 @@ export function useVisibleLanes(): BottomLane[] {
   })))
 
   const favoriteLanes = useSettings(s => s.favoriteLanes)
+  const cursorHidden = useUi(s => s.cursorHidden)
   // A running stopwatch's lanes to Now (its start, when kept favorited, and the latest lap) always show.
   const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
   const startId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[0] : null))
@@ -90,8 +91,9 @@ export function useVisibleLanes(): BottomLane[] {
         out.push({ key: 'implied-secondary', kind: 'secondary', selected, secondary, a: ref(secondary), b: ref(selected), top: 0, index: 0 })
       }
     }
-    // Free cursor with a selection: the live lane from the selection to the cursor (hidden by geometry while they coincide).
-    if (selected && v.mode === 'cursor' && !v.inMove) {
+    // Free cursor with a selection: the live lane from the selection to the cursor (hidden by
+    // geometry while they coincide). A hidden cursor takes its lane with it.
+    if (selected && v.mode === 'cursor' && !v.inMove && !cursorHidden) {
       out.push({ key: 'implied-cursor', kind: 'selected-cursor', selected, a: ref(selected), b: 'center', top: 0, index: 0 })
     }
     for (const s of saved) {
@@ -106,7 +108,7 @@ export function useVisibleLanes(): BottomLane[] {
       })
     }
     return out
-  }, [instants, spans, v, favoriteLanes, trackedId, startId, keepStart])
+  }, [instants, spans, v, favoriteLanes, cursorHidden, trackedId, startId, keepStart])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
@@ -179,7 +181,7 @@ export const laneHasControls = (lane: BottomLane, selectedSpanId: string | null)
 
 /** What a lane is called where its own chip isn't shown (an "N spans" chip's list). */
 export function laneName(lane: BottomLane): string {
-  if (lane.kind === 'saved') return spanHeader(lane.span) ?? `${displayName(lane.span.start.label)} → ${spanEndName(lane.span)}`
+  if (lane.kind === 'saved') return spanHeader(lane.span) ?? `${endpointName(lane.span.start)} → ${spanEndName(lane.span)}`
   if (lane.kind === 'secondary') return `${endpointName(lane.secondary)} → ${endpointName(lane.selected)}`
   return endpointName(lane.selected)
 }

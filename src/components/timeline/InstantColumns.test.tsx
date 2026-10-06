@@ -237,10 +237,13 @@ describe('chip polish: renaming and vertical tools', () => {
     expect(container.querySelector('.chip--saved')!.contains(below)).toBe(false)
   })
 
-  it('keeps horizontal tools beside the chip', () => {
+  it('puts horizontal tools under the chip too, but beside a moving chip (its badge is under it)', () => {
     const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
     useView.setState({ currentSelectedInstantId: id })
-    const { container } = render(<Columns />)
+    const { container, rerender } = render(<Columns />)
+    expect(container.querySelector('.tl-col__below .tl-col__tools')).not.toBeNull()
+    act(() => useView.setState({ moveMode: { instantId: id, originalCenter: twentyMinutesAgo() } }))
+    rerender(<Columns />)
     expect(container.querySelector('.tl-col__below')).toBeNull()
     expect(container.querySelector('.tl-col__tools')).not.toBeNull()
   })

@@ -12,6 +12,7 @@ import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelati
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
+import { endpointName } from '../../domain/spans.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
@@ -24,7 +25,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
-import { useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
+import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
 import { InstantLines } from './InstantLines.tsx'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
@@ -116,8 +117,8 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
       <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
     </>
   ) : null
-  // Vertical: tools sit in a row under the chip so none lies on the marker line. Horizontal: beside the chip.
-  const toolsBelow = vertical && toolButtons !== null
+  // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it).
+  const toolsBelow = toolButtons !== null && chipToolsBelow({ moving, vertical })
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
 
   return (
@@ -146,7 +147,7 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
           <button
             type="button"
             className="chip__main"
-            title={`${displayName(inst.label)} · ${formatDateTime(ts)}. Click to select; double-click to focus, then again to rename`}
+            title={`${inst.label ? displayName(inst.label) : 'Instant'} · ${formatDateTime(ts)}. Click to select; double-click to focus, then again to rename`}
             onClick={onTap}
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
@@ -192,7 +193,7 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
 const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured }:
   { inst: InstantRecord; foldCount: number; foldedIds: string; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
-  const name = chipName(inst.label)
+  const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
   // The Cursor tag's ＋ is still growing into this chip: the chip shows once it arrives.
   const morphTarget = useUi(s => s.plusMorph?.id === inst.id && s.plusMorph.phase === 'in')
