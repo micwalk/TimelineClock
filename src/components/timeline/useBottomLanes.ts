@@ -14,7 +14,7 @@ import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
-import { nestPackedSlots, packSlots, stableSlots } from '../../domain/laneSlots.ts'
+import { packSlots, stableSlots } from '../../domain/laneSlots.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -150,14 +150,14 @@ export const NO_LANE_SLOTS: LaneSlots = { live: {}, saved: {} }
 export function placeLanes(visible: BottomLane[], rowsUsed: number, orientation: Orientation, prev: LaneSlots = NO_LANE_SLOTS):
   { lanes: BottomLane[]; height: number | undefined; liveCount: number; slots: LaneSlots } {
   const { live, saved } = partitionLanes(visible)
-  // Saved lanes: stable, except that a span containing another sits further out (nestSlots).
+  // Saved lanes: stable and packed; a span containing another sits further out.
   const ranges = Object.fromEntries(saved.map(l => [l.key, typeof l.a === 'number' && typeof l.b === 'number'
     ? { lo: Math.min(l.a, l.b), hi: Math.max(l.a, l.b) } : undefined]))
   const slots: LaneSlots = {
     live: stableSlots(prev.live, live.map(l => l.key)),
     // Spans that don't overlap in time share a track (a stopwatch's laps), so many spans
     // don't mean many lanes.
-    saved: nestPackedSlots(packSlots(prev.saved, saved.map(l => l.key), ranges), ranges),
+    saved: packSlots(prev.saved, saved.map(l => l.key), ranges),
   }
   const span = (m: Record<string, number>) => Math.max(0, ...Object.values(m).map(v => v + 1))
   const liveCount = orientation === 'vertical' ? 0 : span(slots.live)

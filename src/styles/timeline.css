@@ -934,3 +934,15 @@
 .tl-nowflag__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
 .tl-nowflag__total:empty { display: none; }
 .tl-nowflag--group .tl-nowflag__left { font: 700 12px/1 var(--font-ui); }
+
+/* --- Motion -----------------------------------------------------------------
+   State changes ease instead of snapping: colours as something is selected or focused, tools
+   popping in, the timeline growing as lanes come and go. (Positions move per frame from JS;
+   nothing here transitions a transform the engine writes.) */
+.chip { transition: background 120ms ease, transform 120ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease; }
+.span-chip, .tl-tag__box { transition: background 120ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease; }
+@keyframes tools-in {
+  from { opacity: 0; scale: 0.8; }
+}
+.tl-col__tools, .tl-lane__tools > *, .tl-lane__end > *, .chip__name-hint { animation: tools-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.timeline:not([data-orientation='vertical']) { transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1); }
