@@ -343,9 +343,13 @@
 /* Hiding the cursor (LiveTags): the Cursor tag folds into its arrowhead on the axis and the
    bright line fades; the arrowhead brings it back. The fold pivots on the arrow's tip (the
    origin is set where the tag's own transform puts the box's edge on the axis). */
+/* The Cursor tag's step out of the Now tag's way (--slot, set per collision) glides instead of
+   jumping: registered as a number, so it interpolates; the ＋ (and an open popover) reads the
+   same eased value, so the ＋ stays exactly where it is while the tag moves. */
+@property --slot { syntax: '<number>'; inherits: true; initial-value: 0; }
 .tl-tag {
   transform-origin: 0 100%;
-  transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 220ms ease;
+  transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 220ms ease, --slot 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .timeline[data-orientation='vertical'] .tl-tag { transform-origin: 100% 0; }
 .tl-tag.is-collapsed { scale: 0.12; opacity: 0; pointer-events: none; }

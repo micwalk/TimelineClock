@@ -31,6 +31,7 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
   one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
 - While naming a chip, the time shown under it no longer covers the chip below.
+- The Cursor tag glides out of the Now tag's way (and back) instead of jumping; its ＋ stays put.
 - Span chips read like the label boxes beside the lanes in vertical, in both orientations: the
   name, then while the span contains Now the time left (big, in the lane's colour) and its
   length small ("3m timer 01:58 /3m"), otherwise its length. Selecting a span no longer adds a
