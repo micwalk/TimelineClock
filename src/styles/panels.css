@@ -563,6 +563,10 @@
 .shell-status .is-off { color: var(--ink); }
 .shell-status .is-off > span { color: var(--c-now); }
 .shell-status__fix { margin-left: 1.2em; color: var(--ink-faint); }
+.shell-diag { margin-top: 10px; display: grid; gap: 6px; }
+.shell-diag__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.shell-diag__note { margin: 0; font-size: 12px; color: var(--ink-dim); }
+.shell-diag__text { width: 100%; box-sizing: border-box; font-size: 11px; color: var(--ink); background: var(--box-bg); border: 1px solid var(--ink-faint); border-radius: var(--radius-chip); }
 @media (prefers-reduced-motion: reduce) {
   .help__scrim { animation: none; }
 }

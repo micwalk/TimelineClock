@@ -9,19 +9,22 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { useShell } from '../../store/shell.ts'
 import { SNOOZE_MINUTES, dismiss, snooze } from '../AlarmScheduler.ts'
 import { Alarms } from './alarmsPlugin.ts'
+import { diag, timed } from './diagLog.ts'
 
 let running = false
 let again = false
 
 async function syncOnce() {
   // Never prompt from here: the prompt belongs to the first start or a tap (requestNotificationPermission).
-  if ((await Alarms.checkPermissions()).notifications !== 'granted') {
-    useShell.setState({ status: await Alarms.getStatus() })
+  if ((await timed('checkPermissions', Alarms.checkPermissions())).notifications !== 'granted') {
+    useShell.setState({ status: await timed('getStatus', Alarms.getStatus()) })
     return
   }
 
-  const { actions } = await Alarms.takeActions()
-  replayAlarmActions(sanitizeAlarmActions(actions), {
+  const { actions } = await timed('takeActions', Alarms.takeActions())
+  const answers = sanitizeAlarmActions(actions)
+  if (answers.length > 0) diag(`replaying ${answers.map(a => a.type).join(', ')}`)
+  replayAlarmActions(answers, {
     isOn: id => !!entities.getInstant(id)?.alarm,
     dismiss,
     snooze: (id, at) => snooze(id, SNOOZE_MINUTES, at),
@@ -29,12 +32,12 @@ async function syncOnce() {
 
   const { instants, spans } = useEntities.getState()
   const { autoDismissMs, unattended } = useAlarms.getState()
-  const status = await Alarms.sync({
+  const status = await timed('sync', Alarms.sync({
     alarms: desiredNativeAlarms(instants, spans, Date.now(), autoDismissMs),
     ringMs: autoDismissMs,
     unattended,
     snoozeMinutes: SNOOZE_MINUTES,
-  })
+  }))
   useShell.setState({ status })
 }
 

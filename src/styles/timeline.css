@@ -746,7 +746,7 @@
 
 /* --- Dropping instants ---------------------------------------------------- */
 
-/* The faint "name…" prompt on a nameless chip: one tap opens the name box in place. */
+/* The faint "name…" prompt on a selected nameless chip: one tap opens the name box in place. */
 .chip__name-hint {
   padding: 0 2px 0 5px;
   font: italic 500 13px/1 var(--font-ui);

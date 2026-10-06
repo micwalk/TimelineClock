@@ -42,7 +42,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 5. **Local-First**: Data stays on device unless user opts into sync
 6. **Performance First**: Optimize for 60fps timeline rendering and smooth interactions
 7. **History is core**: never fade, dim or hide past instants/spans to reduce clutter; fix clutter with layout
-8. **Capture, then relate**: one tap drops a nameless instant (e.g. rice goes on) with nothing popping up; name it later with one tap on the chip's "name…" hint; create timers/alarms relative to it (+13m); look back at elapsed time. Judge UX by how few taps this takes
+8. **Capture, then relate**: one tap drops a nameless instant (e.g. rice goes on) with nothing popping up; name it later: tap the chip, then its "name…" hint (shown only while selected, so unnamed chips stay compact); create timers/alarms relative to it (+13m); look back at elapsed time. Judge UX by how few taps this takes
 9. **Everything glows**: style through theme tokens (--accent/--halo, .glow-box/.glow-text, --glow) so a future style editor can change it
 10. **Propose UX changes before building them**: the owner has rejected some unrequested interaction changes
 

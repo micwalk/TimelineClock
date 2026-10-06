@@ -139,7 +139,7 @@ function SavedChip({ inst, row, cross, shift, foldCount, foldedIds, selected, fo
           />
         ) : (
           <>
-          {unnamed && (
+          {unnamed && selected && (
             <button type="button" className="chip__name-hint" aria-label="Name this instant" onClick={() => view.editInstant(inst.id)}>name…</button>
           )}
           <button

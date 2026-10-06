@@ -45,3 +45,14 @@ export async function silenceNativeAlarms() {
     console.warn('[Native] Could not silence the alarms', err)
   }
 }
+
+/** Settings › Diagnostics (Android app only): the native and page logs as text, to copy. */
+export async function nativeDiagnostics(): Promise<string> {
+  if (!isNativeShell()) return ''
+  return (await loadNative()).diagnosticsText()
+}
+
+export async function clearNativeDiagnostics() {
+  if (!isNativeShell()) return
+  await (await loadNative()).clearDiagnostics()
+}

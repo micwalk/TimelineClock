@@ -93,14 +93,16 @@ public class LiveNotificationsPlugin extends Plugin {
         try {
             if (intent == null || !NotificationViews.ACTION_OPEN.equals(intent.getAction())) return;
             int alarmId = intent.getIntExtra(NotificationViews.EXTRA_ALARM_ID, 0);
+            Diag.log(getContext(), "tap " + intent.getStringExtra(NotificationViews.EXTRA_KIND) + (alarmId != 0 ? " alarm " + alarmId : ""));
             if (alarmId != 0) Alarms.silenceLater(getContext(), alarmId);
             String instantId = intent.getStringExtra(NotificationViews.EXTRA_INSTANT_ID);
             if (instantId == null) return;
             JSObject data = new JSObject();
             data.put("instantId", instantId);
             data.put("kind", intent.getStringExtra(NotificationViews.EXTRA_KIND));
-            // Kept until the page listens: a tap may have cold-started the app.
-            notifyListeners("notificationTapped", data, true);
+            // Kept until the page listens: a tap may have cold-started the app. Sent from the
+            // plugin thread, like every other message to the page.
+            getBridge().execute(() -> notifyListeners("notificationTapped", data, true));
         } catch (RuntimeException e) {
             Log.e(TAG, "Could not handle a notification tap", e);
         }

@@ -15,6 +15,9 @@ export interface AlarmsPlugin {
   getStatus(): Promise<ShellStatus>
   /** Stops the sound of every ringing alarm; they stay on the lock screen until answered. */
   silence(): Promise<void>
+  /** The native diagnostics log (Diag.java), oldest first. */
+  getLog(): Promise<{ lines: string[] }>
+  clearLog(): Promise<void>
   checkPermissions(): Promise<AlarmsPermissions>
   requestPermissions(): Promise<AlarmsPermissions>
   /** An answer was given from a notification while the page runs. */

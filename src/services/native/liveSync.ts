@@ -6,6 +6,7 @@ import { desiredLiveNotifications } from '../../domain/nativeNotifications.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useQuick } from '../../store/quick.ts'
 import { LiveNotifications } from './liveNotificationsPlugin.ts'
+import { timed } from './diagLog.ts'
 
 /** What was last sent, so unchanged lists aren't posted again. */
 let lastSent = ''
@@ -24,7 +25,7 @@ async function syncOnce(force: boolean) {
 
   const json = JSON.stringify(items)
   if (!force && json === lastSent) return
-  await LiveNotifications.sync({ items })
+  await timed('live sync', LiveNotifications.sync({ items }))
   lastSent = json
 }
 

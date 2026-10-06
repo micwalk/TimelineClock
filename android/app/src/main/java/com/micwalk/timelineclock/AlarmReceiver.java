@@ -20,23 +20,32 @@ public class AlarmReceiver extends BroadcastReceiver {
 
     private static final String TAG = "AlarmReceiver";
 
+    /** Runs off the main thread (goAsync), so storage and notification work never holds up the app's screen. */
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null || intent.getAction() == null) return;
         Context c = context.getApplicationContext();
-        try {
-            NotificationChannels.ensure(c);
-            int id = intent.getIntExtra(EXTRA_ID, 0);
-            switch (intent.getAction()) {
-                case ACTION_FIRE -> Alarms.fire(c, id);
-                case ACTION_RING_END -> Alarms.ringEnd(c, id);
-                case ACTION_DISMISS -> Alarms.dismiss(c, id);
-                case ACTION_SNOOZE -> Alarms.snooze(c, id);
-                case Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Alarms.restore(c);
-                default -> { }
+        String action = intent.getAction();
+        int id = intent.getIntExtra(EXTRA_ID, 0);
+        PendingResult pending = goAsync();
+        Alarms.run(() -> {
+            try {
+                Diag.log(c, "receiver " + action.substring(action.lastIndexOf('.') + 1) + " " + id + (Alarms.appOpen ? " (app open)" : ""));
+                NotificationChannels.ensure(c);
+                switch (action) {
+                    case ACTION_FIRE -> Alarms.fire(c, id);
+                    case ACTION_RING_END -> Alarms.ringEnd(c, id);
+                    case ACTION_DISMISS -> Alarms.dismiss(c, id);
+                    case ACTION_SNOOZE -> Alarms.snooze(c, id);
+                    case Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Alarms.restore(c);
+                    default -> { }
+                }
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Could not handle " + action, e);
+                Diag.log(c, "receiver " + action + " failed: " + e);
+            } finally {
+                pending.finish();
             }
-        } catch (RuntimeException e) {
-            Log.e(TAG, "Could not handle " + intent.getAction(), e);
-        }
+        });
     }
 }

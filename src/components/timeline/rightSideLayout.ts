@@ -152,7 +152,8 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   for (const k of c.saved.clusters) {
     const ps = k.memberIds.map(posOf).filter((p): p is number => p !== null)
     if (ps.length === 0) continue
-    const mid = ps.reduce((a, b) => a + b, 0) / ps.length
+    // Where the "+N" chip is drawn: its members' mean time, slid as the layout slid it.
+    const mid = ps.reduce((a, b) => a + b, 0) / ps.length + k.shift
     const xlo = GEOMETRY_VERTICAL.chipStart + k.crossOffset
     blockers.push({ lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2, xlo, xhi: xlo + CLUSTER_WIDTH })
   }
@@ -193,6 +194,16 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   const chipSize = LANE_CHIP_SIZE + 2 * LANE_TOOLS_SIZE
   // A span too short to hold its box clear of the others lets it out past its ends (escape).
   const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP, onTop, { escape: true })
+  // A chip that had to leave its span isn't tied to a spot there any more: place it clear of
+  // every instant chip too, so its tools don't land on them.
+  const half = chipSize / 2
+  const escaped = chipItems.filter(it => chips[it.key] - half < it.lo || chips[it.key] + half > it.hi)
+  if (escaped.length > 0) {
+    const stay: Interval[] = chipItems
+      .filter(it => !escaped.includes(it))
+      .map(it => ({ lo: chips[it.key] - half, hi: chips[it.key] + half, xlo: it.xlo, xhi: it.xhi }))
+    Object.assign(chips, layoutNowFlags(escaped, nowPos, chipSize, GAP, [...blockers, ...stay], { escape: true }))
+  }
   const chipBoxes: Interval[] = chipItems.map(it => ({ lo: chips[it.key] - chipSize / 2, hi: chips[it.key] + chipSize / 2, xlo: it.xlo, xhi: it.xhi }))
   // Live lanes' chips (left side) next, clear of those they would actually touch: a wide
   // selected chip can reach across the axis; the Now and Cursor tags sit on the live side.

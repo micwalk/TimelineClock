@@ -51,11 +51,16 @@ public class AlarmsPlugin extends Plugin {
     static void announceActions() {
         AlarmsPlugin p = current;
         if (p == null) return;
-        try {
-            p.notifyListeners("actions", new JSObject(), true);
-        } catch (RuntimeException e) {
-            Log.w(TAG, "Could not tell the page about an answer", e);
-        }
+        Diag.log(p.getContext(), "announce answers to the page");
+        // From the plugin thread, like every other message to the page.
+        p.getBridge().execute(() -> {
+            try {
+                p.notifyListeners("actions", new JSObject(), true);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Could not tell the page about an answer", e);
+                Diag.log(p.getContext(), "announce failed: " + e);
+            }
+        });
     }
 
     /**
@@ -90,6 +95,7 @@ public class AlarmsPlugin extends Plugin {
             synchronized (AlarmStore.LOCK) {
                 actions = AlarmStore.takeActions(getContext());
             }
+            if (actions.length() > 0) Diag.log(getContext(), "page took " + actions.length() + " answer(s)");
             JSObject result = new JSObject();
             result.put("actions", actions);
             call.resolve(result);
@@ -97,6 +103,24 @@ public class AlarmsPlugin extends Plugin {
             Log.e(TAG, "takeActions failed", e);
             call.reject("takeActions failed: " + e.getMessage());
         }
+    }
+
+    /** The diagnostics log (Diag) plus `log`, lines the page adds: { lines }. */
+    @PluginMethod
+    public void getLog(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            result.put("lines", Diag.lines(getContext()));
+            call.resolve(result);
+        } catch (RuntimeException e) {
+            call.reject("getLog failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void clearLog(PluginCall call) {
+        Diag.clear(getContext());
+        call.resolve();
     }
 
     /** Silence in the app: stops the sound of every ringing alarm; they stay on the lock screen until answered. */

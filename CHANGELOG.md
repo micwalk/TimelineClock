@@ -33,6 +33,10 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - A focused span's length can be typed (its clock tool, or a double-tap on the length): its
   end moves, so a timer's length changes with it.
 - Typing a clock time starts with the hour: **9** is 9:00 (it was 9 minutes past midnight).
+- An unnamed chip shows just its time; its "name…" hint appears once it's selected.
+- Settings in the Android app can copy a diagnostics log (alarm events, notification taps,
+  stalls and page errors) to report a problem. Answers from a notification are handled off
+  the app's main thread, and a crashed page reloads instead of staying dead.
 - Chips no longer hide under the selected chip or its tools, and live chips keep clear of the
   Now and Cursor tags.
 - Dismissing a timer's alarm unfavorites its end; the star on a favorite's lane chip

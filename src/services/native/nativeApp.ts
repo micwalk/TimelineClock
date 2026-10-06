@@ -12,6 +12,8 @@ import { syncAlarms } from './alarmSync.ts'
 import { Alarms } from './alarmsPlugin.ts'
 import { LiveNotifications } from './liveNotificationsPlugin.ts'
 import { syncLive } from './liveSync.ts'
+import { clearPageLog, diag, pageLog, watchPage } from './diagLog.ts'
+import { versionLine } from '../../domain/version.ts'
 
 /** Store changes come in bursts (a timer makes two instants and two spans): sync once after. Short, so an alarm set just before leaving the app is scheduled. */
 const DEBOUNCE_MS = 50
@@ -44,9 +46,38 @@ export async function silenceAlarms() {
   await Alarms.silence()
 }
 
+/** Settings › Diagnostics: the versions, what Android allows, then the native and page logs. */
+export async function diagnosticsText(): Promise<string> {
+  const { shellVersion, status } = useShell.getState()
+  let native: string[] = []
+  try {
+    native = (await Alarms.getLog()).lines
+  } catch (err) {
+    native = [`(native log unavailable: ${String(err)})`]
+  }
+  return [
+    versionLine(__APP_VERSION__, shellVersion),
+    `Status: ${JSON.stringify(status)}`,
+    `User agent: ${navigator.userAgent}`,
+    '',
+    '— Android app —',
+    ...native,
+    '',
+    '— Page —',
+    ...pageLog(),
+  ].join('\n')
+}
+
+export async function clearDiagnostics() {
+  clearPageLog()
+  try { await Alarms.clearLog() } catch { /* an older app has no log */ }
+}
+
 export function startNativeApp() {
   if (started) return
   started = true
+  watchPage()
+  diag('page started')
 
   App.getInfo()
     .then(info => useShell.setState({ shellVersion: info.version }))
@@ -55,16 +86,17 @@ export function startNativeApp() {
   // A tap goes to the stopwatch's run, a running timer's span, or an alarm's overtime. The
   // plugin keeps a tap that started the app until this listener is added.
   LiveNotifications.addListener('notificationTapped', ({ instantId, kind }) => {
+    diag(`tapped ${String(kind)}`)
     if (typeof instantId !== 'string' || !instantId) return
     revealLive(KINDS.find(k => k === kind) ?? 'alarm', instantId)
   }).catch(warn('Tap listener'))
   // Dismiss / Snooze on a notification while the page runs: replay it now.
-  Alarms.addListener('actions', () => void syncAlarms()).catch(warn('Alarm answer listener'))
+  Alarms.addListener('actions', () => { diag('answers from a notification'); void syncAlarms() }).catch(warn('Alarm answer listener'))
 
   useEntities.subscribe((s, prev) => { if (s.instants !== prev.instants || s.spans !== prev.spans) syncSoon() })
   useQuick.subscribe((s, prev) => { if (s.stopwatch !== prev.stopwatch) syncSoon() })
   useAlarms.subscribe((s, prev) => { if (s.autoDismissMs !== prev.autoDismissMs || s.unattended !== prev.unattended) syncSoon() })
-  App.addListener('resume', () => syncAll(true)).catch(warn('Resume listener'))
+  App.addListener('resume', () => { diag('resume'); syncAll(true) }).catch(warn('Resume listener'))
   // Leaving the app: don't wait out the debounce.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && debounce) { clearTimeout(debounce); debounce = null; syncAll() }

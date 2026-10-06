@@ -30,12 +30,13 @@ beforeEach(() => {
 const twentyMinutesAgo = () => engine.getFrame().now - 20 * MINUTE
 
 describe('unnamed saved chips', () => {
-  it('show a name hint instead of "?", and tapping it opens the name box', () => {
+  it('show just their time; once selected, a name hint that opens the name box', () => {
     const t = twentyMinutesAgo()
     const id = entities.createInstant(t, '')
     render(<Columns />)
     expect(screen.queryByText('?')).toBeNull()
-    expect(screen.getByText(formatClockCompact(t, false))).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Name this instant' })).toBeNull()
+    fireEvent.click(screen.getByText(formatClockCompact(t, false)))
     fireEvent.click(screen.getByRole('button', { name: 'Name this instant' }))
     expect(useView.getState().editingInstantId).toBe(id)
   })

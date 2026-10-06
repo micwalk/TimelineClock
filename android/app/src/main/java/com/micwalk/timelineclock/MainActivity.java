@@ -2,6 +2,7 @@ package com.micwalk.timelineclock;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.CapConfig;
@@ -16,6 +17,8 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Before the bridge starts, so alarms scheduled by the page always have their channel.
         NotificationChannels.ensure(this);
+        Diag.watchMainThread(this);
+        Diag.log(this, "activity created" + (savedInstanceState != null ? " (restored)" : ""));
         registerPlugin(AlarmsPlugin.class);
         registerPlugin(LiveNotificationsPlugin.class);
 
@@ -38,6 +41,19 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
+        // The page's renderer crashing or being killed leaves a dead page: note it and reload.
+        bridgeBuilder.addWebViewListener(
+            new WebViewListener() {
+                @Override
+                public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                    Diag.log(MainActivity.this, "page renderer gone" + (detail != null && detail.didCrash() ? " (crashed)" : " (killed)") + "; reloading");
+                    // The WebView can't be used again: start the activity over rather than crash.
+                    recreate();
+                    return true;
+                }
+            }
+        );
+
         super.onCreate(savedInstanceState);
 
         if (BuildConfig.PREVIEW) {
@@ -50,11 +66,13 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         Alarms.appOpen = true;
+        Diag.log(this, "resumed");
     }
 
     @Override
     public void onPause() {
         Alarms.appOpen = false;
+        Diag.log(this, "paused");
         super.onPause();
     }
 

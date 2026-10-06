@@ -35,6 +35,11 @@ final class Alarms {
 
     private Alarms() {}
 
+    /** Runs `work` off the main thread, one job at a time. */
+    static void run(Runnable work) {
+        WORK.execute(work);
+    }
+
     /** Silences alarm `id` off the main thread (it reads and writes storage). */
     static void silenceLater(Context c, int id) {
         Context app = c.getApplicationContext();
@@ -43,6 +48,7 @@ final class Alarms {
                 silence(app, id);
             } catch (RuntimeException e) {
                 Log.e(TAG, "Could not silence " + id, e);
+                Diag.log(app, "silence " + id + " failed: " + e);
             }
         });
     }
@@ -75,6 +81,9 @@ final class Alarms {
             }
             AlarmStore.saveAlarms(c, stored);
             for (AlarmSpec d : plan.ringNow) ring(c, d, now);
+            if (!plan.cancel.isEmpty() || !plan.schedule.isEmpty() || !plan.ringNow.isEmpty()) {
+                Diag.log(c, "sync: " + desired.size() + " wanted, cancel " + plan.cancel.size() + ", schedule " + plan.schedule.size() + ", ring now " + plan.ringNow.size());
+            }
         }
     }
 
@@ -108,6 +117,7 @@ final class Alarms {
                 if ((id != 0 && s.id != id) || !AlarmSpec.RINGING.equals(s.state) || s.silenced) continue;
                 s.silenced = true;
                 AlarmStore.put(c, s);
+                Diag.log(c, "silence " + s.id);
                 // Cancelling is what stops an insistent sound for sure; the quiet copy replaces it.
                 NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
                 post(c, s);
@@ -137,6 +147,7 @@ final class Alarms {
             s.pendingAck = true;
             AlarmStore.put(c, s);
             record(c, "dismiss", s, 0);
+            Diag.log(c, "dismissed " + s.id);
         }
         AlarmsPlugin.announceActions();
     }
@@ -163,6 +174,7 @@ final class Alarms {
             AlarmStore.put(c, s);
             schedule(c, s);
             record(c, "snooze", s, at);
+            Diag.log(c, "snoozed " + s.id + " to " + clock(c, at));
             int liveId = s.liveId != 0 ? s.liveId : s.id;
             NotificationViews.post(c, NotificationViews.TAG_LIVE, liveId,
                 NotificationViews.live(c, liveId, true, s.title, "Rings at " + clock(c, at), at, s.instantId));
@@ -200,6 +212,7 @@ final class Alarms {
 
     /** Rings `s` from `since`: ringing notification, countdown gone, and the unanswered timeout. */
     private static void ring(Context c, AlarmSpec s, long since) {
+        Diag.log(c, "ring " + s.id + (appOpen ? " (app open)" : "") + (s.silenced ? " silenced" : ""));
         s.state = AlarmSpec.RINGING;
         s.ringingSince = since;
         AlarmStore.put(c, s);
@@ -214,6 +227,7 @@ final class Alarms {
             NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced, appOpen));
         } catch (RuntimeException e) {
             Log.e(TAG, "Could not post the ringing notification", e);
+            Diag.log(c, "ringing notification failed: " + e);
         }
     }
 

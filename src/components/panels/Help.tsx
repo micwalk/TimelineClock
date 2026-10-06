@@ -95,7 +95,7 @@ function HelpContent() {
             <dt className="help__cursor">Cursor</dt>
             <dd>The centre of the timeline when you move away from Now. Its tag shows the time there and how far it is from Now.</dd>
             <dt>Instant</dt>
-            <dd>A saved point in time, shown as a chip. Drop one with no name, then tap its “name…” hint later. Star it as a favorite, or give a future one an alarm.</dd>
+            <dd>A saved point in time, shown as a chip. Drop one with no name; later, tap it and then its “name…” hint. Star it as a favorite, or give a future one an alarm.</dd>
             <dt>Span</dt>
             <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one.</dd>
             <dt>Agenda</dt>

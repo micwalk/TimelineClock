@@ -204,6 +204,10 @@ the site the app is running (it updates by itself); Y is the installed Android a
   still ring while offline.
 - **No alarm sound**: check the Settings checklist, the **alarm** volume, and Do Not Disturb
   (it lets alarms through by default).
+- **Something froze or misbehaved**: Settings › **Copy diagnostics log** (at the bottom, under
+  the checklist) copies what the app logged: alarms ringing and answered, notification taps,
+  the app pausing and resuming, slow calls, stalls and page errors. Paste it into a message
+  or an issue. **Clear** empties it, so the next copy shows only a fresh attempt.
 - **Uninstalling deletes the app's data.** Export a backup first (Settings › Data).
 
 ### If you ever lose the key
@@ -267,6 +271,10 @@ Netlify builds for every pull request).
     `AlarmStore.java` (SharedPreferences), and the pure, unit-tested `AlarmPlan.java`.
     Answers given from a notification are kept until the page replays them
     (`replayAlarmActions`); until then a sync leaves those alarms alone.
+  - `Diag.java`: the diagnostics log (300 lines in SharedPreferences) and a main-thread
+    watchdog; the page adds its own lines (`src/services/native/diagLog.ts`) and Settings
+    copies both (`AlarmsPlugin.getLog`). `AlarmReceiver` does its work off the main thread
+    (`goAsync`), and messages to the page go out from the plugin thread.
   - `LiveNotificationsPlugin.java`: the running timer / stopwatch notifications, and taps on
     any of the app's notifications (including the tap that started the app). A tap on a
     ringing alarm silences it (`Alarms.silence`: the notification is posted again without
