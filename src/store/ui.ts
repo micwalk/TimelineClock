@@ -37,6 +37,8 @@ export interface UiState {
   /** The Help / About dialog. */
   helpOpen: boolean
   plusMorph: PlusMorph | null
+  /** The Cursor tag is folded into its arrowhead and its line hidden, for looking around. */
+  cursorHidden: boolean
 }
 
 export const useUi = create<UiState>(() => ({
@@ -49,6 +51,7 @@ export const useUi = create<UiState>(() => ({
   timerMenuOpen: false,
   helpOpen: false,
   plusMorph: null,
+  cursorHidden: false,
 }))
 
 export const DROP_HIGHLIGHT_MS = 900

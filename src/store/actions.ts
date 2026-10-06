@@ -299,6 +299,13 @@ export function endPan(tolerancePx: number, { snap = true }: { snap?: boolean } 
   settleCursor(tolerancePx / frame().pxPerMs, true, true)
 }
 
+/** Folds the Cursor tag into its arrowhead and hides its line (or shows them again). Nothing else changes. */
+export function setCursorHidden(hidden: boolean) {
+  if (hidden) { ui.closeTagMenu(); ui.closeTimeInput(); endNaming() }
+  useUi.setState({ cursorHidden: hidden })
+}
+export const toggleCursorHidden = () => setCursorHidden(!useUi.getState().cursorHidden)
+
 export function toggleCursorLock() {
   const f = frame()
   const locking = !v().cursorLocked

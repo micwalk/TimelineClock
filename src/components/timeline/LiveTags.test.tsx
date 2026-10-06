@@ -12,7 +12,7 @@ beforeEach(() => {
   engine.cancelTransition()
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
-  useUi.setState({ timeInput: null, tagMenu: null })
+  useUi.setState({ timeInput: null, tagMenu: null, cursorHidden: false, plusMorph: null })
 })
 
 const cursorMode = () => useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().center })
@@ -128,6 +128,20 @@ describe('CursorTag', () => {
     act(() => actions.moveCursorBy(60_000))
     expect(useView.getState().editingInstantId).toBeNull()
     expect(useEntities.getState().instants[0].label).toBe('')
+  })
+
+  it('folds into its arrowhead from its hide button (line too), and the arrowhead brings it back', () => {
+    cursorMode()
+    const { container } = render(<CursorTag />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the cursor' }))
+    expect(useUi.getState().cursorHidden).toBe(true)
+    expect(container.querySelector('.tl-col--line.is-cursor.is-collapsed')).not.toBeNull()
+    expect(container.querySelector('.tl-tag.is-collapsed')).not.toBeNull()
+    // Nothing else changed: still a free cursor where it was.
+    expect(useView.getState().viewFocusMode).toBe('cursor')
+    fireEvent.click(screen.getByRole('button', { name: 'Show the cursor' }))
+    expect(useUi.getState().cursorHidden).toBe(false)
+    expect(container.querySelector('.is-collapsed')).toBeNull()
   })
 
   it('has no + button while following Now', () => {

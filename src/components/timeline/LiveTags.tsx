@@ -4,7 +4,7 @@
 import { useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
-import { ClockIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
+import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SECOND } from '../../domain/time.ts'
@@ -132,6 +132,7 @@ export function CursorTag() {
   const instants = useEntities(s => s.instants)
   const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
   const push = useFrameValue(f => (freeCursor ? plusPush(f, byId) : 0))
+  const hidden = useUi(s => s.cursorHidden)
   if (!visible) return null
 
   const name = selected ? shortName(chipName(selected.label)) : ''
@@ -166,9 +167,22 @@ export function CursorTag() {
   }
 
   return (
-    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}
+    <Marker className={`is-cursor${onInstant ? ' is-on-instant' : ''}${menuOpen || popover ? ' has-popover' : ''}${hidden ? ' is-collapsed' : ''}`} ariaLabel="Cursor" getPos={f => f.mainSize / 2}
       style={push ? ({ '--plus-push': `${push}px` } as CSSProperties) : undefined}>
+      {/* Folded away: the arrowhead stays on the axis, and tapping it brings the tag back. */}
+      {hidden && (
+        <button type="button" className="tl-tag__show" data-no-pan aria-label="Show the cursor" title="Show the cursor (H)"
+          onClick={() => act.setCursorHidden(false)} />
+      )}
       <ArrowTag
+        className={hidden ? 'is-collapsed' : undefined}
+        inert={hidden}
+        extra={(
+          <button type="button" className="tl-tag__hide glow-box" data-no-pan aria-label="Hide the cursor" title="Hide the cursor (H)"
+            onClick={() => act.setCursorHidden(true)}>
+            <EyeSlashIcon aria-hidden />
+          </button>
+        )}
         srName="Cursor"
         measure="cursor"
         hint={onInstant ? 'Tap for tools' : 'Tap for tools; double-tap to drop an instant here'}

@@ -329,6 +329,59 @@
 .tl-tag__menu-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .tl-tag__menu-icon { width: 16px; height: 16px; flex: none; color: var(--accent); }
 
+/* Hiding the cursor (LiveTags): the Cursor tag folds into its arrowhead on the axis and the
+   bright line fades; the arrowhead brings it back. The fold pivots on the arrow's tip (the
+   origin is set where the tag's own transform puts the box's edge on the axis). */
+.tl-tag {
+  transform-origin: 0 100%;
+  transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 220ms ease;
+}
+.timeline[data-orientation='vertical'] .tl-tag { transform-origin: 100% 0; }
+.tl-tag.is-collapsed { scale: 0.12; opacity: 0; pointer-events: none; }
+.tl-col__line { transition: opacity 240ms ease; }
+.tl-col--line.is-collapsed .tl-col__line { opacity: 0; }
+.tl-tag__arrow { transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1); transform-origin: 50% 100%; }
+.timeline[data-orientation='vertical'] .tl-tag__arrow { transform-origin: 100% 50%; }
+.tl-col--label.is-collapsed .tl-tag__arrow { scale: 1.3; }
+.tl-tag__show {
+  position: absolute;
+  left: -18px;
+  top: calc(var(--tl-axis) - var(--tl-tag-arrow) - 16px);
+  width: 36px;
+  height: calc(var(--tl-tag-arrow) + 18px);
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.tl-tag__show:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.timeline[data-orientation='vertical'] .tl-tag__show {
+  left: calc(var(--tl-axis) - var(--tl-tag-arrow) - 16px);
+  top: -18px;
+  width: calc(var(--tl-tag-arrow) + 18px);
+  height: 36px;
+}
+/* The hide button: a small badge on the tag's corner (top left; top right, by the axis, in vertical). */
+.tl-tag__hide {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--box-bg);
+  color: var(--accent);
+  cursor: pointer;
+}
+.tl-tag__hide::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+.tl-tag__hide > svg { width: 13px; height: 13px; }
+.tl-tag__hide:hover { background: var(--box-bg-raised); }
+.timeline[data-orientation='vertical'] .tl-tag__hide { left: auto; right: -9px; }
+
 /* --- Chips -------------------------------------------------------------- */
 
 .chip {

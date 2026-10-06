@@ -15,7 +15,7 @@ const ARROW_PATH = 'M9 18 Q10.5 8 17 1 Q9 5 1 1 Q7.5 8 9 18 Z'
 /** The same shape pointing right (vertical timeline), tip at (18,9). */
 const ARROW_PATH_RIGHT = 'M18 9 Q8 10.5 1 17 Q5 9 1 1 Q8 7.5 18 9 Z'
 
-export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, menuOpen, onDismissMenu, menu, popover, measure, className, extra, children }: {
+export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, menuOpen, onDismissMenu, menu, popover, measure, className, extra, inert, children }: {
   /**
    * Name read before the visible readout when the readout doesn't say what the tag
    * is ("Cursor"). The readout stays in the accessible name, so it is announced.
@@ -42,6 +42,8 @@ export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, m
   className?: string
   /** More controls beside the box (e.g. the Cursor tag's hide button). */
   extra?: ReactNode
+  /** Folded away: the box and its buttons can't be reached (the arrowhead stays). */
+  inert?: boolean
   children: ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -56,7 +58,7 @@ export function ArrowTag({ srName, hint, action, slot, onClick, onDoubleClick, m
   return (
     <>
       <svg className="tl-tag__arrow" viewBox="0 0 18 18" aria-hidden><path d={vertical ? ARROW_PATH_RIGHT : ARROW_PATH} /></svg>
-      <div ref={ref} className={`tl-tag${className ? ` ${className}` : ''}`} style={{ '--slot': slot } as CSSProperties}>
+      <div ref={ref} className={`tl-tag${className ? ` ${className}` : ''}`} style={{ '--slot': slot } as CSSProperties} inert={inert}>
         <button
           ref={boxRef}
           type="button"
