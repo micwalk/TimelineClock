@@ -3,6 +3,10 @@
 # Netlify deploy preview, as the "preview" pre-release (or the tag in the TC_PREVIEW_TAG
 # repository variable; see the preview job).
 #
+# It builds only when the push (or the PR update) changed something that goes into the APK
+# (the changes job: .github/scripts/apk-inputs-changed.mjs). Web changes never need a new
+# APK: the app loads the live site.
+#
 # Signing: the key lives only in repository secrets (Settings > Secrets and variables >
 # Actions), never in the repo:
 #   ANDROID_KEYSTORE_BASE64    the keystore file, base64-encoded
@@ -15,16 +19,18 @@
 name: Android app
 
 on:
+  # Branches other than main are built by their pull request.
   push:
+    branches: [main]
     paths:
       - 'android/**'
       - 'android-offline/**'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
-      - 'CHANGELOG.md'
       - '.github/workflows/android.yml'
       - '.github/actions/android-setup/**'
+      - '.github/scripts/apk-inputs-changed.mjs'
   pull_request:
     paths:
       - 'android/**'
@@ -34,6 +40,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/android.yml'
       - '.github/actions/android-setup/**'
+      - '.github/scripts/apk-inputs-changed.mjs'
   # Actions > Android app > Run workflow: e.g. on main after adding the signing secrets, or
   # on a branch to publish its TC Preview app.
   workflow_dispatch:
@@ -55,7 +62,42 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Did this push change the APK? A pull request's path filter matches its whole diff, so
+  # once a PR touches the native side every later push would rebuild; this compares only
+  # what the push added (before..after; a new PR: its whole diff), and the version and
+  # Capacitor packages in package.json, not every edit to it.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apk: ${{ steps.diff.outputs.apk }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          AFTER: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "Run by hand: build." && echo "apk=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          from="$BEFORE"
+          if [ "$EVENT" = pull_request ] && [ "$ACTION" != synchronize ]; then
+            from=$(git merge-base "$BASE" "$AFTER" || true)
+          fi
+          node .github/scripts/apk-inputs-changed.mjs "$from" "$AFTER" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.apk == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -180,9 +222,12 @@ jobs:
   # TC_PREVIEW_TAG repository variable (Settings > Secrets and variables > Actions > Variables)
   # for every build from then on, or type a tag in Run workflow's preview_tag for one build.
   preview:
+    needs: changes
     if: >-
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
-      || (github.event_name == 'workflow_dispatch' && (inputs.preview || inputs.preview_tag != ''))
+      needs.changes.outputs.apk == 'true' && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+        || (github.event_name == 'workflow_dispatch' && (inputs.preview || inputs.preview_tag != ''))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

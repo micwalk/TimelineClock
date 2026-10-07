@@ -294,7 +294,11 @@ Netlify builds for every pull request).
 - Build locally: JDK 21 and the Android SDK (platform 37; Gradle can fetch it), then
   `npx cap sync android && cd android && ./gradlew assembleRelease` (add `-PtcPreview` for TC
   Preview; `:app:testReleaseUnitTest` runs the native unit tests). CI:
-  `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`.
+  `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`. It
+  builds (and publishes TC Preview) only when a push changes what goes into the APK: `android/`,
+  `android-offline/`, `capacitor.config.ts`, the version or the Capacitor packages, or the
+  workflow itself (`.github/scripts/apk-inputs-changed.mjs`); web-only pushes skip it. Branches
+  build through their pull request; pushes to `main` build and release.
 - TC Preview (`-PtcPreview`): `applicationIdSuffix ".preview"`, label "TC Preview",
   `BuildConfig.PREVIEW`. `SiteChoice.java` saves the chosen address and starts the bridge with
   the bundled config's `server.url` swapped for it; `SiteAddress.java` (unit tested) accepts

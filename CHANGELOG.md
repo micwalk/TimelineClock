@@ -50,6 +50,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   stay, hidden), and hiding a span to Now unfavorites its instant. Setting an alarm no longer
   makes the instant a favorite (a timer's end still is: its span to Now is the countdown).
   Saved data is brought into line when it loads.
+- CI builds the Android app only when a push changes what goes into the APK (the native
+  project, the offline page, the Capacitor config or packages, the version), so web-only
+  pushes no longer rebuild it, and branches build only through their pull request.
 - TC Preview (the test app) is updated in place on each build instead of deleted and made
   again, which failed when the old release was still there. It can also be published as
   another release (`preview_tag` in Run workflow, or the `TC_PREVIEW_TAG` repository variable;
