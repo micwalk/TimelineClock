@@ -13,11 +13,12 @@ beforeEach(() => {
 })
 afterEach(() => setDragging(false, false))
 
-/** A free cursor `px` pixels from an instant (at the current zoom). */
+/** A free cursor `px` pixels from an instant (at the current zoom), an hour from Now. */
 function cursorNear(px: number) {
   const f = engine.sample()
-  const id = entities.createInstant(f.center, 'Rice')
-  useView.setState({ viewFocusMode: 'cursor', timeCenter: f.center + px / f.pxPerMs })
+  const ts = f.now - 3600_000
+  const id = entities.createInstant(ts, 'Rice')
+  useView.setState({ viewFocusMode: 'cursor', timeCenter: ts + px / f.pxPerMs })
   return id
 }
 

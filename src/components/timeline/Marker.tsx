@@ -7,7 +7,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useFrameListener, usePositionMain } from '../../engine/hooks.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
 
-export function Marker({ className, getPos, ariaLabel, style, frameClass, children }: {
+export function Marker({ className, getPos, ariaLabel, style, frameClass, frameStyle, children }: {
   className: string
   getPos: (f: Frame) => number
   ariaLabel?: string
@@ -15,6 +15,8 @@ export function Marker({ className, getPos, ariaLabel, style, frameClass, childr
   style?: CSSProperties
   /** A class that comes and goes with the frame (e.g. is-capturing), set on both halves without re-rendering. */
   frameClass?: (f: Frame) => string | null
+  /** Writes per-frame style onto the label half (custom properties its content reads), after it is placed. */
+  frameStyle?: (f: Frame, label: HTMLDivElement) => void
   children?: ReactNode
 }) {
   const lineRef = useRef<HTMLDivElement>(null)
@@ -23,6 +25,7 @@ export function Marker({ className, getPos, ariaLabel, style, frameClass, childr
   usePositionMain(labelRef, getPos)
   const applied = useRef<string | null>(null)
   useFrameListener(f => {
+    if (frameStyle && labelRef.current) frameStyle(f, labelRef.current)
     if (!frameClass) return
     const want = frameClass(f)
     for (const el of [lineRef.current, labelRef.current]) {

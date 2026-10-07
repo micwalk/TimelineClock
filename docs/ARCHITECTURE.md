@@ -90,28 +90,40 @@ smoothly and never teleport. Springs ask for frames only while they move.
 
 ## Motion
 
-- **Capture** (`domain/capture.ts`, `components/timeline/capture.ts`, `engine/gesture.ts`):
-  `captureAt(frame)` is the instant the cursor is on: the focused one, or for a free cursor one
-  within the landing radius while a drag is held slowly (`gesture`: held, touch or mouse, and its
-  smoothed speed from usePanZoom), or right under it at rest; it holds a little past the radius.
-  The Cursor tag leans onto it on a spring (`getPos`) and shows its time; its chip lights up.
+- **Capture** (`domain/capture.ts`, `components/timeline/capture.ts`, `engine/gesture.ts`): the
+  one definition of what the cursor is on. `captureAt(frame)` is the focused instant, or for a
+  free cursor an instant or Now within the landing radius while a drag is held slowly (`gesture`:
+  held, touch or mouse, and its smoothed speed from usePanZoom), or exactly under it at rest; it
+  holds a little past the radius. Everything reads it: the tag's colour and time, the chip
+  lighting up, where a release lands (usePanZoom asks it as the drag ends; `act.endPan({ land })`),
+  and exact landings for steps and typed times (`findCapture` at 2px). `captureFlowAt(frame)` is
+  the one motion every effect runs on (a spring, 0 away to 1 merged, eased): the cursor's line
+  leaning onto the target (`lean`), the ＋ flowing into an instant's chip, the Cursor tag merging
+  into the Now tag. They start on the same frame and move together.
+- **Chips keep out of the ＋'s way** (`savedLayout.keepClearOfPlus`, `domain/pushClear`): while
+  the ＋ is out on the cursor line, chips in its row (column) are pushed along the time axis
+  just clear of it, each pushing the next on; a per-frame pass over the cached layout, so the
+  layout cache still serves pans, and chips glide there on their springs.
 - **Cursor ＋** (`plusMorph.ts`, `PlusMorphLayer.tsx`): the drop is one shell element, drawn per
   frame while it runs; its ends are measured once (the ＋, the new chip) and the chip end follows
-  the time axis, so a pan mid-morph keeps it attached. While the cursor is on an instant, or the
-  ＋ would cover a saved chip (`coveredChip`: the chips' boxes from `savedLayoutAt`, with their
-  tools, against the ＋'s, both measured across from the axis, so it works at any zoom with no
-  layout reads; `domain/capture.findBoxOverlap`), the ＋ is inside that chip: one spring (0 at the ＋, 1 inside the chip) drives a metaball drawn as SVG
-  paths (`domain/metaball.ts`: two circles and the gooey neck between them, outlines under fills),
-  so it reverses smoothly mid-way and costs nothing at rest. `useUi.plusHidden` hides the real ＋
+  the time axis, so a pan mid-morph keeps it attached. While the cursor is on an instant, the ＋
+  is inside its chip: the capture flow drives a metaball drawn as SVG paths (`domain/metaball.ts`:
+  two circles and the gooey neck between them, outlines under fills), so it reverses smoothly
+  mid-way and costs nothing at rest. `useUi.plusHidden` hides the real ＋
   while it is away. The ＋ is pinned against the tag's lean, so it never moves and is measured
   once per flow. Naming ends through `act.endNaming` (pans, steps and wheel call it), which blurs
   the name box so it commits; ended in place, the cursor lands on the new instant.
 - **Hiding the cursor**: CSS (`.is-collapsed` on the Cursor marker): the tag scales into its
   arrowhead, pivoting on the arrow's tip, and the line fades; `useVisibleLanes` drops the
   Selected→Cursor lane.
-- **The Cursor tag stepping aside**: `--slot` (its step out of the Now tag's way) is registered
-  with `@property` as a number and transitions on `.tl-tag`, so the tag glides; the ＋ inside it
-  reads the same eased value to stay put.
+- **The Cursor tag and the Now tag** (`domain/tagAvoid.ts`, written per frame by `CursorTag` as
+  `--lift`): a continuous function of their distance, so the tag moves with the pan itself. In
+  horizontal it arcs over the Now tag (`cursorLift`: it starts to rise a ramp away, is clear of
+  Now's box wherever they would overlap, and crests over Now's line). In vertical it is pushed
+  along the time axis, kept just clear (`cursorPush`, shared with `rightSideLayout` through
+  `cursorTagPos`); the push flips sides where the cursor crosses Now, which the merge into Now
+  hides (capture: the tag sinks into Now's and fades, `--merge`) or, on a fast pan, a short spring
+  eases over. The ＋ is held in place against both (its inline translate).
 - State changes ease in CSS (colours, tools popping in, the timeline's height), never on
   properties the engine writes (transforms).
 

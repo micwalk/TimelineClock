@@ -8,6 +8,8 @@ import { releaseVelocity, shouldGlide } from '../domain/glide.ts'
 import type { PointerSample } from '../domain/glide.ts'
 import { glide } from './glide.ts'
 import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
+import { captureAt } from '../components/timeline/capture.ts'
+import { engine } from '../engine/viewportEngine.ts'
 import { useLayout } from '../store/layout.ts'
 import { getTunables } from '../store/settings.ts'
 import { noteDragMove, setDragging } from '../engine/gesture.ts'
@@ -105,16 +107,19 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       if (pointers.size < 2) pinchDist = 0
       if (drag && e.pointerId === drag.id) {
         if (drag.moved) {
+          // What the cursor shows it is about to land on (the capture, by the same rule, read
+          // before the drag ends): the release lands exactly there, never anywhere it didn't show.
+          const shown = captureAt(engine.sample())
           el.classList.remove('is-panning')
           setDragging(false)
           const t = getTunables()
-          const landing = drag.touch ? t.landingTouchPx : t.landingMousePx
           const v = pointers.size === 0 && drag.id === e.pointerId && e.type === 'pointerup'
             ? releaseVelocity(samples, performance.now(), { windowMs: t.glideWindowMs, stillMs: t.glideStillMs })
             : 0
-          // Snap only when released almost at rest; a glide never snaps where it stops.
-          if (shouldGlide(v, t.glideMinSpeed)) glide.start(v)
-          else endPan(landing, { snap: Math.abs(v) < t.snapMaxReleaseSpeed })
+          // A tick snap only when released almost at rest; a glide never snaps where it stops.
+          if (shown?.preview) endPan({ land: { id: shown.id, kind: shown.kind } })
+          else if (shouldGlide(v, t.glideMinSpeed)) glide.start(v)
+          else endPan({ snap: Math.abs(v) < t.snapMaxReleaseSpeed })
           swallowTrailingClick()
         } else if (swallowClick) {
           swallowTrailingClick() // a press that stopped a glide: swallow its click, then disarm

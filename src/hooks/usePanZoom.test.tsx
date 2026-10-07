@@ -120,11 +120,11 @@ describe('usePanZoom', () => {
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
-  it('a drag released with some speed ends without snapping', () => {
+  it('a drag still moving fast ends without landing (the cursor never showed it was on the instant)', () => {
     render(<Harness onTap={() => {}} />)
     const pxPerMs = engine.sample().pxPerMs
-    entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice') // would snap if released at rest
-    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.1) // 0.1 px/ms: above 0.05, below the glide speed
+    entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice') // would land if released slowly
+    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.7) // faster than a capture holds
     expect(useView.getState().viewFocusMode).toBe('cursor')
   })
 
@@ -136,12 +136,12 @@ describe('usePanZoom', () => {
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
-  it('takes the snap release speed from settings', () => {
-    settings.setTunable('snapMaxReleaseSpeed', 0.5)
+  it('lands where the capture shows, whatever the tick snap release speed', () => {
+    settings.setTunable('snapMaxReleaseSpeed', 0)
     render(<Harness onTap={() => {}} />)
     const pxPerMs = engine.sample().pxPerMs
     const id = entities.createInstant(Date.now() - (100 + 5) / pxPerMs, 'Rice')
-    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.1)
+    driftRelease(screen.getByTestId('timeline'), 300, 400, 0.1) // slow enough to be caught
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 

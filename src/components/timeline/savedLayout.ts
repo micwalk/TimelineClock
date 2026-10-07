@@ -15,7 +15,9 @@ import { useView } from '../../store/view.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
-import { GEOMETRY, verticalCrossBudget } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL, verticalCrossBudget } from './geometry.ts'
+import type { PushBox } from '../../domain/pushClear.ts'
+import { pushClear } from '../../domain/pushClear.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
@@ -407,9 +409,62 @@ export function savedLayoutAt(f: FrameLike): SavedLayout {
   if (!inputs) return EMPTY_LAYOUT
   const last = source.last
   if (last && last.f === f && last.inputs === inputs) return last.result
-  const result = source.compute(f, inputs)
+  const result = keepClearOfPlus(f, inputs, source.compute(f, inputs))
   source.last = { f, inputs, result }
   return result
+}
+
+// ---------------------------------------------------------------------------
+// The Cursor ＋ is an obstacle: it never moves, so chips in its row (column) are pushed along
+// the time axis out of its way, each pushing the next on (domain/pushClear). Applied per frame
+// on top of the layout, so the layout itself (and its cache) doesn't depend on the pan; chips
+// glide there on their springs (chipPlacement.ts). The chip the cursor is on takes the ＋ in
+// instead (plusMorph.ts), so while the ＋ is in or flowing into a chip there is no obstacle.
+
+/** The ＋ (.tl-tag__drop): 30px, starting this far from the first chip row (column) across the axis. */
+const PLUS_SIZE = 30
+const PLUS_ACROSS = { horizontal: GEOMETRY.tagArrow + 5 - (GEOMETRY.chipTop - GEOMETRY.axis), vertical: GEOMETRY_VERTICAL.tagArrow + 5 - (GEOMETRY_VERTICAL.chipStart - GEOMETRY_VERTICAL.axis) }
+
+let plusOut: (f: FrameLike) => boolean = () => false
+/** plusMorph says whether the ＋ is out (drawn on the cursor line), per frame. */
+export function setPlusObstacle(isOut: (f: FrameLike) => boolean) { plusOut = isOut }
+
+function keepClearOfPlus(f: FrameLike, c: SavedLayoutInputs, l: SavedLayout): SavedLayout {
+  if (l.visibleIds.length === 0 || !plusOut(f)) return l
+  const vertical = c.orientation === 'vertical'
+  const across = PLUS_ACROSS[vertical ? 'vertical' : 'horizontal']
+  const inBand = (offset: number, extent: number) => offset < across + PLUS_SIZE && offset + extent > across
+  const cursor = f.mainSize / 2
+  const byId = new Map(c.instants.map(i => [i.id, i]))
+  const boxes: PushBox[] = []
+  for (const id of l.visibleIds) {
+    const offset = l.crossOffsets[id]
+    const inst = byId.get(id)
+    if (offset === undefined || !inst) continue
+    const w = c.widths[id] ?? estimateChipWidth(inst.label)
+    const { tail, below, toolsWidth } = chipToolsExtent(inst, {
+      selected: c.selected === id, focused: c.mode === 'instant' && c.focusedInstantId === id,
+      moving: c.moving === id, editing: c.editing === id, now: f.now, vertical,
+    })
+    if (!inBand(offset, vertical ? Math.max(w, toolsWidth) : CHIP_HEIGHT)) continue
+    const at = (c.moving === id ? cursor : f.pos(inst.tsEpochMs)) + (l.shifts[id] ?? 0)
+    const half = vertical ? CHIP_HEIGHT / 2 : (Math.max(w, below > 0 ? toolsWidth : 0) + (l.foldCount[id] ? FOLD_BADGE_WIDTH : 0)) / 2
+    boxes.push({ id, at, lo: at - half, hi: at + half + tail })
+  }
+  for (const k of l.clusters) {
+    if (!inBand(k.crossOffset, vertical ? CLUSTER_WIDTH : CHIP_HEIGHT)) continue
+    const ps = k.memberIds.map(id => byId.get(id)).filter((i): i is InstantRecord => !!i).map(i => f.pos(i.tsEpochMs))
+    if (ps.length === 0) continue
+    const at = ps.reduce((a, b) => a + b, 0) / ps.length + k.shift
+    const half = (vertical ? CHIP_HEIGHT : CLUSTER_WIDTH) / 2
+    boxes.push({ id: `cluster:${k.id}`, at, lo: at - half, hi: at + half })
+  }
+  const pushed = pushClear(boxes, { lo: cursor - PLUS_SIZE / 2, hi: cursor + PLUS_SIZE / 2 }, getTunables().chipGapPx)
+  if (Object.keys(pushed).length === 0) return l
+  const shifts = { ...l.shifts }
+  for (const [id, d] of Object.entries(pushed)) if (!id.startsWith('cluster:')) shifts[id] = Math.round((shifts[id] ?? 0) + d)
+  const clusters = l.clusters.map(k => (pushed[`cluster:${k.id}`] ? { ...k, shift: Math.round(k.shift + pushed[`cluster:${k.id}`]) } : k))
+  return { ...l, shifts, clusters }
 }
 
 /** Where a cluster is this frame (by id), from the layout's cluster list. */

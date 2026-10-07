@@ -8,10 +8,6 @@ export const GEOMETRY = {
   axis: 150,
   /** Arrowhead height; live tag boxes sit just above it. */
   tagArrow: 14,
-  /** Distance between the two live tag slots. */
-  tagSlot: 60,
-  /** Main-axis distance under which the Now and Cursor tags would overlap. */
-  tagClearance: 130,
   /** Top of the first saved chip row, and the row pitch. */
   chipTop: 166,
   chipRow: 34,
@@ -46,8 +42,6 @@ export const GEOMETRY_VERTICAL = {
   /** Live lanes: x of the first bar from the left edge, and the spacing inward. */
   liveLaneStart: 8,
   liveLaneGap: 12,
-  /** How far the Cursor tag moves along the time axis when it collides with Now. */
-  tagSlotV: 76,
 } as const
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)

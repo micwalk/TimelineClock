@@ -5,7 +5,7 @@ import { useLayout } from '../../store/layout.ts'
 import { verticalTagMaxWidth } from './geometry.ts'
 
 const tag = () => (
-  <ArrowTag hint="h" slot={0} onClick={() => {}} onDoubleClick={() => {}} menuOpen={false} onDismissMenu={() => {}}>12:58:29a</ArrowTag>
+  <ArrowTag hint="h" onClick={() => {}} onDoubleClick={() => {}} menuOpen={false} onDismissMenu={() => {}}>12:58:29a</ArrowTag>
 )
 
 beforeEach(() => useLayout.setState({ orientation: 'horizontal', dir: 1 }))

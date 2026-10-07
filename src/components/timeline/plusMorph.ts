@@ -5,12 +5,13 @@
 // cross-fades into the chip. The ＋ is now inside that chip.
 //
 // Capture: whenever the cursor is on an instant (focused, or about to land on it: capture.ts),
-// the ＋ belongs inside that instant's chip, since a drop there would only duplicate it. The ＋
-// also never sits on a chip: whenever its circle would cover one (a wide chip near the cursor,
-// whatever the zoom), it goes inside that chip. It flows in as a 2D metaball: a blob leaves the ＋'s place, a gooey neck reaches the chip and
+// the ＋ belongs inside that instant's chip, since a drop there would only duplicate it. It
+// flows in as a 2D metaball: a blob leaves the ＋'s place, a gooey neck reaches the chip and
 // the blob is absorbed (the chip swells a little). When the cursor leaves, the blob is pulled
-// back out, the neck stretches and snaps, and the blob rounds back into the ＋. One spring
-// (0 = at the ＋'s place, 1 = inside the chip) drives it, so it reverses smoothly mid-way.
+// back out, the neck stretches and snaps, and the blob rounds back into the ＋. It runs on the
+// capture flow (captureFlowAt: 0 = at the ＋'s place, 1 = inside the chip), the same motion
+// that glides the cursor onto the instant's line, so the two always move together. Chips that
+// are not captured keep out of the ＋'s way (the saved layout treats it as an obstacle).
 //
 // After naming a dropped instant without moving, the cursor lands on it (it is right there).
 //
@@ -23,25 +24,17 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import { engine, reducedMotion } from '../../engine/viewportEngine.ts'
 import { gesture } from '../../engine/gesture.ts'
 import { clamp, easeInOutCubic, lerp, smoothstep } from '../../domain/time.ts'
-import type { SpringState } from '../../domain/spring.ts'
-import { omegaFor, springSettled, stepSpring } from '../../domain/spring.ts'
 import type { Point } from '../../domain/metaball.ts'
 import { circlePath, metaballNeck } from '../../domain/metaball.ts'
-import type { Box } from '../../domain/capture.ts'
-import type { InstantRecord } from '../../domain/entities.ts'
-import { findBoxOverlap } from '../../domain/capture.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
-import { captureAt } from './capture.ts'
-import { CHIP_HEIGHT, chipToolsExtent, estimateChipWidth, savedLayoutAt, useChipWidths } from './savedLayout.ts'
-import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
+import { captureAt, captureFlowAt, settleCaptureFlow } from './capture.ts'
+import { setPlusObstacle } from './savedLayout.ts'
 
 /** ＋ to the new chip, ms. */
 export const MORPH_IN_MS = 420
-/** The ＋ flowing into a chip, or out of it, ms to settle. */
-export const BLOB_SETTLE_MS = 420
 /** The shell fades out over the chip as it hands over, ms (matches .tl-morph). */
 const HANDOVER_MS = 140
 /** Share of the way in at which the chip starts showing through the shell (a crossfade). */
@@ -52,12 +45,6 @@ const WAIT_FRAMES = 30
 const CHIP_RADIUS = 7
 /** The bulge a chip pushes out to meet the blob, px (it sits just inside the chip's edge). */
 const BULGE_R = 9
-const OMEGA_BLOB = omegaFor(BLOB_SETTLE_MS)
-/** The ＋ (.tl-tag__drop): a 30px circle on the cursor line, starting this far across the axis (the tag's arrow, 5px). */
-const PLUS_SIZE = 30
-const PLUS_FROM_AXIS = GEOMETRY.tagArrow + 5
-/** A chip the ＋ went into keeps it until they are this far apart, px. */
-const COVER_RELEASE_PX = 4
 
 /** A box measured relative to the timeline; `ts` (if set) is the time it rides along with. */
 interface Anchored { x: number; y: number; w: number; h: number; ts: number | null; pos0: number }
@@ -81,8 +68,9 @@ let fadeTimer: ReturnType<typeof setTimeout> | null = null
 /** The metaball: an SVG with the same shapes twice, outlines under fills (so only the outer edge shows). */
 export interface BlobParts { svg: SVGSVGElement; strokes: SVGPathElement[]; fills: SVGPathElement[]; glyph: SVGGElement }
 let blobParts: BlobParts | null = null
-const blob: { anchor: string | null; t: SpringState; perf: number; chip: Anchored | null; home: Anchored | null; drawn: boolean } =
-  { anchor: null, t: { x: 0, v: 0 }, perf: NaN, chip: null, home: null, drawn: false }
+/** The chip the blob flows into and the ＋'s place (each measured once per flow). */
+const blob: { anchor: string | null; t: number; chip: Anchored | null; home: Anchored | null; drawn: boolean } =
+  { anchor: null, t: 0, chip: null, home: null, drawn: false }
 /** The instant dropped from the ＋ while it is being named; then the one to land on. */
 let namingId: string | null = null
 let pendingLand: string | null = null
@@ -103,6 +91,9 @@ function at(a: Anchored, f: Frame): Anchored {
 }
 
 const tsOf = (id: string) => useEntities.getState().instants.find(i => i.id === id)?.tsEpochMs ?? null
+
+// Chips keep out of the ＋'s way while it is out on the cursor line (savedLayout.ts).
+setPlusObstacle(() => !!plusButton && plusButton.isConnected && !useUi.getState().plusHidden)
 
 function setPlusHidden(hidden: boolean) {
   if (useUi.getState().plusHidden !== hidden) ui.setPlusHidden(hidden)
@@ -125,10 +116,11 @@ function finishIn() {
   hideShell(true)
   if (!r) return
   if (useUi.getState().plusMorph?.id === r.id) ui.setPlusMorph(null)
-  // The ＋ is inside the new chip now; the blob takes it from here.
+  // The ＋ is inside the new chip now (the cursor is on it: capture); the blob takes it from here.
   blob.anchor = r.id
-  blob.t = { x: 1, v: 0 }
+  blob.t = 1
   blob.chip = null
+  settleCaptureFlow(r.id)
 }
 
 function drawIn(f: Frame) {
@@ -247,99 +239,39 @@ function drawBlob(f: Frame, t: number) {
   if (!blob.drawn) { blob.drawn = true; parts.svg.classList.add('is-on') }
 }
 
-let coveredPrev: string | null = null
-let byIdCache: { from: readonly InstantRecord[]; map: Map<string, InstantRecord> } | null = null
-const instantsById = (instants: readonly InstantRecord[]) => {
-  if (byIdCache?.from !== instants) byIdCache = { from: instants, map: new Map(instants.map(i => [i.id, i])) }
-  return byIdCache.map
-}
-
-/**
- * The saved chip the ＋ would cover in this frame, from the chips' layout (no layout reads): its
- * box, with its tools while selected, against the ＋'s, both measured across from the axis.
- */
-function coveredChip(f: Frame): string | null {
-  const layout = savedLayoutAt(f)
-  const v = useView.getState()
-  const byId = instantsById(useEntities.getState().instants)
-  const widths = useChipWidths.getState().widths
-  const vertical = f.orientation === 'vertical'
-  // Where the first chip row (column) starts, across from the axis.
-  const chipsFrom = vertical ? GEOMETRY_VERTICAL.chipStart - GEOMETRY_VERTICAL.axis : GEOMETRY.chipTop - GEOMETRY.axis
-  const cursor = f.mainSize / 2
-  const plus: Box = { lo: cursor - PLUS_SIZE / 2, hi: cursor + PLUS_SIZE / 2, xlo: PLUS_FROM_AXIS, xhi: PLUS_FROM_AXIS + PLUS_SIZE }
-  const boxes: (Box & { id: string })[] = []
-  for (const id of layout.visibleIds) {
-    if (layout.rows[id] === undefined) continue
-    const inst = byId.get(id)
-    if (!inst) continue
-    const moving = v.moveMode?.instantId === id
-    const mid = (moving ? cursor : f.pos(inst.tsEpochMs)) + (layout.shifts[id] ?? 0)
-    // Off along the time axis: no need to size it.
-    if (Math.abs(mid - cursor) > 400) continue
-    const w = widths[id] ?? estimateChipWidth(inst.label)
-    const { tail, below, toolsWidth } = chipToolsExtent(inst, {
-      selected: v.currentSelectedInstantId === id,
-      focused: v.viewFocusMode === 'instant' && v.focusedInstantId === id,
-      moving,
-      editing: v.editingInstantId === id,
-      now: f.now,
-      vertical,
-    })
-    const xlo = chipsFrom + (layout.crossOffsets[id] ?? 0)
-    if (vertical) boxes.push({ id, lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2 + tail, xlo, xhi: xlo + Math.max(w, toolsWidth) })
-    else {
-      const half = Math.max(w, below > 0 ? toolsWidth : 0) / 2
-      boxes.push({ id, lo: mid - half, hi: mid + Math.max(half, w / 2 + tail), xlo, xhi: xlo + CHIP_HEIGHT + below })
-    }
-  }
-  coveredPrev = findBoxOverlap(boxes, plus, coveredPrev, COVER_RELEASE_PX)
-  return coveredPrev
-}
-
 function tick(f: Frame) {
   if (run) { drawIn(f); return }
   const cap = captureAt(f)
-  // The instant the cursor is on, else a chip the ＋ would cover.
-  const want = cap?.id ?? (plusButton ? coveredChip(f) : null)
   // Named a dropped instant without moving: the cursor is right on it, so it lands there.
   if (pendingLand && !gesture.dragging) {
     const id = pendingLand
     pendingLand = null
     if (cap?.preview && cap.id === id) act.focusInstant(id)
   }
+  // The same motion as the cursor's glide onto the instant (capture.ts). Now has no chip: the
+  // ＋ stays out while the cursor merges into Now.
+  const flow = captureFlowAt(f)
+  const inChip = flow.kind === 'instant' ? flow : null
+  const wantIn = cap?.kind === 'instant'
   if (!plusButton) {
     // No ＋ on screen (Now, a hidden cursor, move mode): it simply is wherever it belongs.
-    blob.anchor = want
-    blob.t = { x: want ? 1 : 0, v: 0 }
+    blob.anchor = inChip?.id ?? null
+    blob.t = inChip?.t ?? 0
     blob.chip = null
     blob.home = null
     hideBlob()
-    setPlusHidden(!!want)
+    setPlusHidden(wantIn)
     return
   }
-  // From one instant to the next (Previous, Next) the ＋ stays inside: no trip out and back.
-  if (want && blob.anchor !== want && (blob.t.x > 0.5 || !blob.anchor)) { blob.anchor = want; blob.chip = null }
-  const target = want && want === blob.anchor ? 1 : 0
-  const before = blob.t.x
-  if (reducedMotion()) blob.t = { x: target, v: 0 }
+  if ((inChip?.id ?? null) !== blob.anchor) { blob.anchor = inChip?.id ?? null; blob.chip = null; blob.home = null }
+  const before = blob.t
+  blob.t = inChip?.t ?? 0
+  if (blob.t >= 0.97 && before < 0.97 && wantIn) absorbBump(blob.anchor)
+  setPlusHidden(blob.t > 0.001 || wantIn)
+  if (blob.t > 0.001 && blob.t < 0.999) drawBlob(f, blob.t)
   else {
-    // A spring at rest may not have ticked for a while (idle frames are sparse): start it gently.
-    const dt = Number.isNaN(blob.perf) ? 16 : clamp(f.perf - blob.perf, 0, 32)
-    blob.t = stepSpring(blob.t, target, dt, OMEGA_BLOB)
-    if (springSettled(blob.t, target, 0.002)) blob.t = { x: target, v: 0 }
-  }
-  blob.perf = f.perf
-  // Back home: free to flow into whatever captures the cursor next.
-  if (blob.t.x === 0 && blob.anchor !== want) { blob.anchor = want; blob.chip = null }
-  if (target === 1 && before < 0.97 && blob.t.x >= 0.97) absorbBump(blob.anchor)
-  setPlusHidden(blob.t.x > 0.001 || want !== null)
-  if (blob.t.x > 0.001 && blob.t.x < 0.999) {
-    drawBlob(f, blob.t.x)
-    engine.requestFrame()
-  } else {
     hideBlob()
-    if (blob.t.x === 0 || blob.t.x === 1) { blob.chip = null; blob.home = null }
+    if (blob.t === 0 || blob.t === 1) { blob.chip = null; blob.home = null }
   }
 }
 

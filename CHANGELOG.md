@@ -31,9 +31,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
   one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
 - While naming a chip, the time shown under it no longer covers the chip below.
-- The ＋ never sits on a chip: whenever it would cover one (a wide chip near the cursor, at
-  any zoom), it flows into that chip, and back out as the cursor moves on.
-- The Cursor tag glides out of the Now tag's way (and back) instead of jumping; its ＋ stays put.
+- One rule for what the cursor is on: the cursor gliding onto an instant's line, the ＋ flowing
+  into its chip and where a release lands all follow it, start on the same frame and move
+  together. Chips the cursor isn't on glide out of the ＋'s way, so it never sits on one.
+- The Cursor tag keeps clear of the Now tag as the pan moves, never in steps: in horizontal it
+  arcs over it; in vertical it is pushed along, and as the cursor crosses Now it merges into the
+  Now tag (and a release there lands on Now) instead of hopping over.
 - Span chips read like the label boxes beside the lanes in vertical, in both orientations: the
   name, then while the span contains Now the time left (big, in the lane's colour) and its
   length small ("3m timer 01:58 /3m"), otherwise its length. Selecting a span no longer adds a

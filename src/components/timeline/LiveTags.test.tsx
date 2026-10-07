@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { CursorTag, NowTag, liveTagsCollide } from './LiveTags.tsx'
+import { CursorTag, NowTag } from './LiveTags.tsx'
 import * as actions from '../../store/actions.ts'
 import { engine } from '../../engine/viewportEngine.ts'
 import { entities, useEntities } from '../../store/entities.ts'
@@ -207,16 +207,6 @@ describe('CursorTag on a focused instant', () => {
     cursorMode()
     render(<CursorTag />)
     expect(screen.getAllByRole('group', { name: 'Cursor' })[0].className).not.toContain('is-on-instant')
-  })
-})
-
-describe('liveTagsCollide', () => {
-  it('is true within the clearance on either side, false beyond', () => {
-    expect(liveTagsCollide(500, 500, 100)).toBe(true)
-    expect(liveTagsCollide(401, 500, 100)).toBe(true)
-    expect(liveTagsCollide(599, 500, 100)).toBe(true)
-    expect(liveTagsCollide(400, 500, 100)).toBe(false)
-    expect(liveTagsCollide(600, 500, 100)).toBe(false)
   })
 })
 

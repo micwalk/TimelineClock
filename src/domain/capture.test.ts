@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findBoxOverlap, findCapture } from './capture.ts'
+import { NOW_TARGET, findCapture } from './capture.ts'
 
 // 1 px per ms keeps the numbers readable.
 const at = (id: string, ts: number, hidden = false) => ({ id, ts, hidden })
@@ -21,6 +21,14 @@ describe('findCapture', () => {
     expect(findCapture({ ...o, instants: [at('a', 17)], prevId: 'a' })).toBeNull()
   })
 
+  it('captures Now like an instant, the nearest of them winning', () => {
+    expect(findCapture({ instants: [at('a', 9)], now: 3, center: 0, pxPerMs: 1, radiusPx: 12 })).toBe(NOW_TARGET)
+    expect(findCapture({ instants: [at('a', 2)], now: 6, center: 0, pxPerMs: 1, radiusPx: 12 })).toBe('a')
+    expect(findCapture({ instants: [], now: 20, center: 0, pxPerMs: 1, radiusPx: 12 })).toBeNull()
+    // An instant right at Now wins the tie.
+    expect(findCapture({ instants: [at('a', 4)], now: 4, center: 0, pxPerMs: 1, radiusPx: 12 })).toBe('a')
+  })
+
   it('scales with the zoom', () => {
     // 10 px per second: an instant 1 s away is 10 px away.
     expect(findCapture({ instants: [at('a', 1000)], center: 0, pxPerMs: 0.01, radiusPx: 12 })).toBe('a')
@@ -28,22 +36,3 @@ describe('findCapture', () => {
   })
 })
 
-describe('findBoxOverlap', () => {
-  const plus = { lo: 100, hi: 130, xlo: 19, xhi: 49 }
-  const chip = (id: string, lo: number, hi: number, xlo = 16, xhi = 44) => ({ id, lo, hi, xlo, xhi })
-
-  it('finds the chip the ＋ would cover, the nearest along time first', () => {
-    expect(findBoxOverlap([chip('far', 0, 101), chip('near', 90, 150)], plus)).toBe('near')
-  })
-
-  it('ignores chips clear of it along time or across the axis', () => {
-    expect(findBoxOverlap([chip('before', 0, 99), chip('row 1', 90, 150, 50, 78)], plus)).toBeNull()
-  })
-
-  it('holds the last one until it is clear by the release distance', () => {
-    const boxes = [chip('a', 0, 97)]
-    expect(findBoxOverlap(boxes, plus)).toBeNull()
-    expect(findBoxOverlap(boxes, plus, 'a', 4)).toBe('a')
-    expect(findBoxOverlap([chip('a', 0, 95)], plus, 'a', 4)).toBeNull()
-  })
-})

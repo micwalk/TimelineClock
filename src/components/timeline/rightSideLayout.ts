@@ -14,6 +14,9 @@ import type { SavedLayout } from './savedLayout.ts'
 import { CHIP_HEIGHT, CLUSTER_WIDTH, chipToolsExtent, estimateChipWidth, savedLayoutAt } from './savedLayout.ts'
 import { GEOMETRY_VERTICAL, verticalLiveLaneX } from './geometry.ts'
 import { engine } from '../../engine/viewportEngine.ts'
+import type { TagSize } from '../../domain/tagAvoid.ts'
+import { cursorPush } from '../../domain/tagAvoid.ts'
+import { captureFlowAt } from './capture.ts'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls } from './useBottomLanes.ts'
 
@@ -63,6 +66,27 @@ const tagObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObs
   }
   engine.requestFrame()
 })
+
+/** A live tag box's size before it has been measured, px. */
+const TAG_GUESS = { w: 128, h: 52 }
+
+/** The Now and Cursor tags' boxes along and across the time axis (domain/tagAvoid), measured or guessed. */
+export function liveTagSizes(orientation: 'horizontal' | 'vertical'): { now: TagSize; cursor: TagSize } {
+  const size = (key: 'now' | 'cursor') => {
+    const s = tagSizes.get(key) ?? TAG_GUESS
+    return orientation === 'horizontal' ? { main: s.w, cross: s.h } : { main: s.h, cross: s.w }
+  }
+  return { now: size('now'), cursor: size('cursor') }
+}
+
+/** Where the Cursor tag's box is centered along the time axis this frame, px: on the cursor's line (leaning onto what it is capturing), pushed out of the Now tag's way (vertical), merged into Now's while the cursor merges into Now. */
+export function cursorTagPos(f: Frame): number {
+  const flow = captureFlowAt(f)
+  const mid = f.mainSize / 2 + flow.lean
+  if (f.orientation === 'horizontal') return mid
+  const { now, cursor } = liveTagSizes('vertical')
+  return mid + cursorPush(mid - f.pos(f.now), now, cursor) * (1 - (flow.kind === 'now' ? flow.s : 0))
+}
 
 /** The Now or Cursor tag registers its box while it shows; returns the cleanup. */
 export function observeTag(key: 'now' | 'cursor', el: HTMLElement): () => void {
@@ -247,11 +271,9 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   // Live lanes' chips (left side) next, clear of those they would actually touch: a wide
   // selected chip can reach across the axis; the Now and Cursor tags sit on the live side.
   const tags: Interval[] = []
-  const cursorPos = f.mainSize / 2
   for (const [key, size] of tagSizes) {
-    // As CursorTag places itself: a step along the axis, away from Now, when the two would meet.
-    const slot = key === 'cursor' && Math.abs(nowPos - cursorPos) < GEOMETRY_VERTICAL.tagSlotV ? (cursorPos < nowPos ? -1 : 1) : 0
-    const mid = (key === 'now' ? nowPos : cursorPos) + slot * GEOMETRY_VERTICAL.tagSlotV
+    // As CursorTag places itself: pushed along the axis, away from Now, as the two meet.
+    const mid = key === 'now' ? nowPos : cursorTagPos(f)
     const xhi = GEOMETRY_VERTICAL.axis - GEOMETRY_VERTICAL.tagArrow
     tags.push({ lo: mid - size.h / 2, hi: mid + size.h / 2, xlo: xhi - size.w, xhi })
   }

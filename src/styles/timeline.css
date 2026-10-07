@@ -307,11 +307,14 @@
     drop-shadow(0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--halo) 60%, transparent));
   pointer-events: none;
 }
+/* --lift (px, written per frame by the Cursor tag: domain/tagAvoid) moves the tag out of the Now
+   tag's way: up in horizontal, along the time axis in vertical. The ＋ inside is held in place. */
 .tl-tag {
   position: absolute;
   left: 0;
-  bottom: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px + var(--slot, 0) * var(--tl-tag-slot));
+  bottom: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px);
   transform: translateX(-50%);
+  translate: 0 calc(var(--lift, 0) * -1px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -343,13 +346,9 @@
 /* Hiding the cursor (LiveTags): the Cursor tag folds into its arrowhead on the axis and the
    bright line fades; the arrowhead brings it back. The fold pivots on the arrow's tip (the
    origin is set where the tag's own transform puts the box's edge on the axis). */
-/* The Cursor tag's step out of the Now tag's way (--slot, set per collision) glides instead of
-   jumping: registered as a number, so it interpolates; the ＋ (and an open popover) reads the
-   same eased value, so the ＋ stays exactly where it is while the tag moves. */
-@property --slot { syntax: '<number>'; inherits: true; initial-value: 0; }
 .tl-tag {
   transform-origin: 0 100%;
-  transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 220ms ease, --slot 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: scale 280ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 220ms ease;
 }
 .timeline[data-orientation='vertical'] .tl-tag { transform-origin: 100% 0; }
 .tl-tag.is-collapsed { scale: 0.12; opacity: 0; pointer-events: none; }
@@ -742,7 +741,8 @@
   bottom: auto;
   top: 0;
   right: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px);
-  transform: translateY(calc(-50% + var(--slot, 0) * var(--tl-tag-slot-v)));
+  transform: translateY(-50%);
+  translate: 0 calc(var(--lift, 0) * 1px);
   align-items: flex-end;
 }
 /* Menus and popovers open to the right of the tag, over the chips */
@@ -928,9 +928,10 @@
 .tl-tag__drop {
   position: absolute;
   /* Across the axis, on the cursor line: the tag ends an arrow short of the axis, so clear the
-     arrow and the axis glow; stay on the axis side when the tag is lifted out of Now's way. */
+     arrow and the axis glow. Its inline translate holds it in place while the tag leans onto an
+     instant or moves out of Now's way. */
   left: 50%;
-  top: calc(100% + 2 * var(--tl-tag-arrow) + 4px + var(--slot, 0) * var(--tl-tag-slot));
+  top: calc(100% + 2 * var(--tl-tag-arrow) + 4px);
   transform: translateX(-50%);
   z-index: 2;
   width: 30px;
@@ -948,9 +949,17 @@
 .timeline[data-orientation='vertical'] .tl-tag__drop {
   left: calc(100% + 2 * var(--tl-tag-arrow) + 4px);
   top: 50%;
-  /* Stay on the cursor line when the tag is shifted out of Now's way. */
-  transform: translateY(calc(-50% - var(--slot, 0) * var(--tl-tag-slot-v)));
+  transform: translateY(-50%);
 }
+
+/* The cursor merging into Now (capture: --merge 0..1, per frame): its tag sinks into the Now
+   tag and fades, the arrowheads meet; taps go to the Now tag once it is mostly in. */
+.tl-col--label.is-cursor .tl-tag__box,
+.tl-col--label.is-cursor .tl-tag__hide,
+.tl-col--label.is-cursor .tl-tag__arrow { opacity: calc(1 - var(--merge, 0)); }
+.tl-col--label.is-cursor .tl-tag__box { scale: calc(1 - 0.3 * var(--merge, 0)); }
+.tl-col--label.is-cursor.is-merging .tl-tag__box,
+.tl-col--label.is-cursor.is-merging .tl-tag__hide { pointer-events: none; }
 
 /* The move-mode time entry opens under the moving chip in both orientations. */
 .popover--chip { z-index: 70; }
