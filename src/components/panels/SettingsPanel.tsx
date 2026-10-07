@@ -108,7 +108,7 @@ export function SettingsPanel() {
               </select>
             </label>
             <label className="settings__row">
-              <span>Lanes for favorites and alarms</span>
+              <span>Lanes for favorites</span>
               <select value={favoriteLanes} onChange={e => settings.setFavoriteLanes(e.target.value === 'always' ? 'always' : 'selected')}>
                 <option value="selected">When selected</option>
                 <option value="always">Always</option>

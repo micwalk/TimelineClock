@@ -2,7 +2,7 @@
 // shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
 import type { InstantRecord, SpanRecord } from '../domain/entities.ts'
-import { NOW_SENTINEL, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans } from '../domain/entities.ts'
+import { NOW_SENTINEL, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
@@ -16,10 +16,7 @@ export interface EntitiesState {
 const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
 const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
 
-export const useEntities = create<EntitiesState>(() => ({
-  instants: loadInstants(),
-  spans: loadSpans(),
-}))
+export const useEntities = create<EntitiesState>(() => syncFavorites(loadInstants(), loadSpans()))
 
 useEntities.subscribe((s, prev) => {
   if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, s.instants)
@@ -40,13 +37,14 @@ export const entities = {
   getInstant: (id: string | null | undefined) => (id ? get().instants.find(i => i.id === id) : undefined),
   getSpan: (id: string | null | undefined) => (id ? get().spans.find(s => s.id === id) : undefined),
 
-  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean; favorite?: boolean; snoozeOriginalId?: string } = {}): string {
+  /** A new instant, never a favorite yet (setFavorite adds the span to Now that makes one). */
+  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean; snoozeOriginalId?: string } = {}): string {
     const alarm = !!opts.alarm
     const rec: InstantRecord = {
       id: newInstantId(),
       tsEpochMs,
       label,
-      favorite: alarm || !!opts.favorite, // alarmed instants are always favorites (PRD)
+      favorite: false,
       alarm,
       ...(opts.snoozeOriginalId ? { snoozeOriginalId: opts.snoozeOriginalId } : {}),
     }
@@ -66,7 +64,7 @@ export const entities = {
   setInstantTime: (id: string, tsEpochMs: number) => patchInstant(id, () => ({ tsEpochMs })),
   setFavoriteFlag: (id: string, favorite: boolean) => patchInstant(id, () => ({ favorite })),
   setHiddenFlag: (id: string, hidden: boolean) => patchInstant(id, () => ({ hidden })),
-  setAlarmFlag: (id: string, alarm: boolean) => patchInstant(id, i => ({ alarm, favorite: alarm ? true : i.favorite })),
+  setAlarmFlag: (id: string, alarm: boolean) => patchInstant(id, () => ({ alarm })),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId, label, visible: opts.visible ?? false, endIsNow: false }
@@ -74,7 +72,7 @@ export const entities = {
     return rec.id
   },
 
-  /** Ensures the instant has a span to Now (used for favorites); returns its id. */
+  /** Ensures the instant has a span to Now (a favorite's); returns its id. */
   upsertNowSpan(startInstantId: string, visible: boolean): string {
     const found = get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow)
     if (found) {
@@ -88,13 +86,16 @@ export const entities = {
 
   nowSpanOf: (startInstantId: string) => get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow),
 
-  /** Favorites carry a visible span to Now; unfavoriting just hides it. */
+  /**
+   * A favorite is an instant whose span to Now is tracked: favoriting adds that span,
+   * unfavoriting deletes it (domain/entities syncFavorites keeps stored data to that rule).
+   */
   setFavorite(id: string, favorite: boolean) {
     entities.setFavoriteFlag(id, favorite)
     if (favorite) entities.upsertNowSpan(id, true)
     else {
       const sp = entities.nowSpanOf(id)
-      if (sp) entities.setSpanVisible(sp.id, false)
+      if (sp) entities.deleteSpan(sp.id)
     }
   },
 

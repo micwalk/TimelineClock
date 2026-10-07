@@ -228,8 +228,14 @@ Netlify builds for every pull request).
 - **Get it** from the **preview** pre-release: on the phone, open
   https://github.com/micwalk/TimelineClock/releases/download/preview/timeline-clock-preview.apk
   and install it like the real app. CI publishes it for pull requests that change the native
-  side, signed with the same key; each build replaces the last one, at the same link.
+  side, signed with the same key; each build updates that release in place, at the same link.
   (Actions › Android app › Run workflow with **preview** ticked builds one from any branch.)
+- **Another release**: to publish TC Preview as a fresh release (say `preview-2`, at
+  `…/releases/download/preview-2/timeline-clock-preview.apk`), type that tag in Run workflow's
+  **preview_tag** for one build, or set the repository variable `TC_PREVIEW_TAG` (Settings ›
+  Secrets and variables › Actions › Variables) to move every build from then on; delete the
+  variable to go back to `preview`. Version tags (`v1.2.3`) are refused: they are the real
+  app's releases.
 - **Pick the PR**: on its first start it asks *Which preview?*. Type the pull request's
   number (or paste a preview address) and tap **Open**; it remembers it. To switch, long-press
   the app icon › **Change preview**. If the preview can't be loaded (wrong number, or Netlify
@@ -288,7 +294,11 @@ Netlify builds for every pull request).
 - Build locally: JDK 21 and the Android SDK (platform 37; Gradle can fetch it), then
   `npx cap sync android && cd android && ./gradlew assembleRelease` (add `-PtcPreview` for TC
   Preview; `:app:testReleaseUnitTest` runs the native unit tests). CI:
-  `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`.
+  `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`. It
+  builds (and publishes TC Preview) only when a push changes what goes into the APK: `android/`,
+  `android-offline/`, `capacitor.config.ts`, the version or the Capacitor packages, or the
+  workflow itself (`.github/scripts/apk-inputs-changed.mjs`); web-only pushes skip it. Branches
+  build through their pull request; pushes to `main` build and release.
 - TC Preview (`-PtcPreview`): `applicationIdSuffix ".preview"`, label "TC Preview",
   `BuildConfig.PREVIEW`. `SiteChoice.java` saves the chosen address and starts the bridge with
   the bundled config's `server.url` swapped for it; `SiteAddress.java` (unit tested) accepts

@@ -1,6 +1,11 @@
 # Builds the Android app (docs/android.md) and, on main, publishes it as a GitHub Release.
 # On pull requests it also publishes "TC Preview", a separate test app that loads a PR's
-# Netlify deploy preview, as the "preview" pre-release.
+# Netlify deploy preview, as the "preview" pre-release (or the tag in the TC_PREVIEW_TAG
+# repository variable; see the preview job).
+#
+# It builds only when the push (or the PR update) changed something that goes into the APK
+# (the changes job: .github/scripts/apk-inputs-changed.mjs). Web changes never need a new
+# APK: the app loads the live site.
 #
 # Signing: the key lives only in repository secrets (Settings > Secrets and variables >
 # Actions), never in the repo:
@@ -14,16 +19,18 @@
 name: Android app
 
 on:
+  # Branches other than main are built by their pull request.
   push:
+    branches: [main]
     paths:
       - 'android/**'
       - 'android-offline/**'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
-      - 'CHANGELOG.md'
       - '.github/workflows/android.yml'
       - '.github/actions/android-setup/**'
+      - '.github/scripts/apk-inputs-changed.mjs'
   pull_request:
     paths:
       - 'android/**'
@@ -33,6 +40,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/android.yml'
       - '.github/actions/android-setup/**'
+      - '.github/scripts/apk-inputs-changed.mjs'
   # Actions > Android app > Run workflow: e.g. on main after adding the signing secrets, or
   # on a branch to publish its TC Preview app.
   workflow_dispatch:
@@ -41,6 +49,10 @@ on:
         description: Also publish this branch's TC Preview app (the "preview" pre-release)
         type: boolean
         default: false
+      preview_tag:
+        description: Publish TC Preview under this release tag instead (e.g. preview-2), a new release with its own download link
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -50,7 +62,42 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Did this push change the APK? A pull request's path filter matches its whole diff, so
+  # once a PR touches the native side every later push would rebuild; this compares only
+  # what the push added (before..after; a new PR: its whole diff), and the version and
+  # Capacitor packages in package.json, not every edit to it.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apk: ${{ steps.diff.outputs.apk }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          AFTER: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "Run by hand: build." && echo "apk=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          from="$BEFORE"
+          if [ "$EVENT" = pull_request ] && [ "$ACTION" != synchronize ]; then
+            from=$(git merge-base "$BASE" "$AFTER" || true)
+          fi
+          node .github/scripts/apk-inputs-changed.mjs "$from" "$AFTER" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.apk == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -169,12 +216,18 @@ jobs:
   # TC Preview (docs/android.md): a separate app ("com.micwalk.timelineclock.preview") that
   # asks which pull request's Netlify deploy preview to load, so a PR can be tried on the
   # phone before it reaches main. Published as the "preview" pre-release (never "latest"),
-  # replaced by each build, at a download link that stays the same. Same-repo pull requests
-  # only: forks get no secrets.
+  # updated in place by each build, at a download link that stays the same. Same-repo pull
+  # requests only: forks get no secrets.
+  # Retarget it to another release (a fresh tag and download link, e.g. "preview-2"): set the
+  # TC_PREVIEW_TAG repository variable (Settings > Secrets and variables > Actions > Variables)
+  # for every build from then on, or type a tag in Run workflow's preview_tag for one build.
   preview:
+    needs: changes
     if: >-
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
-      || (github.event_name == 'workflow_dispatch' && inputs.preview)
+      needs.changes.outputs.apk == 'true' && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+        || (github.event_name == 'workflow_dispatch' && (inputs.preview || inputs.preview_tag != ''))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -186,7 +239,17 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       BRANCH: ${{ github.head_ref || github.ref_name }}
+      PREVIEW_TAG: ${{ inputs.preview_tag || vars.TC_PREVIEW_TAG || 'preview' }}
     steps:
+      - name: Check the release tag
+        run: |
+          # A plain tag name, and never a version tag: those are the real app's releases.
+          if ! [[ "$PREVIEW_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || [[ "$PREVIEW_TAG" =~ ^v[0-9] ]]; then
+            echo "::error::TC Preview's release tag '$PREVIEW_TAG' must be letters, digits, '.', '-' or '_', and not a version tag (v1.2.3)."
+            exit 1
+          fi
+          echo "TC Preview publishes to the '$PREVIEW_TAG' pre-release."
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.HEAD_SHA }}
@@ -209,7 +272,7 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease -PtcPreview --no-daemon --stacktrace
 
-      - name: Publish the "preview" pre-release
+      - name: Publish the TC Preview pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -229,6 +292,15 @@ jobs:
             grep -i "SHA-256" signing.txt || true
             echo '```'
           } > notes.md
-          # Replace the previous one; the tag (and so the download link) keeps its name.
-          gh release delete preview --cleanup-tag --yes 2>/dev/null || true
-          gh release create preview "$apk" --prerelease --target "$HEAD_SHA" --title "TC Preview (test app)" --notes-file notes.md
+          title="TC Preview (test app)"
+          if gh release view "$PREVIEW_TAG" > /dev/null 2>&1; then
+            # Update it in place, so the download link never breaks: replace the APK and the
+            # notes, then move the tag to this build (only the source archives follow the tag).
+            gh release upload "$PREVIEW_TAG" "$apk" --clobber
+            gh release edit "$PREVIEW_TAG" --prerelease --title "$title" --notes-file notes.md
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$PREVIEW_TAG" -f sha="$HEAD_SHA" -F force=true > /dev/null \
+              || echo "::warning::The APK and notes are updated, but the '$PREVIEW_TAG' tag couldn't be moved to ${HEAD_SHA:0:7}."
+          else
+            gh release create "$PREVIEW_TAG" "$apk" --prerelease --target "$HEAD_SHA" --title "$title" --notes-file notes.md
+          fi
+          echo "Download: https://github.com/${GITHUB_REPOSITORY}/releases/download/$PREVIEW_TAG/$apk" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -85,7 +85,7 @@ describe('Timer and Stopwatch buttons', () => {
     const [, , stop] = sw().marks
     expect(sw().stopped).toBe(true)
     expect(instant(stop).label).toBe('Stop')
-    expect(entities.nowSpanOf(l1)?.visible).toBe(false)
+    expect(entities.nowSpanOf(l1)).toBeUndefined()
     // Stopping ends tracking: the start is unfavorited too.
     expect(instant(s0).favorite).toBe(false)
     expect(spans().find(sp => sp.startInstantId === l1 && sp.endInstantId === stop)).toMatchObject({ label: 'Lap 2', visible: true })
@@ -130,7 +130,7 @@ describe('Timer and Stopwatch buttons', () => {
     act.startStopwatch()
     const [s0] = sw().marks
     act.resetStopwatch()
-    expect(entities.nowSpanOf(s0)?.visible).toBe(false)
+    expect(entities.nowSpanOf(s0)).toBeUndefined()
     expect(sw()).toEqual(IDLE_STOPWATCH)
   })
 
@@ -264,7 +264,8 @@ describe('revealInstant (alarm notification click)', () => {
   })
 
   it('keeps the Favorites tab when the instant is a favorite', () => {
-    const id = entities.createInstant(Date.now() - MINUTE, 'Rice', { favorite: true })
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rice')
+    entities.setFavorite(id, true)
     useUi.setState({ listTab: 'favorites' })
     act.revealInstant(id, false)
     expect(useUi.getState().listTab).toBe('favorites')
@@ -278,21 +279,33 @@ describe('revealInstant (alarm notification click)', () => {
 })
 
 describe('favorites and alarms', () => {
-  it('favoriting adds a visible span to Now; unfavoriting hides it', () => {
+  it('favoriting adds a visible span to Now; unfavoriting deletes it', () => {
     const id = entities.createInstant(Date.now() - HOUR, 'Start')
     act.toggleFavorite(id)
     const span = entities.nowSpanOf(id)!
     expect(instant(id).favorite).toBe(true)
     expect(span.visible).toBe(true)
+    act.focusSpan(span.id)
+    useView.setState({ selectedSpanId: span.id })
     act.toggleFavorite(id)
-    expect(entities.nowSpanOf(id)!.visible).toBe(false)
+    expect(instant(id).favorite).toBe(false)
+    expect(entities.nowSpanOf(id)).toBeUndefined()
+    expect(view()).toMatchObject({ focusedSpanId: null, selectedSpanId: null })
   })
 
-  it('setting an alarm also favorites the instant', () => {
+  it('hiding a span to Now unfavorites its instant', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Start')
+    act.setFavorite(id, true)
+    act.toggleSpanVisible(entities.nowSpanOf(id)!.id)
+    expect(instant(id).favorite).toBe(false)
+    expect(entities.nowSpanOf(id)).toBeUndefined()
+  })
+
+  it('setting an alarm does not favorite the instant', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Wake')
     act.toggleAlarm(id)
-    expect(instant(id)).toMatchObject({ alarm: true, favorite: true })
-    expect(entities.nowSpanOf(id)?.visible).toBe(true)
+    expect(instant(id)).toMatchObject({ alarm: true, favorite: false })
+    expect(entities.nowSpanOf(id)).toBeUndefined()
   })
 
   it('snoozing creates a numbered alarm, links it, and dismisses the original', () => {
@@ -351,7 +364,8 @@ describe('setSpanLength', () => {
   })
 
   it('leaves spans to Now alone', () => {
-    const id = entities.createInstant(Date.now() - HOUR, 'Rice', { favorite: true })
+    const id = entities.createInstant(Date.now() - HOUR, 'Rice')
+    entities.setFavorite(id, true)
     act.setFavorite(id, true)
     const toNow = entities.nowSpanOf(id)!
     act.setSpanLength(toNow.id, MINUTE)
@@ -541,7 +555,7 @@ describe('tick snap', () => {
     useSettings.setState({ tickSnap: true })
     const { tick, t } = offTick()
     act.focusCursorAt(t, false)
-    act.endPan(20)
+    act.endPan()
     expect(view().viewFocusMode).toBe('cursor')
     expect(view().timeCenter).toBe(tick)
   })
@@ -551,10 +565,10 @@ describe('tick snap', () => {
     const { t, pxPerMs } = offTick()
     settings.setTunable('tickSnapPx', 0.1) // the cursor is 0.3px off the tick
     act.focusCursorAt(t, false)
-    act.endPan(20)
+    act.endPan()
     expect(view().timeCenter).toBe(t)
     settings.setTunable('tickSnapPx', 0.5)
-    act.endPan(20)
+    act.endPan()
     expect(view().timeCenter).not.toBe(t)
     expect(Math.abs(view().timeCenter - t) * pxPerMs).toBeLessThan(0.5)
     settings.resetTunable('tickSnapPx')
@@ -565,7 +579,7 @@ describe('tick snap', () => {
     const { t } = offTick()
     entities.createInstant(t + 1000, 'Rice')
     act.focusCursorAt(t, false)
-    act.endPan(20, { snap: false })
+    act.endPan({ snap: false })
     expect(view()).toMatchObject({ viewFocusMode: 'cursor', timeCenter: t })
   })
 
@@ -573,18 +587,31 @@ describe('tick snap', () => {
     useSettings.setState({ tickSnap: false })
     const { t } = offTick()
     act.focusCursorAt(t, false)
-    act.endPan(20)
+    act.endPan()
     expect(view().timeCenter).toBe(t)
     useSettings.setState({ tickSnap: true })
   })
 
-  it('an instant within the landing radius wins over a tick', () => {
+  it('lands on what the cursor showed it was on (an instant, or Now) rather than a tick', () => {
     useSettings.setState({ tickSnap: true })
     const { t } = offTick()
     const id = entities.createInstant(t + 1000, 'Rice')
     act.focusCursorAt(t, false)
-    act.endPan(20)
+    act.endPan({ land: { id, kind: 'instant' } })
     expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+    act.focusCursorAt(t, false)
+    act.endPan({ land: { id: '__now__', kind: 'now' } })
+    expect(view().viewFocusMode).toBe('now')
+  })
+
+  it('without a capture, never lands on an instant near the cursor', () => {
+    useSettings.setState({ tickSnap: false })
+    const { t } = offTick()
+    entities.createInstant(t + 1000, 'Rice')
+    act.focusCursorAt(t, false)
+    act.endPan()
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', timeCenter: t })
+    useSettings.setState({ tickSnap: true })
   })
 
   it('moveCursorBy never snaps to ticks', () => {

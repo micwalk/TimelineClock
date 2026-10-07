@@ -27,7 +27,7 @@ const SPECS = {
   landingMousePx: { label: 'Land on Now/instants within, mouse (px)', default: 8, min: 0, max: 60, step: 1, group: 'Gestures' },
   landingTouchPx: { label: 'Land on Now/instants within, touch (px)', default: 12, min: 0, max: 80, step: 1, group: 'Gestures' },
   tickSnapPx: { label: 'Snap to a tick within (px)', default: 8, min: 0, max: 40, step: 1, group: 'Gestures' },
-  snapMaxReleaseSpeed: { label: 'Snap only when released slower than (px/ms)', default: 0.05, min: 0, max: 1, step: 0.01, group: 'Gestures' },
+  snapMaxReleaseSpeed: { label: 'Snap to a tick only when released slower than (px/ms)', default: 0.05, min: 0, max: 1, step: 0.01, group: 'Gestures' },
   tickSnapEaseMs: { label: 'Ease into a snapped tick (ms)', default: 150, min: 0, max: 1000, step: 10, group: 'Gestures' },
   glideWindowMs: { label: 'Velocity sampling window (ms)', default: 100, min: 20, max: 500, step: 10, group: 'Glide' },
   glideStillMs: { label: 'Pause that cancels a glide (ms)', default: 50, min: 0, max: 500, step: 10, group: 'Glide' },

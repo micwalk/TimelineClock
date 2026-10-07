@@ -10,7 +10,7 @@ import { formatDateTime, formatDurationCoarse, formatRelativeCoarse } from '../.
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
 import type { ResolvedSpan } from '../../domain/spans.ts'
-import { isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
+import { endpointName, isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import type { ListTab } from '../../store/ui.ts'
@@ -41,10 +41,14 @@ function useScrollFocused(container: React.RefObject<HTMLElement | null>, focusK
 // ---------------------------------------------------------------------------
 // Instants
 
+/** A saved time's relative text changes only with the clock's second, never with a pan or zoom. */
+const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
+
 function Relative({ ts }: { ts: number | 'now' | 'center' }) {
   return (
     <LiveText
       className="list-row__rel mono"
+      watch={typeof ts === 'number' ? bySecond : undefined}
       compute={f => {
         if (ts === 'now') return '00:00'
         return formatRelativeCoarse((ts === 'center' ? f.center : ts) - f.now)
@@ -59,8 +63,7 @@ function pick(focus: () => void) {
   if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
 }
 
-const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: InstantRecord; focused: boolean; selected: boolean }) {
-  const isPast = useFrameValue(f => inst.tsEpochMs < f.now)
+const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { inst: InstantRecord; focused: boolean; selected: boolean; isPast: boolean }) {
   return (
     <div
       data-key={inst.id}
@@ -74,7 +77,7 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected }: { inst: Ins
       <div className="list-row__name">
         <IconButton icon={inst.favorite ? StarSolid : StarOutline} label={inst.favorite ? 'Unfavorite' : 'Favorite'}
           color="var(--c-favorite)" bare pressed={!!inst.favorite} onClick={() => act.toggleFavorite(inst.id)} />
-        <span className={inst.label ? '' : 'is-empty'}>{displayName(inst.label)}</span>
+        <span className={inst.label ? '' : 'is-empty'}>{endpointName(inst)}</span>
         {inst.alarm && <BellAlertIcon className="list-row__bell" aria-label="Alarm set" />}
         <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline'}
           className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={!!inst.hidden}
@@ -124,7 +127,9 @@ function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
   const showLive = !favoritesOnly
   const showCursor = showLive && v.mode === 'cursor'
   // Where Now and the Cursor slot into the sorted list; changes only when they cross an instant.
-  const nowIdx = useFrameValue(f => (showLive ? lowerBound(sorted, f.now) : -1))
+  // Rows before Now are past (one value for the list, rather than one per row every frame).
+  const pastCount = useFrameValue(f => lowerBound(sorted, f.now))
+  const nowIdx = showLive ? pastCount : -1
   const cursorIdx = useFrameValue(f => (showCursor ? lowerBound(sorted, f.center) : -1))
 
   const rows: { key: string; node: React.ReactNode }[] = []
@@ -136,7 +141,7 @@ function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
     pushLive(i)
     rows.push({
       key: inst.id,
-      node: <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} />,
+      node: <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} isPast={i < pastCount} />,
     })
   })
   pushLive(sorted.length)
@@ -164,9 +169,10 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
   const [editing, setEditing] = useState(false)
   const start = row.kind === 'saved' ? row.r.start : row.start
   const end = row.kind === 'saved' ? row.r.end ?? null : row.end
-  const endName = row.kind === 'saved' ? spanEndName(row.r) : end ? displayName(end.label) : 'Now'
+  const endName = row.kind === 'saved' ? spanEndName(row.r) : end ? endpointName(end) : 'Now'
   const visible = row.kind === 'saved' ? row.r.span.visible !== false : row.visible
-  const name = row.kind === 'saved' ? displayName(row.r.span.label, isFavoriteNowSpan(row.r) ? '★ Favorite' : '?') : row.label
+  const unnamed = row.kind === 'saved' && !row.r.span.label && !isFavoriteNowSpan(row.r)
+  const name = row.kind === 'saved' ? displayName(row.r.span.label, isFavoriteNowSpan(row.r) ? '★ Favorite' : 'Unnamed') : row.label
   const toggleVisible = () => {
     if (row.kind === 'saved') act.toggleSpanVisible(row.r.span.id)
     else view.setImpliedVisible(row.which, !row.visible)
@@ -196,10 +202,10 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
             onCancel={() => setEditing(false)}
           />
         ) : (
-          <span className={name === '?' ? 'is-empty' : ''}>{name}</span>
+          <span className={unnamed ? 'is-empty' : ''}>{name}</span>
         )}
       </div>
-      <div className="list-row__sname">{displayName(start.label)}</div>
+      <div className="list-row__sname">{endpointName(start)}</div>
       <div className="list-row__dt mono">{formatDateTime(start.tsEpochMs)}</div>
       <LiveText className="list-row__dur mono" compute={f => formatDurationCoarse((end ? end.tsEpochMs : f.now) - start.tsEpochMs)} />
       {end ? (

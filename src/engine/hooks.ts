@@ -33,6 +33,26 @@ export function useFrameValue<T>(selector: (f: Frame) => T, isEqual: (a: T, b: T
   return useSyncExternalStore(engine.subscribe, getSnapshot)
 }
 
+const noSubscribe = () => () => {}
+
+/**
+ * useFrameValue that only watches frames while `active`; otherwise it returns `idle` and costs
+ * nothing per frame. For values most instances never need (a chip's "is past" when it has no alarm).
+ */
+export function useFrameValueWhile<T>(active: boolean, selector: (f: Frame) => T, idle: T): T {
+  const selectorRef = useRef(selector)
+  selectorRef.current = selector
+  const cache = useRef<{ value: T } | null>(null)
+  const getSnapshot = () => {
+    if (!active) return idle
+    const value = selectorRef.current(engine.getFrame())
+    if (cache.current && Object.is(cache.current.value, value)) return cache.current.value
+    cache.current = { value }
+    return value
+  }
+  return useSyncExternalStore(active ? engine.subscribe : noSubscribe, getSnapshot)
+}
+
 export const shallowArrayEqual = <T>(a: readonly T[], b: readonly T[]) =>
   a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
 

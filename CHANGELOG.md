@@ -7,6 +7,60 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.2.0 — 2026-10-06
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- Smoother on phones, zooming especially: about 50% more frames per second when zooming and
+  10–25% more when panning on a slowed-down CPU, and more with many instants and spans. The
+  saved instants' lines now pan as one layer, chips no longer make the whole timeline redraw
+  while zooming, and nothing measures the page in the middle of a frame.
+- The Cursor tag's round **＋** now sits across the axis from the tag in horizontal too (below
+  it, where new chips appear), as it already did in vertical. Tapping it drops an instant and
+  opens its name: the ＋ stretches into the new chip. Type a name, or just tap elsewhere or move
+  on to leave it unnamed; named in place, the cursor lands on it. (Double-tap the Cursor tag, or
+  +, to drop one without naming it.)
+- Dragging slowly over an instant shows where you'll land before you let go: the cursor glides
+  onto its line and shows its time, and its chip lights up. While the cursor is on an instant,
+  the ＋ flows into that instant's chip like a drop of liquid, and is pulled back out when you
+  move on (the ＋ itself never moves).
+- Chips glide out of each other's way instead of jumping, and slide quickly when they have to
+  pop to another row; new chips fade in. Colours ease as things are selected, and tools pop in.
+- **Hide the cursor**: the eye badge on the Cursor tag (or H) folds the tag into its arrowhead
+  and hides its line, to look around without it; tap the arrowhead (or H) to bring it back.
+- Spans that follow each other share a lane: a stopwatch's laps run along one track instead of
+  one lane each. Names that would crowd a lane fold into **N spans**, which zooms in when tapped.
+- While naming a chip, the time shown under it no longer covers the chip below.
+- One rule for what the cursor is on: the cursor gliding onto an instant's line, the ＋ flowing
+  into its chip and where a release lands all follow it, start on the same frame and move
+  together. Chips the cursor isn't on glide out of the ＋'s way, so it never sits on one.
+- The Cursor tag keeps clear of the Now tag as the pan moves, never in steps: in horizontal it
+  arcs over it; in vertical it is pushed along, and as the cursor crosses Now it merges into the
+  Now tag (and a release there lands on Now) instead of hopping over.
+- Span chips read like the label boxes beside the lanes in vertical, in both orientations: the
+  name, then while the span contains Now the time left (big, in the lane's colour) and its
+  length small ("3m timer 01:58 /3m"), otherwise its length. Selecting a span no longer adds a
+  second chip spelling out its ends: its label box turns into the chip, with its tools, in the
+  same spot (at Now while it contains Now).
+- A selected span's end arrows stay whole on screen; in vertical the lanes sit a little further
+  in from the edge.
+- Hiding the cursor hides its lane too (from the selected instant to the cursor).
+- In horizontal, a selected chip's tools sit in a row under it, as in vertical.
+- The name box of a new instant no longer sits on a dark box after the ＋ turns into it.
+- Unnamed instants are named by their time wherever a name is shown (lane chips, the Agenda,
+  menus), never "?".
+- A favorite now means its span to Now is tracked: unfavoriting deletes that span (it used to
+  stay, hidden), and hiding a span to Now unfavorites its instant. Setting an alarm no longer
+  makes the instant a favorite (a timer's end still is: its span to Now is the countdown).
+  Saved data is brought into line when it loads.
+- CI builds the Android app only when a push changes what goes into the APK (the native
+  project, the offline page, the Capacitor config or packages, the version), so web-only
+  pushes no longer rebuild it, and branches build only through their pull request.
+- TC Preview (the test app) is updated in place on each build instead of deleted and made
+  again, which failed when the old release was still there. It can also be published as
+  another release (`preview_tag` in Run workflow, or the `TC_PREVIEW_TAG` repository variable;
+  docs/android.md).
+
 ## 0.1.0 — 2026-10-04
 
 **Android app: new.** Install it from this release (docs/android.md).

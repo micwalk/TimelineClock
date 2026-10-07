@@ -74,7 +74,7 @@ describe('syncAlarms', () => {
     )
     await syncAlarms()
     expect(entities.getInstant('end')).toMatchObject({ alarm: false, favorite: false })
-    expect(entities.getSpan('endNow')?.visible).toBe(false)
+    expect(entities.getSpan('endNow')).toBeUndefined()
     expect(fake.synced?.alarms).toEqual([])
   })
 

@@ -12,6 +12,7 @@ import { useLayout } from '../../store/layout.ts'
 import { focusInstant, focusNow } from '../../store/actions.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { observeLaneChip, rightSideLayout } from './rightSideLayout.ts'
+import { laneChipLayout } from './laneChipLayout.ts'
 
 /** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -58,6 +59,9 @@ export interface SpanLaneProps {
   layoutKey?: string
 }
 
+/** An endpoint arrow's center stays this far from the screen's ends (half its 26px button, and a margin). */
+const ARROW_INSET = 16
+
 function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertical: boolean) {
   if (!target || target.kind === 'cursor') return null
   const onClick = target.kind === 'now' ? () => focusNow() : () => focusInstant(target.id)
@@ -85,7 +89,7 @@ export function SpanLane(props: SpanLaneProps) {
   const chipWrapRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical' })
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false })
 
   useFrameListener(f => {
     const pa = f.pos(resolveTimeRef(a, f.now, f.center))
@@ -115,14 +119,32 @@ export function SpanLane(props: SpanLaneProps) {
       lineRef.current.style.transform = v ? `translate3d(0,${g.left}px,0)` : `translate3d(${g.left}px,0,0)`
       lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
-    // Vertical lane chips take their spot from the shared layout, so they never overlap each other.
-    const mid = v && layoutKey ? (rightSideLayout(f).chips[layoutKey] ?? g.mid) : g.mid
-    if (anchorRef.current && !(Math.abs(mid - s.mid) <= 0.01)) {
+    // Lane chips take their spot from a shared layout, so they never overlap each other: vertical,
+    // clear of every other chip; horizontal (saved side), along their lane, where chips that
+    // would touch fold into an "N spans" chip (LaneGroupChips).
+    let mid = g.mid
+    let folded = false
+    if (layoutKey && v) mid = rightSideLayout(f).chips[layoutKey] ?? g.mid
+    else if (layoutKey && !live) {
+      const placed = laneChipLayout(f)
+      mid = placed.shown[layoutKey] ?? g.mid
+      folded = layoutKey in placed.groupOf
+    }
+    if (anchorRef.current && (folded !== s.folded || anchorRef.current !== s.anchor)) {
+      s.folded = folded
+      anchorRef.current.classList.toggle('is-folded', folded)
+    }
+    if (anchorRef.current && (anchorRef.current !== s.anchor || !(Math.abs(mid - s.mid) <= 0.01))) {
+      s.anchor = anchorRef.current
       s.mid = mid
       anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
     }
-    // Endpoint arrows sit on the line at its visible ends.
-    const place = (el: HTMLDivElement | null, pos: number) => { if (el) el.style.transform = v ? `translate3d(0,${pos}px,0)` : `translate3d(${pos}px,0,0)` }
+    // Endpoint arrows sit on the line at its visible ends, kept whole on screen.
+    const place = (el: HTMLDivElement | null, pos: number) => {
+      if (!el) return
+      const p = Math.min(f.mainSize - ARROW_INSET, Math.max(ARROW_INSET, pos))
+      el.style.transform = v ? `translate3d(0,${p}px,0)` : `translate3d(${p}px,0,0)`
+    }
     place(startEndRef.current, g.left)
     place(finishEndRef.current, g.right)
     if (g.leftOffscreen !== s.l) { s.l = g.leftOffscreen; leftChevRef.current?.classList.toggle('is-visible', s.l) }
@@ -162,8 +184,9 @@ export function SpanLane(props: SpanLaneProps) {
             <div ref={finishEndRef} className="tl-lane__end">{arrowFor(rightTarget, 'right', vertical)}</div>
           </>
         )}
-        <div ref={anchorRef} className="tl-lane__anchor">
-          {!(vertical && barOnly) && <div ref={chipWrapRef} className="tl-lane__chip-wrap">
+        {/* A bar-only lane has no chip: no anchor either (each one is a composited layer). */}
+        {hasChip && <div ref={anchorRef} className="tl-lane__anchor">
+          <div ref={chipWrapRef} className="tl-lane__chip-wrap">
             <div className="tl-lane__tools tl-lane__tools--left">
               {extra?.left}
             </div>
@@ -185,8 +208,8 @@ export function SpanLane(props: SpanLaneProps) {
               {extra?.right}
             </div>
             {below}
-          </div>}
-        </div>
+          </div>
+        </div>}
       </div>
     </>
   )

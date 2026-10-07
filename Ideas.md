@@ -16,16 +16,18 @@ Not sure yet, but needs improvement
 * Step increments configurable in Settings (choose which steps the ± buttons offer) plus a 'Custom…' option to type any step
 * rendering of spans as just rectangles
 * first class spans
-* "Genie" save animation: when Now or the Cursor becomes a saved instant, its readout box
-  drains like hourglass sand into its arrow, flows through the axis, and expands into the
-  new saved-instant chip on the other side. (After layout v2, which puts live markers and
-  saved instants on opposite sides of the axis.)
 * Orientation switch animation: labels hide, the timeline and instant lines rotate into the
   new orientation, then labels reappear.
 * Wider spans like a traditional calendar view (e.g. a named span such as 'beach' drawn as a block)
-* Scroll the view without moving the cursor or changing selection/focus (hide the cursor while just looking around)
+* Scroll the view without moving the cursor or changing selection/focus (a real "just looking" mode; hiding the cursor, done, is the minimal version)
+* Horizontal on a landscape phone: many saved lanes still make the timeline taller than the screen; cap the lanes by the room and fold the rest
+* Morph Now's drops too (the big ＋ and double-tap on the Now tag), like the Cursor ＋
 
 Done:
+* Cursor ＋ morphs into the new instant's chip with its name open, and back (replaces the "genie" save animation idea)
+* Hide the cursor: the Cursor tag folds into its arrowhead
+* Chips glide (springs) instead of jumping; crowded span names fold into "N spans"; spans that follow each other share a lane
+* Performance pass: camera-style world layer for lines, chip geometry per frame, no layout reads in frames
 * favorite -> span not always working (stars now go through the same favorite path as the label star)
 * Snooze name: Snooze 2: Snooze 1: Test Alarm (snoozes are named from the original alarm)
 * Settings Screen: glow, how long alarms ring, auto-snooze when unanswered, Test alarm under Dev. Gear lives in the Agenda tab bar.

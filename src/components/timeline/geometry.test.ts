@@ -19,7 +19,7 @@ describe('timeline geometry', () => {
 
   it('has a vertical set, written as px custom properties', () => {
     const style = geometryStyleFor('vertical')
-    expect(style).toMatchObject({ '--tl-axis': '140px', '--tl-tag-arrow': '14px', '--tl-chip-start': '152px', '--tl-lane-gap': '18px', '--tl-tag-slot-v': '76px' })
+    expect(style).toMatchObject({ '--tl-axis': '140px', '--tl-tag-arrow': '14px', '--tl-chip-start': '152px', '--tl-lane-gap': '18px' })
     expect(Object.keys(style)).toHaveLength(Object.keys(GEOMETRY_VERTICAL).length)
     expect(geometryStyleFor('horizontal')).toBe(geometryStyle)
   })
@@ -34,6 +34,6 @@ describe('timeline geometry', () => {
     const base = 390 - GEOMETRY_VERTICAL.chipStart - 8
     expect(verticalCrossBudget(390, 0)).toBe(base)
     // Only the bars cost width; lane chips draw over the saved chips, so selecting never reflows them.
-    expect(verticalCrossBudget(390, 2)).toBe(base - 2 * GEOMETRY_VERTICAL.laneGap)
+    expect(verticalCrossBudget(390, 2)).toBe(base - (GEOMETRY_VERTICAL.laneEdge - 12) - 2 * GEOMETRY_VERTICAL.laneGap)
   })
 })

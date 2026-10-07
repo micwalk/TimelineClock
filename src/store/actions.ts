@@ -20,6 +20,8 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
+import { syncFavorites } from '../domain/entities.ts'
+import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, dismiss, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
@@ -142,46 +144,47 @@ export function focusSpan(spanId: string, zoomToFit = true) {
 
 export function moveCursorBy(deltaMs: number) {
   engine.stopMomentum()
+  endNaming()
   view.setTimeCenter(frame().center + deltaMs)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
   refreshLock()
-  settleCursor(exactLandingMs(), false)
+  landIfExact(false)
 }
 
 /**
- * Snap distance for moves that target a precise time (± steps, typed times): only an
- * essentially exact hit counts, so a typed time is never pulled to a nearby instant.
+ * Moves that target a precise time (± steps, typed times) land on Now or an instant only on
+ * an essentially exact hit (domain/capture, the same rule as a cursor at rest), so a typed
+ * time is never pulled to a nearby instant. px, capped at half a second when zoomed far out.
  */
-const exactLandingMs = () => Math.min(500, 2 / frame().pxPerMs)
+const EXACT_LANDING_PX = 2
+const EXACT_LANDING_MAX_MS = 500
 
-/**
- * Where a free cursor comes to rest: if it is within `toleranceMs` of Now or of an
- * instant, focus that instead (the cursor "becomes" it and is hidden). Failing that,
- * with `snapToTicks` (drag/glide ends only) and the setting on, it eases to the nearest tick.
- */
-function settleCursor(toleranceMs: number, animate: boolean, snapToTicks = false): boolean {
-  if (v().viewFocusMode !== 'cursor' || v().moveMode) return false
+/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. */
+function exactHit(ts: number, withNow: boolean): LandingTarget | null {
   const f = frame()
-  if (Math.abs(f.now - f.center) <= toleranceMs) {
-    focusNow(animate)
-    return true
-  }
-  let best: { id: string; d: number } | null = null
-  for (const i of useEntities.getState().instants) {
-    const d = Math.abs(i.tsEpochMs - f.center)
-    if (d <= toleranceMs && (!best || d < best.d)) best = { id: i.id, d }
-  }
-  if (!best) {
-    if (!snapToTicks || !useSettings.getState().tickSnap) return false
-    const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
-    if (tick === f.center || Math.abs(tick - f.center) * f.pxPerMs > getTunables().tickSnapPx) return false
-    engine.beginTransition(getTunables().tickSnapEaseMs)
-    view.setTimeCenter(tick)
-    refreshLock()
-    return true
-  }
-  focusInstant(best.id, animate)
-  return true
+  const id = findCapture({
+    instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })),
+    now: withNow ? f.now : undefined, center: ts, pxPerMs: f.pxPerMs,
+    radiusPx: Math.min(EXACT_LANDING_PX, EXACT_LANDING_MAX_MS * f.pxPerMs),
+  })
+  return id ? { id, kind: id === NOW_TARGET ? 'now' : 'instant' } : null
+}
+
+/** Lands a free cursor that came to rest exactly on Now or an instant: it focuses that instead. */
+function landIfExact(animate: boolean): boolean {
+  if (v().viewFocusMode !== 'cursor' || v().moveMode) return false
+  const hit = exactHit(frame().center, true)
+  if (hit) landOn(hit, animate)
+  return !!hit
+}
+
+/** What a released drag lands on: what the cursor showed it was on (components/timeline/capture). */
+export interface LandingTarget { id: string; kind: 'instant' | 'now' }
+
+/** The cursor lands on Now or an instant: it focuses it (the cursor "becomes" it). */
+function landOn(target: LandingTarget, animate: boolean) {
+  if (target.kind === 'now') focusNow(animate)
+  else focusInstant(target.id, animate)
 }
 
 /** Within this many px of the cursor, an instant counts as "under" it. */
@@ -245,6 +248,7 @@ export const zoomOut = () => zoomBy(1 + ZOOM_STEP)
 /** Start of a drag: detach from whatever was followed, keeping the current on-screen center. */
 export function beginPan() {
   engine.cancelTransition()
+  endNaming()
   const f = frame()
   view.setTimeCenter(f.center)
   if (v().viewFocusMode !== 'cursor') view.setFocus('cursor')
@@ -258,6 +262,7 @@ export function panByPixels(dx: number) {
 
 /** Mouse wheel / trackpad scroll along the time axis: pans like a drag, without the landing snap. */
 export function wheelPan(dPx: number) {
+  endNaming()
   if (v().viewFocusMode !== 'cursor') beginPan()
   panByPixels(-dPx)
 }
@@ -287,14 +292,29 @@ export function toggleAgendaDock() {
 }
 
 /**
- * End of a drag: snap to Now or to an instant if the center landed within `tolerancePx`,
- * else to the nearest tick within `tickSnapPx`. `{ snap: false }` (a glide's end, or a
+ * End of a drag. It lands on what the cursor showed it was about to land on (`land`: the
+ * capture, the one rule for "near enough"). Otherwise, released almost at rest (`snap`), it
+ * eases to the nearest tick within `tickSnapPx` when the setting is on; `{ snap: false }` (a
  * release with speed) leaves the cursor exactly where the pan stopped.
  */
-export function endPan(tolerancePx: number, { snap = true }: { snap?: boolean } = {}) {
-  if (!snap) return
-  settleCursor(tolerancePx / frame().pxPerMs, true, true)
+export function endPan({ snap = true, land = null }: { snap?: boolean; land?: LandingTarget | null } = {}) {
+  if (v().viewFocusMode !== 'cursor' || v().moveMode) return
+  if (land) { landOn(land, true); return }
+  if (!snap || !useSettings.getState().tickSnap) return
+  const f = frame()
+  const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
+  if (tick === f.center || Math.abs(tick - f.center) * f.pxPerMs > getTunables().tickSnapPx) return
+  engine.beginTransition(getTunables().tickSnapEaseMs)
+  view.setTimeCenter(tick)
+  refreshLock()
 }
+
+/** Folds the Cursor tag into its arrowhead and hides its line (or shows them again). Nothing else changes. */
+export function setCursorHidden(hidden: boolean) {
+  if (hidden) { ui.closeTagMenu(); ui.closeTimeInput(); endNaming() }
+  useUi.setState({ cursorHidden: hidden })
+}
+export const toggleCursorHidden = () => setCursorHidden(!useUi.getState().cursorHidden)
 
 export function toggleCursorLock() {
   const f = frame()
@@ -351,6 +371,27 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   return id
 }
 
+/**
+ * The Cursor tag's ＋: drop an unnamed instant at the cursor with its name box open (the ＋
+ * turns into its chip). Leaving it empty keeps it unnamed; moving the cursor or tapping
+ * elsewhere ends naming. Returns the new id.
+ */
+export function dropAndName(): string {
+  const ts = cursorTime()
+  const id = entities.createInstant(ts, '')
+  view.editInstant(id)
+  return id
+}
+
+/** Ends naming an instant (keeping what was typed): moving the cursor away does this. */
+export function endNaming() {
+  if (!v().editingInstantId) return
+  const el = typeof document !== 'undefined' ? document.activeElement : null
+  // The name box commits on blur.
+  if (el instanceof HTMLInputElement && el.closest('.chip--saved')) el.blur()
+  else view.editInstant(null)
+}
+
 // ---------------------------------------------------------------------------
 // Timer and Stopwatch buttons: quick ways to make instants and spans (domain/quickCreate)
 
@@ -363,7 +404,7 @@ export function startTimer(ms: number) {
   const label = `${formatTimerLength(ms)} timer`
   const start = entities.createInstant(now, '')
   const end = entities.createInstant(now + ms, label, { alarm: true })
-  entities.upsertNowSpan(end, true)
+  entities.setFavorite(end, true) // its span to Now is the countdown
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
@@ -460,7 +501,10 @@ export function resetStopwatch() {
   quick.resetStopwatch()
 }
 
+/** A favorite is an instant whose span to Now is tracked: unfavoriting deletes that span. */
 export function setFavorite(id: string, favorite: boolean) {
+  const sp = favorite ? undefined : entities.nowSpanOf(id)
+  if (sp) view.forgetSpan(sp.id)
   entities.setFavorite(id, favorite)
 }
 
@@ -478,7 +522,6 @@ export function toggleAlarm(id: string) {
     return
   }
   entities.setAlarmFlag(id, true)
-  entities.upsertNowSpan(id, true) // alarms are favorites
   void primeNotifications() // the first bell asks for notification permission
 }
 
@@ -607,7 +650,10 @@ export function deleteSpan(id: string) {
 
 export function toggleSpanVisible(id: string) {
   const sp = entities.getSpan(id)
-  if (sp) entities.setSpanVisible(id, !sp.visible)
+  if (!sp) return
+  // A span to Now is shown exactly while its instant is a favorite.
+  if (sp.endIsNow) setFavorite(sp.startInstantId, !sp.visible)
+  else entities.setSpanVisible(id, !sp.visible)
 }
 
 /** Double-click on a span: focus and fit it, or rename if it's already focused. */
@@ -656,8 +702,7 @@ export function applyClockInput(hour12: number, minutes: number, seconds: number
 
 /** Sends the cursor to a typed time, landing on an instant only if one is exactly there. */
 function landCursorAt(ts: number) {
-  const tolerance = exactLandingMs()
-  const hit = v().moveMode ? undefined : useEntities.getState().instants.find(i => Math.abs(i.tsEpochMs - ts) <= tolerance)
+  const hit = v().moveMode ? null : exactHit(ts, false)
   if (hit) focusInstant(hit.id)
   else focusCursorAt(ts)
 }
@@ -729,7 +774,8 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
   }
   if (choice.data && backup.data) {
     const before = useEntities.getState()
-    const next = importedData(before, backup.data, choice.mode)
+    const merged = importedData(before, backup.data, choice.mode)
+    const next = syncFavorites(merged.instants, merged.spans)
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

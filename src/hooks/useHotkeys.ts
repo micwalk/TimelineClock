@@ -29,6 +29,7 @@ export function useHotkeys() {
         case 'a': case 'ArrowLeft': case 'ArrowUp': return run(() => act.goToAdjacentInstant(-1))
         case '+': case '=': return run(() => act.dropInstant())
         case 'v': return run(act.rotate)
+        case 'h': return run(act.toggleCursorHidden)
         case 't': return run(() => ui.setTimerMenu(!useUi.getState().timerMenuOpen))
         case 'q': return run(() => act.navigateFocusHistory(-1))
         case 'e': return run(() => act.navigateFocusHistory(1))

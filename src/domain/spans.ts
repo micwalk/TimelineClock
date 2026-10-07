@@ -1,7 +1,6 @@
 // Pure span logic: label text, on-screen geometry, and which saved spans get a lane.
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { displayName } from './entities.ts'
-import { chipName, formatClockCompact } from './format.ts'
+import { chipName, formatClockCompact, formatDurationHMS, formatDurationShort, formatLiveSpan } from './format.ts'
 
 /** A time that may be fixed or follow the live clock / the view center (cursor). */
 export type TimeRef = number | 'now' | 'center'
@@ -54,10 +53,10 @@ export const isFavoriteNowSpan = (r: ResolvedSpan) => !!r.span.endIsNow && !!r.s
 export const spanHeader = (r: ResolvedSpan): string | undefined =>
   isFavoriteNowSpan(r) || !r.span.label ? undefined : r.span.label
 
-/** An endpoint's name in an implied lane's chip: its name, else its compact time ("8:53a"), never "?". */
+/** An instant's name wherever it is named in text (lane chips, the Agenda, menus): its name, else its compact time ("8:53a"), never "?". */
 export const endpointName = (i: InstantRecord): string => (i.label ? chipName(i.label) : formatClockCompact(i.tsEpochMs, false))
 
-export const spanEndName = (r: ResolvedSpan) => (r.span.endIsNow ? 'Now' : displayName(r.end?.label))
+export const spanEndName = (r: ResolvedSpan) => (r.span.endIsNow || !r.end ? 'Now' : endpointName(r.end))
 
 /** 0 = involves the focused instant, 1 = involves the selected instant, 2 = merely visible. */
 export type SpanPriority = 0 | 1 | 2
@@ -97,7 +96,7 @@ export function savedSpanLanes(opts: {
     if (focusMode === 'instant' && focusedInstantId) priority = involves(focusedInstantId) ? 0 : r.span.visible ? 2 : -1
     else if (selectedInstantId) priority = involves(selectedInstantId) ? 1 : r.span.visible ? 2 : -1
     else if (r.span.visible) priority = 2
-    // Favorites and alarms show time since/until on their chip; their lane to Now
+    // Favorites show time since/until on their chip; their lane to Now
     // appears only when selected or focused, unless the user wants it always.
     if (priority === 2 && isFavoriteNowSpan(r) && favoriteLanes === 'selected' && !trackedIds?.has(r.span.startInstantId)) continue
     if (priority === -1) continue
@@ -105,4 +104,26 @@ export function savedSpanLanes(opts: {
   }
   const mid = (s: LaneSpan) => (s.start.tsEpochMs + spanEndTs(s, now)) / 2
   return [...focused, ...out.sort((x, y) => x.priority - y.priority || mid(x) - mid(y))]
+}
+
+/** The span's ends in time order (an endpoint may be Now or the cursor). */
+const orderedEnds = (a: TimeRef, b: TimeRef, now: number, center: number): [number, number] => {
+  const ta = resolveTimeRef(a, now, center)
+  const tb = resolveTimeRef(b, now, center)
+  return ta <= tb ? [ta, tb] : [tb, ta]
+}
+
+/**
+ * A saved span's reading (components/timeline/SpanReading): the time left while it contains
+ * Now ("01:58"), else its length as precise as the zoom allows (formatLiveSpan).
+ */
+export function spanReadingValue(a: TimeRef, b: TimeRef, f: { now: number; center: number; pxPerMs: number }): string {
+  const [start, end] = orderedEnds(a, b, f.now, f.center)
+  return start <= f.now && f.now <= end ? formatDurationHMS(end - f.now) : formatLiveSpan(end - start, 1 / f.pxPerMs)
+}
+
+/** Beside the time left, the whole length small ("/3m"); nothing when the span doesn't contain Now. */
+export function spanReadingTotal(a: TimeRef, b: TimeRef, f: { now: number; center: number }): string {
+  const [start, end] = orderedEnds(a, b, f.now, f.center)
+  return start <= f.now && f.now <= end ? `/${formatDurationShort(end - start)}` : ''
 }

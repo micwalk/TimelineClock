@@ -48,3 +48,38 @@ export function sanitizeSpans(data: unknown): SpanRecord[] {
     .filter((x): x is SpanRecord => !!x && typeof x.id === 'string' && typeof x.startInstantId === 'string' && typeof x.endInstantId === 'string')
     .map(x => ({ ...x, label: typeof x.label === 'string' ? x.label : '' }))
 }
+
+/**
+ * A favorite is an instant whose span to Now is tracked: every favorite has one span to Now,
+ * shown, and nothing else has one. Repairs data saved before that rule (unfavoriting used to
+ * hide the span, and an alarm used to make its instant a favorite, sometimes without a span:
+ * those stop being favorites). Returns the inputs unchanged when they already follow it.
+ */
+export function syncFavorites(instants: InstantRecord[], spans: SpanRecord[]): { instants: InstantRecord[]; spans: SpanRecord[] } {
+  const withSpan = new Set(spans.filter(sp => sp.endIsNow).map(sp => sp.startInstantId))
+  // Favorited by an alarm alone (setting a favorite always made its span).
+  const alarmOnly = (i: InstantRecord) => !!i.favorite && !!i.alarm && !withSpan.has(i.id)
+  const nextInstants = instants.some(alarmOnly) ? instants.map(i => (alarmOnly(i) ? { ...i, favorite: false } : i)) : instants
+  const favorites = new Set(nextInstants.filter(i => i.favorite).map(i => i.id))
+  const seen = new Set<string>()
+  let changed = false
+  const nextSpans: SpanRecord[] = []
+  for (const sp of spans) {
+    if (!sp.endIsNow) nextSpans.push(sp)
+    else if (!favorites.has(sp.startInstantId) || seen.has(sp.startInstantId)) changed = true
+    else {
+      seen.add(sp.startInstantId)
+      if (sp.visible) nextSpans.push(sp)
+      else {
+        nextSpans.push({ ...sp, visible: true })
+        changed = true
+      }
+    }
+  }
+  for (const id of favorites) {
+    if (seen.has(id)) continue
+    nextSpans.push({ id: newSpanId(), startInstantId: id, endInstantId: NOW_SENTINEL, label: '', visible: true, endIsNow: true })
+    changed = true
+  }
+  return { instants: nextInstants, spans: changed ? nextSpans : spans }
+}
