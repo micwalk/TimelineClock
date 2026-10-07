@@ -32,3 +32,26 @@ export function findCapture(o: CaptureInput): string | null {
   }
   return best?.id ?? null
 }
+
+/** A box in timeline px: `lo`–`hi` along the time axis, `xlo`–`xhi` across it. */
+export interface Box { lo: number; hi: number; xlo: number; xhi: number }
+
+const gapBetween = (a: Box, b: Box) =>
+  Math.max(0, a.lo - b.hi, b.lo - a.hi) + Math.max(0, a.xlo - b.xhi, b.xlo - a.xhi)
+
+/**
+ * The box that overlaps `target` (the Cursor tag's ＋), nearest along the time axis first: the
+ * ＋ can't sit on a chip, so it flows into the chip it would cover. The one overlapping last
+ * time holds until it is `releasePx` clear (no flicker at the edge).
+ */
+export function findBoxOverlap(boxes: readonly (Box & { id: string })[], target: Box, prevId?: string | null, releasePx = 0): string | null {
+  const mid = (b: Box) => (b.lo + b.hi) / 2
+  let best: { id: string; d: number } | null = null
+  for (const b of boxes) {
+    const gap = gapBetween(b, target)
+    if (gap > (b.id === prevId ? releasePx : 0)) continue
+    const d = Math.abs(mid(b) - mid(target))
+    if (!best || d < best.d || (d === best.d && b.id === prevId)) best = { id: b.id, d }
+  }
+  return best?.id ?? null
+}

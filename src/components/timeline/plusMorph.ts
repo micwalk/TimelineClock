@@ -5,8 +5,9 @@
 // cross-fades into the chip. The ＋ is now inside that chip.
 //
 // Capture: whenever the cursor is on an instant (focused, or about to land on it: capture.ts),
-// the ＋ belongs inside that instant's chip, since a drop there would only duplicate it. It
-// flows in as a 2D metaball: a blob leaves the ＋'s place, a gooey neck reaches the chip and
+// the ＋ belongs inside that instant's chip, since a drop there would only duplicate it. The ＋
+// also never sits on a chip: whenever its circle would cover one (a wide chip near the cursor,
+// whatever the zoom), it goes inside that chip. It flows in as a 2D metaball: a blob leaves the ＋'s place, a gooey neck reaches the chip and
 // the blob is absorbed (the chip swells a little). When the cursor leaves, the blob is pulled
 // back out, the neck stretches and snaps, and the blob rounds back into the ＋. One spring
 // (0 = at the ＋'s place, 1 = inside the chip) drives it, so it reverses smoothly mid-way.
@@ -26,11 +27,16 @@ import type { SpringState } from '../../domain/spring.ts'
 import { omegaFor, springSettled, stepSpring } from '../../domain/spring.ts'
 import type { Point } from '../../domain/metaball.ts'
 import { circlePath, metaballNeck } from '../../domain/metaball.ts'
+import type { Box } from '../../domain/capture.ts'
+import type { InstantRecord } from '../../domain/entities.ts'
+import { findBoxOverlap } from '../../domain/capture.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { captureAt } from './capture.ts'
+import { CHIP_HEIGHT, chipToolsExtent, estimateChipWidth, savedLayoutAt, useChipWidths } from './savedLayout.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 
 /** ＋ to the new chip, ms. */
 export const MORPH_IN_MS = 420
@@ -47,6 +53,11 @@ const CHIP_RADIUS = 7
 /** The bulge a chip pushes out to meet the blob, px (it sits just inside the chip's edge). */
 const BULGE_R = 9
 const OMEGA_BLOB = omegaFor(BLOB_SETTLE_MS)
+/** The ＋ (.tl-tag__drop): a 30px circle on the cursor line, starting this far across the axis (the tag's arrow, 5px). */
+const PLUS_SIZE = 30
+const PLUS_FROM_AXIS = GEOMETRY.tagArrow + 5
+/** A chip the ＋ went into keeps it until they are this far apart, px. */
+const COVER_RELEASE_PX = 4
 
 /** A box measured relative to the timeline; `ts` (if set) is the time it rides along with. */
 interface Anchored { x: number; y: number; w: number; h: number; ts: number | null; pos0: number }
@@ -236,10 +247,61 @@ function drawBlob(f: Frame, t: number) {
   if (!blob.drawn) { blob.drawn = true; parts.svg.classList.add('is-on') }
 }
 
+let coveredPrev: string | null = null
+let byIdCache: { from: readonly InstantRecord[]; map: Map<string, InstantRecord> } | null = null
+const instantsById = (instants: readonly InstantRecord[]) => {
+  if (byIdCache?.from !== instants) byIdCache = { from: instants, map: new Map(instants.map(i => [i.id, i])) }
+  return byIdCache.map
+}
+
+/**
+ * The saved chip the ＋ would cover in this frame, from the chips' layout (no layout reads): its
+ * box, with its tools while selected, against the ＋'s, both measured across from the axis.
+ */
+function coveredChip(f: Frame): string | null {
+  const layout = savedLayoutAt(f)
+  const v = useView.getState()
+  const byId = instantsById(useEntities.getState().instants)
+  const widths = useChipWidths.getState().widths
+  const vertical = f.orientation === 'vertical'
+  // Where the first chip row (column) starts, across from the axis.
+  const chipsFrom = vertical ? GEOMETRY_VERTICAL.chipStart - GEOMETRY_VERTICAL.axis : GEOMETRY.chipTop - GEOMETRY.axis
+  const cursor = f.mainSize / 2
+  const plus: Box = { lo: cursor - PLUS_SIZE / 2, hi: cursor + PLUS_SIZE / 2, xlo: PLUS_FROM_AXIS, xhi: PLUS_FROM_AXIS + PLUS_SIZE }
+  const boxes: (Box & { id: string })[] = []
+  for (const id of layout.visibleIds) {
+    if (layout.rows[id] === undefined) continue
+    const inst = byId.get(id)
+    if (!inst) continue
+    const moving = v.moveMode?.instantId === id
+    const mid = (moving ? cursor : f.pos(inst.tsEpochMs)) + (layout.shifts[id] ?? 0)
+    // Off along the time axis: no need to size it.
+    if (Math.abs(mid - cursor) > 400) continue
+    const w = widths[id] ?? estimateChipWidth(inst.label)
+    const { tail, below, toolsWidth } = chipToolsExtent(inst, {
+      selected: v.currentSelectedInstantId === id,
+      focused: v.viewFocusMode === 'instant' && v.focusedInstantId === id,
+      moving,
+      editing: v.editingInstantId === id,
+      now: f.now,
+      vertical,
+    })
+    const xlo = chipsFrom + (layout.crossOffsets[id] ?? 0)
+    if (vertical) boxes.push({ id, lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2 + tail, xlo, xhi: xlo + Math.max(w, toolsWidth) })
+    else {
+      const half = Math.max(w, below > 0 ? toolsWidth : 0) / 2
+      boxes.push({ id, lo: mid - half, hi: mid + Math.max(half, w / 2 + tail), xlo, xhi: xlo + CHIP_HEIGHT + below })
+    }
+  }
+  coveredPrev = findBoxOverlap(boxes, plus, coveredPrev, COVER_RELEASE_PX)
+  return coveredPrev
+}
+
 function tick(f: Frame) {
   if (run) { drawIn(f); return }
   const cap = captureAt(f)
-  const want = cap?.id ?? null
+  // The instant the cursor is on, else a chip the ＋ would cover.
+  const want = cap?.id ?? (plusButton ? coveredChip(f) : null)
   // Named a dropped instant without moving: the cursor is right on it, so it lands there.
   if (pendingLand && !gesture.dragging) {
     const id = pendingLand

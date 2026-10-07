@@ -97,15 +97,21 @@ smoothly and never teleport. Springs ask for frames only while they move.
   The Cursor tag leans onto it on a spring (`getPos`) and shows its time; its chip lights up.
 - **Cursor ＋** (`plusMorph.ts`, `PlusMorphLayer.tsx`): the drop is one shell element, drawn per
   frame while it runs; its ends are measured once (the ＋, the new chip) and the chip end follows
-  the time axis, so a pan mid-morph keeps it attached. While the cursor is on an instant, the ＋
-  is inside its chip: one spring (0 at the ＋, 1 inside the chip) drives a metaball drawn as SVG
+  the time axis, so a pan mid-morph keeps it attached. While the cursor is on an instant, or the
+  ＋ would cover a saved chip (`coveredChip`: the chips' boxes from `savedLayoutAt`, with their
+  tools, against the ＋'s, both measured across from the axis, so it works at any zoom with no
+  layout reads; `domain/capture.findBoxOverlap`), the ＋ is inside that chip: one spring (0 at the ＋, 1 inside the chip) drives a metaball drawn as SVG
   paths (`domain/metaball.ts`: two circles and the gooey neck between them, outlines under fills),
   so it reverses smoothly mid-way and costs nothing at rest. `useUi.plusHidden` hides the real ＋
   while it is away. The ＋ is pinned against the tag's lean, so it never moves and is measured
   once per flow. Naming ends through `act.endNaming` (pans, steps and wheel call it), which blurs
   the name box so it commits; ended in place, the cursor lands on the new instant.
-- **Hiding the cursor**: CSS only (`.is-collapsed` on the Cursor marker): the tag scales into its
-  arrowhead, pivoting on the arrow's tip, and the line fades.
+- **Hiding the cursor**: CSS (`.is-collapsed` on the Cursor marker): the tag scales into its
+  arrowhead, pivoting on the arrow's tip, and the line fades; `useVisibleLanes` drops the
+  Selected→Cursor lane.
+- **The Cursor tag stepping aside**: `--slot` (its step out of the Now tag's way) is registered
+  with `@property` as a number and transitions on `.tl-tag`, so the tag glides; the ＋ inside it
+  reads the same eased value to stay put.
 - State changes ease in CSS (colours, tools popping in, the timeline's height), never on
   properties the engine writes (transforms).
 
@@ -177,6 +183,13 @@ recent instant undo itself.
   would touch fold into an "N spans" chip (`domain/labelGroups`; horizontal: `laneChipLayout.ts`
   and `LaneGroupChips.tsx`, read per frame by `SpanLane`; vertical: the label boxes in
   `rightSideLayout.ts` / `NowFlags.tsx`).
+- **Span readings (`SpanReading.tsx`, `domain/spans` `spanReadingValue` / `spanReadingTotal`).**
+  Label boxes (vertical) and saved-side span chips (both orientations) read the same: the name,
+  then while the span contains Now the time left in the lane's colour and the whole length small,
+  else the length at the zoom's precision. A span with its own chip (selected or focused) gets no
+  label box; in vertical its chip takes the box's spot (at Now while it contains Now) and runs
+  into its bar. Endpoint arrows are clamped whole on screen, and vertical saved lanes start
+  `GEOMETRY_VERTICAL.laneEdge` (18px) in from the edge.
 - **Live side vs saved side lanes (`useBottomLanes.ts`: `isLiveLane`, `partitionLanes`, `placeLanes`).** A lane with an endpoint at Now or the cursor is *live*: saved spans ending at Now, the implied Selected→Now lane and the implied Selected→Cursor lane. (A span whose endpoint is the instant being moved is not live; it follows the cursor but stays saved.) Live lanes draw on the live side: horizontal, a band above the tags with lanes at y = 10 + i × 24 (`geometry.ts` `liveBandHeight`; the axis, tags, chip rows and saved lanes shift down by the band, written as `--tl-axis` / `--tl-chip-top`, so with no live lanes the geometry is unchanged); vertical, thin bars stacked inward from the left edge (x = 8 + i × 12, in the lines layer) with the chip on the inner side. Their chips are short and colour-coded (`formatDurationShort`; a name is cut to 8 characters; `now` variant red, `cursor` variant the cursor accent) and their arrows and tools (pin, rename/visibility/delete) show only after a tap on the chip (`useUi.laneTools`, dismissed by an outside tap or Escape). Saved-side lanes (below the chips, or the right edge in vertical) hold only spans between two saved instants, and only they count against the vertical chip budget.
 - **Control bar (`components/panels/ControlBar.tsx`).** Horizontal: one row. Vertical: still the bottom bar, laid out as a two-row grid that follows the screen: zoom out, ▲, step up | NOW/＋ (spanning both rows) on row 1, and zoom in, ▼, step down on row 2. `useLayout.dir` decides what up means: with the future down (dir 1) ▲ is the previous instant and step up is the earlier step (−30m); with the future up (dir −1) they are the next instant and the later step (+30m). Steps use compact labels ("−30m") and keep the split caret / long-press menu, which places itself above or below by the available room.
 - **Momentum (`hooks/glide.ts`, `domain/glide.ts`).** A flicked drag keeps panning from engine
@@ -261,6 +274,11 @@ it brings Android in line with the entities, using pure decisions from
 Inside the app the in-app scheduler still rings (the ringing panel), but the notification
 makes the sound, so Dismiss / Snooze in either place stops it. Dismissing a timer's alarm also
 unfavorites its end.
+
+A favorite is an instant whose span to Now is tracked: `entities.setFavorite` adds that span or
+deletes it (`act.setFavorite` also forgets it in the view), hiding a span to Now unfavorites its
+instant, and an alarm never favorites. `domain/entities.syncFavorites` keeps stored and imported
+data to that rule.
 
 ## Testing
 
