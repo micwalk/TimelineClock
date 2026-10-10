@@ -5,7 +5,10 @@ closed or the phone is asleep.** The web app (PWA) can't do that: Android freeze
 in the background, and no web feature can wake it at a set time.
 
 The Android app is a thin shell around the live site (`https://timelineclockapp.netlify.app`).
-Web changes reach it by themselves, like PWA updates. You install the app again only when
+It stays on that address although the public one is now `https://timelineclock.app`: the
+app's data lives in that origin's storage, and deploy previews only exist under
+`netlify.app` (SiteAddress.java). Switching needs a data migration first, and that address
+must keep serving rather than redirect. Web changes reach it by themselves, like PWA updates. You install the app again only when
 its native part changes; [CHANGELOG.md](../CHANGELOG.md) says when.
 
 What it adds:
