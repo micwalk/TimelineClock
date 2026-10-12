@@ -1,8 +1,9 @@
 // Saved instants and spans. Persisted to the same localStorage keys and record
 // shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
-import type { InstantRecord, SpanRecord } from '../domain/entities.ts'
-import { NOW_SENTINEL, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
+import type { AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
+import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
+import { syncAlarmVisibility } from '../domain/alarms.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
@@ -16,7 +17,10 @@ export interface EntitiesState {
 const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
 const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
 
-export const useEntities = create<EntitiesState>(() => syncFavorites(loadInstants(), loadSpans()))
+export const useEntities = create<EntitiesState>(() => {
+  const { instants, spans } = syncFavorites(loadInstants(), loadSpans())
+  return { instants: syncAlarmVisibility(instants, Date.now()), spans }
+})
 
 useEntities.subscribe((s, prev) => {
   if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, s.instants)
@@ -29,6 +33,17 @@ const get = useEntities.getState
 const patchInstant = (id: string, patch: (i: InstantRecord) => Partial<InstantRecord>) =>
   set(s => ({ instants: s.instants.map(i => (i.id === id ? { ...i, ...patch(i) } : i)) }))
 
+/** Changes an instant's alarms; an empty list drops the field. */
+const patchAlarms = (id: string, change: (list: AlarmRecord[]) => AlarmRecord[]) =>
+  set(s => ({
+    instants: s.instants.map(i => {
+      if (i.id !== id) return i
+      const { alarms, ...rest } = i
+      const next = change(alarms ?? [])
+      return next.length > 0 ? { ...rest, alarms: next } : rest
+    }),
+  }))
+
 const patchSpan = (id: string, patch: Partial<SpanRecord>) =>
   set(s => ({ spans: s.spans.map(sp => (sp.id === id ? { ...sp, ...patch } : sp)) }))
 
@@ -39,13 +54,12 @@ export const entities = {
 
   /** A new instant, never a favorite yet (setFavorite adds the span to Now that makes one). */
   createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean; snoozeOriginalId?: string } = {}): string {
-    const alarm = !!opts.alarm
     const rec: InstantRecord = {
       id: newInstantId(),
       tsEpochMs,
       label,
       favorite: false,
-      alarm,
+      ...(opts.alarm ? { alarms: [{ id: newAlarmId(), offsetMs: 0 }] } : {}),
       ...(opts.snoozeOriginalId ? { snoozeOriginalId: opts.snoozeOriginalId } : {}),
     }
     set(s => ({ instants: [...s.instants, rec] }))
@@ -64,7 +78,18 @@ export const entities = {
   setInstantTime: (id: string, tsEpochMs: number) => patchInstant(id, () => ({ tsEpochMs })),
   setFavoriteFlag: (id: string, favorite: boolean) => patchInstant(id, () => ({ favorite })),
   setHiddenFlag: (id: string, hidden: boolean) => patchInstant(id, () => ({ hidden })),
-  setAlarmFlag: (id: string, alarm: boolean) => patchInstant(id, () => ({ alarm })),
+
+  /** Adds an alarm at the instant (offset 0); returns its id. An alarm still to ring is never hidden, so this shows the instant. */
+  addAlarm(id: string): string {
+    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: 0 }
+    patchInstant(id, i => ({ alarms: [...(i.alarms ?? []), alarm], ...(i.hidden ? { hidden: false } : {}) }))
+    return alarm.id
+  },
+  removeAlarm: (id: string, alarmId: string) => patchAlarms(id, list => list.filter(a => a.id !== alarmId)),
+  setAlarmOffset: (id: string, alarmId: string, offsetMs: number) =>
+    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.max(0, Math.round(offsetMs)) } : a))),
+  /** Answered (dismissed or snoozed): it stays as history and never rings again. */
+  markAlarmDone: (id: string, alarmId: string) => patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, done: true } : a))),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId, label, visible: opts.visible ?? false, endIsNow: false }

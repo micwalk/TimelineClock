@@ -1,6 +1,6 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
-import { findDueAlarms, nextAlarmTime, snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
+import { alarmLabel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
@@ -43,20 +43,21 @@ function check() {
   // Alarms nobody answered: dismiss or snooze, per settings.
   const expired = ringing.filter(r => now - r.triggeredAt > autoDismissMs)
   for (const r of expired) {
-    if (unattended === 'snooze') snooze(r.instantId)
-    else dismiss(r.instantId)
+    const key = ringKey(r.instantId, r.alarmId)
+    if (unattended === 'snooze') snooze(key)
+    else dismiss(key)
   }
 
-  const ringingIds = new Set(useAlarms.getState().ringing.map(r => r.instantId))
-  const due = findDueAlarms(useEntities.getState().instants, now, ringingIds, autoDismissMs)
+  const ringingKeys = new Set(useAlarms.getState().ringing.map(r => ringKey(r.instantId, r.alarmId)))
+  const due = findDueAlarms(useEntities.getState().instants, now, ringingKeys, autoDismissMs)
   if (due.length > 0) {
     useAlarms.setState(s => ({
-      ringing: [...s.ringing, ...due.map(i => ({ instantId: i.id, label: i.label, tsEpochMs: i.tsEpochMs, triggeredAt: now }))],
+      ringing: [...s.ringing, ...due.map(({ inst, alarm }) => ({ instantId: inst.id, alarmId: alarm.id, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: now }))],
     }))
     if (pageRings()) audio.startAlarmSound(hasRinging)
-    for (const i of due) {
-      const instantId = i.id
-      void notifications.notifyAlarm(i.label, { instantId, onClick: () => onNotificationClick(instantId) })
+    for (const { inst, alarm } of due) {
+      const instantId = inst.id
+      void notifications.notifyAlarm(alarmLabel(inst, alarm), { instantId, key: ringKey(instantId, alarm.id), onClick: () => onNotificationClick(instantId) })
     }
   }
   schedule()
@@ -72,15 +73,21 @@ function schedule() {
   timer = setTimeout(check, wait)
 }
 
+/** Whether an alarm (by ring key) is ringing. */
+export const isAlarmRinging = (key: string) => useAlarms.getState().ringing.some(r => ringKey(r.instantId, r.alarmId) === key)
+
 /**
- * Stops ringing and turns the alarm off on the instant. A timer's end is done with, so it also
- * stops being a favorite (its span to Now goes).
+ * Answers an alarm (by ring key): stops it ringing and keeps it as history (it never rings
+ * again). An alarm at a timer's end finishes the timer, so its end also stops being a favorite
+ * (its span to Now goes).
  */
-export function dismiss(instantId: string) {
-  useAlarms.setState(s => ({ ringing: s.ringing.filter(r => r.instantId !== instantId) }))
-  entities.setAlarmFlag(instantId, false)
+export function dismiss(key: string) {
+  const { instantId, alarmId } = parseRingKey(key)
+  useAlarms.setState(s => ({ ringing: s.ringing.filter(r => !(r.instantId === instantId && r.alarmId === alarmId)) }))
+  const alarm = findAlarm(entities.getInstant(instantId), alarmId)
+  if (alarm) entities.markAlarmDone(instantId, alarmId)
   const { instants, spans } = useEntities.getState()
-  if (timerSpanFor(instantId, instants, spans)) {
+  if ((!alarm || alarm.offsetMs === 0) && timerSpanFor(instantId, instants, spans)) {
     const nowSpan = entities.nowSpanOf(instantId)
     if (nowSpan) view.forgetSpan(nowSpan.id)
     entities.setFavorite(instantId, false)
@@ -88,18 +95,26 @@ export function dismiss(instantId: string) {
   if (!hasRinging()) audio.stopAlarmSound()
 }
 
+/** Answers every ringing alarm of an instant (it is going away). */
+export function dismissInstant(instantId: string) {
+  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismiss(ringKey(r.instantId, r.alarmId))
+}
+
 /** Snooze length (minutes); the Android app's Snooze button uses it too. */
 export const SNOOZE_MINUTES = 5
 
 /**
- * Dismisses a ringing alarm and sets a new one `minutes` from now (or at `at`: a snooze from
- * the Android app's notification), labelled "Snooze N: <original>" and linked to the original
- * alarm by a span, shown like any saved span.
+ * Answers a ringing alarm (by ring key) and sets a new one `minutes` from now (or at `at`: a
+ * snooze from the Android app's notification), labelled "Snooze N: <original>". An alarm at its
+ * instant is linked to the snooze by a span, shown like any saved span; one before its instant
+ * isn't (the span would run back to the instant it warns about). Returns the snooze's instant.
  */
-export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined {
-  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId)
+export function snooze(key: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined {
+  const { instantId, alarmId } = parseRingKey(key)
+  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId && r.alarmId === alarmId)
   const original = entities.getInstant(instantId)
-  if (!ringing && !original?.alarm) return
+  const alarm = findAlarm(original, alarmId)
+  if (!ringing && (!alarm || alarm.done)) return
   const originalId = original?.snoozeOriginalId ?? instantId
   const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing?.label ?? ''
   const count = entities.snoozeCount(originalId) + 1
@@ -107,8 +122,8 @@ export function snooze(instantId: string, minutes = SNOOZE_MINUTES, at?: number)
     alarm: true,
     snoozeOriginalId: originalId,
   })
-  if (original) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: true })
-  dismiss(instantId)
+  if (original && (alarm?.offsetMs ?? 0) === 0) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: true })
+  dismiss(key)
   return newId
 }
 

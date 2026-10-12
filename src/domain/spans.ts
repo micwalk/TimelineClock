@@ -1,6 +1,7 @@
 // Pure span logic: label text, on-screen geometry, and which saved spans get a lane.
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { chipName, formatClockCompact, formatDurationHMS, formatDurationShort, formatLiveSpan } from './format.ts'
+import { chipName, durationStep, formatClockCompact, formatDuration } from './format.ts'
+import { SECOND } from './time.ts'
 
 /** A time that may be fixed or follow the live clock / the view center (cursor). */
 export type TimeRef = number | 'now' | 'center'
@@ -113,17 +114,25 @@ const orderedEnds = (a: TimeRef, b: TimeRef, now: number, center: number): [numb
   return ta <= tb ? [ta, tb] : [tb, ta]
 }
 
+type ReadingFrame = { now: number; center: number; pxPerMs: number }
+
 /**
  * A saved span's reading (components/timeline/SpanReading): the time left while it contains
- * Now ("01:58"), else its length as precise as the zoom allows (formatLiveSpan).
+ * Now ("1:58"), else its length, each at the granularity that matters (format durationStep).
  */
-export function spanReadingValue(a: TimeRef, b: TimeRef, f: { now: number; center: number; pxPerMs: number }): string {
+export function spanReadingValue(a: TimeRef, b: TimeRef, f: ReadingFrame): string {
   const [start, end] = orderedEnds(a, b, f.now, f.center)
-  return start <= f.now && f.now <= end ? formatDurationHMS(end - f.now) : formatLiveSpan(end - start, 1 / f.pxPerMs)
+  return formatDuration(start <= f.now && f.now <= end ? end - f.now : end - start, { msPerPx: 1 / f.pxPerMs })
 }
 
-/** Beside the time left, the whole length small ("/3m"); nothing when the span doesn't contain Now. */
-export function spanReadingTotal(a: TimeRef, b: TimeRef, f: { now: number; center: number }): string {
+/** Whether the reading changes within a second (time left shown to tenths or ms): it then wants every frame. */
+export function spanReadingTicks(a: TimeRef, b: TimeRef, f: ReadingFrame): boolean {
   const [start, end] = orderedEnds(a, b, f.now, f.center)
-  return start <= f.now && f.now <= end ? `/${formatDurationShort(end - start)}` : ''
+  return start <= f.now && f.now <= end && durationStep(end - f.now, { msPerPx: 1 / f.pxPerMs }) < SECOND
+}
+
+/** Beside the time left, the whole length small ("/3:00"); nothing when the span doesn't contain Now. */
+export function spanReadingTotal(a: TimeRef, b: TimeRef, f: ReadingFrame): string {
+  const [start, end] = orderedEnds(a, b, f.now, f.center)
+  return start <= f.now && f.now <= end ? `/${formatDuration(end - start, { msPerPx: 1 / f.pxPerMs })}` : ''
 }

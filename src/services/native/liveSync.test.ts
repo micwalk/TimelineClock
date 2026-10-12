@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstantRecord, SpanRecord } from '../../domain/entities.ts'
 import type { LiveNotification } from '../../domain/nativeNotifications.ts'
 import { MINUTE } from '../../domain/time.ts'
+import type { InstantOpts } from '../../test/fixtures.ts'
+import { instantFields } from '../../test/fixtures.ts'
 
 const fake = vi.hoisted(() => ({ calls: [] as LiveNotification[][] }))
 
@@ -15,8 +17,8 @@ vi.mock('./liveNotificationsPlugin.ts', () => ({
 }))
 
 const now = Date.now()
-const inst = (id: string, offsetMs: number, opts: Partial<InstantRecord> = {}): InstantRecord =>
-  ({ id, tsEpochMs: now + offsetMs, label: '', ...opts })
+const inst = (id: string, offsetMs: number, opts: InstantOpts = {}): InstantRecord =>
+  ({ id, tsEpochMs: now + offsetMs, label: '', ...instantFields(id, opts) })
 const span = (a: string, b: string, label: string): SpanRecord =>
   ({ id: `s_${a}_${b}`, startInstantId: a, endInstantId: b, label, visible: true, endIsNow: false })
 

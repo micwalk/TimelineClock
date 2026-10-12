@@ -4,11 +4,12 @@ import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { EyeIcon, EyeSlashIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
-import { useFrameValue } from '../../engine/hooks.ts'
+import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateTime, formatDurationCoarse, formatRelativeCoarse } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName } from '../../domain/entities.ts'
+import { hasArmedAlarm, openAlarms } from '../../domain/alarms.ts'
 import type { ResolvedSpan } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
@@ -64,6 +65,8 @@ function pick(focus: () => void) {
 }
 
 const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { inst: InstantRecord; focused: boolean; selected: boolean; isPast: boolean }) {
+  // An alarm still to ring is never hidden, so its instant offers no eye.
+  const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
   return (
     <div
       data-key={inst.id}
@@ -78,10 +81,12 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { i
         <IconButton icon={inst.favorite ? StarSolid : StarOutline} label={inst.favorite ? 'Unfavorite' : 'Favorite'}
           color="var(--c-favorite)" bare pressed={!!inst.favorite} onClick={() => act.toggleFavorite(inst.id)} />
         <span className={inst.label ? '' : 'is-empty'}>{endpointName(inst)}</span>
-        {inst.alarm && <BellAlertIcon className="list-row__bell" aria-label="Alarm set" />}
-        <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline'}
-          className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={!!inst.hidden}
-          onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
+        {openAlarms(inst).length > 0 && <BellAlertIcon className="list-row__bell" aria-label="Alarm set" />}
+        {(inst.hidden || !armed) && (
+          <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline'}
+            className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={!!inst.hidden}
+            onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
+        )}
       </div>
       <div className="list-row__dt mono">{formatDateTime(inst.tsEpochMs)}</div>
       <Relative ts={inst.tsEpochMs} />

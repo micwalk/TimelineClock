@@ -1,6 +1,7 @@
 // Ringing alarms. Persisted so a reload (or HMR) keeps an active alarm on screen.
 import { create } from 'zustand'
 import type { RingingAlarm } from '../domain/alarms.ts'
+import { parseRingKey } from '../domain/alarms.ts'
 import { MINUTE } from '../domain/time.ts'
 import { loadJson, saveJson } from './storage.ts'
 
@@ -23,10 +24,25 @@ export function sanitizeAlarmPrefs(raw: unknown): Pick<AlarmsState, 'autoDismiss
   }
 }
 
+/**
+ * Ringing alarms from storage. Entries saved before offset alarms name only their instant:
+ * they get the instant's one old alarm.
+ */
+export function sanitizeRinging(raw: unknown): RingingAlarm[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((x): RingingAlarm[] => {
+    if (!x || typeof x !== 'object') return []
+    const r = x as Record<string, unknown>
+    if (typeof r.instantId !== 'string' || typeof r.tsEpochMs !== 'number' || typeof r.triggeredAt !== 'number') return []
+    const alarmId = typeof r.alarmId === 'string' ? r.alarmId : parseRingKey(r.instantId).alarmId
+    return [{ instantId: r.instantId, alarmId, label: typeof r.label === 'string' ? r.label : '', tsEpochMs: r.tsEpochMs, triggeredAt: r.triggeredAt }]
+  })
+}
+
 const loaded = loadJson<Partial<AlarmsState>>(ALARMS_KEY, {})
 
 export const useAlarms = create<AlarmsState>(() => ({
-  ringing: Array.isArray(loaded.ringing) ? loaded.ringing : [],
+  ringing: sanitizeRinging(loaded.ringing),
   ...sanitizeAlarmPrefs(loaded),
 }))
 

@@ -4,6 +4,7 @@ import { memo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { BellIcon, StarIcon } from '@heroicons/react/24/solid'
 import { endpointName } from '../../domain/spans.ts'
+import { openAlarms } from '../../domain/alarms.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
@@ -26,7 +27,7 @@ export const ClusterChip = memo(function ClusterChip({ id, topPriority, members 
   const meanTs = members.reduce((sum, m) => sum + m.tsEpochMs, 0) / Math.max(1, members.length)
   useChipPlacement(ref, id, true, f => f.pos(meanTs))
 
-  const hasAlarm = members.some(m => m.alarm)
+  const hasAlarm = members.some(m => openAlarms(m).length > 0)
   const hasFavorite = members.some(m => m.favorite)
   const label = `${members.length} more instants: ${members.map(m => endpointName(m)).join(', ')}`
 

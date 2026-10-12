@@ -8,18 +8,22 @@ import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowsRightLeftIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
+import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
-import type { InstantRecord } from '../../domain/entities.ts'
+import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
+import { hasArmedAlarm, ringKey, ringTime } from '../../domain/alarms.ts'
+import { bellItemId, isLiveAlarm } from '../../domain/bells.ts'
 import { displayName } from '../../domain/entities.ts'
 import { endpointName } from '../../domain/spans.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
-import { useUi } from '../../store/ui.ts'
+import { ui, useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
-import { GEOMETRY_VERTICAL } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
+import { bellDragAt, consumeBellDragClick, startBellDrag } from './bellDrag.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
@@ -61,6 +65,8 @@ interface ChipProps {
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
+  /** Bells before the instant folded into its chip (too close to stand apart: zoomed out). */
+  bellFolded: number
   selected: boolean
   focused: boolean
   editing: boolean
@@ -68,21 +74,42 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
-  // Only an alarm's bell and a selected chip's tools care whether it is past: others don't watch the clock.
-  const isPast = useFrameValueWhile(!!inst.alarm || selected, f => ts < f.now, false)
-  const ringing = useAlarms(s => s.ringing.some(r => r.instantId === inst.id))
+  // Only alarms and a selected chip's tools care whether it is past: others don't watch the clock.
+  const isPast = useFrameValueWhile(!!inst.alarms || selected, f => ts < f.now, false)
+  const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
+  const ringingIds = useAlarms(useShallow(s => s.ringing.filter(r => r.instantId === inst.id).map(r => r.alarmId)))
+  const draggingBell = useUi(s => s.draggingBell)
+  const selectedBell = useUi(s => s.selectedBell)
+  const groupRef = useRef<HTMLDivElement>(null)
   const chipRef = useRef<HTMLDivElement>(null)
-  useChipWidth(chipRef, inst.id)
+  // The layout measures the chip with its bell (the group); the ＋ flows into the chip itself.
+  useChipWidth(groupRef, inst.id)
   useMorphChip(chipRef, inst.id)
   const name = chipName(inst.label)
   const vertical = useLayout(s => s.orientation === 'vertical')
   const unnamed = !inst.label
 
-  const bellGlyph = (!!inst.alarm && !isPast) || ringing
+  // The bell beside the chip: its alarms at the instant (still to ring, or ringing), and the
+  // bells before it folded in. One reads as a bell; more as their count, "3🔔".
+  const atInstant = (inst.alarms ?? []).filter(a => a.offsetMs <= 0 && !a.done && a.id !== draggingBell && (!isPast || ringingIds.includes(a.id)))
+  const ringingHere = atInstant.find(a => ringingIds.includes(a.id))
+  const bellAlarm = ringingHere ?? atInstant[0]
+  const bellCount = atInstant.length + bellFolded
+  const showBell = bellCount > 0
+  const bellSelected = !!bellAlarm && selectedBell === bellAlarm.id
+  // A selected bell's tools close on a press anywhere else.
+  usePopoverDismiss(groupRef, () => ui.selectBell(null), bellSelected)
+  const onBell = () => {
+    if (consumeBellDragClick()) return
+    if (ringingHere) act.dismissAlarm(ringKey(inst.id, ringingHere.id))
+    // Folded bells need room to tell apart: zoom in on them. Otherwise it is the alarm at the instant.
+    else if (bellAlarm && bellFolded === 0) act.selectBell(bellAlarm.id)
+    else act.zoomToTimes([ts, ...(inst.alarms ?? []).filter(a => !a.done).map(a => ringTime(inst, a))])
+  }
   // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
-  const showRelative = !focused && (!!inst.favorite || !!inst.alarm || selected)
+  const showRelative = !focused && (!!inst.favorite || showBell || selected)
   const withSeconds = fineSeconds || selected || focused
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
@@ -91,6 +118,7 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
   const firstTap = useRef<{ wasFocused: boolean } | null>(null)
   const onTap = (e: React.MouseEvent) => {
     if (e.detail <= 1) firstTap.current = { wasFocused: act.isInstantFocused(inst.id) }
+    if (bellSelected) ui.selectBell(null)
     if (moving) setTyping(true)
     else act.selectInstant(inst.id)
   }
@@ -101,13 +129,18 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
     act.zoomToTimes(times)
   }
 
-  const toolButtons = selected && !moving ? (
+  const toolButtons = bellSelected && !moving && bellAlarm ? (
+    <BellTools inst={inst} alarm={bellAlarm} />
+  ) : selected && !moving ? (
     <>
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
-      {!inst.alarm && !isPast && <IconButton icon={BellOutline} label="Set alarm" color={bellColor} bare onClick={() => act.toggleAlarm(inst.id)} />}
+      {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
-      <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
-        color="var(--ink-dim)" bare onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
+      {/* An alarm still to ring is never hidden. */}
+      {(inst.hidden || !armed) && (
+        <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
+          color="var(--ink-dim)" bare onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
+      )}
       <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
     </>
   ) : moving ? (
@@ -122,14 +155,21 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
   const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
 
   return (
-    <div className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}`}>
+    <div ref={groupRef} className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
+      {showBell && (
+        <button type="button" data-no-pan
+          className={`chip-bell glow-box${ringingHere ? ' is-ringing' : ''}${bellSelected ? ' is-selected' : ''}${atInstant.length === 0 ? ' is-folded-only' : ''}`}
+          aria-label={ringingHere ? 'Dismiss alarm' : bellFolded > 0 ? `${bellCount} alarm${bellCount > 1 ? 's' : ''}, zoom to show them` : 'Alarm: drag earlier to ring before, tap for its tools'}
+          title={ringingHere ? 'Dismiss alarm' : bellFolded > 0 ? 'Alarms: tap to show them all' : 'Drag earlier to ring before the instant; tap for its tools'}
+          onPointerDown={bellAlarm && !ringingHere ? e => startBellDrag(e, inst.id, bellAlarm.id) : undefined}
+          onClick={onBell}>
+          {bellCount > 1 && <span className="chip-bell__count">{bellCount}</span>}
+          <BellAlertIcon aria-hidden />
+        </button>
+      )}
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
-        )}
-        {bellGlyph && (
-          <IconButton icon={BellAlertIcon} label={ringing ? 'Dismiss alarm' : 'Turn alarm off'} color={bellColor} bare pressed
-            className={ringing ? 'is-ringing' : ''} onClick={() => act.toggleAlarm(inst.id)} />
         )}
         {editing ? (
           <InlineInput
@@ -186,12 +226,131 @@ function SavedChip({ inst, foldCount, foldedIds, selected, focused, editing, mov
   )
 }
 
+/** A selected bell's tools: type how long before its instant it rings, or delete it. */
+function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
+  const [typing, setTyping] = useState(false)
+  return (
+    <>
+      <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
+      <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
+      {typing && (
+        <TimeEntry
+          title={`Ring before ${displayName(inst.label, formatClockCompact(inst.tsEpochMs, false))}`}
+          className="popover--chip"
+          offset={{ initialMs: alarm.offsetMs, from: endpointName(inst), unsigned: true, onSubmit: ms => { act.setAlarmOffset(inst.id, alarm.id, ms); setTyping(false) } }}
+          onCancel={() => setTyping(false)}
+        />
+      )}
+    </>
+  )
+}
+
+/** Distance from the axis to the first chip row (column), px: a bell's stub runs this far plus its row's offset. */
+const AXIS_GAP = { horizontal: GEOMETRY.chipTop - GEOMETRY.axis, vertical: GEOMETRY_VERTICAL.chipStart - GEOMETRY_VERTICAL.axis }
+
+/**
+ * A bell before its instant (TLC-1): at the time it rings, in the chips' layout, with a short
+ * stub to the axis (a small instant line) and a thin line along the axis back to its instant.
+ * Drag it along time; tap it for its tools. A past one (history) is hollow.
+ */
+const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selected, ringing, dragging }:
+  { inst: InstantRecord; alarm: AlarmRecord; siblings: string; past: boolean; selected: boolean; ringing: boolean; dragging: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const stubRef = useRef<HTMLDivElement>(null)
+  const linkRef = useRef<HTMLDivElement>(null)
+  const vertical = useLayout(s => s.orientation === 'vertical')
+  // Its tools close on a press anywhere else.
+  usePopoverDismiss(ref, () => ui.selectBell(null), selected)
+  // Where a bell of this instant rings (the drag's time while dragged).
+  const ringOf = (a: AlarmRecord) => {
+    const d = bellDragAt()
+    return d && d.alarmId === a.id ? d.ringTs : ringTime(inst, a)
+  }
+  const ringTs = () => ringOf(alarm)
+  // The instant's other bells drawn: each draws its line only as far as the next one nearer the instant.
+  const others = useMemo(() => {
+    const ids = new Set(siblings.split(','))
+    return (inst.alarms ?? []).filter(a => ids.has(a.id))
+  }, [inst.alarms, siblings])
+  useChipPlacement(ref, bellItemId(alarm.id), false, f => f.pos(ringTs()), (f, _target, current) => {
+    // The stub reaches from the bell back to the axis, whatever row it sits in.
+    const stub = stubRef.current
+    if (stub) {
+      const len = `${Math.max(0, AXIS_GAP[f.orientation] + current.cross)}px`
+      const prop = f.orientation === 'horizontal' ? 'height' : 'width'
+      if (stub.style[prop] !== len) { stub.style.height = ''; stub.style.width = ''; stub.style[prop] = len }
+    }
+    // The line along the axis, from the bell's time on to the next bell nearer its instant (or the
+    // instant). Each stretch reads as how many bells reach over it: one is dashed, more solid.
+    const link = linkRef.current
+    if (link) {
+      const mine = ringTs()
+      let to = inst.tsEpochMs
+      let shared = false
+      for (const o of others) {
+        const r = ringOf(o)
+        if (r > mine && r < to) to = r
+        if (r < mine) shared = true
+      }
+      link.classList.toggle('is-solid', shared)
+      const a = f.pos(mine)
+      const b = f.pos(to)
+      const lo = Math.max(-100_000, Math.min(a, b))
+      const len = Math.min(200_000, Math.abs(b - a))
+      const transform = f.orientation === 'horizontal' ? `translate3d(${lo.toFixed(1)}px,0,0)` : `translate3d(0,${lo.toFixed(1)}px,0)`
+      if (link.style.transform !== transform) link.style.transform = transform
+      const prop = f.orientation === 'horizontal' ? 'width' : 'height'
+      const size = `${len.toFixed(1)}px`
+      if (link.style[prop] !== size) { link.style.width = ''; link.style.height = ''; link.style[prop] = size }
+    }
+  })
+  const name = endpointName(inst)
+  const key = ringKey(inst.id, alarm.id)
+  const onTap = () => {
+    if (consumeBellDragClick()) return
+    if (ringing) act.dismissAlarm(key)
+    else act.selectBell(alarm.id)
+  }
+  const label = past
+    ? `Past alarm ${formatDuration(alarm.offsetMs, { exact: true })} before ${name}`
+    : `Alarm ${formatDuration(alarm.offsetMs, { exact: true })} before ${name}${ringing ? ', ringing: tap to dismiss' : ': drag to move, tap for its tools'}`
+  return (
+    <>
+      <div ref={linkRef} className={`tl-bell-link${past ? ' is-past' : ''}`} aria-hidden />
+      <div ref={ref} className={`tl-col tl-col--label tl-bell${selected ? ' is-selected' : ''}${past ? ' is-past' : ''}${dragging ? ' is-dragging' : ''}`} role="group" aria-label={label}>
+        <div className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
+          <div ref={stubRef} className="tl-bell__stub" aria-hidden />
+          <button type="button" data-no-pan className={`chip-bell glow-box${ringing ? ' is-ringing' : ''}${selected ? ' is-selected' : ''}`}
+            aria-label={label} title={label}
+            onPointerDown={past ? undefined : e => startBellDrag(e, inst.id, alarm.id)}
+            onClick={onTap}>
+            {past ? <BellOutline aria-hidden /> : <BellAlertIcon aria-hidden />}
+          </button>
+          {/* How long before its instant: while dragged (live) or selected. */}
+          {(dragging || selected) && (
+            <LiveText className="tl-bell__offset glow-text" compute={f => `−${formatDuration(Math.max(0, inst.tsEpochMs - ringTs()), { msPerPx: 1 / f.pxPerMs, exact: true })}`} />
+          )}
+          {selected && (
+            <div className="tl-col__below">
+              <div className="tl-col__tools">
+                {past
+                  ? <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
+                  : <BellTools inst={inst} alarm={alarm} />}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+})
+
 /**
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string; captured: boolean } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: number; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -202,6 +361,21 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, sele
   const belowRef = useRef<HTMLDivElement>(null)
   // Vertical: a chip wider than the room runs off the right edge; pull its tools row back on screen.
   const chipWidth = useChipWidths(s => s.widths[inst.id])
+  const alarmStubRef = useRef<HTMLDivElement>(null)
+  const onPlaced = (f: Frame, target: ChipOffsets, current: ChipOffsets) => {
+    // Tied to bells before it: a stub runs across from the axis (where their line ends) to the
+    // chip, whatever row it sits in or however far it slid.
+    const stub = alarmStubRef.current
+    if (stub) {
+      const horizontal = f.orientation === 'horizontal'
+      const transform = horizontal ? `translate(${(-current.shift).toFixed(1)}px,${(-current.cross).toFixed(1)}px)` : `translate(${(-current.cross).toFixed(1)}px,${(-current.shift).toFixed(1)}px)`
+      if (stub.style.transform !== transform) stub.style.transform = transform
+      const len = `${Math.max(0, AXIS_GAP[f.orientation] + current.cross).toFixed(1)}px`
+      const prop = horizontal ? 'height' : 'width'
+      if (stub.style[prop] !== len) { stub.style.height = ''; stub.style.width = ''; stub.style[prop] = len }
+    }
+    pullTools(f, target)
+  }
   const pullTools = (f: Frame, target: ChipOffsets) => {
     const el = belowRef.current
     if (!el) return
@@ -210,11 +384,13 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, sele
     const transform = pull > 0 ? `translateX(${-pull}px)` : ''
     if (el.style.transform !== transform) el.style.transform = transform
   }
-  useChipPlacement(ref, inst.id, false, moving ? f => f.mainSize / 2 : f => f.pos(ts), pullTools)
+  useChipPlacement(ref, inst.id, false, moving ? f => f.mainSize / 2 : f => f.pos(ts), onPlaced)
+  const linked = bellLinked && !moving
 
   return (
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}`} role="group" aria-label={`Instant ${name}`}>
-      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} belowRef={belowRef}
+      {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
+      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
@@ -261,6 +437,31 @@ export function SavedInstantColumns() {
     return out
   }, [spanEnds, v.secondary, v.selected, capturedId, focusedId, v.moving])
 
+  // Alarms by id, for the bells before their instants.
+  const alarmsById = useMemo(() => {
+    const out = new Map<string, { inst: InstantRecord; alarm: AlarmRecord }>()
+    for (const inst of instants) for (const alarm of inst.alarms ?? []) out.set(alarm.id, { inst, alarm })
+    return out
+  }, [instants])
+  const selectedBell = useUi(s => s.selectedBell)
+  const draggingBell = useUi(s => s.draggingBell)
+  const ringingKeys = useAlarms(useShallow(s => s.ringing.map(r => ringKey(r.instantId, r.alarmId))))
+  const ringingSet = useMemo(() => new Set(ringingKeys), [ringingKeys])
+  // Each instant's drawn bells: their lines meet, and its chip ties into them.
+  const bellsByInstant = useMemo(() => {
+    const out = new Map<string, string[]>()
+    for (const id of layout.bellIds) {
+      const b = alarmsById.get(id)
+      if (b) out.set(b.inst.id, [...(out.get(b.inst.id) ?? []), id])
+    }
+    return out
+  }, [layout.bellIds, alarmsById])
+  // Bells that are history (answered or missed) draw hollow.
+  const pastIds = useFrameValue(f => layout.bellIds.filter(id => {
+    const b = alarmsById.get(id)
+    return !!b && !isLiveAlarm(b.inst, b.alarm, f.now, ringingSet)
+  }).join(','))
+
   // Snooze ids per chip that shows them.
   const foldedIds = useMemo(() => {
     const out: Record<string, string[]> = {}
@@ -280,6 +481,8 @@ export function SavedInstantColumns() {
             inst={inst}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
+            bellFolded={layout.bellFolded[id] ?? 0}
+            bellLinked={bellsByInstant.has(id)}
             selected={v.selected === id}
             focused={focusedId === id}
             secondary={v.secondary === id}
@@ -289,6 +492,18 @@ export function SavedInstantColumns() {
             fineSeconds={fineSeconds}
             captured={capturedId === id}
           />
+        )
+      })}
+      {layout.bellIds.map(id => {
+        const b = alarmsById.get(id)
+        if (!b) return null
+        return (
+          <BellMarker key={id} inst={b.inst} alarm={b.alarm}
+            siblings={(bellsByInstant.get(b.inst.id) ?? []).filter(o => o !== id).join(',')}
+            past={pastIds.split(',').includes(id)}
+            selected={selectedBell === id}
+            dragging={draggingBell === id}
+            ringing={ringingSet.has(ringKey(b.inst.id, id))} />
         )
       })}
       {layout.clusters.map(c => (

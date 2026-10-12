@@ -24,7 +24,8 @@ import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { SNOOZE_MINUTES, dismiss, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
+import { SNOOZE_MINUTES, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
+import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -102,7 +103,8 @@ const REVEAL_MIN_WIDTH = 2 * MINUTE
  * A tap on one of the Android app's notifications (domain/nativeNotifications liveTapTarget):
  * the stopwatch's run, a running timer's span, or an alarm's overtime, focused and selected.
  */
-export function revealLive(kind: NotificationKind, instantId: string) {
+export function revealLive(kind: NotificationKind, key: string) {
+  const { instantId } = parseRingKey(key) // an alarm's tap names the alarm
   const { instants, spans } = useEntities.getState()
   const target = liveTapTarget(kind, instantId, instants, spans, nowTime())
   if (!target) { focusNow(); return }
@@ -513,16 +515,37 @@ export function toggleFavorite(id: string) {
   if (inst) setFavorite(id, !inst.favorite)
 }
 
-export function toggleAlarm(id: string) {
-  const inst = entities.getInstant(id)
-  if (!inst) return
-  if (inst.alarm) {
-    if (useAlarms.getState().ringing.some(r => r.instantId === id)) dismiss(id)
-    else entities.setAlarmFlag(id, false)
-    return
-  }
-  entities.setAlarmFlag(id, true)
+/** Adds an alarm at the instant (its bell can then be dragged earlier); returns its id. */
+export function addAlarm(id: string): string | undefined {
+  if (!entities.getInstant(id)) return
+  const alarmId = entities.addAlarm(id)
   void primeNotifications() // the first bell asks for notification permission
+  return alarmId
+}
+
+/** Deletes one alarm; a ringing one is answered first (it was heard). */
+export function removeAlarm(id: string, alarmId: string) {
+  const key = ringKey(id, alarmId)
+  if (isAlarmRinging(key)) dismiss(key)
+  entities.removeAlarm(id, alarmId)
+  if (useUi.getState().selectedBell === alarmId) ui.selectBell(null)
+}
+
+/**
+ * Sets how long before its instant an alarm rings. It never rings in the past: an offset that
+ * would is cut back to Now. Answered alarms stay as they were (history).
+ */
+export function setAlarmOffset(id: string, alarmId: string, offsetMs: number) {
+  const inst = entities.getInstant(id)
+  const alarm = findAlarm(inst, alarmId)
+  if (!inst || !alarm || alarm.done) return
+  const latest = Math.max(0, inst.tsEpochMs - nowTime())
+  entities.setAlarmOffset(id, alarmId, Math.min(Math.max(0, offsetMs), latest))
+}
+
+/** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
+export function selectBell(alarmId: string | null) {
+  ui.selectBell(useUi.getState().selectedBell === alarmId ? null : alarmId)
 }
 
 /**
@@ -532,6 +555,8 @@ export function toggleAlarm(id: string) {
 export function setInstantHidden(id: string, hidden: boolean) {
   const inst = entities.getInstant(id)
   if (!inst) return
+  // An alarm still to ring is never hidden.
+  if (hidden && hasArmedAlarm(inst, nowTime())) return
   entities.setHiddenFlag(id, hidden)
   if (!hidden) return
   const s = v()
@@ -551,7 +576,7 @@ export function renameInstant(id: string, label: string) {
 export function deleteInstant(id: string) {
   const inst = entities.getInstant(id)
   const wasFocused = v().viewFocusMode === 'instant' && v().focusedInstantId === id
-  if (useAlarms.getState().ringing.some(r => r.instantId === id)) dismiss(id)
+  dismissInstant(id)
   for (const sp of useEntities.getState().spans) {
     if (sp.startInstantId === id || sp.endInstantId === id) view.forgetSpan(sp.id)
   }
@@ -715,9 +740,10 @@ export {
   silence as silenceAlarms,
 } from '../services/AlarmScheduler.ts'
 
-/** Snooze from the app: the alarm rings again in `minutes`, and the view goes to the snooze (the span from the alarm to its next ring). */
-export function snoozeAlarm(instantId: string, minutes = SNOOZE_MINUTES): string | undefined {
-  const newId = snooze(instantId, minutes)
+/** Snooze from the app (by ring key): the alarm rings again in `minutes`, and the view goes to the snooze (the span from the alarm to its next ring). */
+export function snoozeAlarm(key: string, minutes = SNOOZE_MINUTES): string | undefined {
+  const { instantId } = parseRingKey(key)
+  const newId = snooze(key, minutes)
   if (!newId) return
   const sp = useEntities.getState().spans.find(s => s.startInstantId === instantId && s.endInstantId === newId)
   if (sp) {
@@ -775,11 +801,12 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
   if (choice.data && backup.data) {
     const before = useEntities.getState()
     const merged = importedData(before, backup.data, choice.mode)
-    const next = syncFavorites(merged.instants, merged.spans)
+    const synced = syncFavorites(merged.instants, merged.spans)
+    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans }
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)
-    for (const r of useAlarms.getState().ringing) if (!instantIds.has(r.instantId)) dismiss(r.instantId)
+    for (const r of useAlarms.getState().ringing) if (!instantIds.has(r.instantId)) dismiss(ringKey(r.instantId, r.alarmId))
     for (const sp of before.spans) if (!spanIds.has(sp.id)) view.forgetSpan(sp.id)
     for (const i of before.instants) if (!instantIds.has(i.id)) view.forgetInstant(i.id)
     if (lostFocus) focusCursorAt(v().timeCenter, false)

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { truncateText } from '../../domain/format.ts'
 import type { TimeRef } from '../../domain/spans.ts'
-import { spanReadingTotal, spanReadingValue } from '../../domain/spans.ts'
+import { spanReadingTicks, spanReadingTotal, spanReadingValue } from '../../domain/spans.ts'
 
 export function SpanReading({ name, nameMax = 14, a, b, nameSlot, onValueDoubleClick }: {
   /** The span's name ('' for none). */
@@ -27,7 +27,7 @@ export function SpanReading({ name, nameMax = 14, a, b, nameSlot, onValueDoubleC
         className="span-read__time"
         onDoubleClick={onValueDoubleClick && (e => { e.stopPropagation(); onValueDoubleClick() })}
       >
-        <LiveText className="span-read__value mono" compute={f => spanReadingValue(a, b, f)} />
+        <LiveText className="span-read__value mono" compute={(f, ctx) => { if (spanReadingTicks(a, b, f)) ctx.fast(); return spanReadingValue(a, b, f) }} />
         <LiveText className="span-read__total mono" compute={f => spanReadingTotal(a, b, f)} />
       </span>
     </>

@@ -44,14 +44,14 @@ export function layoutOffsets(f: Frame, id: string, cluster: boolean): ChipOffse
 
 /**
  * Positions `ref` at `base(f)` along the time axis plus the chip's animated layout offsets.
- * `onPlaced` gets the offsets the chip is heading to (e.g. to pull a tools row on screen).
+ * `onPlaced` gets the offsets the chip is heading to (e.g. to pull a tools row on screen) and where it is now.
  */
 export function useChipPlacement(
   ref: RefObject<HTMLElement | null>,
   id: string,
   cluster: boolean,
   base: (f: Frame) => number,
-  onPlaced?: (f: Frame, target: ChipOffsets) => void,
+  onPlaced?: (f: Frame, target: ChipOffsets, current: ChipOffsets) => void,
 ) {
   const st = useRef<{ shift: SpringState; cross: SpringState; perf: number; orientation: string; written: string; target: ChipOffsets } | null>(null)
   useFrameListener(f => {
@@ -80,6 +80,6 @@ export function useChipPlacement(
     const transform = `translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0)`
     if (!s || transform !== s.written) el.style.transform = transform
     st.current = { shift, cross, perf: f.perf, orientation: f.orientation, written: transform, target }
-    onPlaced?.(f, target)
+    onPlaced?.(f, target, { shift: shift.x, cross: cross.x })
   })
 }

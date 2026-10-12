@@ -75,6 +75,6 @@ describe('implied lane chips', () => {
     const { result } = renderHook(() => useVisibleLanes())
     render(<BottomLanes lanes={result.current.map(l => ({ ...l, top: 200 }))} />)
     expect(screen.getByText(`${formatClockCompact(ts, false)} to Cursor`, { exact: false })).toBeInTheDocument()
-    expect(screen.getByText('10m')).toBeInTheDocument()
+    expect(screen.getByText('10:00')).toBeInTheDocument()
   })
 })

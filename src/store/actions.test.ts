@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { entities, useEntities } from './entities.ts'
 import { initialViewState, useView } from './view.ts'
 import { useAlarms } from './alarms.ts'
+import { ringKey } from '../domain/alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
@@ -37,7 +38,7 @@ describe('Timer and Stopwatch buttons', () => {
     expect(end.id).toBe(endId)
     expect(start).toMatchObject({ label: '' })
     expect(Math.abs(start.tsEpochMs - now)).toBeLessThan(1000)
-    expect(end).toMatchObject({ label: '13m timer', alarm: true, favorite: true, tsEpochMs: start.tsEpochMs + 13 * MINUTE })
+    expect(end).toMatchObject({ label: '13m timer', alarms: [{ offsetMs: 0 }], favorite: true, tsEpochMs: start.tsEpochMs + 13 * MINUTE })
     expect(entities.nowSpanOf(end.id)?.visible).toBe(true)
     expect(spans().find(sp => !sp.endIsNow)).toMatchObject({ startInstantId: start.id, endInstantId: end.id, label: '13m timer', visible: true })
     expect(useQuick.getState().recentTimers).toEqual([13 * MINUTE])
@@ -175,7 +176,7 @@ describe('notification permission', () => {
 
   it('is asked for when a bell is set or a timer started', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Wake')
-    act.toggleAlarm(id)
+    act.addAlarm(id)
     expect(requestPermission).toHaveBeenCalledTimes(1)
     act.startTimer(5 * MINUTE)
     expect(requestPermission).toHaveBeenCalledTimes(2) // still 'default' in this stub; the browser keeps the answer
@@ -303,32 +304,89 @@ describe('favorites and alarms', () => {
 
   it('setting an alarm does not favorite the instant', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Wake')
-    act.toggleAlarm(id)
-    expect(instant(id)).toMatchObject({ alarm: true, favorite: false })
+    act.addAlarm(id)
+    expect(instant(id)).toMatchObject({ alarms: [{ offsetMs: 0 }], favorite: false })
     expect(entities.nowSpanOf(id)).toBeUndefined()
   })
 
-  it('snoozing creates a numbered alarm, links it, and dismisses the original', () => {
+  it('snoozing creates a numbered alarm, links it, and answers the original (kept as history)', () => {
     const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
-    useAlarms.setState({ ringing: [{ instantId: id, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const first = act.snoozeAlarm(id, 5)!
-    expect(instant(first)).toMatchObject({ label: 'Snooze 1: Wake', alarm: true, snoozeOriginalId: id })
-    expect(instant(id).alarm).toBe(false)
+    const alarmId = instant(id).alarms![0].id
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    const first = act.snoozeAlarm(ringKey(id, alarmId), 5)!
+    expect(instant(first)).toMatchObject({ label: 'Snooze 1: Wake', alarms: [{ offsetMs: 0 }], snoozeOriginalId: id })
+    expect(instant(id).alarms).toEqual([{ id: alarmId, offsetMs: 0, done: true }])
     expect(useAlarms.getState().ringing).toEqual([])
 
-    useAlarms.setState({ ringing: [{ instantId: first, label: 'Snooze 1: Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const second = act.snoozeAlarm(first, 5)!
+    const firstAlarm = instant(first).alarms![0].id
+    useAlarms.setState({ ringing: [{ instantId: first, alarmId: firstAlarm, label: 'Snooze 1: Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    const second = act.snoozeAlarm(ringKey(first, firstAlarm), 5)!
     expect(instant(second).label).toBe('Snooze 2: Wake')
     expect(instant(second).snoozeOriginalId).toBe(id)
   })
 
   it('snoozing goes to the snooze: its span from the alarm is focused and selected', () => {
     const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
-    useAlarms.setState({ ringing: [{ instantId: id, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const snoozed = act.snoozeAlarm(id, 5)!
+    const alarmId = instant(id).alarms![0].id
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    const snoozed = act.snoozeAlarm(ringKey(id, alarmId), 5)!
     const span = useEntities.getState().spans.find(s => s.startInstantId === id && s.endInstantId === snoozed)!
     expect(span.visible).toBe(true)
     expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: span.id, selectedSpanId: span.id })
+  })
+})
+
+describe('offset alarms (TLC-1)', () => {
+  it('an alarm can ring before its instant, and several can; each is its own', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Meeting')
+    const a = act.addAlarm(id)!
+    const b = act.addAlarm(id)!
+    act.setAlarmOffset(id, a, 15 * MINUTE)
+    act.setAlarmOffset(id, b, 5 * MINUTE)
+    expect(instant(id).alarms).toEqual([{ id: a, offsetMs: 15 * MINUTE }, { id: b, offsetMs: 5 * MINUTE }])
+    act.removeAlarm(id, a)
+    expect(instant(id).alarms).toEqual([{ id: b, offsetMs: 5 * MINUTE }])
+    act.removeAlarm(id, b)
+    expect(instant(id).alarms).toBeUndefined()
+  })
+
+  it('never rings in the past: an offset reaching back past Now stops at Now', () => {
+    const id = entities.createInstant(Date.now() + 10 * MINUTE, 'Soon')
+    const a = act.addAlarm(id)!
+    act.setAlarmOffset(id, a, HOUR)
+    expect(instant(id).alarms![0].offsetMs).toBeLessThanOrEqual(10 * MINUTE)
+    act.setAlarmOffset(id, a, -MINUTE)
+    expect(instant(id).alarms![0].offsetMs).toBe(0)
+  })
+
+  it('an instant with an alarm still to ring can\u2019t be hidden; adding one shows a hidden instant', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Wake')
+    act.setInstantHidden(id, true)
+    expect(instant(id).hidden).toBe(true)
+    act.addAlarm(id)
+    expect(instant(id).hidden).toBe(false)
+    act.setInstantHidden(id, true)
+    expect(instant(id).hidden).toBe(false)
+  })
+
+  it('removing a ringing alarm answers it first', () => {
+    const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
+    const alarmId = instant(id).alarms![0].id
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    act.removeAlarm(id, alarmId)
+    expect(useAlarms.getState().ringing).toEqual([])
+    expect(instant(id).alarms).toBeUndefined()
+  })
+
+  it('snoozing an alarm before its instant makes a snooze but no span back to the instant', () => {
+    const id = entities.createInstant(Date.now() + 15 * MINUTE - 1000, 'Wake')
+    const alarmId = act.addAlarm(id)!
+    entities.setAlarmOffset(id, alarmId, 15 * MINUTE)
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake in 15m', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
+    const snoozed = act.snoozeAlarm(ringKey(id, alarmId), 5)!
+    expect(instant(snoozed)).toMatchObject({ label: 'Snooze 1: Wake', snoozeOriginalId: id })
+    expect(useEntities.getState().spans.some(sp => sp.startInstantId === id && sp.endInstantId === snoozed)).toBe(false)
+    expect(instant(id).alarms).toEqual([{ id: alarmId, offsetMs: 15 * MINUTE, done: true }])
   })
 })
 
@@ -360,7 +418,7 @@ describe('setSpanLength', () => {
     const timer = useEntities.getState().spans.find(sp => !sp.endIsNow && sp.endInstantId === end)!
     const start = instant(timer.startInstantId).tsEpochMs
     act.setSpanLength(timer.id, 5 * MINUTE)
-    expect(instant(end)).toMatchObject({ tsEpochMs: start + 5 * MINUTE, alarm: true })
+    expect(instant(end)).toMatchObject({ tsEpochMs: start + 5 * MINUTE, alarms: [{ offsetMs: 0 }] })
   })
 
   it('leaves spans to Now alone', () => {

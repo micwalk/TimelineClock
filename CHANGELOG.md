@@ -7,6 +7,32 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.3.0 — 2026-10-12
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Alarms before an instant** (TLC-1): an alarm is now a bell beside its instant's chip. Drag
+  the bell earlier and it rings that long before the instant ("Wake up in 15m"), at the time it
+  sits on the timeline, with a short line down to the axis and a dashed line back to its
+  instant. Add more bells for more warnings (the bell tool on a selected chip adds one each
+  time). Bells move with their instant. Tap a bell to type how long before, or delete it.
+- Zoomed out, a bell too close to its instant to stand apart folds into the instant's chip,
+  whose bell then counts its alarms (one is just a bell; more read "3🔔"); tapping that zooms
+  in to show them all.
+- An alarm still to ring is never hidden: an instant with one can't be hidden, and adding an
+  alarm to a hidden instant shows it again.
+- Answered alarms are kept as history: select their instant to see them as hollow bells.
+- Several bells on one instant share one line: dashed beyond the nearest bells, solid where
+  more than one bell's line runs. The instant's chip ties in with a yellow line from the axis.
+- A chip with an active alarm (still to ring, or ringing) has a yellow left edge.
+- **Lengths show the detail that matters**, everywhere: on spans, live lanes, the Stopwatch and
+  Timer buttons and alarm bells. Zoomed in shows seconds, then tenths, then milliseconds; a
+  length under a minute always shows milliseconds (a stopwatch's first lap: "0:04.215") and
+  one under an hour seconds ("26:13", where it used to say "26m" zoomed out). An alarm's offset
+  always shows what it was set to: 1m 30s reads "1:30", never "1m".
+- The Android app rings each bell on its own, shows it as the next alarm, and lets you dismiss
+  or snooze it from the notification. Alarms set before this update keep ringing as they were.
+
 ## 0.2.0 — 2026-10-06
 
 **Android app: web only** (nothing to install; it updates itself).

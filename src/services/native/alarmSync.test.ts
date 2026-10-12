@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstantRecord, SpanRecord } from '../../domain/entities.ts'
 import type { NativeAlarm } from '../../domain/nativeNotifications.ts'
 import { MINUTE } from '../../domain/time.ts'
+import type { InstantOpts } from '../../test/fixtures.ts'
+import { instantFields } from '../../test/fixtures.ts'
 
 // A fake Alarms plugin: the last sync, waiting answers, and the permission.
 const fake = vi.hoisted(() => ({
@@ -24,8 +26,8 @@ vi.mock('./alarmsPlugin.ts', () => ({
 }))
 
 const now = Date.now()
-const inst = (id: string, offsetMs: number, opts: Partial<InstantRecord> = {}): InstantRecord =>
-  ({ id, tsEpochMs: now + offsetMs, label: id, ...opts })
+const inst = (id: string, offsetMs: number, opts: InstantOpts = {}): InstantRecord =>
+  ({ id, tsEpochMs: now + offsetMs, label: id, ...instantFields(id, opts) })
 const span = (id: string, a: string, b: string, label = ''): SpanRecord =>
   ({ id, startInstantId: a, endInstantId: b, label, visible: true, endIsNow: false })
 
@@ -73,7 +75,8 @@ describe('syncAlarms', () => {
       [span('timer', 'start', 'end', '1m timer'), { id: 'endNow', startInstantId: 'end', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }],
     )
     await syncAlarms()
-    expect(entities.getInstant('end')).toMatchObject({ alarm: false, favorite: false })
+    // Answered: kept as history, never rings again.
+    expect(entities.getInstant('end')).toMatchObject({ alarms: [{ offsetMs: 0, done: true }], favorite: false })
     expect(entities.getSpan('endNow')).toBeUndefined()
     expect(fake.synced?.alarms).toEqual([])
   })
@@ -84,9 +87,10 @@ describe('syncAlarms', () => {
     const { syncAlarms, useEntities } = await load([inst('wake', -MINUTE, { alarm: true, label: 'Wake up' })])
     await syncAlarms()
     const snoozed = useEntities.getState().instants.find(i => i.snoozeOriginalId === 'wake')
-    expect(snoozed).toMatchObject({ tsEpochMs: at, label: 'Snooze 1: Wake up', alarm: true })
-    expect(useEntities.getState().instants.find(i => i.id === 'wake')?.alarm).toBe(false)
-    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([snoozed?.id])
+    expect(snoozed).toMatchObject({ tsEpochMs: at, label: 'Snooze 1: Wake up', alarms: [{ offsetMs: 0 }] })
+    expect(snoozed?.alarms?.[0].done).toBeUndefined()
+    expect(useEntities.getState().instants.find(i => i.id === 'wake')?.alarms?.[0].done).toBe(true)
+    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([`${snoozed?.id}|${snoozed?.alarms?.[0].id}`])
   })
 
   it('runs overlapping calls one after another, the last one seeing the latest state', async () => {

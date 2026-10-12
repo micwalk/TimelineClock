@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, syncFavorites } from './entities.ts'
+import type { InstantOpts } from '../test/fixtures.ts'
+import { instantFields } from '../test/fixtures.ts'
 
-const inst = (id: string, extra: Partial<InstantRecord> = {}): InstantRecord => ({ id, tsEpochMs: 0, label: '', ...extra })
+const inst = (id: string, extra: InstantOpts = {}): InstantRecord => ({ id, tsEpochMs: 0, label: '', ...instantFields(id, extra) })
 const toNow = (id: string, startInstantId: string, visible = true): SpanRecord =>
   ({ id, startInstantId, endInstantId: NOW_SENTINEL, label: '', visible, endIsNow: true })
 const between = (id: string, a: string, b: string): SpanRecord => ({ id, startInstantId: a, endInstantId: b, label: '', visible: true })

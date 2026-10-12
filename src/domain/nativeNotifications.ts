@@ -3,7 +3,8 @@
 // running timer and stopwatch through LiveNotifications.
 import { displayName } from './entities.ts'
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { formatClockCompact } from './format.ts'
+import { alarmLabel, ringKey, ringTime } from './alarms.ts'
+import { formatClockCompact, formatDuration } from './format.ts'
 import type { StopwatchState } from './quickCreate.ts'
 import { stopwatchPhase, stopwatchStartLabel } from './quickCreate.ts'
 
@@ -39,9 +40,12 @@ export function assignNotificationIds(keys: Iterable<string>): Map<string, numbe
   return ids
 }
 
-/** The ids of every alarmed instant, past or future. */
+/** Notification ids for every alarm, past or future, by ring key. */
 export const alarmNotificationIds = (instants: readonly InstantRecord[]) =>
-  assignNotificationIds(instants.filter(i => i.alarm).map(i => i.id))
+  assignNotificationIds(instants.flatMap(i => (i.alarms ?? []).map(a => ringKey(i.id, a.id))))
+
+/** A timer's end: an open (unanswered) alarm at the instant itself. */
+const hasOpenAlarmAtInstant = (i: InstantRecord) => !!i.alarms?.some(a => !a.done && a.offsetMs === 0)
 
 /**
  * A live notification's id: stable for its kind and instant, so the native side can replace a
@@ -79,6 +83,7 @@ export function timerSpanFor(
 /** What the native side rings (AlarmSpec.java). */
 export interface NativeAlarm {
   id: number
+  /** The alarm's ring key (domain/alarms): the native side passes it back as is. */
   instantId: string
   /** When it rings (epoch ms). */
   at: number
@@ -91,8 +96,9 @@ export interface NativeAlarm {
 }
 
 /**
- * Alarmed instants as native alarms, soonest first: those ahead, and those that came due
- * within `ringMs` and are still on (ringing, or about to). Timers are named after their span.
+ * Alarms as native alarms, soonest first: those ahead, and those that came due within `ringMs`
+ * and are still unanswered (ringing, or about to). An alarm at a timer's end is named after the
+ * timer's span; one before its instant says how long is left ("Wake up in 15m").
  */
 export function desiredNativeAlarms(
   instants: readonly InstantRecord[],
@@ -102,19 +108,23 @@ export function desiredNativeAlarms(
 ): NativeAlarm[] {
   const ids = alarmNotificationIds(instants)
   return instants
-    .filter(i => i.alarm && i.tsEpochMs > now - ringMs)
-    .sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+    .flatMap(inst => (inst.alarms ?? []).filter(a => !a.done && ringTime(inst, a) > now - ringMs).map(alarm => ({ inst, alarm, at: ringTime(inst, alarm) })))
+    .sort((a, b) => a.at - b.at)
     .slice(0, MAX_NATIVE_ALARMS)
-    .map(i => {
-      const timer = timerSpanFor(i.id, instants, spans)
-      const clock = formatClockCompact(i.tsEpochMs, true)
+    .map(({ inst, alarm, at }) => {
+      const key = ringKey(inst.id, alarm.id)
+      const clock = formatClockCompact(inst.tsEpochMs, true)
+      if (alarm.offsetMs > 0) {
+        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `${formatDuration(alarm.offsetMs, { exact: true })} to go · ${clock}`, liveId: 0 }
+      }
+      const timer = timerSpanFor(inst.id, instants, spans)
       return {
-        id: ids.get(i.id)!,
-        instantId: i.id,
-        at: i.tsEpochMs,
-        title: timer ? displayName(timer.span.label || i.label, 'Timer') : displayName(i.label, 'Alarm'),
+        id: ids.get(key)!,
+        instantId: key,
+        at,
+        title: timer ? displayName(timer.span.label || inst.label, 'Timer') : displayName(inst.label, 'Alarm'),
         ringText: timer ? `Time's up · ${clock}` : `Due ${clock}`,
-        liveId: timer ? liveIdFor('countdown', i.id) : 0,
+        liveId: timer ? liveIdFor('countdown', inst.id) : 0,
       }
     })
 }
@@ -125,6 +135,7 @@ export function desiredNativeAlarms(
 /** Recorded by the native side (Alarms.java) while the page may have been frozen. */
 export interface NativeAlarmAction {
   type: 'dismiss' | 'snooze'
+  /** The alarm's ring key (NativeAlarm.instantId). */
   instantId: string
   /** Snooze: when it rings again. */
   at?: number
@@ -143,17 +154,17 @@ export function sanitizeAlarmActions(raw: unknown): NativeAlarmAction[] {
 }
 
 /**
- * Replays answers in order. The native side keeps naming an alarm by its first instant even
- * after snoozing it, so a snooze's new instant takes over that name for the later answers.
- * An answer for an alarm that is already off (answered in the app too) is skipped.
+ * Replays answers in order, by ring key. The native side keeps naming an alarm by its first
+ * key even after snoozing it, so a snooze's new alarm takes over that name for the later
+ * answers. An answer for an alarm that is already off (answered in the app too) is skipped.
  */
 export function replayAlarmActions(
   actions: readonly NativeAlarmAction[],
   ops: {
-    isOn: (instantId: string) => boolean
-    dismiss: (instantId: string) => void
-    /** Returns the snooze's new instant. */
-    snooze: (instantId: string, at: number | undefined) => string | undefined
+    isOn: (key: string) => boolean
+    dismiss: (key: string) => void
+    /** Returns the snooze's new alarm's key. */
+    snooze: (key: string, at: number | undefined) => string | undefined
   },
 ): void {
   const now = new Map<string, string>()
@@ -184,7 +195,7 @@ export interface LiveNotification {
 
 /**
  * Running timers and the stopwatch:
- * - a countdown for each future alarmed instant that ends a timer span (timerSpanFor) that has
+ * - a countdown for each future instant with an alarm at it that ends a timer span (timerSpanFor) that has
  *   started, named after the span (else the alarm). At zero the native side replaces it with
  *   the ringing alarm.
  * - the stopwatch while it runs, counting up from its start.
@@ -200,7 +211,7 @@ export function desiredLiveNotifications(
   let nextChangeAt: number | null = null
   const items: LiveNotification[] = []
 
-  const ends = instants.filter(i => i.alarm && i.tsEpochMs > now).sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+  const ends = instants.filter(i => hasOpenAlarmAtInstant(i) && i.tsEpochMs > now).sort((a, b) => a.tsEpochMs - b.tsEpochMs)
   for (const end of ends) {
     const timer = timerSpanFor(end.id, instants, spans)
     if (!timer) continue

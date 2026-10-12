@@ -279,6 +279,116 @@
 .chip--cluster { gap: 3px; padding: 0 8px; color: var(--accent); font: 700 14px/1 var(--font-ui); }
 .chip--cluster > svg { width: 13px; height: 13px; }
 
+/* --- Alarm bells (TLC-1) -------------------------------------------------
+   A chip's alarms sit in a bell beside it (left of the chip, inside the measured group, so the
+   layout keeps room for it); more than one (bells before the instant folded in when zoomed out,
+   or several at it) reads as their count, "3🔔".
+   A bell before its instant is its own marker (.tl-bell) at the time it rings, in the chips'
+   layout, with a stub to the axis and a dashed line along the axis back to its instant. */
+.chip-bell {
+  --accent: var(--c-alarm);
+  --halo: var(--c-alarm);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex: none;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border-radius: 13px;
+  background: var(--box-bg);
+  color: var(--c-alarm);
+  cursor: grab;
+  touch-action: none;
+}
+.chip-bell:hover { background: var(--box-bg-raised); }
+.chip-bell > svg { width: 15px; height: 15px; flex: none; }
+/* A bigger touch target than the glyph. */
+.chip-bell::after { content: ''; position: absolute; inset: -7px; }
+.chip-bell__count { font: 700 12px/1 var(--font-ui); }
+.chip-bell.is-folded-only { cursor: pointer; }
+.chip-bell.is-selected { background: var(--box-bg-raised); box-shadow: 0 0 0 2px var(--c-alarm), 0 0 calc(10px * var(--glow)) var(--c-alarm); }
+.chip-bell.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }
+.tl-bell.is-dragging .chip-bell { cursor: grabbing; scale: 1.12; }
+.tl-bell .chip-bell { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+
+/* The stub: a short instant line from the bell back to the axis (its length is written per frame). */
+.tl-bell__stub {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--c-alarm);
+  box-shadow: 0 0 calc(6px * var(--glow)) var(--c-alarm);
+  pointer-events: none;
+}
+.timeline[data-orientation='vertical'] .tl-bell__stub { left: auto; right: 100%; bottom: auto; top: 50%; width: 0; height: 2px; margin: -1px 0 0; }
+
+/* The line along the axis from the bell's time to its instant (position and length written per frame). */
+.tl-bell-link {
+  position: absolute;
+  left: 0;
+  top: calc(var(--tl-axis) + 3px);
+  height: 2px;
+  z-index: var(--z-lines);
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--c-alarm) 0 6px, transparent 6px 10px);
+  filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-alarm));
+  will-change: transform;
+}
+.timeline[data-orientation='vertical'] .tl-bell-link {
+  top: 0;
+  left: calc(var(--tl-axis) + 3px);
+  width: 2px;
+  height: 0;
+  background: repeating-linear-gradient(180deg, var(--c-alarm) 0 6px, transparent 6px 10px);
+}
+/* Where two or more bells' lines would run over each other, one solid line. */
+.tl-bell-link.is-solid { background: var(--c-alarm); }
+
+/* A chip with bells before it: a stub across from the axis (where their line ends) to the chip,
+   over its own line (position and length written per frame). */
+.tl-col__alarm-stub {
+  position: absolute;
+  left: -1px;
+  top: var(--tl-axis);
+  width: 2px;
+  background: var(--c-alarm);
+  box-shadow: 0 0 calc(6px * var(--glow)) var(--c-alarm);
+  pointer-events: none;
+}
+.timeline[data-orientation='vertical'] .tl-col__alarm-stub { left: var(--tl-axis); top: -1px; width: 0; height: 2px; }
+/* Shorthand for "has an active alarm" (still to ring, or ringing): a yellow left edge. */
+.chip--saved.has-alarm { border-left: 3px solid var(--c-alarm); }
+
+.tl-bell.is-past .tl-bell__stub { background: none; border-left: 2px dotted var(--c-alarm); box-shadow: none; }
+.timeline[data-orientation='vertical'] .tl-bell.is-past .tl-bell__stub { border-left: none; border-top: 2px dotted var(--c-alarm); }
+
+/* How long before its instant, beside the bell while dragged or selected. */
+.tl-bell__offset {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 5px;
+  padding: 3px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--box-bg-strong);
+  color: var(--c-alarm);
+  font: 700 12px/1 var(--font-mono);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tl-bell .tl-col__below { --accent: var(--c-alarm); --halo: var(--c-alarm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-bell .chip-bell { animation: none; }
+  .chip-bell.is-ringing svg { animation: none; }
+}
+
 .tl-col__badge {
   position: absolute;
   left: 50%;

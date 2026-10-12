@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, truncateText,
-  formatLiveSpan, formatRelativeCoarse, formatRelativeShort, formatSignedDuration, livePrecision, parseDurationInput, showsSeconds, to24h,
+  durationStep, formatDuration, formatLiveSpan, formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
 } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
@@ -162,9 +162,12 @@ describe('truncateText', () => {
 
 describe('formatLiveSpan', () => {
   const T = 26 * MINUTE + 13 * SECOND + 457
-  it('is coarse zoomed out', () => {
-    expect(formatLiveSpan(T, 10_000)).toBe('26m')
-    expect(formatLiveSpan(HOUR + 5 * MINUTE, 10_000)).toBe('1h 5m')
+  it('is coarse zoomed out, for an hour or more', () => {
+    expect(formatLiveSpan(HOUR + 5 * MINUTE + 3 * SECOND, 10_000)).toBe('1h 5m')
+  })
+  it('never reads a span under an hour as bare minutes, nor one under a minute without ms', () => {
+    expect(formatLiveSpan(T, 10_000)).toBe('26:13')
+    expect(formatLiveSpan(4 * SECOND + 50, 10_000)).toBe('0:04.050')
   })
   it('shows seconds, then tenths, then ms as you zoom in', () => {
     expect(formatLiveSpan(T, 100)).toBe('26:13')
@@ -173,10 +176,29 @@ describe('formatLiveSpan', () => {
     expect(formatLiveSpan(HOUR + 5 * MINUTE + 3 * SECOND, 100)).toBe('1:05:03')
     expect(formatLiveSpan(4 * SECOND + 50, 1)).toBe('0:04.050')
   })
-  it('picks precision from px per unit', () => {
-    expect(livePrecision(2000)).toBe(null)
-    expect(livePrecision(1000)).toBe(0)
-    expect(livePrecision(4)).toBe(1)
-    expect(livePrecision(3)).toBe(3)
+  it('picks the zoom\u2019s unit from px per unit', () => {
+    const long = 3 * HOUR
+    expect(durationStep(long, { msPerPx: 2000 })).toBe(MINUTE)
+    expect(durationStep(long, { msPerPx: 1000 })).toBe(SECOND)
+    expect(durationStep(long, { msPerPx: 4 })).toBe(100)
+    expect(durationStep(long, { msPerPx: 3 })).toBe(1)
+  })
+})
+
+describe('formatDuration', () => {
+  it('shows an exact value (an alarm\u2019s offset) down to what it holds, not by its length', () => {
+    expect(formatDuration(15 * MINUTE, { exact: true })).toBe('15m')
+    expect(formatDuration(MINUTE + 30 * SECOND, { exact: true })).toBe('1:30')
+    expect(formatDuration(MINUTE + 1500, { exact: true })).toBe('1:01.5')
+    expect(formatDuration(MINUTE + 1234, { exact: true })).toBe('1:01.234')
+  })
+  it('lets the zoom go finer than an exact value needs', () => {
+    expect(formatDuration(15 * MINUTE, { exact: true, msPerPx: 100 })).toBe('15:00')
+    expect(formatDuration(15 * MINUTE, { exact: true, msPerPx: 1 })).toBe('15:00.000')
+  })
+  it('without a zoom, shows by length: ms under a minute, seconds under an hour', () => {
+    expect(formatDuration(4321)).toBe('0:04.321')
+    expect(formatDuration(12 * MINUTE + 3 * SECOND + 400)).toBe('12:03')
+    expect(formatDuration(2 * HOUR + 3 * MINUTE)).toBe('2h 3m')
   })
 })

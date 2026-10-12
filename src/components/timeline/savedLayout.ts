@@ -18,6 +18,10 @@ import { getTunables, useSettings } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL, verticalCrossBudget } from './geometry.ts'
 import type { PushBox } from '../../domain/pushClear.ts'
 import { pushClear } from '../../domain/pushClear.ts'
+import { hasArmedAlarm, parseRingKey, ringKey } from '../../domain/alarms.ts'
+import { bellItemId, bellsToShow } from '../../domain/bells.ts'
+import { useUi } from '../../store/ui.ts'
+import { bellDragAt } from './bellDrag.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
@@ -32,10 +36,25 @@ const TOOLS_GAP_BELOW = 4
 const TOOLS_GAP_BESIDE = 6
 
 /** How many tool buttons a chip shows (as InstantColumns draws them): selected, or moving. */
-export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number }): number {
+export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number; selectedBell?: string | null }): number {
   if (o.moving) return 3 // type the time, confirm, cancel
+  // The bell beside the chip, selected: its tools instead (type the offset, delete).
+  if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell && a.offsetMs <= 0)) return BELL_TOOLS
   if (!o.selected) return 0
-  return Number(!i.favorite) + Number(!i.alarm && i.tsEpochMs >= o.now) + Number(o.focused) + 2 // + hide, delete
+  // Favorite, add an alarm (ahead only), move (focused), hide (not with an alarm to ring), delete.
+  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
+}
+
+/** A bell before its instant (BellMarker): its button, and its tools (delete, type the offset) while selected. */
+export const BELL_SIZE = 26
+const BELL_TOOLS = 2
+
+/** A bell's box: the bell, and its tools under it while selected. */
+function bellExtent(selected: boolean, vertical: boolean): { mainExtent: number; crossExtent: number; tail?: number } {
+  const toolsWidth = BELL_TOOLS * TOOL_SIZE + (BELL_TOOLS - 1) * TOOL_GAP
+  const row = TOOLS_GAP_BELOW + TOOL_SIZE
+  if (vertical) return selected ? { mainExtent: CHIP_HEIGHT, crossExtent: Math.max(BELL_SIZE, toolsWidth), tail: row } : { mainExtent: CHIP_HEIGHT, crossExtent: BELL_SIZE }
+  return selected ? { mainExtent: Math.max(BELL_SIZE, toolsWidth), crossExtent: CHIP_HEIGHT + row } : { mainExtent: BELL_SIZE, crossExtent: CHIP_HEIGHT }
 }
 
 /** Whether a chip's tools sit in the row under it (.tl-col__below): always, but beside a moving chip in horizontal (its "Moving" badge is under it). */
@@ -48,7 +67,7 @@ export const chipToolsBelow = (o: { moving: boolean; vertical: boolean }) => o.v
  */
 export function chipToolsExtent(
   i: InstantRecord,
-  o: { selected: boolean; focused: boolean; moving: boolean; editing: boolean; now: number; vertical: boolean },
+  o: { selected: boolean; focused: boolean; moving: boolean; editing: boolean; now: number; vertical: boolean; selectedBell?: string | null },
 ): { tail: number; below: number; toolsWidth: number } {
   const tools = chipToolCount(i, o)
   const toolsWidth = tools > 0 ? tools * TOOL_SIZE + (tools - 1) * TOOL_GAP : 0
@@ -133,12 +152,14 @@ export interface LayoutContext {
   editingId: string | null
   movingId: string | null
   ringingIds: ReadonlySet<string>
+  /** The alarm whose bell is selected: a chip's own bell shows its tools under the chip. */
+  selectedBell?: string | null
   widths: Readonly<Record<string, number>>
   /** Defaults to horizontal. Vertical swaps the chip's extents: its height runs along time. */
   orientation?: 'horizontal' | 'vertical'
 }
 
-/** Layout items for the given instants. Priority: focused 0, selected 1, secondary 1.5, moving/editing 2, ringing 3, upcoming alarm 4, favorite 5, other 6. */
+/** Layout items for the given instants. Priority: focused 0, selected 1, secondary 1.5, moving/editing 2, ringing 3, (bells 3.5), upcoming alarm 4, favorite 5, other 6. */
 export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext): LabelItem[] {
   const vertical = c.orientation === 'vertical'
   return instants.map(i => {
@@ -150,9 +171,9 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
     const ringing = c.ringingIds.has(i.id)
     const width = c.widths[i.id] ?? estimateChipWidth(i.label)
     const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
-      : i.alarm && i.tsEpochMs > c.now ? 4 : i.favorite ? 5 : 6
+      : hasArmedAlarm(i, c.now) ? 4 : i.favorite ? 5 : 6
     // Its tools take room too, so neighbours keep clear of them.
-    const { tail, below, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical })
+    const { tail, below, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical, selectedBell: c.selectedBell })
     const rowWidth = below > 0 ? toolsWidth : 0
     return {
       id: i.id,
@@ -194,6 +215,10 @@ export interface SavedLayout {
   /** Chip id → snoozes it shows. */
   foldCount: Record<string, number>
   clusters: ClusterInfo[]
+  /** Bells before their instants that are drawn (alarm ids, in time order); placed under `bell:<id>` in rows/crossOffsets/shifts. */
+  bellIds: string[]
+  /** Instant id → live bells folded into its chip (too close to stand apart). */
+  bellFolded: Record<string, number>
   /** Rows the chips occupy, at least 1. */
   rowsUsed: number
 }
@@ -209,6 +234,7 @@ const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<strin
 export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
     sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
@@ -235,7 +261,11 @@ export interface SavedLayoutInputs {
   secondary: string | null
   editing: string | null
   moving: string | null
+  /** Ring keys of the ringing alarms. */
   ringing: readonly string[]
+  /** The alarm whose bell is selected (its tools show) or dragged. */
+  selectedBell: string | null
+  draggingBell: string | null
   widths: Readonly<Record<string, number>>
   tunables: unknown
   laneCount: number
@@ -249,6 +279,8 @@ interface CacheEntry {
   inputs: SavedLayoutInputs
   visible: InstantRecord[]
   upcoming: boolean[]
+  /** The bells drawn and folded, as one string ("id,id|instant:n"). */
+  bells: string
   pxPerMs: number
   crossSize: number
   result: SavedLayout
@@ -257,9 +289,9 @@ interface CacheEntry {
 /**
  * The layout as a function of the frame, memoized. Positions are taken relative to the
  * earliest visible instant, so a pure pan changes nothing the layout reads: the cache key
- * is the visible set (and which alarms are still upcoming), zoom (within ZOOM_REUSE), cross size and the inputs.
- * A moving instant rides the screen center, which a pan does move relative to the others,
- * so that mode skips the cache.
+ * is the visible set (and which alarms are still upcoming), the bells drawn and folded, zoom
+ * (within ZOOM_REUSE), cross size and the inputs. A moving instant rides the screen center,
+ * which a pan does move relative to the others, and a dragged bell the pointer, so those skip the cache.
  */
 export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInputs) => SavedLayout {
   let cache: CacheEntry | null = null
@@ -274,16 +306,25 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
       ((!i.hidden || revealed(i)) && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
     const prev = cache
+    const ringingKeys = new Set(c.ringing)
+    const drag = c.draggingBell ? bellDragAt() : null
+    const revealPast = new Set([c.selected, c.mode === 'instant' ? c.focusedInstantId : null].filter((x): x is string => !!x))
+    const bells = bellsToShow(c.instants, {
+      now: f.now, pos: f.pos, lo, hi, ringingKeys, revealPast,
+      collapsePx: getTunables().bellCollapsePx,
+      dragging: drag && drag.alarmId === c.draggingBell ? drag : null,
+    })
+    const bellKey = `${bells.shown.map(b => b.alarm.id).join(',')}|${Object.entries(bells.folded).map(([k, n]) => `${k}:${n}`).join(',')}`
 
     // Cheap probe: walk the instants once against the cached visible set, allocating nothing.
     // A zoom step too small to matter (the tail of zoom smoothing) reuses the layout too: chips
     // glide to their spots anyway, so being off by a pixel or two for a frame doesn't show.
-    if (prev && prev.inputs === c && c.moving === null && Math.abs(f.pxPerMs / prev.pxPerMs - 1) < ZOOM_REUSE && prev.crossSize === f.crossSize) {
+    if (prev && prev.inputs === c && c.moving === null && !c.draggingBell && prev.bells === bellKey && Math.abs(f.pxPerMs / prev.pxPerMs - 1) < ZOOM_REUSE && prev.crossSize === f.crossSize) {
       let n = 0
       let same = true
       for (const i of c.instants) {
         if (!isVisible(i)) continue
-        if (prev.visible[n] !== i || prev.upcoming[n] !== (!!i.alarm && i.tsEpochMs > f.now)) { same = false; break }
+        if (prev.visible[n] !== i || prev.upcoming[n] !== hasArmedAlarm(i, f.now)) { same = false; break }
         n++
       }
       if (same && n === prev.visible.length) return prev.result
@@ -303,10 +344,22 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       focusedId: c.mode === 'instant' ? c.focusedInstantId : null,
       editingId: c.editing,
       movingId: c.moving,
-      ringingIds: new Set(c.ringing),
+      ringingIds: new Set(c.ringing.map(k => parseRingKey(k).instantId)),
+      selectedBell: c.selectedBell,
       widths: c.widths,
       orientation: c.orientation,
     })
+    // Bells before their instants share the chips' room. A live one is never hidden (pinned:
+    // it always gets a place, never a "+N"); they sit next to the axis before ordinary chips.
+    for (const b of bells.shown) {
+      items.push({
+        id: bellItemId(b.alarm.id),
+        pos: f.pos(b.ringTs) - originPos,
+        ...bellExtent(c.selectedBell === b.alarm.id, vertical),
+        priority: 3.5,
+        pinned: true,
+      })
+    }
     const t = getTunables()
     const r = layoutLabels(items, {
       orientation: c.orientation,
@@ -336,6 +389,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       folded: r.folded,
       foldCount: r.foldCount,
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
+      bellIds: bells.shown.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
+      bellFolded: bells.folded,
       rowsUsed: Math.max(1, deepest + 1),
     }
     // Keep the old object when nothing visible changed, so React skips the render.
@@ -343,7 +398,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     cache = {
       inputs: c,
       visible,
-      upcoming: visible.map(i => !!i.alarm && i.tsEpochMs > f.now),
+      upcoming: visible.map(i => hasArmedAlarm(i, f.now)),
+      bells: bellKey,
       pxPerMs: f.pxPerMs,
       crossSize: f.crossSize,
       result,
@@ -367,6 +423,8 @@ export interface SavedLayoutStructure {
   folded: Record<string, string>
   foldCount: Record<string, number>
   clusters: { id: string; memberIds: string[]; topPriority: number }[]
+  bellIds: string[]
+  bellFolded: Record<string, number>
   rowsUsed: number
 }
 
@@ -379,6 +437,7 @@ const sameKeys = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<strin
 export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
@@ -392,10 +451,12 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   folded: l.folded,
   foldCount: l.foldCount,
   clusters: l.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, topPriority: c.topPriority })),
+  bellIds: l.bellIds,
+  bellFolded: l.bellFolded,
   rowsUsed: l.rowsUsed,
 })
 
-export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], rowsUsed: 1 }
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, rowsUsed: 1 }
 
 const source: {
   compute: ReturnType<typeof createSavedLayoutCache>
@@ -444,7 +505,7 @@ function keepClearOfPlus(f: FrameLike, c: SavedLayoutInputs, l: SavedLayout): Sa
     const w = c.widths[id] ?? estimateChipWidth(inst.label)
     const { tail, below, toolsWidth } = chipToolsExtent(inst, {
       selected: c.selected === id, focused: c.mode === 'instant' && c.focusedInstantId === id,
-      moving: c.moving === id, editing: c.editing === id, now: f.now, vertical,
+      moving: c.moving === id, editing: c.editing === id, now: f.now, vertical, selectedBell: c.selectedBell,
     })
     if (!inBand(offset, vertical ? Math.max(w, toolsWidth) : CHIP_HEIGHT)) continue
     const at = (c.moving === id ? cursor : f.pos(inst.tsEpochMs)) + (l.shifts[id] ?? 0)
@@ -498,13 +559,14 @@ export function useSavedLayoutSource(laneCount = 0): number {
   const revealIds = useMemo(() => spans
     .filter(sp => spanIds.includes(sp.id))
     .flatMap(sp => [sp.startInstantId, sp.endInstantId]), [spans, spanIds])
-  const ringing = useAlarms(useShallow(s => s.ringing.map(r => r.instantId)))
+  const ringing = useAlarms(useShallow(s => s.ringing.map(r => ringKey(r.instantId, r.alarmId))))
+  const bellUi = useUi(useShallow(s => ({ selectedBell: s.selectedBell, draggingBell: s.draggingBell })))
   const widths = useChipWidths(s => s.widths)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const inputs = useMemo<SavedLayoutInputs>(
-    () => ({ orientation, dir, instants, ...v, ringing, widths, tunables, laneCount, revealIds }),
-    [orientation, dir, instants, v, ringing, widths, tunables, laneCount, revealIds],
+    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, tunables, laneCount, revealIds }),
+    [orientation, dir, instants, v, ringing, bellUi, widths, tunables, laneCount, revealIds],
   )
   // Set during render so the children rendering next (the chips) read these inputs.
   source.inputs = inputs
