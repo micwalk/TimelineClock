@@ -158,31 +158,56 @@ export function chipName(label: string): string {
 export const showsSeconds = (finestTickMs: number, thresholdMs: number): boolean => finestTickMs < thresholdMs
 
 
-/** How many px of the time axis one unit of a live readout should span before it is shown. */
-const LIVE_UNIT_PX = 30
+// ---------------------------------------------------------------------------
+// Durations at the granularity that matters. One rule for every length the timeline shows
+// (span readings, live lanes, alarm offsets, the stopwatch): the finest of
+//   - what the zoom can resolve: a unit spanning at least DURATION_UNIT_PX on screen;
+//   - what the length calls for: under a minute shows ms (a stopwatch's first lap), under an
+//     hour seconds, so short spans never read as a bare "1m";
+//   - for a snapped or typed value (an alarm's offset: `exact`), what the value holds, so 1m 30s
+//     never reads "1m". Exact values skip the length rule: 15 minutes stays "15m".
 
-/** Decimal places of seconds a live readout shows at this zoom: null = coarse ("26m"), 0 = seconds, 1 = tenths, 3 = ms. */
-export function livePrecision(msPerPx: number): number | null {
-  const unit = msPerPx * LIVE_UNIT_PX
-  if (unit >= MINUTE) return null
-  if (unit >= SECOND) return 0
-  if (unit >= 100) return 1
-  return 3
+/** Units a duration is shown to, coarsest first: minutes ("26m"), seconds, tenths, ms. */
+export type DurationStep = typeof MINUTE | typeof SECOND | 100 | 1
+
+/** How many px of the time axis one unit should span before the zoom shows it. */
+const DURATION_UNIT_PX = 30
+
+/** The finest unit the zoom resolves (no zoom: minutes). */
+function zoomStep(msPerPx: number | undefined): DurationStep {
+  if (msPerPx === undefined) return MINUTE
+  const unit = msPerPx * DURATION_UNIT_PX
+  return unit >= MINUTE ? MINUTE : unit >= SECOND ? SECOND : unit >= 100 ? 100 : 1
 }
 
-/**
- * A live span's length at the precision the zoom supports: "26m" / "1h 5m" zoomed out,
- * "26:13" / "1:05:13" when seconds are visible, then "26:13.4", then "26:13.457".
- */
-export function formatLiveSpan(ms: number, msPerPx: number): string {
-  const p = livePrecision(msPerPx)
+/** The finest unit a value holds: 90s holds seconds, 1.5s tenths. */
+function exactStep(abs: number): DurationStep {
+  const t = Math.round(abs)
+  return t % 100 ? 1 : t % SECOND ? 100 : t % MINUTE ? SECOND : MINUTE
+}
+
+/** The finest unit a duration is shown to (see above). `msPerPx`: the zoom; `exact`: a snapped or typed value. */
+export function durationStep(ms: number, o: { msPerPx?: number; exact?: boolean } = {}): DurationStep {
   const abs = Math.abs(ms)
-  if (p === null) return formatDurationShort(abs)
-  const step = p === 0 ? SECOND : p === 1 ? 100 : 1
+  const byValue: DurationStep = o.exact ? exactStep(abs) : abs < MINUTE ? 1 : abs < HOUR ? SECOND : MINUTE
+  return Math.min(zoomStep(o.msPerPx), byValue) as DurationStep
+}
+
+/** A length to a unit: "26m" / "1h 5m" (minutes), "26:13" / "1:05:13" (seconds), "26:13.4", "0:04.050". */
+export function formatDurationTo(ms: number, step: DurationStep): string {
+  const abs = Math.abs(ms)
+  if (step >= MINUTE) return formatDurationShort(abs)
   const t = Math.floor(abs / step) * step
   const h = Math.floor(t / HOUR)
   const m = Math.floor((t % HOUR) / MINUTE)
   const s = Math.floor((t % MINUTE) / SECOND)
-  const frac = p === 0 ? '' : `.${Math.floor((t % SECOND) / (p === 1 ? 100 : 1)).toString().padStart(p, '0')}`
+  const frac = step === SECOND ? '' : step === 100 ? `.${Math.floor((t % SECOND) / 100)}` : `.${(t % SECOND).toString().padStart(3, '0')}`
   return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}${frac}` : `${m}:${pad2(s)}${frac}`
 }
+
+/** A length at the granularity that matters (durationStep). */
+export const formatDuration = (ms: number, o: { msPerPx?: number; exact?: boolean } = {}): string =>
+  formatDurationTo(ms, durationStep(ms, o))
+
+/** A live span's length at this zoom (formatDuration): "1h 5m" zoomed out, "26:13", "26:13.4", "26:13.457". */
+export const formatLiveSpan = (ms: number, msPerPx: number): string => formatDuration(ms, { msPerPx })

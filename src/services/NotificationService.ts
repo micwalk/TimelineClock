@@ -34,9 +34,10 @@ export class NotificationService {
 	/**
 	 * The instant and TAB_ID ride along in the notification so a click (handled in
 	 * public/sw-extras.js) can bring back this window and go to the alarm. `onClick` is for
-	 * the fallback window notification, used when there is no service worker.
+	 * the fallback window notification, used when there is no service worker. `key` (the
+	 * alarm's ring key) tells apart two alarms of one instant.
 	 */
-	public async notifyAlarm(label: string, target: { instantId: string; onClick: () => void }): Promise<void> {
+	public async notifyAlarm(label: string, target: { instantId: string; key: string; onClick: () => void }): Promise<void> {
 		const supported = this.isSupported()
 		const permission = supported ? Notification.permission : 'unsupported'
 		console.log('[Notif] notifyAlarm called:', { supported, permission, label })
@@ -65,7 +66,7 @@ export class NotificationService {
 				body,
 				icon: '/pwa-192x192.png',
 				badge: '/pwa-64x64.png',
-				tag: `alarm-${target.instantId}`,
+				tag: `alarm-${target.key}`,
 				data: { instantId: target.instantId, tabId: TAB_ID },
 				requireInteraction: true,
 				silent: false

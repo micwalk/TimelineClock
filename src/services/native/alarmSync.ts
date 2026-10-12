@@ -1,8 +1,9 @@
-// Alarmed instants as native alarms, so a timer rings with the app closed or the phone asleep,
+// Alarms as native alarms, so a timer rings with the app closed or the phone asleep,
 // with Dismiss and Snooze on the notification (android/.../Alarms.java). Each sync first replays
 // the answers given from notifications while the page wasn't running, then hands the native
 // side the full list; it works out what to schedule, ring or stop. Decisions:
 // domain/nativeNotifications.
+import { findAlarm, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { desiredNativeAlarms, replayAlarmActions, sanitizeAlarmActions } from '../../domain/nativeNotifications.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { entities, useEntities } from '../../store/entities.ts'
@@ -25,9 +26,17 @@ async function syncOnce() {
   const answers = sanitizeAlarmActions(actions)
   if (answers.length > 0) diag(`replaying ${answers.map(a => a.type).join(', ')}`)
   replayAlarmActions(answers, {
-    isOn: id => !!entities.getInstant(id)?.alarm,
+    isOn: key => {
+      const { instantId, alarmId } = parseRingKey(key)
+      const alarm = findAlarm(entities.getInstant(instantId), alarmId)
+      return !!alarm && !alarm.done
+    },
     dismiss,
-    snooze: (id, at) => snooze(id, SNOOZE_MINUTES, at),
+    snooze: (key, at) => {
+      const newId = snooze(key, SNOOZE_MINUTES, at)
+      const alarm = entities.getInstant(newId)?.alarms?.[0]
+      return newId && alarm ? ringKey(newId, alarm.id) : undefined
+    },
   })
 
   const { instants, spans } = useEntities.getState()

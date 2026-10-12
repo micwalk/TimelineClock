@@ -40,6 +40,10 @@ export interface UiState {
   plusHidden: boolean
   /** The Cursor tag is folded into its arrowhead and its line hidden, for looking around. */
   cursorHidden: boolean
+  /** The alarm (by id) whose bell was tapped: its tools show until the next outside tap. */
+  selectedBell: string | null
+  /** The bell being dragged (its alarm's id): it follows the pointer (timeline/bellDrag). */
+  draggingBell: string | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -54,6 +58,8 @@ export const useUi = create<UiState>(() => ({
   plusMorph: null,
   plusHidden: false,
   cursorHidden: false,
+  selectedBell: null,
+  draggingBell: null,
 }))
 
 export const DROP_HIGHLIGHT_MS = 900
@@ -80,4 +86,6 @@ export const ui = {
   closeLaneTools: () => useUi.setState({ laneTools: null }),
   setPlusMorph: (plusMorph: PlusMorph | null) => useUi.setState({ plusMorph }),
   setPlusHidden: (plusHidden: boolean) => useUi.setState({ plusHidden }),
+  selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
+  setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
 }

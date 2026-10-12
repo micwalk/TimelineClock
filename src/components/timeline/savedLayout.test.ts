@@ -4,10 +4,12 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import type { LayoutContext, SavedLayoutInputs } from './savedLayout.ts'
 import { ZOOM_REUSE, createSavedLayoutCache, estimateChipWidth, layoutItems, layoutStats, useChipWidths } from './savedLayout.ts'
 import { useSettings } from '../../store/settings.ts'
+import type { InstantOpts } from '../../test/fixtures.ts'
+import { instantFields } from '../../test/fixtures.ts'
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
 
-const inst = (id: string, ts: number, extra: Partial<InstantRecord> = {}): InstantRecord => ({ id, tsEpochMs: ts, label: id, ...extra })
+const inst = (id: string, ts: number, extra: InstantOpts = {}): InstantRecord => ({ id, tsEpochMs: ts, label: id, ...instantFields(id, extra) })
 const ctx = (extra: Partial<LayoutContext> = {}): LayoutContext => ({
   now: 1000, pos: ts => ts / 10, mainSize: 800,
   selectedId: null, focusedId: null, editingId: null, movingId: null,
@@ -77,7 +79,7 @@ describe('createSavedLayoutCache', () => {
   })
   const inputs = (instants: InstantRecord[], extra: Partial<SavedLayoutInputs> = {}): SavedLayoutInputs => ({
     orientation: 'horizontal', dir: 1, instants, mode: 'cursor', focusedInstantId: null, selected: null, secondary: null,
-    editing: null, moving: null, ringing: [], widths: {}, tunables: {}, laneCount: 0, ...extra,
+    editing: null, moving: null, ringing: [], selectedBell: null, draggingBell: null, widths: {}, tunables: {}, laneCount: 0, ...extra,
   })
   const crowd = (n: number) => Array.from({ length: n }, (_, k) => inst(`c${k}`, 1000 + k))
 

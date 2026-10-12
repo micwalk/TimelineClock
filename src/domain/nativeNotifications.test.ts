@@ -7,11 +7,13 @@ import {
 } from './nativeNotifications.ts'
 import { IDLE_STOPWATCH } from './quickCreate.ts'
 import { MINUTE, SECOND } from './time.ts'
+import type { InstantOpts } from '../test/fixtures.ts'
+import { instantFields } from '../test/fixtures.ts'
 
 const now = 1_800_000_000_000
 const RING = 5 * MINUTE
-const inst = (id: string, offsetMs: number, opts: Partial<InstantRecord> = {}): InstantRecord =>
-  ({ id, tsEpochMs: now + offsetMs, label: '', ...opts })
+const inst = (id: string, offsetMs: number, opts: InstantOpts = {}): InstantRecord =>
+  ({ id, tsEpochMs: now + offsetMs, label: '', ...instantFields(id, opts) })
 const span = (id: string, a: string, b: string, label = ''): SpanRecord =>
   ({ id, startInstantId: a, endInstantId: b, label, visible: true, endIsNow: false })
 const nowSpan = (id: string, from: string): SpanRecord =>

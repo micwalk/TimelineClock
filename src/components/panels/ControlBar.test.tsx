@@ -151,7 +151,7 @@ describe('Stopwatch and Timer buttons', () => {
     render(<ControlBar />)
     fireEvent.click(screen.getByRole('button', { name: /Start a timer/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: '10m' }))
-    const end = useEntities.getState().instants.find(i => i.alarm)!
+    const end = useEntities.getState().instants.find(i => i.alarms)!
     expect(end.label).toBe('10m timer')
     expect(screen.queryByRole('menu')).toBeNull()
   })
@@ -166,7 +166,7 @@ describe('Stopwatch and Timer buttons', () => {
     expect(useEntities.getState().instants).toHaveLength(0)
     fireEvent.change(input, { target: { value: '13' } })
     fireEvent.submit(input)
-    expect(useEntities.getState().instants.find(i => i.alarm)?.label).toBe('13m timer')
+    expect(useEntities.getState().instants.find(i => i.alarms)?.label).toBe('13m timer')
   })
 
   it('offers recent lengths first', () => {

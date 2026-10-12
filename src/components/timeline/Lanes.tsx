@@ -3,7 +3,8 @@ import { useLayoutEffect, useState } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS, formatLiveSpan, livePrecision, truncateText } from '../../domain/format.ts'
+import { durationStep, formatDurationTo, truncateText } from '../../domain/format.ts'
+import { SECOND } from '../../domain/time.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
@@ -24,30 +25,24 @@ import { engine } from '../../engine/viewportEngine.ts'
 // ---------------------------------------------------------------------------
 // Shared bits
 
-/** Live length of a span ("26:13", "00:10"): whole seconds at finest, so no continuous frames. */
+/**
+ * Live length of a span, at the granularity that matters (format durationStep): "1h 5m" zoomed
+ * out, "26:13", "26:13.4", "0:04.050" (zoomed in, or under a minute: a stopwatch's first lap).
+ * Sub-second readouts ask for frames while they show.
+ */
 function Duration({ a, b }: { a: TimeRef; b: TimeRef }) {
   return (
     <LiveText
-      compute={f => formatDurationHMS(Math.abs(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)))}
-    />
-  )
-}
-
-/**
- * Live length of a span on a live lane's chip, as precise as the zoom allows: "26m" zoomed out,
- * then "26:13", "26:13.4", "26:13.457". Sub-second readouts ask for frames while they show.
- */
-function ShortDuration({ a, b }: { a: TimeRef; b: TimeRef }) {
-  return (
-    <LiveText
       compute={(f, ctx) => {
-        const msPerPx = 1 / f.pxPerMs
-        if ((livePrecision(msPerPx) ?? 0) > 0) ctx.fast()
-        return formatLiveSpan(resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center), msPerPx)
+        const ms = resolveTimeRef(b, f.now, f.center) - resolveTimeRef(a, f.now, f.center)
+        const step = durationStep(ms, { msPerPx: 1 / f.pxPerMs })
+        if (step < SECOND) ctx.fast()
+        return formatDurationTo(ms, step)
       }}
     />
   )
 }
+
 
 /** The longest span name a live lane's chip shows. */
 const LIVE_NAME_MAX = 12
@@ -78,7 +73,7 @@ function LiveImpliedChip({ from, to, a, b }: { from: string; to: string; a: Time
   return (
     <span className="span-chip__text">
       <span className="sr-only">{`${from} to ${to} `}</span>
-      <ShortDuration a={a} b={b} />
+      <Duration a={a} b={b} />
     </span>
   )
 }
@@ -137,7 +132,7 @@ function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
           <span className="span-chip__sep" aria-hidden>·</span>
         </>
       ) : null)}
-      <ShortDuration a={a} b={b} />
+      <Duration a={a} b={b} />
     </span>
   )
 }

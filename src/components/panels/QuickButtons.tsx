@@ -4,7 +4,8 @@ import { useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { ArrowPathIcon, BellAlertIcon, ClockIcon, FlagIcon, StopIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { formatDurationHMS } from '../../domain/format.ts'
+import { durationStep, formatDurationTo } from '../../domain/format.ts'
+import { SECOND } from '../../domain/time.ts'
 import { formatTimerLength, parseTimerInput, stopwatchPhase, timerChoices } from '../../domain/quickCreate.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { useEntities } from '../../store/entities.ts'
@@ -16,9 +17,16 @@ import { CtlButton } from './CtlButton.tsx'
 /** Time of a mark (null if it was deleted: the store prunes it on the next change). */
 const useMarkTime = (id: string | undefined) => useEntities(s => (id ? s.instants.find(i => i.id === id)?.tsEpochMs ?? null : null))
 
-/** Live time since `from` ("00:45", "12:03", "01:02:03"); fixed to `to` when given. */
+/** Live time since `from` ("0:45.123", "12:03", "1:02:03"; format durationStep); fixed to `to` when given. */
 function Elapsed({ from, to }: { from: number; to?: number }) {
-  return <LiveText compute={f => formatDurationHMS((to ?? f.now) - from)} />
+  return (
+    <LiveText compute={(f, ctx) => {
+      const ms = (to ?? f.now) - from
+      const step = durationStep(ms)
+      if (to === undefined && step < SECOND) ctx.fast()
+      return formatDurationTo(ms, step)
+    }} />
+  )
 }
 
 export function StopwatchButton({ style }: { style?: CSSProperties }) {
