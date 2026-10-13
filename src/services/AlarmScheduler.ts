@@ -2,7 +2,8 @@
 // notifications); the decision logic is in domain/alarms.
 import { alarmLabel, alarmsToSkip, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, snoozeLanding, warningsToSkip } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
-import { MINUTE } from '../domain/time.ts'
+import { MINUTE, SECOND } from '../domain/time.ts'
+import { getTunables } from '../store/settings.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
@@ -121,7 +122,7 @@ export function snoozeUntil(key: string, at: number): string | undefined {
   const inst = entities.getInstant(instantId)
   const alarm = findAlarm(inst, alarmId)
   if (!inst || !alarm || alarm.answered) { stopRinging(instantId, [alarmId]); return }
-  const landing = snoozeLanding(inst, alarm, at, Date.now())
+  const landing = snoozeLanding(inst, alarm, at, Date.now(), getTunables().snoozeJoinSec * SECOND)
   entities.answerAlarms(instantId, [alarmId], 'snoozed')
   const nextId = 'joins' in landing ? landing.joins : entities.addAlarm(instantId, { offsetMs: landing.offsetMs, snoozeOf: alarmId })
   stopRinging(instantId, [alarmId])

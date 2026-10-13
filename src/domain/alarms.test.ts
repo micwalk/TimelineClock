@@ -6,7 +6,7 @@ import {
 import { findAdjacent, pushFocusHistory, stepFocusHistory } from './navigation.ts'
 import type { AlarmRecord, InstantRecord } from './entities.ts'
 import { legacyAlarmId, sanitizeInstants } from './entities.ts'
-import { MINUTE } from './time.ts'
+import { MINUTE, SECOND } from './time.ts'
 
 const now = 1_800_000_000_000
 /** An instant `offsetMs` from now with one alarm at it (none when `alarm` is false); its ring key is its id. */
@@ -115,6 +115,21 @@ describe('snoozeLanding', () => {
   it('never lets a warning land past its instant: it joins the alarm there', () => {
     const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
     expect(snoozeLanding(w, w.alarms![0], ts + 2 * MINUTE, now)).toEqual({ joins: 'at', ringTs: ts })
+  })
+  it('rounds to whole seconds before the instant rules, so rounding never makes a second alarm at the instant', () => {
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    // 0.4s before the instant: rounds to 0, and joins rather than adding a second alarm at 0.
+    expect(snoozeLanding(w, w.alarms![0], ts - 400, now, 0)).toEqual({ joins: 'at', ringTs: ts })
+    expect(snoozeLanding(w, w.alarms![0], ts - 2 * MINUTE - 400, now, 0)).toEqual({ offsetMs: 2 * MINUTE, ringTs: ts - 2 * MINUTE })
+  })
+  it('joins the instant when a warning would ring within the join distance before it', () => {
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    expect(snoozeLanding(w, w.alarms![0], ts - 30 * SECOND, now)).toEqual({ joins: 'at', ringTs: ts })
+    expect(snoozeLanding(w, w.alarms![0], ts - 90 * SECOND, now)).toEqual({ offsetMs: 90 * SECOND, ringTs: ts - 90 * SECOND })
+  })
+  it('keeps a snooze of the alarm at the instant after it, by at least a second', () => {
+    const w = wake([{ id: 'at', offsetMs: 0 }])
+    expect(snoozeLanding(w, w.alarms![0], ts + 300, now)).toEqual({ offsetMs: -SECOND, ringTs: ts + SECOND })
   })
   it('or becomes the alarm at the instant when there is none still to ring', () => {
     const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0, answered: 'skipped' }])

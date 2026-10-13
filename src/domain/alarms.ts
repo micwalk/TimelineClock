@@ -62,19 +62,27 @@ export function alarmLabel(inst: InstantRecord, a: AlarmRecord): string {
  * Where snoozing an alarm until `at` lands:
  * - `{ offsetMs }`: a new alarm, that far before its instant (negative: after it).
  * - `{ joins }`: nothing new; the instant's own alarm (that id) still rings and covers it.
- * A warning (before its instant) never lands past the instant: snoozed that far, it becomes
- * the alarm at the instant, or joins the one already there.
+ * Snoozes land on whole seconds ("+5:00", not "+5:04.815"), and the instant rules apply to
+ * that rounded time, so rounding can never make a second alarm at the instant or move one
+ * across it:
+ * - A warning (before its instant) that would land past the instant, or within `joinMs` before
+ *   it (a moment before the instant's own alarm), lands on the instant: it joins the alarm
+ *   already there, or becomes it (offset exactly 0).
+ * - A snooze of the alarm at (or after) its instant stays after it: at least a second.
  */
 export type SnoozeLanding = { offsetMs: number; ringTs: number } | { joins: string; ringTs: number }
 
-export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: number, now: number): SnoozeLanding {
+/** How close before its instant a snoozed warning joins the instant (a tunable overrides it: Settings > Advanced). */
+export const SNOOZE_JOIN_MS = 60 * SECOND
+
+export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: number, now: number, joinMs = SNOOZE_JOIN_MS): SnoozeLanding {
   const ts = inst.tsEpochMs
-  if (alarm.offsetMs > 0 && at >= ts) {
+  let offsetMs = Math.round((ts - at) / SECOND) * SECOND
+  if (alarm.offsetMs > 0 && offsetMs < Math.max(SECOND, joinMs)) {
     const atInstant = inst.alarms?.find(a => a.id !== alarm.id && a.offsetMs === 0 && !a.answered && ts >= now)
     return atInstant ? { joins: atInstant.id, ringTs: ts } : { offsetMs: 0, ringTs: ts }
   }
-  // Whole seconds: a snooze reads "+5:00" after its instant, not "+5:04.815".
-  const offsetMs = Math.round((ts - at) / SECOND) * SECOND
+  if (alarm.offsetMs <= 0) offsetMs = Math.min(offsetMs, -SECOND)
   return { offsetMs, ringTs: ts - offsetMs }
 }
 

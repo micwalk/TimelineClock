@@ -14,9 +14,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **Snoozing adds a bell, not an instant** (TLC-2): a snoozed alarm rings again as another
   bell (⟲) on the same instant, so no more "Snooze 1: Wake up" instants and spans (old ones
   stay as history). Snoozing the alarm at an instant puts its bell after it.
-- A warning before an instant never snoozes past it: snoozed that far, it rings with the
-  instant itself (a 3-minute warning snoozed for 5 minutes rings at the instant, not 2 minutes
-  late).
+- A warning before an instant never snoozes past it: snoozed that far, or to within a minute
+  before it, it rings with the instant itself (a 3-minute warning snoozed for 5 minutes rings
+  at the instant, not 2 minutes late, and never as a second alarm at the same moment).
 - More snooze choices on a ringing alarm: 5 minutes, 10, 15, or a length you type, each saying
   where it lands. Or drag a ringing bell later on the timeline to snooze until there.
 - **Skip alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool

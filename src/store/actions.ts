@@ -764,7 +764,7 @@ export function snoozeLandingFor(key: string, at: number): SnoozeLanding | null 
   const { instantId, alarmId } = parseRingKey(key)
   const inst = entities.getInstant(instantId)
   const alarm = findAlarm(inst, alarmId)
-  return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime()) : null
+  return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND) : null
 }
 
 export { skipAlarms } from '../services/AlarmScheduler.ts'

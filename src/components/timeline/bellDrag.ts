@@ -89,11 +89,11 @@ export function startBellDrag(e: React.PointerEvent<HTMLElement>, instantId: str
     setTimeout(() => { swallowClick = false }, 0)
     const target = entities.getInstant(instantId)
     if (!d || !target || ev.type === 'pointercancel') { engine.invalidate(); return }
-    // A ringing bell: snoozed until where it was let go.
-    if (snoozing) { act.snoozeAlarmUntil(key, Math.max(d.ringTs, engine.sample().now)); return }
     const f = engine.sample()
-    // Let go next to its instant: back onto the chip.
+    // Let go next to its instant: back onto the chip (a ringing one: snoozed until the instant).
     const near = Math.abs(f.pos(target.tsEpochMs) - f.pos(d.ringTs)) < getTunables().bellCollapsePx
+    // A ringing bell: snoozed until where it was let go.
+    if (snoozing) { act.snoozeAlarmUntil(key, Math.max(near ? target.tsEpochMs : d.ringTs, f.now)); return }
     act.setAlarmOffset(instantId, alarmId, near ? 0 : target.tsEpochMs - d.ringTs)
   }
   window.addEventListener('pointermove', onMove)
