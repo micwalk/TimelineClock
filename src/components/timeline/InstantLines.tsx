@@ -65,13 +65,15 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
       if (cls !== n.cls) { n.cls = cls; n.el.className = `tl-col tl-col--line${cls ? ` ${cls}` : ''}` }
       if (Math.abs(x - n.x) > 0.01 || Number.isNaN(n.x)) { n.x = x; placeAlong(n.el, f.orientation, x) }
     }
-    for (const id of savedLayoutAt(f).visibleIds) {
+    const layout = savedLayoutAt(f)
+    for (const id of layout.visibleIds) {
       const inst = byId.get(id)
       if (!inst) continue
       const x = id === movingId ? f.mainSize / 2 - base : (inst.tsEpochMs - s.origin) * k
       // Off screen: no line (a zoom would rewrite it every frame for nothing).
       if (base + x < -LINE_MARGIN_PX || base + x > f.mainSize + LINE_MARGIN_PX) continue
-      place(id, x, lineClass[id] ?? '')
+      // A repeat collapsed into its series' rhythm: a short tick on the axis, not a full line.
+      place(id, x, layout.rhythm[id] ? 'is-rhythm' : lineClass[id] ?? '')
     }
     if (ghostTs !== null) place(GHOST, (ghostTs - s.origin) * k, 'is-ghost')
     for (const [key, n] of s.nodes) {

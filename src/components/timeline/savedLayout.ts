@@ -20,6 +20,8 @@ import type { PushBox } from '../../domain/pushClear.ts'
 import { pushClear } from '../../domain/pushClear.ts'
 import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
+import type { SeriesSummary } from '../../domain/rhythm.ts'
+import { planRhythm, seriesItemId } from '../../domain/rhythm.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
 import { useTimelineInstants } from './timelineInstants.ts'
@@ -97,7 +99,8 @@ export const useChipWidths = create<ChipWidthsState>(set => ({
   widths: {},
   setWidth: (id, width) => set(s => (s.widths[id] === width ? s : { widths: { ...s.widths, [id]: width } })),
   prune: existingIds => set(s => {
-    const stale = Object.keys(s.widths).filter(id => !existingIds.has(id))
+    // Series summary chips (series:<id>) aren't instants: their widths stay.
+    const stale = Object.keys(s.widths).filter(id => !existingIds.has(id) && !id.startsWith('series:'))
     if (stale.length === 0) return s
     const widths = { ...s.widths }
     for (const id of stale) delete widths[id]
@@ -220,6 +223,10 @@ export interface SavedLayout {
   bellIds: string[]
   /** Instant id → live bells folded into its chip (too close to stand apart). */
   bellFolded: Record<string, number>
+  /** Occurrences collapsed into their series' rhythm (id → series): a tick, no chip. */
+  rhythm: Record<string, string>
+  /** Collapsed series' summary chips (placed under `series:<id>`). */
+  seriesChips: SeriesSummary[]
   /** Rows the chips occupy, at least 1. */
   rowsUsed: number
 }
@@ -231,11 +238,15 @@ const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<strin
   return ka.every(k => k in b && a[k] === b[k])
 }
 
+const sameSummaries = (a: readonly SeriesSummary[], b: readonly SeriesSummary[]) =>
+  a.length === b.length && a.every((x, k) => x.seriesId === b[k].seriesId && x.anchorId === b[k].anchorId && x.count === b[k].count && x.nextTs === b[k].nextTs)
+
 /** Structural equality without serializing: the same chips in the same places. */
 export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
     sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
+    sameRecord(a.rhythm, b.rhythm) && sameSummaries(a.seriesChips, b.seriesChips) &&
     sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
@@ -336,7 +347,23 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const origin = visible.reduce((m, i) => Math.min(m, i.tsEpochMs), Infinity)
     const originPos = Number.isFinite(origin) ? f.pos(origin) : 0
     const vertical = c.orientation === 'vertical'
-    const items = layoutItems(visible, {
+    const t = getTunables()
+    // Repeats zoomed out collapse into a rhythm (domain/rhythm): ticks and one summary chip.
+    const ringingIds = new Set(c.ringing.map(k => parseRingKey(k).instantId))
+    const worked = new Set([c.selected, c.secondary, c.mode === 'instant' ? c.focusedInstantId : null, c.editing, c.moving].filter(Boolean))
+    const rhythm = planRhythm(
+      visible.filter(i => i.seriesId).map(i => ({
+        id: i.id, seriesId: i.seriesId!, pos: f.pos(i.tsEpochMs), ts: i.tsEpochMs,
+        keep: !!i.seriesEdited || worked.has(i.id) || ringingIds.has(i.id),
+      })),
+      {
+        now: f.now,
+        gapPx: sid => (vertical ? t.rhythmGapPx : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
+        // Its summary chip sits on screen (clear of the edges) when it can.
+        view: { lo: vertical ? CHIP_HEIGHT : 120, hi: f.mainSize - (vertical ? CHIP_HEIGHT : 120) },
+      },
+    )
+    const items = layoutItems(visible.filter(i => !rhythm.collapsed[i.id]), {
       now: f.now,
       pos: ts => f.pos(ts) - originPos,
       mainSize: f.mainSize,
@@ -345,14 +372,15 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       focusedId: c.mode === 'instant' ? c.focusedInstantId : null,
       editingId: c.editing,
       movingId: c.moving,
-      ringingIds: new Set(c.ringing.map(k => parseRingKey(k).instantId)),
+      ringingIds,
       selectedBell: c.selectedBell,
       widths: c.widths,
       orientation: c.orientation,
     })
     // Bells before their instants share the chips' room. A live one is never hidden (pinned:
     // it always gets a place, never a "+N"); they sit next to the axis before ordinary chips.
-    for (const b of bells.shown) {
+    const shownBells = bells.shown.filter(b => !rhythm.collapsed[b.inst.id])
+    for (const b of shownBells) {
       items.push({
         id: bellItemId(b.alarm.id),
         pos: f.pos(b.ringTs) - originPos,
@@ -361,7 +389,19 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
         pinned: true,
       })
     }
-    const t = getTunables()
+    // A collapsed series' summary chip, at its next occurrence. It stands for many: never a "+N".
+    for (const sm of rhythm.summaries) {
+      const id = seriesItemId(sm.seriesId)
+      const w = c.widths[id] ?? 180
+      items.push({
+        id,
+        pos: f.pos(sm.anchorTs) - originPos,
+        mainExtent: vertical ? CHIP_HEIGHT : w,
+        crossExtent: vertical ? w : CHIP_HEIGHT,
+        priority: 3.6,
+        pinned: true,
+      })
+    }
     const r = layoutLabels(items, {
       orientation: c.orientation,
       crossBudget: vertical ? verticalCrossBudget(f.crossSize, c.laneCount) : Infinity,
@@ -390,8 +430,10 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       folded: r.folded,
       foldCount: r.foldCount,
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
-      bellIds: bells.shown.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
-      bellFolded: bells.folded,
+      bellIds: shownBells.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
+      bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !rhythm.collapsed[id])),
+      rhythm: rhythm.collapsed,
+      seriesChips: rhythm.summaries.filter(sm => r.placed[seriesItemId(sm.seriesId)]),
       rowsUsed: Math.max(1, deepest + 1),
     }
     // Keep the old object when nothing visible changed, so React skips the render.
@@ -426,6 +468,7 @@ export interface SavedLayoutStructure {
   clusters: { id: string; memberIds: string[]; topPriority: number }[]
   bellIds: string[]
   bellFolded: Record<string, number>
+  seriesChips: SeriesSummary[]
   rowsUsed: number
 }
 
@@ -438,7 +481,7 @@ const sameKeys = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<strin
 export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
-    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameSummaries(a.seriesChips, b.seriesChips) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
@@ -454,10 +497,11 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   clusters: l.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, topPriority: c.topPriority })),
   bellIds: l.bellIds,
   bellFolded: l.bellFolded,
+  seriesChips: l.seriesChips,
   rowsUsed: l.rowsUsed,
 })
 
-export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, rowsUsed: 1 }
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, rhythm: {}, seriesChips: [], rowsUsed: 1 }
 
 const source: {
   compute: ReturnType<typeof createSavedLayoutCache>

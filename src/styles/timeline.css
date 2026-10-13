@@ -363,6 +363,32 @@
    tapped (and stored); the chip itself is. */
 .tl-col.is-virtual .chip-bell, .tl-bell.is-virtual { pointer-events: none; }
 
+/* Repeats zoomed out (domain/rhythm): each collapsed occurrence is a short amber tick across the
+   axis instead of a full line, and one summary chip stands for them. */
+.tl-col--line.is-rhythm { --accent: var(--c-alarm); --halo: var(--c-alarm); }
+.tl-col--line.is-rhythm .tl-col__line {
+  top: calc(var(--tl-axis) - 7px);
+  bottom: auto;
+  height: 16px;
+  background: var(--c-alarm);
+  box-shadow: 0 0 calc(5px * var(--glow)) var(--c-alarm);
+}
+.timeline[data-orientation='vertical'] .tl-col--line.is-rhythm .tl-col__line {
+  top: -1px;
+  left: calc(var(--tl-axis) - 7px);
+  right: auto;
+  width: 16px;
+  height: 2px;
+}
+.tl-series { --accent: color-mix(in srgb, var(--c-alarm) 70%, transparent); --halo: var(--c-alarm); }
+.chip--series { gap: 7px; padding: 0 10px 0 8px; border-style: dashed; }
+.tl-series.has-alarm .chip--series { border-left: 3px solid var(--c-alarm); }
+.chip-series__mark { color: var(--c-alarm); font: 800 15px/1 var(--font-ui); }
+.chip-series__rule { color: var(--c-alarm); font: 700 13px/1 var(--font-ui); white-space: nowrap; }
+.chip-series__bell { width: 14px; height: 14px; color: var(--c-alarm); }
+.tl-series .chip { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .tl-series .chip { animation: none; } }
+
 /* The skip tool's two choices. */
 .skip-tool { position: relative; display: inline-flex; }
 .skip-menu { --accent: var(--c-alarm); display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: max-content; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }

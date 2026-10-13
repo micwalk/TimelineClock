@@ -33,12 +33,16 @@ import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } 
 import { InstantLines } from './InstantLines.tsx'
 import { useTimelineInstants } from './timelineInstants.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
-import { describeRepeat } from '../../domain/series.ts'
+import { describeRepeat, occurrenceTs } from '../../domain/series.ts'
+import type { SeriesSummary } from '../../domain/rhythm.ts'
+import { seriesItemId } from '../../domain/rhythm.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
 import { useMorphChip } from './plusMorph.ts'
 import { captureAt } from './capture.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
+import { HOUR, easeInOutCubic } from '../../domain/time.ts'
+import { engine, reducedMotion } from '../../engine/viewportEngine.ts'
 
 /** Vertical: the tools row under a chip stays this far in from the right edge, px. */
 const TOOLS_EDGE = 6
@@ -113,7 +117,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     else act.zoomToTimes([ts, ...(inst.alarms ?? []).filter(a => !a.answered).map(a => ringTime(inst, a))])
   }
   // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
-  const showRelative = !focused && (!!inst.favorite || showBell || selected)
+  // Zoomed out past hours (ticks an hour or coarser), "· in 3d 8h" is noise: only a selected chip keeps it.
+  const coarse = useFrameValue(f => pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms >= HOUR)
+  const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
   const withSeconds = fineSeconds || selected || focused
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
@@ -273,6 +279,9 @@ function CancelTool({ inst }: { inst: InstantRecord }) {
     </div>
   )
 }
+
+/** How long a series' summary chip glides to the occurrence it moves on to, ms. */
+const SERIES_GLIDE_MS = 260
 
 /** The mark on an occurrence of a repeating series. */
 const REPEAT_MARK = '⟳'
@@ -461,6 +470,51 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
 })
 
 /**
+ * A repeating series zoomed out into a rhythm (domain/rhythm): one chip for its occurrences on
+ * screen, at the next one: "⟳ Wake up · Weekdays 9:00a · in 3d 8h". A tap zooms in until they
+ * stand apart.
+ */
+const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummary }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const groupRef = useRef<HTMLDivElement>(null)
+  const id = seriesItemId(summary.seriesId)
+  useChipWidth(groupRef, id)
+  // When it moves on to another occurrence (panned past one), it glides there instead of jumping.
+  const glide = useRef({ from: summary.anchorTs, to: summary.anchorTs, at: -Infinity })
+  if (glide.current.to !== summary.anchorTs) {
+    const g = glide.current
+    const t = Math.min(1, (performance.now() - g.at) / SERIES_GLIDE_MS)
+    glide.current = { from: g.from + (g.to - g.from) * easeInOutCubic(t), to: summary.anchorTs, at: performance.now() }
+  }
+  useChipPlacement(ref, id, false, f => {
+    const g = glide.current
+    const t = reducedMotion() ? 1 : Math.min(1, (f.perf - g.at) / SERIES_GLIDE_MS)
+    if (t < 1) engine.requestFrame()
+    return f.pos(g.from + (g.to - g.from) * easeInOutCubic(t))
+  })
+  const series = useEntities(s => s.groups?.find(g => g.id === summary.seriesId))
+  const vertical = useLayout(s => s.orientation === 'vertical')
+  if (!series) return null
+  const rule = `${describeRepeat(series.repeat)} ${formatClockCompact(occurrenceTs(series, series.from), false)}`
+  const name = displayName(series.label, 'Repeat')
+  const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
+  return (
+    <div ref={ref} className={`tl-col tl-col--label tl-series${series.alarms.length > 0 ? ' has-alarm' : ''}`} role="group" aria-label={`${name}, repeats ${rule}`}>
+      <div ref={groupRef} className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
+        <button type="button" className="chip chip--series glow-box" onClick={zoomIn}
+          title={`${name}: ${summary.count} on screen, ${rule}. Tap to zoom in`}>
+          <span className="chip-series__mark" aria-hidden>{REPEAT_MARK}</span>
+          <span className="chip__name">{name}</span>
+          <span className="chip-series__rule">{rule}</span>
+          {series.alarms.length > 0 && <BellAlertIcon className="chip-series__bell" aria-label="with alarms" />}
+          <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />
+        </button>
+      </div>
+    </div>
+  )
+})
+
+/**
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
@@ -621,6 +675,7 @@ export function SavedInstantColumns() {
             ringing={ringingSet.has(ringKey(b.inst.id, id))} />
         )
       })}
+      {layout.seriesChips.map(sm => <SeriesChip key={sm.seriesId} summary={sm} />)}
       {layout.clusters.map(c => (
         <ClusterChip
           key={c.id}
