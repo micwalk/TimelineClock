@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest'
+import type { InstantRecord } from './entities.ts'
+import type { SeriesRecord } from './series.ts'
+import {
+  EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, dateKey, daysBetween, describeRepeat, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
+  planOccurrences, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant,
+} from './series.ts'
+import { DAY, MINUTE } from './time.ts'
+
+// Monday 2026-10-12, local time.
+const at = (d: number, h = 0, m = 0) => new Date(2026, 9, d, h, m).getTime()
+const series = (o: Partial<SeriesRecord> = {}): SeriesRecord => ({
+  id: 'g', kind: 'series', label: 'Wake up', time: '07:00', repeat: { kind: 'weekly', days: WEEKDAYS }, alarms: [0, 15 * MINUTE], from: '2026-10-12', ...o,
+})
+let n = 0
+const ids = { instant: () => `i${++n}`, alarm: () => `a${++n}` }
+
+describe('dates', () => {
+  it('reads local dates and wall-clock times', () => {
+    expect(dateKey(at(12, 23, 59))).toBe('2026-10-12')
+    expect(clockKey(at(12, 7, 5))).toBe('07:05')
+    expect(nextDateKey('2026-10-31')).toBe('2026-11-01')
+    expect(daysBetween('2026-10-12', '2026-11-02')).toBe(21)
+    expect(occurrenceTs(series(), '2026-10-13')).toBe(at(13, 7))
+  })
+})
+
+describe('occursOn', () => {
+  it('runs on its days, inside its dates, minus skipped ones', () => {
+    const s = series({ until: '2026-10-23', skips: ['2026-10-14'] })
+    expect(['2026-10-11', '2026-10-12', '2026-10-14', '2026-10-17', '2026-10-23', '2026-10-26'].map(d => occursOn(s, d)))
+      .toEqual([false, true, false, false, true, false])
+  })
+  it('every N days from its first date', () => {
+    const s = series({ repeat: { kind: 'interval', every: 3 } })
+    expect(['2026-10-12', '2026-10-13', '2026-10-15', '2026-10-18'].map(d => occursOn(s, d))).toEqual([true, false, true, true])
+  })
+})
+
+describe('nextOccurrence', () => {
+  it('finds the next one after now, and none for a paused or ended series', () => {
+    expect(nextOccurrence(series(), at(12, 8))).toEqual({ date: '2026-10-13', ts: at(13, 7) })
+    expect(nextOccurrence(series(), at(16, 8))?.date).toBe('2026-10-19') // Friday → Monday
+    expect(nextOccurrence(series({ paused: true }), at(12, 8))).toBeNull()
+    expect(nextOccurrence(series({ until: '2026-10-12' }), at(12, 8))).toBeNull()
+  })
+})
+
+describe('planOccurrences', () => {
+  it('makes the missing occurrences from now to the horizon, with the series’ alarms', () => {
+    const made = planOccurrences([series()], [], at(12, 8), at(12, 8) + 7 * DAY, ids)
+    expect(made.map(i => i.occurrence)).toEqual(['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-19'])
+    expect(made[0]).toMatchObject({ tsEpochMs: at(13, 7), label: 'Wake up', seriesId: 'g' })
+    expect(made[0].alarms?.map(a => a.offsetMs)).toEqual([0, 15 * MINUTE])
+  })
+  it('never makes one twice, nor back-fills the past, nor for a paused series', () => {
+    const have: InstantRecord = { id: 'x', tsEpochMs: at(13, 7), label: 'Wake up', seriesId: 'g', occurrence: '2026-10-13' }
+    expect(planOccurrences([series()], [have], at(12, 8), at(13, 23), ids)).toEqual([])
+    expect(planOccurrences([series()], [], at(12, 8), at(12, 23), ids)).toEqual([]) // today's 7:00 has passed
+    expect(planOccurrences([series({ paused: true })], [], at(12, 8), at(20), ids)).toEqual([])
+  })
+})
+
+describe('remaking after a rule change', () => {
+  it('remakes only occurrences ahead, never edited, with no alarm answered', () => {
+    const now = at(13, 12)
+    const list: InstantRecord[] = [
+      { id: 'past', tsEpochMs: at(13, 7), label: '', seriesId: 'g', occurrence: '2026-10-13' },
+      { id: 'plain', tsEpochMs: at(14, 7), label: '', seriesId: 'g', occurrence: '2026-10-14' },
+      { id: 'edited', tsEpochMs: at(15, 7), label: '', seriesId: 'g', occurrence: '2026-10-15', seriesEdited: true },
+      { id: 'answered', tsEpochMs: at(16, 7), label: '', seriesId: 'g', occurrence: '2026-10-16', alarms: [{ id: 'a', offsetMs: 2 * DAY, answered: 'dismissed' }] },
+      { id: 'other', tsEpochMs: at(14, 7), label: '', seriesId: 'h', occurrence: '2026-10-14' },
+    ]
+    expect(remakeable(series(), list, now).map(i => i.id)).toEqual(['plain'])
+  })
+  it('takes the rule from an occurrence: name, time of day, alarms (not snoozes)', () => {
+    const inst: InstantRecord = { id: 'i', tsEpochMs: at(14, 6, 30), label: 'Up!', alarms: [
+      { id: 'a', offsetMs: 0 }, { id: 'b', offsetMs: 10 * MINUTE }, { id: 'c', offsetMs: -5 * MINUTE, snoozeOf: 'a' },
+    ] }
+    expect(ruleFromOccurrence(inst)).toEqual({ label: 'Up!', time: '06:30', alarms: [10 * MINUTE, 0] })
+    expect(seriesFromInstant(inst, { kind: 'weekly', days: WEEKENDS }, 'g2')).toMatchObject({ id: 'g2', from: '2026-10-14', time: '06:30' })
+  })
+})
+
+describe('describeRepeat', () => {
+  it('reads like a phone alarm', () => {
+    expect(describeRepeat({ kind: 'weekly', days: EVERY_DAY })).toBe('Daily')
+    expect(describeRepeat({ kind: 'weekly', days: WEEKDAYS })).toBe('Weekdays')
+    expect(describeRepeat({ kind: 'weekly', days: [0, 6] })).toBe('Weekends')
+    expect(describeRepeat({ kind: 'weekly', days: [5, 1, 3] })).toBe('Mon, Wed, Fri')
+    expect(describeRepeat({ kind: 'interval', every: 3 })).toBe('Every 3 days')
+  })
+})
+
+describe('sanitizeGroups', () => {
+  it('keeps well-formed series only', () => {
+    const good = series({ until: '2026-12-01', skips: ['2026-10-14', 'bad'], paused: true })
+    const out = sanitizeGroups([good, { ...good, id: 'g' }, { ...series({ id: 'h' }), time: '25:00' }, { ...series({ id: 'k' }), repeat: { kind: 'weekly', days: [] } }, 'junk'])
+    expect(out).toEqual([{ ...good, skips: ['2026-10-14'] }])
+  })
+})

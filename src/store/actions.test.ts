@@ -5,7 +5,8 @@ import { useAlarms } from './alarms.ts'
 import { ringKey } from '../domain/alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
-import { HOUR, MINUTE } from '../domain/time.ts'
+import { DAY, HOUR, MINUTE } from '../domain/time.ts'
+import { EVERY_DAY, dateKey } from '../domain/series.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
@@ -15,7 +16,7 @@ import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
-  useEntities.setState({ instants: [], spans: [] })
+  useEntities.setState({ instants: [], spans: [], groups: [] })
   useView.setState(initialViewState())
   useAlarms.setState({ ringing: [] })
 })
@@ -794,5 +795,59 @@ describe('backup export and import', () => {
     settings.setGlow(0.5)
     act.importBackup(backup, { settings: false, data: true, mode: 'combine' })
     expect(useSettings.getState().glow).toBe(0.5)
+  })
+})
+
+describe('repeating series (TLC-2)', () => {
+  const occurrences = (seriesId: string) => useEntities.getState().instants.filter(i => i.seriesId === seriesId).sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+  const daily = { kind: 'weekly' as const, days: EVERY_DAY }
+  const start = () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Wake up', { alarm: true })
+    act.repeatInstant(id, daily)
+    return { id, seriesId: instant(id).seriesId! }
+  }
+
+  it('repeating an instant makes it the first occurrence and makes the next two weeks', () => {
+    const { id, seriesId } = start()
+    const list = occurrences(seriesId)
+    expect(list[0].id).toBe(id)
+    expect(list.length).toBeGreaterThanOrEqual(14)
+    expect(list[1].tsEpochMs - list[0].tsEpochMs).toBeGreaterThan(22 * HOUR) // a day apart (DST-proof)
+    expect(list[1]).toMatchObject({ label: 'Wake up', alarms: [{ offsetMs: 0 }] })
+  })
+
+  it('editing one occurrence changes that one only, and offers to apply it to all future ones', () => {
+    const { seriesId } = start()
+    const second = occurrences(seriesId)[1]
+    act.renameInstant(second.id, 'Sleep in')
+    expect(instant(second.id)).toMatchObject({ label: 'Sleep in', seriesEdited: true })
+    expect(occurrences(seriesId)[2].label).toBe('Wake up')
+    expect(useUi.getState().seriesHint).toBe(second.id)
+    act.applyToFutureOccurrences(second.id)
+    expect(entities.getGroup(seriesId)?.label).toBe('Sleep in')
+    expect(occurrences(seriesId).slice(1).every(i => i.label === 'Sleep in')).toBe(true)
+  })
+
+  it('deleting one occurrence skips its date; deleting it and all later ones ends the series there', () => {
+    const { seriesId } = start()
+    const [, second, third] = occurrences(seriesId)
+    act.deleteOccurrences(second.id, 'this')
+    expect(entities.getGroup(seriesId)?.skips).toEqual([second.occurrence])
+    act.syncSeries()
+    expect(occurrences(seriesId).some(i => i.occurrence === second.occurrence)).toBe(false)
+    act.deleteOccurrences(third.id, 'later')
+    expect(occurrences(seriesId).map(i => i.occurrence)).toEqual([dateKey(instant(occurrences(seriesId)[0].id).tsEpochMs)])
+    expect(entities.getGroup(seriesId)?.until! < third.occurrence!).toBe(true)
+    act.syncSeries(Date.now() + 30 * DAY)
+    expect(occurrences(seriesId)).toHaveLength(1)
+  })
+
+  it('pausing removes the untouched occurrences ahead; running it again makes them again', () => {
+    const { seriesId } = start()
+    const n = occurrences(seriesId).length
+    act.setSeriesPaused(seriesId, true)
+    expect(occurrences(seriesId)).toHaveLength(0)
+    act.setSeriesPaused(seriesId, false)
+    expect(occurrences(seriesId).length).toBe(n)
   })
 })

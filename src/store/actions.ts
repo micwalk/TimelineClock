@@ -7,7 +7,7 @@ import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
-import { MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
+import { DAY, MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
@@ -24,7 +24,10 @@ import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { SNOOZE_MINUTES, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import type { Repeat } from '../domain/series.ts'
+import { OCCURRENCE_HORIZON_MAX_MS, OCCURRENCE_HORIZON_MS, dateKey, occurrenceTs, planOccurrences, remakeable, ruleFromOccurrence, seriesFromInstant } from '../domain/series.ts'
+import { newAlarmId, newInstantId } from '../domain/entities.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
@@ -520,6 +523,7 @@ export function toggleFavorite(id: string) {
 export function addAlarm(id: string): string | undefined {
   if (!entities.getInstant(id)) return
   const alarmId = entities.addAlarm(id)
+  touchOccurrence(id)
   void primeNotifications() // the first bell asks for notification permission
   return alarmId
 }
@@ -529,6 +533,7 @@ export function removeAlarm(id: string, alarmId: string) {
   const key = ringKey(id, alarmId)
   if (isAlarmRinging(key)) dismiss(key)
   entities.removeAlarm(id, alarmId)
+  touchOccurrence(id)
   if (useUi.getState().selectedBell === alarmId) ui.selectBell(null)
 }
 
@@ -544,6 +549,7 @@ export function setAlarmOffset(id: string, alarmId: string, offsetMs: number) {
   const earliest = alarm.offsetMs < 0 ? -Infinity : 0
   const latest = Math.max(earliest === 0 ? 0 : -Infinity, inst.tsEpochMs - nowTime())
   entities.setAlarmOffset(id, alarmId, Math.min(Math.max(earliest, offsetMs), latest))
+  if (!alarm.snoozeOf) touchOccurrence(id)
 }
 
 /** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
@@ -572,12 +578,16 @@ export function setInstantHidden(id: string, hidden: boolean) {
 }
 
 export function renameInstant(id: string, label: string) {
+  if (entities.getInstant(id)?.label !== label) touchOccurrence(id)
   entities.setInstantLabel(id, label)
   view.editInstant(null)
 }
 
 export function deleteInstant(id: string) {
   const inst = entities.getInstant(id)
+  // An occurrence deleted on its own: its date is skipped, so the series doesn't make it again.
+  const series = inst?.occurrence ? entities.getGroup(inst.seriesId) : undefined
+  if (series && inst?.occurrence) entities.putGroup({ ...series, skips: [...(series.skips ?? []), inst.occurrence] })
   const wasFocused = v().viewFocusMode === 'instant' && v().focusedInstantId === id
   dismissInstant(id)
   for (const sp of useEntities.getState().spans) {
@@ -612,6 +622,7 @@ export function confirmMove() {
   const mm = v().moveMode
   if (!mm) return
   entities.setInstantTime(mm.instantId, frame().center)
+  touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId, false)
 }
@@ -622,6 +633,7 @@ export function moveInstantTo(ts: number) {
   if (!mm) return
   view.setTimeCenter(ts)
   entities.setInstantTime(mm.instantId, ts)
+  touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId)
 }
@@ -770,7 +782,115 @@ export function snoozeLandingFor(key: string, at: number, exact = false): Snooze
   return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND, exact) : null
 }
 
-export { cancelAlarms } from '../services/AlarmScheduler.ts'
+/** Cancels an instant's warnings or all its alarms (services/AlarmScheduler); on an occurrence, that one only. */
+export function cancelAlarms(instantId: string, which: 'warnings' | 'all') {
+  cancelAlarmsNow(instantId, which)
+  touchOccurrence(instantId, false) // that day's alarms only: nothing to apply to the rule
+}
+
+// ---------------------------------------------------------------------------
+// Repeating series (TLC-2; domain/series). Occurrences are ordinary instants made a rolling
+// window ahead; editing one edits that one (and offers "Apply to all future").
+
+/** Marks an occurrence as edited on its own (rule changes leave it alone) and offers to apply the edit to all future ones. */
+function touchOccurrence(id: string, offerApply = true) {
+  const inst = entities.getInstant(id)
+  if (!inst?.seriesId) return
+  if (!inst.seriesEdited) entities.patchInstant(id, () => ({ seriesEdited: true }))
+  if (offerApply) ui.showSeriesHint(id)
+}
+
+/** How far ahead occurrences are made: the horizon, or as far as the view reaches (up to the cap). */
+let occurrencesUntil = 0
+
+/**
+ * Makes the occurrences due within the horizon (or `until`, as far as the view reaches, capped):
+ * called on start, hourly, when series change, and as the view moves further ahead.
+ */
+export function syncSeries(until?: number) {
+  const now = Date.now()
+  const want = Math.min(now + OCCURRENCE_HORIZON_MAX_MS, Math.max(now + OCCURRENCE_HORIZON_MS, until ?? 0, occurrencesUntil > now ? occurrencesUntil : 0))
+  occurrencesUntil = want
+  const { groups, instants } = useEntities.getState()
+  if (!groups || groups.length === 0) return
+  entities.addInstants(planOccurrences(groups, instants, now, want, { instant: newInstantId, alarm: newAlarmId }))
+}
+
+/** Remakes a series' untouched occurrences ahead (after its rule changed). */
+function remakeSeries(seriesId: string) {
+  const series = entities.getGroup(seriesId)
+  if (!series) return
+  const gone = remakeable(series, useEntities.getState().instants, Date.now())
+  for (const i of gone) { dismissInstant(i.id); view.forgetInstant(i.id) }
+  entities.deleteInstants(gone.map(i => i.id))
+  syncSeries()
+}
+
+/**
+ * Repeats an instant (it becomes its series' first occurrence), or, on an occurrence, changes
+ * how its series repeats from now on.
+ */
+export function repeatInstant(id: string, repeat: Repeat) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  if (inst.seriesId && entities.getGroup(inst.seriesId)) {
+    const series = entities.getGroup(inst.seriesId)!
+    entities.putGroup({ ...series, repeat })
+    remakeSeries(series.id)
+    return
+  }
+  const series = seriesFromInstant(inst, repeat)
+  entities.putGroup(series)
+  entities.patchInstant(id, () => ({ seriesId: series.id, occurrence: dateKey(inst.tsEpochMs), seriesEdited: false }))
+  syncSeries()
+}
+
+/** "Apply to all future": an edited occurrence's name, time of day and alarms become its series' rule. */
+export function applyToFutureOccurrences(id: string) {
+  const inst = entities.getInstant(id)
+  const series = entities.getGroup(inst?.seriesId)
+  if (!inst || !series) return
+  entities.putGroup({ ...series, ...ruleFromOccurrence(inst) })
+  entities.patchInstant(id, () => ({ seriesEdited: false }))
+  ui.showSeriesHint(null)
+  remakeSeries(series.id)
+}
+
+/** Pauses a series (its untouched occurrences ahead go; none are made) or runs it again. */
+export function setSeriesPaused(seriesId: string, paused: boolean) {
+  const series = entities.getGroup(seriesId)
+  if (!series) return
+  entities.putGroup({ ...series, paused })
+  if (paused) remakeSeries(seriesId)
+  else syncSeries()
+}
+
+/**
+ * Deletes an occurrence on its own (its date is skipped), or it and all later ones (the series
+ * ends the day before; earlier occurrences stay as history).
+ */
+export function deleteOccurrences(id: string, which: 'this' | 'later') {
+  const inst = entities.getInstant(id)
+  const series = entities.getGroup(inst?.seriesId)
+  if (!inst?.occurrence || !series || which === 'this') { deleteInstant(id); return }
+  const date = inst.occurrence
+  const prev = dateKey(occurrenceTs(series, date) - DAY)
+  entities.putGroup({ ...series, until: series.until && series.until < prev ? series.until : prev })
+  for (const i of useEntities.getState().instants) {
+    if (i.seriesId === series.id && i.occurrence && i.occurrence >= date) deleteInstant(i.id)
+  }
+}
+
+/** Ends a series now: its occurrences ahead go (those that passed stay as history). */
+export function endSeries(seriesId: string) {
+  const series = entities.getGroup(seriesId)
+  if (!series) return
+  const next = useEntities.getState().instants
+    .filter(i => i.seriesId === seriesId && i.occurrence && i.tsEpochMs > Date.now())
+    .sort((a, b) => a.tsEpochMs - b.tsEpochMs)[0]
+  if (next) deleteOccurrences(next.id, 'later')
+  else entities.putGroup({ ...series, until: dateKey(Date.now()) })
+}
 
 /** What a ringing alarm's card offers (by ring key). */
 export function ringingChoicesFor(key: string): RingingChoices | null {
@@ -790,7 +910,7 @@ export function exportBackup(date = new Date()): Backup {
   delete preferences.layoutVersion
   const { autoDismissMs, unattended } = useAlarms.getState()
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
-  const { instants, spans } = useEntities.getState()
+  const { instants, spans, groups } = useEntities.getState()
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -800,7 +920,7 @@ export function exportBackup(date = new Date()): Backup {
       alarms: { autoDismissMs, unattended },
       view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
     },
-    data: { instants, spans },
+    data: { instants, spans, groups: groups ?? [] },
   }
 }
 
@@ -827,7 +947,7 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
     const before = useEntities.getState()
     const merged = importedData(before, backup.data, choice.mode)
     const synced = syncFavorites(merged.instants, merged.spans)
-    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans }
+    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [] }
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

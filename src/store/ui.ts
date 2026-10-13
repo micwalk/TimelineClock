@@ -44,6 +44,8 @@ export interface UiState {
   selectedBell: string | null
   /** The bell being dragged (its alarm's id): it follows the pointer (timeline/bellDrag). */
   draggingBell: string | null
+  /** An occurrence of a repeating series just edited on its own: its chip offers "Apply to all future" for a while. */
+  seriesHint: string | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -60,7 +62,12 @@ export const useUi = create<UiState>(() => ({
   cursorHidden: false,
   selectedBell: null,
   draggingBell: null,
+  seriesHint: null,
 }))
+
+/** How long an edited occurrence offers "Apply to all future". */
+export const SERIES_HINT_MS = 8000
+let seriesHintTimer: ReturnType<typeof setTimeout> | null = null
 
 export const DROP_HIGHLIGHT_MS = 900
 let dropTimer: ReturnType<typeof setTimeout> | null = null
@@ -88,4 +95,10 @@ export const ui = {
   setPlusHidden: (plusHidden: boolean) => useUi.setState({ plusHidden }),
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
+  showSeriesHint(id: string | null) {
+    if (seriesHintTimer) clearTimeout(seriesHintTimer)
+    seriesHintTimer = null
+    useUi.setState({ seriesHint: id })
+    if (id) seriesHintTimer = setTimeout(() => { seriesHintTimer = null; useUi.setState(s => (s.seriesHint === id ? { seriesHint: null } : s)) }, SERIES_HINT_MS)
+  },
 }

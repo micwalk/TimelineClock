@@ -2,6 +2,8 @@
 // Parsing never trusts the file; merging keeps the "one span to Now per instant" rule.
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants, sanitizeSpans } from './entities.ts'
+import type { GroupRecord } from './series.ts'
+import { sanitizeGroups } from './series.ts'
 
 export const BACKUP_FORMAT = 'timeline-clock-backup'
 export const BACKUP_VERSION = 1
@@ -9,6 +11,8 @@ export const BACKUP_VERSION = 1
 export interface BackupData {
   instants: InstantRecord[]
   spans: SpanRecord[]
+  /** Repeating series (missing from backups made before them). */
+  groups?: GroupRecord[]
 }
 
 /** Settings sections, kept as raw records here; the stores sanitize them on import. */
@@ -46,7 +50,8 @@ export function cleanData(data: BackupData): BackupData {
   // At most one span to Now per instant (the last one).
   const nowSpanByStart = new Map<string, string>()
   for (const s of spans) if (s.endIsNow) nowSpanByStart.set(s.startInstantId, s.id)
-  return { instants, spans: spans.filter(s => !s.endIsNow || nowSpanByStart.get(s.startInstantId) === s.id) }
+  const groups = [...new Map((data.groups ?? []).map(g => [g.id, g])).values()]
+  return { instants, spans: spans.filter(s => !s.endIsNow || nowSpanByStart.get(s.startInstantId) === s.id), ...(groups.length > 0 ? { groups } : {}) }
 }
 
 /** Reads a backup file's text. Accepts files with settings, data or both. */
@@ -73,7 +78,7 @@ export function parseBackup(text: string): ParseResult {
   }
   if (r.data && typeof r.data === 'object') {
     const d = asRecord(r.data)
-    backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans) })
+    backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups) })
   }
   if (!backup.settings && !backup.data) return { ok: false, error: 'The backup has no settings or data.' }
   return { ok: true, backup }
@@ -89,6 +94,7 @@ export function combineData(current: BackupData, incoming: BackupData): BackupDa
   return cleanData({
     instants: [...current.instants, ...incoming.instants],
     spans: [...current.spans.filter(s => !(s.endIsNow && incomingNowStarts.has(s.startInstantId))), ...incoming.spans],
+    groups: [...(current.groups ?? []), ...(incoming.groups ?? [])],
   })
 }
 

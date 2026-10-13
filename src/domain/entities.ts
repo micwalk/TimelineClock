@@ -12,6 +12,11 @@ export interface InstantRecord {
   snoozeOriginalId?: string
   /** Hidden from the timeline (no line or chip) by the user; its spans and Agenda row stay. */
   hidden?: boolean
+  /** An occurrence of a repeating series (domain/series): the series, and its date ("YYYY-MM-DD"). */
+  seriesId?: string
+  occurrence?: string
+  /** Changed on its own (name, time, alarms): the series' rule changes leave it alone. */
+  seriesEdited?: boolean
 }
 
 /** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */
