@@ -23,6 +23,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
+import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
 import { bellDragAt, consumeBellDragClick, startBellDrag } from './bellDrag.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
@@ -256,18 +257,20 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
 function CancelTool({ inst }: { inst: InstantRecord }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   usePopoverDismiss(ref, () => setOpen(false), open)
   const warnings = warningsToCancel(inst).length
   const all = openAlarms(inst).length
   // A menu only when there is a choice (warnings and the alarm at the instant); otherwise the tap cancels.
   const choice = warnings > 0 && warnings < all
+  useKeepOnScreen(menuRef, open && choice)
   const label = all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'
   return (
     <div ref={ref} className="skip-tool">
       <IconButton icon={BellSlashIcon} label={choice ? 'Cancel alarms…' : label} color={bellColor} bare pressed={open}
         onClick={() => (choice ? setOpen(o => !o) : act.cancelAlarms(inst.id, 'all'))} />
       {open && choice && (
-        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Cancel alarms">
+        <div ref={menuRef} className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Cancel alarms">
           <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'warnings'); setOpen(false) }}>
             Cancel warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
           </button>
@@ -293,14 +296,16 @@ const REPEAT_MARK = '⟳'
 function RepeatTool({ inst }: { inst: InstantRecord }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   usePopoverDismiss(ref, () => setOpen(false), open)
+  useKeepOnScreen(menuRef, open)
   const series = useEntities(s => (inst.seriesId ? s.groups?.find(g => g.id === inst.seriesId) : undefined))
   return (
     <div ref={ref} className="skip-tool">
       <IconButton icon={ArrowPathIcon} label={series ? `Repeats ${describeRepeat(series.repeat)}: change` : 'Repeat'} color="var(--c-alarm)" bare pressed={open || !!series}
         onClick={() => setOpen(o => !o)} />
       {open && (
-        <div className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Repeat">
+        <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Repeat">
           <div className="repeat-menu__title">{series ? `Repeats ${describeRepeat(series.repeat).toLowerCase()} at ${formatClockCompact(inst.tsEpochMs, false)}` : `Repeat at ${formatClockCompact(inst.tsEpochMs, false)}`}</div>
           <RepeatPicker value={series?.repeat ?? null} onChange={r => { if (r) act.repeatInstant(inst.id, r) }} />
           {series && (
@@ -321,12 +326,14 @@ function RepeatTool({ inst }: { inst: InstantRecord }) {
 function DeleteOccurrenceTool({ inst }: { inst: InstantRecord }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   usePopoverDismiss(ref, () => setOpen(false), open)
+  useKeepOnScreen(menuRef, open)
   return (
     <div ref={ref} className="skip-tool">
       <IconButton icon={TrashIcon} label="Delete…" color="var(--c-danger)" className="glow-box" pressed={open} onClick={() => setOpen(o => !o)} />
       {open && (
-        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Delete">
+        <div ref={menuRef} className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Delete">
           <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.deleteOccurrences(inst.id, 'this'); setOpen(false) }}>
             Delete this one
           </button>
