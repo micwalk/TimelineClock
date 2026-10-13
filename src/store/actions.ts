@@ -25,8 +25,8 @@ import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
-import type { SnoozeLanding } from '../domain/alarms.ts'
-import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
+import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
+import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -767,7 +767,15 @@ export function snoozeLandingFor(key: string, at: number): SnoozeLanding | null 
   return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND) : null
 }
 
-export { skipAlarms } from '../services/AlarmScheduler.ts'
+export { cancelAlarms } from '../services/AlarmScheduler.ts'
+
+/** What a ringing alarm's card offers (by ring key). */
+export function ringingChoicesFor(key: string): RingingChoices | null {
+  const { instantId, alarmId } = parseRingKey(key)
+  const inst = entities.getInstant(instantId)
+  const alarm = findAlarm(inst, alarmId)
+  return inst && alarm ? ringingChoices(inst, alarm, nowTime(), SNOOZE_MINUTES * MINUTE, getTunables().snoozeJoinSec * SECOND) : null
+}
 
 // ---------------------------------------------------------------------------
 // Backup: export and import

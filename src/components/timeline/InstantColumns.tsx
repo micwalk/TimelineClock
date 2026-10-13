@@ -11,7 +11,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
-import { hasArmedAlarm, openAlarms, ringKey, ringTime, warningsToSkip } from '../../domain/alarms.ts'
+import { hasArmedAlarm, openAlarms, ringKey, ringTime, warningsToCancel } from '../../domain/alarms.ts'
 import { bellItemId, isLiveAlarm } from '../../domain/bells.ts'
 import { displayName } from '../../domain/entities.ts'
 import { endpointName } from '../../domain/spans.ts'
@@ -135,7 +135,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     <>
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
-      {openAlarms(inst).length > 0 && <SkipTool inst={inst} />}
+      {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
       {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* An alarm still to ring is never hidden. */}
       {(inst.hidden || !armed) && (
@@ -228,30 +228,28 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
 }
 
 /**
- * Skip an instant's alarms before they ring (the opposite of a snooze): its warnings, keeping
- * the alarm at the instant, or all of them. Skipped alarms stay as history.
+ * Cancel an instant's alarms (the opposite of a snooze): its warnings, keeping the alarm at the
+ * instant, or all of them. One tap when there is no choice; a menu when there is.
  */
-function SkipTool({ inst }: { inst: InstantRecord }) {
+function CancelTool({ inst }: { inst: InstantRecord }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   usePopoverDismiss(ref, () => setOpen(false), open)
-  const warnings = warningsToSkip(inst).length
+  const warnings = warningsToCancel(inst).length
   const all = openAlarms(inst).length
-  // A menu only when there is a choice (warnings and the alarm at the instant); otherwise the tap skips.
+  // A menu only when there is a choice (warnings and the alarm at the instant); otherwise the tap cancels.
   const choice = warnings > 0 && warnings < all
-  const label = all > 1 ? `Skip all ${all} alarms` : 'Skip this alarm'
+  const label = all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'
   return (
     <div ref={ref} className="skip-tool">
-      <IconButton icon={BellSlashIcon} label={choice ? 'Skip alarms…' : label} color={bellColor} bare pressed={open}
-        onClick={() => (choice ? setOpen(o => !o) : act.skipAlarms(inst.id, 'all'))} />
+      <IconButton icon={BellSlashIcon} label={choice ? 'Cancel alarms…' : label} color={bellColor} bare pressed={open}
+        onClick={() => (choice ? setOpen(o => !o) : act.cancelAlarms(inst.id, 'all'))} />
       {open && choice && (
-        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Skip alarms">
-          {choice && (
-            <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'warnings'); setOpen(false) }}>
-              Skip warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
-            </button>
-          )}
-          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'all'); setOpen(false) }}>
+        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Cancel alarms">
+          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'warnings'); setOpen(false) }}>
+            Cancel warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
+          </button>
+          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'all'); setOpen(false) }}>
             {label}
           </button>
         </div>

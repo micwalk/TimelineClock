@@ -65,7 +65,8 @@ export function bellsToShow(instants: readonly InstantRecord[], o: BellOptions):
         if (live) folded[inst.id] = (folded[inst.id] ?? 0) + 1
         continue
       }
-      if (ringTs < o.lo || ringTs > o.hi) continue
+      // Off screen, a bell still counts while its line to its instant crosses the screen.
+      if (Math.max(ringTs, inst.tsEpochMs) < o.lo || Math.min(ringTs, inst.tsEpochMs) > o.hi) continue
       shown.push({ inst, alarm, ringTs, past: !live })
     }
   }

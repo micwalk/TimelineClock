@@ -17,11 +17,14 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - A warning before an instant never snoozes past it: snoozed that far, or to within a minute
   before it, it rings with the instant itself (a 3-minute warning snoozed for 5 minutes rings
   at the instant, not 2 minutes late, and never as a second alarm at the same moment).
-- More snooze choices on a ringing alarm: 5 minutes, 10, 15, or a length you type, each saying
-  where it lands. Or drag a ringing bell later on the timeline to snooze until there.
-- **Skip alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool
-  skips its warnings (keeping the alarm at the instant) or all of them, and a ringing warning
-  offers "Skip the rest". Skipped alarms stay as history.
+- A cleaner ringing alarm: Dismiss and Snooze 5m (saying when it will ring again), then Until
+  start for a warning, Other… to type any length right there (the keyboard comes up, and it
+  shows when it will ring as you type), and Dismiss all when the instant has more alarms. Or drag
+  a ringing bell later on the timeline to snooze until there.
+- **Cancel alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool
+  cancels its warnings (keeping the alarm at the instant) or all of them. Alarms that hadn't rung
+  yet are simply gone; only alarms that rang stay as history.
+- An alarm bell's line to its instant still shows when the bell itself is off screen.
 - A timer finishes when the last of its snoozes is dismissed, not when it is first snoozed.
 
 ## 0.3.0 — 2026-10-12

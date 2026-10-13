@@ -399,14 +399,19 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }, { id: warnId, offsetMs: 3 * MINUTE, answered: 'snoozed' }])
   })
 
-  it('skipping warnings keeps the alarm at the instant; skipping all answers every one, as history', () => {
+  it('cancelling deletes alarms still to ring (warnings only, or all); one that rang is dismissed, as history', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Meeting', { alarm: true })
+    const atId = instant(id).alarms![0].id
     const w = act.addAlarm(id)!
     entities.setAlarmOffset(id, w, 15 * MINUTE)
-    act.skipAlarms(id, 'warnings')
-    expect(instant(id).alarms!.map(a => a.answered)).toEqual([undefined, 'skipped'])
-    act.skipAlarms(id, 'all')
-    expect(instant(id).alarms!.map(a => a.answered)).toEqual(['skipped', 'skipped'])
+    act.cancelAlarms(id, 'warnings')
+    expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }])
+    const ringingW = act.addAlarm(id)!
+    entities.setAlarmOffset(id, ringingW, HOUR + MINUTE) // due a minute ago: it rang
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId: ringingW, label: 'Meeting in 1h', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
+    act.cancelAlarms(id, 'all')
+    expect(instant(id).alarms).toEqual([{ id: ringingW, offsetMs: HOUR + MINUTE, answered: 'dismissed' }])
+    expect(useAlarms.getState().ringing).toEqual([])
   })
 })
 

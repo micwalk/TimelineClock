@@ -317,20 +317,60 @@
   background: rgba(255, 255, 255, 0.08);
 }
 .alarm-btn--silence svg { width: 18px; height: 18px; }
-/* Under Dismiss / Snooze: other snooze lengths, a typed one, and Skip the rest (a warning). */
+/* The card: name and time, the live time to its instant, Dismiss / Snooze, then a row of quieter
+   choices that turns into the custom snooze box in place (the two cross-fade in one grid cell). */
 .alarm-card { position: relative; }
-.alarm-card__more { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.alarm-chip {
-  --accent: var(--c-alarm);
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  font: 700 13px/1 var(--font-ui);
+.alarm-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.alarm-card__head .alarm-card__time { margin: 0; }
+.alarm-card__rel { display: block; margin: 3px 0 10px; color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
+.alarm-btn__at { font-weight: 600; opacity: 0.8; }
+.alarm-card__more { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 8px; }
+.alarm-card__links,
+.alarm-card__custom {
+  grid-area: 1 / 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
-.alarm-chip--skip { --accent: var(--ink-dim); margin-left: auto; }
-.alarm-card__entry { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 2; }
+.alarm-card__links { flex-wrap: wrap; row-gap: 2px; }
+.alarm-card__custom { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.alarm-card__more.is-custom .alarm-card__links { opacity: 0; transform: translateY(-6px); pointer-events: none; }
+.alarm-card__more.is-custom .alarm-card__custom { opacity: 1; transform: none; pointer-events: auto; }
+.alarm-link {
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: none;
+  color: var(--c-alarm);
+  font: 700 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.alarm-link:hover { background: rgba(255, 255, 255, 0.07); }
+.alarm-link__at { margin-left: 3px; color: var(--ink-dim); font-weight: 600; }
+.alarm-link--all { margin-left: auto; color: var(--ink-dim); }
+.alarm-link--go { flex: none; }
+.alarm-link--go:disabled { opacity: 0.4; cursor: default; }
+.alarm-custom__input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid var(--c-alarm);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: 700 15px/1 var(--font-mono);
+  box-shadow: 0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--c-alarm) 45%, transparent);
+  outline: none;
+}
+.alarm-custom__input::placeholder { color: var(--ink-faint); font-weight: 600; }
+.alarm-custom__input[aria-invalid='true'] { border-color: var(--c-danger); }
+.alarm-custom__at { flex: none; min-width: 0; color: var(--c-alarm); font-size: 13px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .alarm-card__links, .alarm-card__custom { transition: none; }
+}
 
 /* Bell icon on the timeline while ringing */
 .icon-btn.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }

@@ -90,7 +90,7 @@ export const entities = {
   removeAlarm: (id: string, alarmId: string) => patchAlarms(id, list => list.filter(a => a.id !== alarmId)),
   setAlarmOffset: (id: string, alarmId: string, offsetMs: number) =>
     patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.round(offsetMs) } : a))),
-  /** Answers alarms (dismissed, snoozed, skipped): they stay as history and never ring again. */
+  /** Answers alarms that rang (dismissed, snoozed): they stay as history and never ring again. */
   answerAlarms: (id: string, alarmIds: readonly string[], answer: AlarmAnswer) =>
     patchAlarms(id, list => list.map(a => (alarmIds.includes(a.id) && !a.answered ? { ...a, answered: answer } : a))),
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  alarmLabel, alarmsToSkip, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, snoozeBaseLabel, snoozeLabel, snoozeLanding,
-  syncAlarmVisibility, warningsToSkip,
+  alarmLabel, alarmsToCancel, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, ringingChoices, snoozeBaseLabel, snoozeLabel,
+  snoozeLanding, syncAlarmVisibility, warningsToCancel,
 } from './alarms.ts'
 import { findAdjacent, pushFocusHistory, stepFocusHistory } from './navigation.ts'
 import type { AlarmRecord, InstantRecord } from './entities.ts'
@@ -91,11 +91,12 @@ describe('stored alarms', () => {
   it('keep well-formed alarms only, with distinct ids; only a snooze rings after its instant', () => {
     const [a] = sanitizeInstants([{ id: 'i', tsEpochMs: 5, label: '', alarms: [
       { id: 'a', offsetMs: 60_000, answered: 'dismissed' }, { id: 'a', offsetMs: 1 }, { id: 'b', offsetMs: -5 }, { id: 'c' }, 'junk',
-      { id: 'd', offsetMs: 0, answered: 'maybe' }, { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'skipped' },
+      { id: 'd', offsetMs: 0, answered: 'maybe' }, { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'snoozed' },
+      { id: 'f', offsetMs: 0, answered: 'skipped' },
     ] }])
     expect(a.alarms).toEqual([
       { id: 'a', offsetMs: 60_000, answered: 'dismissed' }, { id: 'b', offsetMs: 0 }, { id: 'd', offsetMs: 0 },
-      { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'skipped' },
+      { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'snoozed' },
     ])
   })
   it('read 0.3\u2019s `done: true` as dismissed', () => {
@@ -132,18 +133,32 @@ describe('snoozeLanding', () => {
     expect(snoozeLanding(w, w.alarms![0], ts + 300, now)).toEqual({ offsetMs: -SECOND, ringTs: ts + SECOND })
   })
   it('or becomes the alarm at the instant when there is none still to ring', () => {
-    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0, answered: 'skipped' }])
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0, answered: 'dismissed' }])
     expect(snoozeLanding(w, w.alarms![0], ts + 2 * MINUTE, now)).toEqual({ offsetMs: 0, ringTs: ts })
   })
 })
 
-describe('skipping', () => {
-  it('skips warnings but keeps the alarm at the instant; or skips all unanswered ones', () => {
+describe('ringingChoices', () => {
+  const ts = now + 10 * MINUTE
+  it('a warning: Snooze 5m only while it lands before the instant; Until start; the others to answer', () => {
+    const w = withAlarms('w', 10 * MINUTE, [{ id: 'w8', offsetMs: 8 * MINUTE }, { id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    expect(ringingChoices(w, w.alarms![0], now, 5 * MINUTE)).toEqual({ snooze: { ringTs: now + 5 * MINUTE }, untilStart: { ringTs: ts }, others: 2 })
+    // 3 minutes to go: 5 more would pass the instant.
+    expect(ringingChoices(w, w.alarms![1], ts - 3 * MINUTE, 5 * MINUTE).snooze).toBeNull()
+  })
+  it('the alarm at the instant (or a snooze after it): Snooze 5m, no Until start', () => {
+    const w = withAlarms('w', 0, [{ id: 'at', offsetMs: 0 }])
+    expect(ringingChoices(w, w.alarms![0], now, 5 * MINUTE)).toEqual({ snooze: { ringTs: now + 5 * MINUTE }, untilStart: null, others: 0 })
+  })
+})
+
+describe('cancelling', () => {
+  it('covers warnings but keeps the alarm at the instant; or all unanswered ones', () => {
     const w = withAlarms('w', 10 * MINUTE, [
       { id: 'w15', offsetMs: 15 * MINUTE }, { id: 'w5', offsetMs: 5 * MINUTE }, { id: 'at', offsetMs: 0 }, { id: 'heard', offsetMs: 7 * MINUTE, answered: 'dismissed' },
     ])
-    expect(warningsToSkip(w).map(a => a.id)).toEqual(['w15', 'w5'])
-    expect(alarmsToSkip(w).map(a => a.id)).toEqual(['w15', 'w5', 'at'])
+    expect(warningsToCancel(w).map(a => a.id)).toEqual(['w15', 'w5'])
+    expect(alarmsToCancel(w).map(a => a.id)).toEqual(['w15', 'w5', 'at'])
   })
 })
 

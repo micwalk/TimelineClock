@@ -14,8 +14,8 @@ export interface InstantRecord {
   hidden?: boolean
 }
 
-/** How an alarm was answered: kept as history, it never rings again. */
-export type AlarmAnswer = 'dismissed' | 'snoozed' | 'skipped'
+/** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */
+export type AlarmAnswer = 'dismissed' | 'snoozed'
 
 /**
  * One alarm on an instant. It rings `offsetMs` before the instant: when the instant's span to
@@ -30,11 +30,11 @@ export interface AlarmRecord {
   offsetMs: number
   /** A snooze: the alarm it snoozed (which is answered 'snoozed'). */
   snoozeOf?: string
-  /** Answered: dismissed, snoozed (another alarm rings later) or skipped (cancelled before it rang). */
+  /** Answered after it rang: dismissed, or snoozed (another alarm rings later). */
   answered?: AlarmAnswer
 }
 
-const ANSWERS: readonly string[] = ['dismissed', 'snoozed', 'skipped'] satisfies AlarmAnswer[]
+const ANSWERS: readonly string[] = ['dismissed', 'snoozed'] satisfies AlarmAnswer[]
 
 export const NOW_SENTINEL = '__NOW__'
 
@@ -66,6 +66,8 @@ function sanitizeAlarms(data: unknown): AlarmRecord[] {
     if (!x || typeof x !== 'object') return []
     const r = x as Record<string, unknown>
     if (typeof r.id !== 'string' || seen.has(r.id) || typeof r.offsetMs !== 'number' || !Number.isFinite(r.offsetMs)) return []
+    // 'skipped' (a test build): cancelled before it rang, which now deletes it.
+    if (r.answered === 'skipped') return []
     seen.add(r.id)
     // `done: true` was 0.3's answered alarm.
     const answered = typeof r.answered === 'string' && ANSWERS.includes(r.answered) ? r.answered as AlarmAnswer : r.done === true ? 'dismissed' : undefined

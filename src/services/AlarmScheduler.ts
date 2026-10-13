@@ -1,6 +1,6 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
-import { alarmLabel, alarmsToSkip, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, snoozeLanding, warningsToSkip } from '../domain/alarms.ts'
+import { alarmLabel, alarmsToCancel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, ringTime, snoozeLanding, warningsToCancel } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE, SECOND } from '../domain/time.ts'
 import { getTunables } from '../store/settings.ts'
@@ -134,16 +134,19 @@ export const snooze = (key: string, minutes = SNOOZE_MINUTES, at?: number): stri
   snoozeUntil(key, at ?? Date.now() + minutes * MINUTE)
 
 /**
- * Skips an instant's alarms before they ring (the opposite of a snooze): its warnings (the alarm
- * at the instant stays), or all of them. Skipped alarms stay as history; ringing ones stop.
+ * Cancels an instant's alarms (the opposite of a snooze): its warnings (the alarm at the instant
+ * stays), or all of them. Those that rang (ringing, or due already) are dismissed and stay as
+ * history; those still to ring are deleted, as if never set.
  */
-export function skipAlarms(instantId: string, which: 'warnings' | 'all') {
+export function cancelAlarms(instantId: string, which: 'warnings' | 'all') {
   const inst = entities.getInstant(instantId)
   if (!inst) return
-  const ids = (which === 'warnings' ? warningsToSkip(inst) : alarmsToSkip(inst)).map(a => a.id)
-  if (ids.length === 0) return
-  entities.answerAlarms(instantId, ids, 'skipped')
-  stopRinging(instantId, ids)
+  const now = Date.now()
+  const ringing = new Set(useAlarms.getState().ringing.filter(r => r.instantId === instantId).map(r => r.alarmId))
+  for (const a of which === 'warnings' ? warningsToCancel(inst) : alarmsToCancel(inst)) {
+    if (ringing.has(a.id) || ringTime(inst, a) <= now) dismiss(ringKey(instantId, a.id))
+    else entities.removeAlarm(instantId, a.id)
+  }
 }
 
 /** Stops the sound but keeps alarms on screen (in the Android app, their notifications too). */

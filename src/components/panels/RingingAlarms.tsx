@@ -1,71 +1,108 @@
 // Ringing alarm panel (top right). Subscribes to the alarm store; no polling.
-// Each alarm: Dismiss, Snooze (5m, or 10m / 15m / a typed length), and for a warning before its
-// instant, "Skip the rest" (its other warnings; the alarm at the instant stays). A warning's
-// snooze never lands past its instant: the buttons say where they land ("Until 9:00").
-import { useState } from 'react'
+// Each ringing alarm is a card:
+//   Meeting                                 10:24p
+//   in 2:41                                          ← time to its instant, live
+//   [ Dismiss ]  [ Snooze 5m · 10:26 ]
+//   Until start · 10:24   ·   Other…   ·   Dismiss all 3
+// Snooze 5m shows for a warning only while it still lands before the instant; Until start only
+// for a warning (it then takes the big button's place if 5m doesn't fit); Dismiss all only when
+// the instant has other alarms to answer. Other… turns that row into a box to type a length
+// ("10", "1h30"), in place, with the keyboard up and where it lands shown as you type.
+import { useRef, useState } from 'react'
 import { BellAlertIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
-import { formatClock12h, formatClockCompact } from '../../domain/format.ts'
+import { LiveText } from '../../engine/LiveText.tsx'
+import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import type { RingingAlarm } from '../../domain/alarms.ts'
 import { ringKey } from '../../domain/alarms.ts'
-import { MINUTE } from '../../domain/time.ts'
-import { entities } from '../../store/entities.ts'
+import { displayName } from '../../domain/entities.ts'
+import { parseTimerInput } from '../../domain/quickCreate.ts'
 import { useAlarms } from '../../store/alarms.ts'
+import { useEntities } from '../../store/entities.ts'
 import * as act from '../../store/actions.ts'
-import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
 
-/** Snooze lengths offered; 5 minutes is the big button. */
-const SNOOZE_CHOICES = [5, 10, 15]
-
-/** The snooze choices for an alarm: each length and where it lands, keeping only those that land apart ("Until 9:00" once). */
-function snoozeChoices(key: string, now: number): { minutes: number; text: string }[] {
-  const seen = new Set<number>()
-  return SNOOZE_CHOICES.flatMap(minutes => {
-    const landing = act.snoozeLandingFor(key, now + minutes * MINUTE)
-    if (!landing || seen.has(landing.ringTs)) return []
-    seen.add(landing.ringTs)
-    const capped = landing.ringTs < now + minutes * MINUTE
-    return [{ minutes, text: capped ? `Until ${formatClockCompact(landing.ringTs, false)}` : `${minutes}m` }]
-  })
-}
+const clock = (ts: number) => formatClockCompact(ts, false)
+const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
 
 function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
   const key = ringKey(alarm.instantId, alarm.alarmId)
-  const [typing, setTyping] = useState(false)
-  const record = entities.getInstant(alarm.instantId)?.alarms?.find(a => a.id === alarm.alarmId)
-  const warning = !!record && record.offsetMs > 0
-  const [first, ...more] = snoozeChoices(key, act.nowTime())
+  // Re-render when the instant changes (renamed, other alarms answered).
+  const inst = useEntities(s => s.instants.find(i => i.id === alarm.instantId))
+  const choices = act.ringingChoicesFor(key)
+  const [custom, setCustom] = useState(false)
+  const [text, setText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const ts = inst?.tsEpochMs ?? alarm.tsEpochMs
+  const name = displayName(inst?.label, clock(ts))
+
+  const typedMs = parseTimerInput(text)
+  const typedLanding = typedMs !== null ? act.snoozeLandingFor(key, act.nowTime() + typedMs) : null
+  const submitCustom = () => {
+    if (typedMs === null) return
+    act.snoozeAlarmUntil(key, act.nowTime() + typedMs)
+  }
+  const openCustom = () => {
+    setCustom(true)
+    // Focus in the tap itself, so phones bring the keyboard up.
+    inputRef.current?.focus()
+  }
+  const closeCustom = () => { setCustom(false); setText('') }
+
+  const big = choices?.snooze
+    ? { text: 'Snooze 5m', at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, 5) }
+    : choices?.untilStart
+      ? { text: 'Until start', at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
+      : null
+  const untilStartLink = choices?.snooze && choices.untilStart ? choices.untilStart : null
+
   return (
     <div className="alarm-card">
-      <div className="alarm-card__label">{alarm.label || 'Alarm'}</div>
-      <div className="alarm-card__time mono">{formatClock12h(alarm.tsEpochMs)}</div>
+      <div className="alarm-card__head">
+        <span className="alarm-card__label">{name}</span>
+        <span className="alarm-card__time mono">{clock(ts)}</span>
+      </div>
+      <LiveText className="alarm-card__rel" watch={bySecond} compute={f => formatRelativeShort(ts - f.now)} />
       <div className="alarm-card__actions">
         <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}>Dismiss</button>
-        {first && (
-          <button type="button" className="alarm-btn alarm-btn--snooze glow-box" onClick={() => act.snoozeAlarm(key, first.minutes)}>
-            Snooze {first.text}
+        {big && (
+          <button type="button" className="alarm-btn alarm-btn--snooze glow-box" onClick={big.run}>
+            {big.text} <span className="alarm-btn__at">· {clock(big.at)}</span>
           </button>
         )}
       </div>
-      <div className="alarm-card__more">
-        {more.map(c => (
-          <button key={c.minutes} type="button" className="alarm-chip glow-box" onClick={() => act.snoozeAlarm(key, c.minutes)}>{c.text}</button>
-        ))}
-        <button type="button" className="alarm-chip glow-box" aria-label="Snooze for a typed length" onClick={() => setTyping(true)}>…</button>
-        {warning && (
-          <button type="button" className="alarm-chip alarm-chip--skip glow-box" onClick={() => act.skipAlarms(alarm.instantId, 'warnings')}
-            title="Skip this and its other warnings; the alarm at the instant still rings">
-            Skip the rest
-          </button>
-        )}
+      <div className={`alarm-card__more${custom ? ' is-custom' : ''}`}>
+        <div className="alarm-card__links" aria-hidden={custom}>
+          {untilStartLink && (
+            <button type="button" className="alarm-link" tabIndex={custom ? -1 : 0} onClick={() => act.snoozeAlarmUntil(key, untilStartLink.ringTs)}>
+              Until start <span className="alarm-link__at">{clock(untilStartLink.ringTs)}</span>
+            </button>
+          )}
+          <button type="button" className="alarm-link" tabIndex={custom ? -1 : 0} onClick={openCustom}>Other…</button>
+          {choices && choices.others > 0 && (
+            <button type="button" className="alarm-link alarm-link--all" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId, 'all')}
+              title="Dismiss this and cancel the instant's other alarms">
+              Dismiss all {choices.others + 1}
+            </button>
+          )}
+        </div>
+        <form className="alarm-card__custom" aria-hidden={!custom} onSubmit={e => { e.preventDefault(); submitCustom() }}>
+          <input
+            ref={inputRef}
+            className="alarm-custom__input mono"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') closeCustom() }}
+            onBlur={() => { if (!text) closeCustom() }}
+            placeholder="10, 25m, 1h30"
+            aria-label="Snooze for (minutes, or like 1h30)"
+            aria-invalid={text !== '' && typedMs === null}
+            enterKeyHint="done"
+            autoComplete="off"
+            tabIndex={custom ? 0 : -1}
+          />
+          <span className="alarm-custom__at mono" aria-live="polite">{typedLanding ? `→ ${clock(typedLanding.ringTs)}` : ''}</span>
+          <button type="submit" className="alarm-link alarm-link--go" disabled={typedMs === null} tabIndex={custom ? 0 : -1}>Snooze</button>
+        </form>
       </div>
-      {typing && (
-        <TimeEntry
-          title="Snooze for"
-          className="alarm-card__entry"
-          offset={{ initialMs: 5 * MINUTE, from: 'Now', unsigned: true, onSubmit: ms => { act.snoozeAlarmUntil(key, act.nowTime() + Math.max(MINUTE / 60, ms)); setTyping(false) } }}
-          onCancel={() => setTyping(false)}
-        />
-      )}
     </div>
   )
 }

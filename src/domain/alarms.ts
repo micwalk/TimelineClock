@@ -89,11 +89,32 @@ export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: numbe
 /** A warning: an alarm before its instant. */
 export const isWarning = (a: AlarmRecord) => a.offsetMs > 0
 
-/** The alarms "Skip warnings" answers: unanswered warnings (the alarm at the instant stays). */
-export const warningsToSkip = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered && isWarning(a))
+/** The alarms "Cancel warnings" covers: unanswered warnings (the alarm at the instant stays). */
+export const warningsToCancel = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered && isWarning(a))
 
-/** The alarms "Skip all" answers: every unanswered one. */
-export const alarmsToSkip = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered)
+/** The alarms "Cancel all" covers: every unanswered one. */
+export const alarmsToCancel = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered)
+
+/** What a ringing alarm's card offers (components/panels/RingingAlarms). */
+export interface RingingChoices {
+  /** Snooze 5 minutes: shown for a warning only while 5 minutes still lands before its instant. */
+  snooze: { ringTs: number } | null
+  /** A warning: snooze until its instant starts. */
+  untilStart: { ringTs: number } | null
+  /** The instant's other alarms still to answer ("Dismiss all" when there are any). */
+  others: number
+}
+
+export function ringingChoices(inst: InstantRecord, alarm: AlarmRecord, now: number, snoozeMs: number, joinMs = SNOOZE_JOIN_MS): RingingChoices {
+  const five = snoozeLanding(inst, alarm, now + snoozeMs, now, joinMs)
+  const warning = isWarning(alarm)
+  const lands = !warning || ('offsetMs' in five && five.offsetMs > 0)
+  return {
+    snooze: lands ? { ringTs: five.ringTs } : null,
+    untilStart: warning ? { ringTs: inst.tsEpochMs } : null,
+    others: (inst.alarms ?? []).filter(a => a.id !== alarm.id && !a.answered).length,
+  }
+}
 
 export interface DueAlarm {
   inst: InstantRecord
