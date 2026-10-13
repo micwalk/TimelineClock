@@ -837,7 +837,7 @@ describe('repeating series (TLC-2)', () => {
     expect(occurrences(seriesId).some(i => i.occurrence === second.occurrence)).toBe(false)
     act.deleteOccurrences(third.id, 'later')
     expect(occurrences(seriesId).map(i => i.occurrence)).toEqual([dateKey(instant(occurrences(seriesId)[0].id).tsEpochMs)])
-    expect(entities.getGroup(seriesId)?.until! < third.occurrence!).toBe(true)
+    expect((entities.getGroup(seriesId)?.until ?? '') < (third.occurrence ?? '')).toBe(true)
     act.syncSeries(Date.now() + 30 * DAY)
     expect(occurrences(seriesId)).toHaveLength(1)
   })
