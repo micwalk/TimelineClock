@@ -74,7 +74,7 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
       <div className={`alarm-card__more${custom ? ' is-custom' : ''}`}>
         <div className="alarm-card__links" aria-hidden={custom}>
           {untilStartLink && (
-            <button type="button" className="alarm-link" tabIndex={custom ? -1 : 0} onClick={() => act.snoozeAlarmUntil(key, untilStartLink.ringTs)}>
+            <button type="button" className="alarm-link glow-box" tabIndex={custom ? -1 : 0} onClick={() => act.snoozeAlarmUntil(key, untilStartLink.ringTs)}>
               Until start <span className="alarm-link__at">{clock(untilStartLink.ringTs)}</span>
             </button>
           )}
@@ -82,7 +82,7 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
             <span>Other…</span><PencilIcon aria-hidden />
           </button>
           {choices && choices.others > 0 && (
-            <button type="button" className="alarm-link alarm-link--all" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId, 'all')}
+            <button type="button" className="alarm-link alarm-link--all glow-box" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId, 'all')}
               title="Dismiss this and cancel the instant's other alarms">
               Dismiss all {choices.others + 1}
             </button>
@@ -104,7 +104,7 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
             tabIndex={custom ? 0 : -1}
           />
           <span className="alarm-custom__at mono" aria-live="polite">{typedLanding ? `→ ${clock(typedLanding.ringTs)}` : ''}</span>
-          <button type="submit" className="alarm-link alarm-link--go" disabled={typedMs === null} tabIndex={custom ? 0 : -1}>Snooze</button>
+          <button type="submit" className="alarm-link alarm-link--go glow-box" disabled={typedMs === null} tabIndex={custom ? 0 : -1}>Snooze</button>
         </form>
       </div>
     </div>

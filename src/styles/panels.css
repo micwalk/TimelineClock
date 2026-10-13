@@ -335,19 +335,26 @@
   min-height: 34px;
   transition: opacity 180ms ease, transform 180ms ease;
 }
-.alarm-card__links { flex-wrap: wrap; row-gap: 2px; }
+.alarm-card__links { flex-wrap: wrap; gap: 6px; }
 .alarm-card__custom { opacity: 0; transform: translateY(6px); pointer-events: none; }
 .alarm-card__more.is-custom .alarm-card__links { opacity: 0; transform: translateY(-6px); pointer-events: none; }
 .alarm-card__more.is-custom .alarm-card__custom { opacity: 1; transform: none; pointer-events: auto; }
+/* The quieter choices are still buttons: outlined boxes, each in its action's colour. */
 .alarm-link {
-  padding: 7px 8px;
+  --accent: var(--c-alarm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1.5px solid var(--accent);
   border-radius: 8px;
-  background: none;
-  color: var(--c-alarm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
   font: 700 13px/1 var(--font-ui);
   white-space: nowrap;
 }
-.alarm-link:hover { background: rgba(255, 255, 255, 0.07); }
+.alarm-link:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 /* "Other…": drawn as a box you type into, so it reads as the way to a custom length. */
 .alarm-other {
   display: inline-flex;
@@ -368,9 +375,9 @@
 }
 .alarm-other > svg { width: 13px; height: 13px; color: var(--c-alarm); }
 .alarm-other:hover { border-color: var(--c-alarm); }
-.alarm-link__at { margin-left: 3px; color: var(--ink-dim); font-weight: 600; }
-.alarm-link--all { margin-left: auto; color: var(--ink-dim); }
-.alarm-link--go { flex: none; }
+.alarm-link__at { color: color-mix(in srgb, var(--accent) 70%, #fff); font-weight: 600; opacity: 0.85; }
+.alarm-link--all { --accent: var(--c-danger); margin-left: auto; }
+.alarm-link--go { flex: none; background: color-mix(in srgb, var(--accent) 45%, transparent); color: #fff; }
 .alarm-link--go:disabled { opacity: 0.4; cursor: default; }
 .alarm-custom__input {
   flex: 1;
