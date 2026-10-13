@@ -237,18 +237,22 @@ function SkipTool({ inst }: { inst: InstantRecord }) {
   usePopoverDismiss(ref, () => setOpen(false), open)
   const warnings = warningsToSkip(inst).length
   const all = openAlarms(inst).length
+  // A menu only when there is a choice (warnings and the alarm at the instant); otherwise the tap skips.
+  const choice = warnings > 0 && warnings < all
+  const label = all > 1 ? `Skip all ${all} alarms` : 'Skip this alarm'
   return (
     <div ref={ref} className="skip-tool">
-      <IconButton icon={BellSlashIcon} label="Skip alarms" color={bellColor} bare pressed={open} onClick={() => setOpen(o => !o)} />
-      {open && (
+      <IconButton icon={BellSlashIcon} label={choice ? 'Skip alarms…' : label} color={bellColor} bare pressed={open}
+        onClick={() => (choice ? setOpen(o => !o) : act.skipAlarms(inst.id, 'all'))} />
+      {open && choice && (
         <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Skip alarms">
-          {warnings > 0 && warnings < all && (
+          {choice && (
             <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'warnings'); setOpen(false) }}>
               Skip warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
             </button>
           )}
           <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'all'); setOpen(false) }}>
-            Skip {all > 1 ? `all ${all} alarms` : 'this alarm'}
+            {label}
           </button>
         </div>
       )}
