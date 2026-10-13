@@ -360,7 +360,11 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
         now: f.now,
         gapPx: sid => (vertical ? t.rhythmGapPx : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
         // Its summary chip sits on screen (clear of the edges) when it can.
-        view: { lo: vertical ? CHIP_HEIGHT : 120, hi: f.mainSize - (vertical ? CHIP_HEIGHT : 120) },
+        view: sid => {
+          // Clear of the ends by a chip's height (vertical) or half its own width (horizontal).
+          const margin = vertical ? CHIP_HEIGHT : (c.widths[seriesItemId(sid)] ?? 240) / 2 + 8
+          return { lo: margin, hi: f.mainSize - margin }
+        },
         // Vertical summaries are wide: two side by side would run off screen, so they stack along time.
         spacing: vertical ? CHIP_HEIGHT + t.chipGapPx : 0,
       },

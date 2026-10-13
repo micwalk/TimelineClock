@@ -27,7 +27,7 @@ describe('planRhythm', () => {
   })
 
   it('sits on screen: at the first occurrence ahead that is on screen', () => {
-    const plan = planRhythm(daily('g', 10, 20), { now, gapPx: () => 56, view: { lo: 90, hi: 400 } })
+    const plan = planRhythm(daily('g', 10, 20), { now, gapPx: () => 56, view: () => ({ lo: 90, hi: 400 }) })
     expect(plan.summaries[0].anchorId).toBe('g5') // g2 (the next ahead) is off screen at 40px
   })
 

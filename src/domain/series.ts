@@ -112,7 +112,7 @@ export const isOccurrence = (i: InstantRecord): i is InstantRecord & { seriesId:
 /** How far ahead occurrences are made (stored): as far as the Android app gets alarms ahead of time. */
 export const OCCURRENCE_HORIZON_MS = 14 * DAY
 
-/** Most occurrences computed for the timeline at once (a year of a daily series, zoomed right out). */
+/** Most occurrences computed for the timeline at once, per series (a year of a daily one, zoomed right out). */
 export const MAX_VIRTUAL_OCCURRENCES = 400
 
 /** A computed occurrence's id: "v:<series>@<date>". */
@@ -136,7 +136,8 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
   for (const s of groups) {
     if (s.kind !== 'series' || s.paused) continue
     const first = dateKey(Math.max(from, now))
-    for (let date = first < s.from ? s.from : first; date <= last && out.length < MAX_VIRTUAL_OCCURRENCES; date = nextDateKey(date)) {
+    const start = out.length
+    for (let date = first < s.from ? s.from : first; date <= last && out.length - start < MAX_VIRTUAL_OCCURRENCES; date = nextDateKey(date)) {
       if (s.until && date > s.until) break
       if (have.has(`${s.id}@${date}`) || !occursOn(s, date)) continue
       const ts = occurrenceTs(s, date)

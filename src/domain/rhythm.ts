@@ -46,8 +46,8 @@ export function planRhythm(
   o: {
     now: number
     gapPx: (seriesId: string) => number
-    /** The screen, px: the summary sits on it when it can. */
-    view?: { lo: number; hi: number }
+    /** Where a series' summary chip fits whole on screen, px: it sits there when it can. */
+    view?: (seriesId: string) => { lo: number; hi: number }
     /** Keep summaries this far apart along time when they can be (vertical: a chip's height), px. */
     spacing?: number
   },
@@ -71,7 +71,8 @@ export function planRhythm(
     const folded = sorted.filter(m => !m.keep)
     if (folded.length < 2) continue
     for (const m of folded) collapsed[m.id] = seriesId
-    const onScreen = o.view ? folded.filter(m => m.pos >= o.view!.lo && m.pos <= o.view!.hi) : folded
+    const view = o.view?.(seriesId)
+    const onScreen = view ? folded.filter(m => m.pos >= view.lo && m.pos <= view.hi) : folded
     const pool = onScreen.length > 0 ? onScreen : folded
     // The first still ahead (clear of other summaries when one is); with none ahead, the latest (the nearest to Now).
     const ahead = pool.filter(m => m.ts >= o.now)
