@@ -24,8 +24,9 @@ import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { SNOOZE_MINUTES, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snooze } from '../services/AlarmScheduler.ts'
-import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, syncAlarmVisibility } from '../domain/alarms.ts'
+import { SNOOZE_MINUTES, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import type { SnoozeLanding } from '../domain/alarms.ts'
+import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -533,14 +534,16 @@ export function removeAlarm(id: string, alarmId: string) {
 
 /**
  * Sets how long before its instant an alarm rings. It never rings in the past: an offset that
- * would is cut back to Now. Answered alarms stay as they were (history).
+ * would is cut back to Now. Only a snooze already after its instant may stay after it; others
+ * stop at the instant. Answered alarms stay as they were (history).
  */
 export function setAlarmOffset(id: string, alarmId: string, offsetMs: number) {
   const inst = entities.getInstant(id)
   const alarm = findAlarm(inst, alarmId)
-  if (!inst || !alarm || alarm.done) return
-  const latest = Math.max(0, inst.tsEpochMs - nowTime())
-  entities.setAlarmOffset(id, alarmId, Math.min(Math.max(0, offsetMs), latest))
+  if (!inst || !alarm || alarm.answered) return
+  const earliest = alarm.offsetMs < 0 ? -Infinity : 0
+  const latest = Math.max(earliest === 0 ? 0 : -Infinity, inst.tsEpochMs - nowTime())
+  entities.setAlarmOffset(id, alarmId, Math.min(Math.max(earliest, offsetMs), latest))
 }
 
 /** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
@@ -740,20 +743,31 @@ export {
   silence as silenceAlarms,
 } from '../services/AlarmScheduler.ts'
 
-/** Snooze from the app (by ring key): the alarm rings again in `minutes`, and the view goes to the snooze (the span from the alarm to its next ring). */
+/**
+ * Snooze from the app (by ring key): another alarm on the same instant rings `minutes` from now
+ * (a warning never past its instant), and the view goes to the instant, where its bell now is.
+ * Returns the ring key of the alarm that rings next.
+ */
 export function snoozeAlarm(key: string, minutes = SNOOZE_MINUTES): string | undefined {
-  const { instantId } = parseRingKey(key)
-  const newId = snooze(key, minutes)
-  if (!newId) return
-  const sp = useEntities.getState().spans.find(s => s.startInstantId === instantId && s.endInstantId === newId)
-  if (sp) {
-    focusSpan(sp.id)
-    view.selectSpan(sp.id)
-  } else {
-    revealInstant(newId)
-  }
-  return newId
+  return snoozeAlarmUntil(key, nowTime() + minutes * MINUTE)
 }
+
+/** Snoozes an alarm until `at` (a ringing bell dragged later), and goes to its instant. */
+export function snoozeAlarmUntil(key: string, at: number): string | undefined {
+  const next = snoozeUntil(key, at)
+  if (next) revealInstant(parseRingKey(key).instantId)
+  return next
+}
+
+/** Where snoozing an alarm (by ring key) until `at` would land, for the snooze buttons' labels. */
+export function snoozeLandingFor(key: string, at: number): SnoozeLanding | null {
+  const { instantId, alarmId } = parseRingKey(key)
+  const inst = entities.getInstant(instantId)
+  const alarm = findAlarm(inst, alarmId)
+  return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime()) : null
+}
+
+export { skipAlarms } from '../services/AlarmScheduler.ts'
 
 // ---------------------------------------------------------------------------
 // Backup: export and import

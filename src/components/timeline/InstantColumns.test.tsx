@@ -166,10 +166,10 @@ describe('overlap layout', () => {
     expect(useView.getState().timeWidth).toBeLessThan(before)
   })
 
-  it('folds a snooze into its original as a ⟲N badge, keeping its line', () => {
+  it('folds an old snooze instant (from before snoozes were alarms) into its original as a ⟲N badge, keeping its line', () => {
     const t = twentyMinutesAgo()
     const orig = entities.createInstant(t, 'Wake', { alarm: true })
-    entities.createInstant(t + 1000, 'Snooze 1: Wake', { alarm: true, snoozeOriginalId: orig })
+    useEntities.setState(s => ({ instants: [...s.instants, { id: 'i_old_snooze', tsEpochMs: t + 1000, label: 'Snooze 1: Wake', snoozeOriginalId: orig }] }))
     const { container } = render(<Columns />)
     expect(lines(container)).toHaveLength(2)
     expect(screen.queryByText('Wake ⟲1')).not.toBeInTheDocument()

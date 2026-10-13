@@ -7,6 +7,23 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.4.0 — 2026-10-13
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Snoozing adds a bell, not an instant** (TLC-2): a snoozed alarm rings again as another
+  bell (⟲) on the same instant, so no more "Snooze 1: Wake up" instants and spans (old ones
+  stay as history). Snoozing the alarm at an instant puts its bell after it.
+- A warning before an instant never snoozes past it: snoozed that far, it rings with the
+  instant itself (a 3-minute warning snoozed for 5 minutes rings at the instant, not 2 minutes
+  late).
+- More snooze choices on a ringing alarm: 5 minutes, 10, 15, or a length you type, each saying
+  where it lands. Or drag a ringing bell later on the timeline to snooze until there.
+- **Skip alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool
+  skips its warnings (keeping the alarm at the instant) or all of them, and a ringing warning
+  offers "Skip the rest". Skipped alarms stay as history.
+- A timer finishes when the last of its snoozes is dismissed, not when it is first snoozed.
+
 ## 0.3.0 — 2026-10-12
 
 **Android app: web only** (nothing to install; it updates itself).

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  alarmLabel, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, snoozeBaseLabel, snoozeLabel, syncAlarmVisibility,
+  alarmLabel, alarmsToSkip, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, snoozeBaseLabel, snoozeLabel, snoozeLanding,
+  syncAlarmVisibility, warningsToSkip,
 } from './alarms.ts'
 import { findAdjacent, pushFocusHistory, stepFocusHistory } from './navigation.ts'
 import type { AlarmRecord, InstantRecord } from './entities.ts'
@@ -20,7 +21,7 @@ describe('findDueAlarms', () => {
   })
   it('rings an alarm before its instant at its own time, and never an answered one', () => {
     const meeting = withAlarms('meeting', 10 * MINUTE, [
-      { id: 'at', offsetMs: 0 }, { id: 'early', offsetMs: 10 * MINUTE + 1000 }, { id: 'heard', offsetMs: 10 * MINUTE + 500, done: true },
+      { id: 'at', offsetMs: 0 }, { id: 'early', offsetMs: 10 * MINUTE + 1000 }, { id: 'heard', offsetMs: 10 * MINUTE + 500, answered: 'dismissed' },
     ])
     expect(findDueAlarms([meeting], now, new Set(), 5 * MINUTE).map(d => d.alarm.id)).toEqual(['early'])
     expect(findDueAlarms([meeting], now, new Set([ringKey('meeting', 'early')]), 5 * MINUTE)).toEqual([])
@@ -39,7 +40,7 @@ describe('nextAlarmTime', () => {
     expect(nextAlarmTime([inst('d', -1)], now)).toBeNull()
   })
   it('counts alarms before their instants, and skips answered ones', () => {
-    const wake = withAlarms('wake', 60 * MINUTE, [{ id: 'at', offsetMs: 0 }, { id: 'early', offsetMs: 15 * MINUTE }, { id: 'heard', offsetMs: 50 * MINUTE, done: true }])
+    const wake = withAlarms('wake', 60 * MINUTE, [{ id: 'at', offsetMs: 0 }, { id: 'early', offsetMs: 15 * MINUTE }, { id: 'heard', offsetMs: 50 * MINUTE, answered: 'dismissed' }])
     expect(nextAlarmTime([wake], now)).toBe(now + 45 * MINUTE)
   })
 })
@@ -59,6 +60,7 @@ describe('alarm labels', () => {
     const wake = withAlarms('wake', 0, [], 'Wake up')
     expect(alarmLabel(wake, { id: 'a', offsetMs: 0 })).toBe('Wake up')
     expect(alarmLabel(wake, { id: 'a', offsetMs: 15 * MINUTE })).toBe('Wake up in 15m')
+    expect(alarmLabel(wake, { id: 'a', offsetMs: -5 * MINUTE, snoozeOf: 'b' })).toBe('Wake up (snoozed)')
     expect(alarmLabel({ ...wake, label: '' }, { id: 'a', offsetMs: 90 * MINUTE })).toMatch(/^\d.* in 1h 30m$/)
   })
 })
@@ -67,7 +69,7 @@ describe('alarm visibility', () => {
   it('an instant with an alarm still to ring is never hidden', () => {
     const list = [
       { ...withAlarms('soon', 5 * MINUTE, [{ id: 'a', offsetMs: 0 }]), hidden: true },
-      { ...withAlarms('heard', 5 * MINUTE, [{ id: 'a', offsetMs: 0, done: true }]), hidden: true },
+      { ...withAlarms('heard', 5 * MINUTE, [{ id: 'a', offsetMs: 0, answered: 'dismissed' }]), hidden: true },
       { ...withAlarms('past', -5 * MINUTE, [{ id: 'a', offsetMs: 0 }]), hidden: true },
     ]
     expect(syncAlarmVisibility(list, now).map(i => [i.id, !!i.hidden])).toEqual([['soon', false], ['heard', true], ['past', true]])
@@ -86,11 +88,47 @@ describe('stored alarms', () => {
     const [b] = sanitizeInstants([{ id: 'i_2', tsEpochMs: 5, label: 'x', alarm: false }])
     expect(b).toEqual({ id: 'i_2', tsEpochMs: 5, label: 'x' })
   })
-  it('keep well-formed alarms only, with distinct ids and no negative offsets', () => {
+  it('keep well-formed alarms only, with distinct ids; only a snooze rings after its instant', () => {
     const [a] = sanitizeInstants([{ id: 'i', tsEpochMs: 5, label: '', alarms: [
-      { id: 'a', offsetMs: 60_000, done: true }, { id: 'a', offsetMs: 1 }, { id: 'b', offsetMs: -5 }, { id: 'c' }, 'junk', { id: 'd', offsetMs: 0, done: 'yes' },
+      { id: 'a', offsetMs: 60_000, answered: 'dismissed' }, { id: 'a', offsetMs: 1 }, { id: 'b', offsetMs: -5 }, { id: 'c' }, 'junk',
+      { id: 'd', offsetMs: 0, answered: 'maybe' }, { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'skipped' },
     ] }])
-    expect(a.alarms).toEqual([{ id: 'a', offsetMs: 60_000, done: true }, { id: 'b', offsetMs: 0 }, { id: 'd', offsetMs: 0 }])
+    expect(a.alarms).toEqual([
+      { id: 'a', offsetMs: 60_000, answered: 'dismissed' }, { id: 'b', offsetMs: 0 }, { id: 'd', offsetMs: 0 },
+      { id: 'e', offsetMs: -MINUTE, snoozeOf: 'a', answered: 'skipped' },
+    ])
+  })
+  it('read 0.3\u2019s `done: true` as dismissed', () => {
+    const [a] = sanitizeInstants([{ id: 'i', tsEpochMs: 5, label: '', alarms: [{ id: 'a', offsetMs: 0, done: true }] }])
+    expect(a.alarms).toEqual([{ id: 'a', offsetMs: 0, answered: 'dismissed' }])
+  })
+})
+
+describe('snoozeLanding', () => {
+  const ts = now + 10 * MINUTE
+  const wake = (alarms: AlarmRecord[]) => withAlarms('wake', 10 * MINUTE, alarms)
+  it('lands a snooze at its time: before the instant, or after it for the alarm at the instant', () => {
+    const w = wake([{ id: 'early', offsetMs: 9 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    expect(snoozeLanding(w, w.alarms![0], now + 5 * MINUTE, now)).toEqual({ offsetMs: 5 * MINUTE, ringTs: now + 5 * MINUTE })
+    expect(snoozeLanding(w, w.alarms![1], ts + 5 * MINUTE, now)).toEqual({ offsetMs: -5 * MINUTE, ringTs: ts + 5 * MINUTE })
+  })
+  it('never lets a warning land past its instant: it joins the alarm there', () => {
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    expect(snoozeLanding(w, w.alarms![0], ts + 2 * MINUTE, now)).toEqual({ joins: 'at', ringTs: ts })
+  })
+  it('or becomes the alarm at the instant when there is none still to ring', () => {
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0, answered: 'skipped' }])
+    expect(snoozeLanding(w, w.alarms![0], ts + 2 * MINUTE, now)).toEqual({ offsetMs: 0, ringTs: ts })
+  })
+})
+
+describe('skipping', () => {
+  it('skips warnings but keeps the alarm at the instant; or skips all unanswered ones', () => {
+    const w = withAlarms('w', 10 * MINUTE, [
+      { id: 'w15', offsetMs: 15 * MINUTE }, { id: 'w5', offsetMs: 5 * MINUTE }, { id: 'at', offsetMs: 0 }, { id: 'heard', offsetMs: 7 * MINUTE, answered: 'dismissed' },
+    ])
+    expect(warningsToSkip(w).map(a => a.id)).toEqual(['w15', 'w5'])
+    expect(alarmsToSkip(w).map(a => a.id)).toEqual(['w15', 'w5', 'at'])
   })
 })
 

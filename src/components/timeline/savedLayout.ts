@@ -18,7 +18,7 @@ import { getTunables, useSettings } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL, verticalCrossBudget } from './geometry.ts'
 import type { PushBox } from '../../domain/pushClear.ts'
 import { pushClear } from '../../domain/pushClear.ts'
-import { hasArmedAlarm, parseRingKey, ringKey } from '../../domain/alarms.ts'
+import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
@@ -41,8 +41,8 @@ export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused:
   // The bell beside the chip, selected: its tools instead (type the offset, delete).
   if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell && a.offsetMs <= 0)) return BELL_TOOLS
   if (!o.selected) return 0
-  // Favorite, add an alarm (ahead only), move (focused), hide (not with an alarm to ring), delete.
-  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
+  // Favorite, add an alarm (ahead only), skip alarms (any unanswered), move (focused), hide (not with an alarm to ring), delete.
+  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
 }
 
 /** A bell before its instant (BellMarker): its button, and its tools (delete, type the offset) while selected. */

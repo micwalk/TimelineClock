@@ -37,7 +37,7 @@ describe('bellsToShow', () => {
   })
 
   it('shows history (answered or missed) only while its instant is selected or focused, hollow', () => {
-    const standup = inst('standup', -60 * MINUTE, [{ id: 'heard', offsetMs: 30 * MINUTE, done: true }, { id: 'missed', offsetMs: 20 * MINUTE }])
+    const standup = inst('standup', -60 * MINUTE, [{ id: 'heard', offsetMs: 30 * MINUTE, answered: 'dismissed' }, { id: 'missed', offsetMs: 20 * MINUTE }])
     expect(ids(bellsToShow([standup], opts()))).toEqual([])
     const r = bellsToShow([standup], opts({ revealPast: new Set(['standup']) }))
     expect(r.shown.map(b => [b.alarm.id, b.past])).toEqual([['heard', true], ['missed', true]])

@@ -5,13 +5,13 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowsRightLeftIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowsRightLeftIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
-import { hasArmedAlarm, ringKey, ringTime } from '../../domain/alarms.ts'
+import { hasArmedAlarm, openAlarms, ringKey, ringTime, warningsToSkip } from '../../domain/alarms.ts'
 import { bellItemId, isLiveAlarm } from '../../domain/bells.ts'
 import { displayName } from '../../domain/entities.ts'
 import { endpointName } from '../../domain/spans.ts'
@@ -93,7 +93,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
 
   // The bell beside the chip: its alarms at the instant (still to ring, or ringing), and the
   // bells before it folded in. One reads as a bell; more as their count, "3🔔".
-  const atInstant = (inst.alarms ?? []).filter(a => a.offsetMs <= 0 && !a.done && a.id !== draggingBell && (!isPast || ringingIds.includes(a.id)))
+  const atInstant = (inst.alarms ?? []).filter(a => a.offsetMs === 0 && !a.answered && a.id !== draggingBell && (!isPast || ringingIds.includes(a.id)))
   const ringingHere = atInstant.find(a => ringingIds.includes(a.id))
   const bellAlarm = ringingHere ?? atInstant[0]
   const bellCount = atInstant.length + bellFolded
@@ -106,7 +106,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     if (ringingHere) act.dismissAlarm(ringKey(inst.id, ringingHere.id))
     // Folded bells need room to tell apart: zoom in on them. Otherwise it is the alarm at the instant.
     else if (bellAlarm && bellFolded === 0) act.selectBell(bellAlarm.id)
-    else act.zoomToTimes([ts, ...(inst.alarms ?? []).filter(a => !a.done).map(a => ringTime(inst, a))])
+    else act.zoomToTimes([ts, ...(inst.alarms ?? []).filter(a => !a.answered).map(a => ringTime(inst, a))])
   }
   // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
   const showRelative = !focused && (!!inst.favorite || showBell || selected)
@@ -135,6 +135,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     <>
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
+      {openAlarms(inst).length > 0 && <SkipTool inst={inst} />}
       {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* An alarm still to ring is never hidden. */}
       {(inst.hidden || !armed) && (
@@ -159,9 +160,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {showBell && (
         <button type="button" data-no-pan
           className={`chip-bell glow-box${ringingHere ? ' is-ringing' : ''}${bellSelected ? ' is-selected' : ''}${atInstant.length === 0 ? ' is-folded-only' : ''}`}
-          aria-label={ringingHere ? 'Dismiss alarm' : bellFolded > 0 ? `${bellCount} alarm${bellCount > 1 ? 's' : ''}, zoom to show them` : 'Alarm: drag earlier to ring before, tap for its tools'}
-          title={ringingHere ? 'Dismiss alarm' : bellFolded > 0 ? 'Alarms: tap to show them all' : 'Drag earlier to ring before the instant; tap for its tools'}
-          onPointerDown={bellAlarm && !ringingHere ? e => startBellDrag(e, inst.id, bellAlarm.id) : undefined}
+          aria-label={ringingHere ? 'Dismiss alarm (drag later to snooze)' : bellFolded > 0 ? `${bellCount} alarm${bellCount > 1 ? 's' : ''}, zoom to show them` : 'Alarm: drag earlier to ring before, tap for its tools'}
+          title={ringingHere ? 'Tap to dismiss; drag later to snooze until there' : bellFolded > 0 ? 'Alarms: tap to show them all' : 'Drag earlier to ring before the instant; tap for its tools'}
+          onPointerDown={bellAlarm ? e => startBellDrag(e, inst.id, bellAlarm.id) : undefined}
           onClick={onBell}>
           {bellCount > 1 && <span className="chip-bell__count">{bellCount}</span>}
           <BellAlertIcon aria-hidden />
@@ -226,6 +227,35 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   )
 }
 
+/**
+ * Skip an instant's alarms before they ring (the opposite of a snooze): its warnings, keeping
+ * the alarm at the instant, or all of them. Skipped alarms stay as history.
+ */
+function SkipTool({ inst }: { inst: InstantRecord }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  usePopoverDismiss(ref, () => setOpen(false), open)
+  const warnings = warningsToSkip(inst).length
+  const all = openAlarms(inst).length
+  return (
+    <div ref={ref} className="skip-tool">
+      <IconButton icon={BellSlashIcon} label="Skip alarms" color={bellColor} bare pressed={open} onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Skip alarms">
+          {warnings > 0 && warnings < all && (
+            <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'warnings'); setOpen(false) }}>
+              Skip warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
+            </button>
+          )}
+          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.skipAlarms(inst.id, 'all'); setOpen(false) }}>
+            Skip {all > 1 ? `all ${all} alarms` : 'this alarm'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** A selected bell's tools: type how long before its instant it rings, or delete it. */
 function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
   const [typing, setTyping] = useState(false)
@@ -281,16 +311,20 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
       if (stub.style[prop] !== len) { stub.style.height = ''; stub.style.width = ''; stub.style[prop] = len }
     }
     // The line along the axis, from the bell's time on to the next bell nearer its instant (or the
-    // instant). Each stretch reads as how many bells reach over it: one is dashed, more solid.
+    // instant), from either side (warnings before it, snoozes after it). Each stretch reads as
+    // how many bells reach over it: one is dashed, more solid.
     const link = linkRef.current
     if (link) {
       const mine = ringTs()
-      let to = inst.tsEpochMs
+      const ts = inst.tsEpochMs
+      const side = Math.sign(ts - mine) // +1: before the instant
+      let to = ts
       let shared = false
       for (const o of others) {
         const r = ringOf(o)
-        if (r > mine && r < to) to = r
-        if (r < mine) shared = true
+        if (Math.sign(ts - r) !== side) continue
+        if ((r - mine) * side > 0 && (to - r) * side > 0) to = r
+        if ((mine - r) * side > 0) shared = true
       }
       link.classList.toggle('is-solid', shared)
       const a = f.pos(mine)
@@ -311,9 +345,12 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
     if (ringing) act.dismissAlarm(key)
     else act.selectBell(alarm.id)
   }
+  const when = alarm.offsetMs >= 0
+    ? `${formatDuration(alarm.offsetMs, { exact: true })} before ${name}`
+    : `snoozed ${formatDuration(-alarm.offsetMs, { exact: true })} after ${name}`
   const label = past
-    ? `Past alarm ${formatDuration(alarm.offsetMs, { exact: true })} before ${name}`
-    : `Alarm ${formatDuration(alarm.offsetMs, { exact: true })} before ${name}${ringing ? ', ringing: tap to dismiss' : ': drag to move, tap for its tools'}`
+    ? `Past alarm ${when}`
+    : `Alarm ${when}${ringing ? ', ringing: tap to dismiss, drag later to snooze' : ': drag to move, tap for its tools'}`
   return (
     <>
       <div ref={linkRef} className={`tl-bell-link${past ? ' is-past' : ''}`} aria-hidden />
@@ -325,10 +362,14 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
             onPointerDown={past ? undefined : e => startBellDrag(e, inst.id, alarm.id)}
             onClick={onTap}>
             {past ? <BellOutline aria-hidden /> : <BellAlertIcon aria-hidden />}
+            {alarm.snoozeOf && <span className="chip-bell__snooze" aria-hidden>{SNOOZE_MARK}</span>}
           </button>
           {/* How long before its instant: while dragged (live) or selected. */}
           {(dragging || selected) && (
-            <LiveText className="tl-bell__offset glow-text" compute={f => `−${formatDuration(Math.max(0, inst.tsEpochMs - ringTs()), { msPerPx: 1 / f.pxPerMs, exact: true })}`} />
+            <LiveText className="tl-bell__offset glow-text" compute={f => {
+              const before = inst.tsEpochMs - ringTs()
+              return `${before >= 0 ? '−' : '+'}${formatDuration(Math.abs(before), { msPerPx: 1 / f.pxPerMs, exact: true })}`
+            }} />
           )}
           {selected && (
             <div className="tl-col__below">

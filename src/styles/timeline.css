@@ -309,6 +309,32 @@
 .chip-bell::after { content: ''; position: absolute; inset: -7px; }
 .chip-bell__count { font: 700 12px/1 var(--font-ui); }
 .chip-bell.is-folded-only { cursor: pointer; }
+/* A snooze's bell: a small ⟲ on its corner (outside the layout's box). */
+.chip-bell__snooze {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  font: 800 11px/1 var(--font-ui);
+  color: var(--c-alarm);
+  text-shadow: 0 0 calc(4px * var(--glow)) var(--c-alarm);
+  pointer-events: none;
+}
+/* The skip tool's two choices. */
+.skip-tool { position: relative; display: inline-flex; }
+.skip-menu { --accent: var(--c-alarm); display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: max-content; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
+.skip-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font: 650 14px/1.1 var(--font-ui);
+  text-align: left;
+}
+.skip-menu__item:hover { background: var(--box-bg-raised); }
+.skip-menu__note { color: var(--ink-dim); font: 600 12px/1.1 var(--font-ui); }
 .chip-bell.is-selected { background: var(--box-bg-raised); box-shadow: 0 0 0 2px var(--c-alarm), 0 0 calc(10px * var(--glow)) var(--c-alarm); }
 .chip-bell.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }
 .tl-bell.is-dragging .chip-bell { cursor: grabbing; scale: 1.12; }

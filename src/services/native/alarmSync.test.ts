@@ -76,7 +76,7 @@ describe('syncAlarms', () => {
     )
     await syncAlarms()
     // Answered: kept as history, never rings again.
-    expect(entities.getInstant('end')).toMatchObject({ alarms: [{ offsetMs: 0, done: true }], favorite: false })
+    expect(entities.getInstant('end')).toMatchObject({ alarms: [{ offsetMs: 0, answered: 'dismissed' }], favorite: false })
     expect(entities.getSpan('endNow')).toBeUndefined()
     expect(fake.synced?.alarms).toEqual([])
   })
@@ -86,11 +86,14 @@ describe('syncAlarms', () => {
     fake.actions = [{ type: 'snooze', instantId: 'wake', at }]
     const { syncAlarms, useEntities } = await load([inst('wake', -MINUTE, { alarm: true, label: 'Wake up' })])
     await syncAlarms()
-    const snoozed = useEntities.getState().instants.find(i => i.snoozeOriginalId === 'wake')
-    expect(snoozed).toMatchObject({ tsEpochMs: at, label: 'Snooze 1: Wake up', alarms: [{ offsetMs: 0 }] })
-    expect(snoozed?.alarms?.[0].done).toBeUndefined()
-    expect(useEntities.getState().instants.find(i => i.id === 'wake')?.alarms?.[0].done).toBe(true)
-    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([`${snoozed?.id}|${snoozed?.alarms?.[0].id}`])
+    // The snooze is another alarm on the same instant, after it (no new instant).
+    const { instants } = useEntities.getState()
+    expect(instants).toHaveLength(1)
+    const [first, snoozed] = instants[0].alarms!
+    expect(first.answered).toBe('snoozed')
+    expect(snoozed).toMatchObject({ offsetMs: instants[0].tsEpochMs - at, snoozeOf: first.id })
+    expect(snoozed.answered).toBeUndefined()
+    expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([`wake|${snoozed.id}`])
   })
 
   it('runs overlapping calls one after another, the last one seeing the latest state', async () => {

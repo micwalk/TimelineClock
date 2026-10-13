@@ -1,6 +1,6 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
-import { alarmLabel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, snoozeBaseLabel, snoozeLabel } from '../domain/alarms.ts'
+import { alarmLabel, alarmsToSkip, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, snoozeLanding, warningsToSkip } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE } from '../domain/time.ts'
 import { useAlarms } from '../store/alarms.ts'
@@ -76,23 +76,30 @@ function schedule() {
 /** Whether an alarm (by ring key) is ringing. */
 export const isAlarmRinging = (key: string) => useAlarms.getState().ringing.some(r => ringKey(r.instantId, r.alarmId) === key)
 
+/** Stops alarms ringing (they may be answered already); the sound stops with the last one. */
+function stopRinging(instantId: string, alarmIds: readonly string[]) {
+  useAlarms.setState(s => ({ ringing: s.ringing.filter(r => !(r.instantId === instantId && alarmIds.includes(r.alarmId))) }))
+  if (!hasRinging()) audio.stopAlarmSound()
+}
+
 /**
  * Answers an alarm (by ring key): stops it ringing and keeps it as history (it never rings
- * again). An alarm at a timer's end finishes the timer, so its end also stops being a favorite
- * (its span to Now goes).
+ * again). The last alarm at or after a timer's end (its own, or the last snooze of it) finishes
+ * the timer, so its end also stops being a favorite (its span to Now goes).
  */
 export function dismiss(key: string) {
   const { instantId, alarmId } = parseRingKey(key)
-  useAlarms.setState(s => ({ ringing: s.ringing.filter(r => !(r.instantId === instantId && r.alarmId === alarmId)) }))
   const alarm = findAlarm(entities.getInstant(instantId), alarmId)
-  if (alarm) entities.markAlarmDone(instantId, alarmId)
+  if (alarm) entities.answerAlarms(instantId, [alarmId], 'dismissed')
+  stopRinging(instantId, [alarmId])
+  const inst = entities.getInstant(instantId)
   const { instants, spans } = useEntities.getState()
-  if ((!alarm || alarm.offsetMs === 0) && timerSpanFor(instantId, instants, spans)) {
+  const stillDue = inst?.alarms?.some(a => !a.answered && a.offsetMs <= 0)
+  if ((!alarm || alarm.offsetMs <= 0) && !stillDue && timerSpanFor(instantId, instants, spans)) {
     const nowSpan = entities.nowSpanOf(instantId)
     if (nowSpan) view.forgetSpan(nowSpan.id)
     entities.setFavorite(instantId, false)
   }
-  if (!hasRinging()) audio.stopAlarmSound()
 }
 
 /** Answers every ringing alarm of an instant (it is going away). */
@@ -104,27 +111,38 @@ export function dismissInstant(instantId: string) {
 export const SNOOZE_MINUTES = 5
 
 /**
- * Answers a ringing alarm (by ring key) and sets a new one `minutes` from now (or at `at`: a
- * snooze from the Android app's notification), labelled "Snooze N: <original>". An alarm at its
- * instant is linked to the snooze by a span, shown like any saved span; one before its instant
- * isn't (the span would run back to the instant it warns about). Returns the snooze's instant.
+ * Snoozes an alarm (by ring key) until `at`: it is answered 'snoozed' and another alarm on the
+ * same instant rings then (domain/alarms snoozeLanding: a warning never lands past its instant;
+ * it lands on it, or joins the alarm already there). Returns the ring key of the alarm that rings
+ * next, or undefined when there was nothing to snooze.
  */
-export function snooze(key: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined {
+export function snoozeUntil(key: string, at: number): string | undefined {
   const { instantId, alarmId } = parseRingKey(key)
-  const ringing = useAlarms.getState().ringing.find(r => r.instantId === instantId && r.alarmId === alarmId)
-  const original = entities.getInstant(instantId)
-  const alarm = findAlarm(original, alarmId)
-  if (!ringing && (!alarm || alarm.done)) return
-  const originalId = original?.snoozeOriginalId ?? instantId
-  const rootLabel = entities.getInstant(originalId)?.label ?? original?.label ?? ringing?.label ?? ''
-  const count = entities.snoozeCount(originalId) + 1
-  const newId = entities.createInstant(at ?? Date.now() + minutes * MINUTE, snoozeLabel(rootLabel, count), {
-    alarm: true,
-    snoozeOriginalId: originalId,
-  })
-  if (original && (alarm?.offsetMs ?? 0) === 0) entities.createSpan(instantId, newId, `snooze ${count}: ${snoozeBaseLabel(rootLabel)}`, { visible: true })
-  dismiss(key)
-  return newId
+  const inst = entities.getInstant(instantId)
+  const alarm = findAlarm(inst, alarmId)
+  if (!inst || !alarm || alarm.answered) { stopRinging(instantId, [alarmId]); return }
+  const landing = snoozeLanding(inst, alarm, at, Date.now())
+  entities.answerAlarms(instantId, [alarmId], 'snoozed')
+  const nextId = 'joins' in landing ? landing.joins : entities.addAlarm(instantId, { offsetMs: landing.offsetMs, snoozeOf: alarmId })
+  stopRinging(instantId, [alarmId])
+  return ringKey(instantId, nextId)
+}
+
+/** Snoozes an alarm `minutes` from now (or until `at`: a snooze from the Android app's notification). */
+export const snooze = (key: string, minutes = SNOOZE_MINUTES, at?: number): string | undefined =>
+  snoozeUntil(key, at ?? Date.now() + minutes * MINUTE)
+
+/**
+ * Skips an instant's alarms before they ring (the opposite of a snooze): its warnings (the alarm
+ * at the instant stays), or all of them. Skipped alarms stay as history; ringing ones stop.
+ */
+export function skipAlarms(instantId: string, which: 'warnings' | 'all') {
+  const inst = entities.getInstant(instantId)
+  if (!inst) return
+  const ids = (which === 'warnings' ? warningsToSkip(inst) : alarmsToSkip(inst)).map(a => a.id)
+  if (ids.length === 0) return
+  entities.answerAlarms(instantId, ids, 'skipped')
+  stopRinging(instantId, ids)
 }
 
 /** Stops the sound but keeps alarms on screen (in the Android app, their notifications too). */

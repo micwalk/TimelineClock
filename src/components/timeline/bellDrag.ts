@@ -1,8 +1,11 @@
-// Dragging an alarm's bell along time (TLC-1): the bell beside a chip, or a bell before its
-// instant. The bell keeps the pointer (data-no-pan stops the timeline panning), follows it
-// earlier in time, and on release sets how long before its instant the alarm rings. Let go
-// close to the instant, it goes back onto the chip (offset 0). Its time while dragged lives
-// here, not in React state: the layout and the bell read it each frame (bellDragAt).
+// Dragging an alarm's bell along time (TLC-1): the bell beside a chip, or a bell of its own.
+// The bell keeps the pointer (data-no-pan stops the timeline panning) and follows it:
+// - a ringing bell, later: let go, and it is snoozed until there (TLC-2);
+// - a snooze after its instant, anywhere from Now on;
+// - any other bell, earlier than its instant. On release it rings that long before; let go
+//   close to the instant and it goes back onto the chip (offset 0).
+// Never into the past. Its time while dragged lives here, not in React state: the layout and
+// the bell read it each frame (bellDragAt).
 import type React from 'react'
 import { engine } from '../../engine/viewportEngine.ts'
 import type { Frame } from '../../engine/viewportEngine.ts'
@@ -12,6 +15,8 @@ import { entities } from '../../store/entities.ts'
 import { getTunables } from '../../store/settings.ts'
 import { ui } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
+import { ringKey } from '../../domain/alarms.ts'
+import { isAlarmRinging } from '../../services/AlarmScheduler.ts'
 
 let drag: { instantId: string; alarmId: string; ringTs: number } | null = null
 /** A drag just ended: the click that follows it is not a tap. */
@@ -38,12 +43,16 @@ export function startBellDrag(e: React.PointerEvent<HTMLElement>, instantId: str
   if (e.pointerType === 'mouse' && e.button !== 0) return
   const inst = entities.getInstant(instantId)
   const alarm = inst?.alarms?.find(a => a.id === alarmId)
-  if (!inst || !alarm || alarm.done) return
+  if (!inst || !alarm || alarm.answered) return
   e.stopPropagation()
   const pointerId = e.pointerId
   const main = (ev: { clientX: number; clientY: number }) => (engine.sample().orientation === 'vertical' ? ev.clientY : ev.clientX)
   const start = main(e)
   const startRing = inst.tsEpochMs - alarm.offsetMs
+  const key = ringKey(instantId, alarmId)
+  const snoozing = isAlarmRinging(key)
+  // Free to go past its instant: a ringing bell (snoozed there) or a snooze already after it.
+  const pastInstant = snoozing || alarm.offsetMs < 0
   const t = getTunables()
   const threshold = e.pointerType === 'mouse' ? t.dragThresholdMousePx : t.dragThresholdTouchPx
   let moved = false
@@ -61,9 +70,10 @@ export function startBellDrag(e: React.PointerEvent<HTMLElement>, instantId: str
     }
     const f = engine.sample()
     const at = f.time(f.pos(startRing) + d)
-    const latest = entities.getInstant(instantId)?.tsEpochMs ?? inst.tsEpochMs
-    // Earlier than its instant, and never in the past.
-    drag = { instantId, alarmId, ringTs: clamp(latest - offsetAt(f, latest, at), Math.min(f.now, latest), latest) }
+    const instTs = entities.getInstant(instantId)?.tsEpochMs ?? inst.tsEpochMs
+    const latest = pastInstant ? Infinity : instTs
+    // Never in the past; earlier than its instant unless it may go past it.
+    drag = { instantId, alarmId, ringTs: clamp(instTs - offsetAt(f, instTs, at), Math.min(f.now, latest), latest) }
     engine.invalidate()
   }
   const finish = (ev: PointerEvent) => {
@@ -79,6 +89,8 @@ export function startBellDrag(e: React.PointerEvent<HTMLElement>, instantId: str
     setTimeout(() => { swallowClick = false }, 0)
     const target = entities.getInstant(instantId)
     if (!d || !target || ev.type === 'pointercancel') { engine.invalidate(); return }
+    // A ringing bell: snoozed until where it was let go.
+    if (snoozing) { act.snoozeAlarmUntil(key, Math.max(d.ringTs, engine.sample().now)); return }
     const f = engine.sample()
     // Let go next to its instant: back onto the chip.
     const near = Math.abs(f.pos(target.tsEpochMs) - f.pos(d.ringTs)) < getTunables().bellCollapsePx

@@ -1,7 +1,7 @@
 // Saved instants and spans. Persisted to the same localStorage keys and record
 // shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
-import type { AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
+import type { AlarmAnswer, AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
 import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
 import { syncAlarmVisibility } from '../domain/alarms.ts'
 import { loadJson, saveJson } from './storage.ts'
@@ -53,14 +53,13 @@ export const entities = {
   getSpan: (id: string | null | undefined) => (id ? get().spans.find(s => s.id === id) : undefined),
 
   /** A new instant, never a favorite yet (setFavorite adds the span to Now that makes one). */
-  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean; snoozeOriginalId?: string } = {}): string {
+  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean } = {}): string {
     const rec: InstantRecord = {
       id: newInstantId(),
       tsEpochMs,
       label,
       favorite: false,
       ...(opts.alarm ? { alarms: [{ id: newAlarmId(), offsetMs: 0 }] } : {}),
-      ...(opts.snoozeOriginalId ? { snoozeOriginalId: opts.snoozeOriginalId } : {}),
     }
     set(s => ({ instants: [...s.instants, rec] }))
     return rec.id
@@ -79,17 +78,21 @@ export const entities = {
   setFavoriteFlag: (id: string, favorite: boolean) => patchInstant(id, () => ({ favorite })),
   setHiddenFlag: (id: string, hidden: boolean) => patchInstant(id, () => ({ hidden })),
 
-  /** Adds an alarm at the instant (offset 0); returns its id. An alarm still to ring is never hidden, so this shows the instant. */
-  addAlarm(id: string): string {
-    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: 0 }
+  /**
+   * Adds an alarm (at the instant, or `offsetMs` before it; a snooze names the alarm it snoozed);
+   * returns its id. An alarm still to ring is never hidden, so this shows the instant.
+   */
+  addAlarm(id: string, opts: { offsetMs?: number; snoozeOf?: string } = {}): string {
+    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: Math.round(opts.offsetMs ?? 0), ...(opts.snoozeOf ? { snoozeOf: opts.snoozeOf } : {}) }
     patchInstant(id, i => ({ alarms: [...(i.alarms ?? []), alarm], ...(i.hidden ? { hidden: false } : {}) }))
     return alarm.id
   },
   removeAlarm: (id: string, alarmId: string) => patchAlarms(id, list => list.filter(a => a.id !== alarmId)),
   setAlarmOffset: (id: string, alarmId: string, offsetMs: number) =>
-    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.max(0, Math.round(offsetMs)) } : a))),
-  /** Answered (dismissed or snoozed): it stays as history and never rings again. */
-  markAlarmDone: (id: string, alarmId: string) => patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, done: true } : a))),
+    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.round(offsetMs) } : a))),
+  /** Answers alarms (dismissed, snoozed, skipped): they stay as history and never ring again. */
+  answerAlarms: (id: string, alarmIds: readonly string[], answer: AlarmAnswer) =>
+    patchAlarms(id, list => list.map(a => (alarmIds.includes(a.id) && !a.answered ? { ...a, answered: answer } : a))),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId, label, visible: opts.visible ?? false, endIsNow: false }
@@ -128,5 +131,4 @@ export const entities = {
   setSpanLabel: (id: string, label: string) => patchSpan(id, { label }),
   setSpanVisible: (id: string, visible: boolean) => patchSpan(id, { visible }),
 
-  snoozeCount: (originalId: string) => get().instants.filter(i => i.snoozeOriginalId === originalId).length,
 }
