@@ -10,9 +10,11 @@
 //   NAME     [ optional ]
 //   [            Set alarm · Tue 7:00a            ]
 //
-// On a wide screen it opens from the button. On a phone (vertical, or a narrow window) it is a
-// sheet at the top of what is visible, so the keyboard never pushes it off screen, over a scrim
-// that closes it.
+// On a wide screen it opens from the button. On a phone (vertical, or a narrow window), or opened
+// from the Alarms tab, it is a sheet at the top of what is visible, so the keyboard never pushes
+// it off screen, over a scrim that closes it. From the Alarms tab it also edits a series: filled
+// in from it, saved with updateSeries (its untouched occurrences ahead follow), with Pause /
+// Resume and End series.
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,6 +27,7 @@ import { dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
+import { useEntities } from '../../store/entities.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
@@ -79,14 +82,28 @@ function useVisibleArea(active: boolean): { top: number; height: number } | null
 
 export function AlarmButton({ style }: { style?: CSSProperties }) {
   const open = useUi(s => s.alarmMenuOpen)
+  const fromList = useUi(s => s.alarmMenuFromList)
+  const editId = useUi(s => s.alarmEditSeries)
+  const editing = useEntities(s => (editId ? s.groups?.find(g => g.id === editId) : undefined))
   const recent = useQuick(s => s.recentAlarms ?? [])
-  const sheet = useSheet()
+  const sheet = useSheet() || fromList
   const [text, setText] = useState('')
   const [pm, setPm] = useState<boolean | null>(null)
   const [repeat, setRepeat] = useState<Repeat | null>(null)
   const [warnings, setWarnings] = useState<number[]>([])
   const [label, setLabel] = useState('')
-  const close = () => { ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setLabel('') }
+  const seeded = useRef<string | null>(null)
+  const close = () => { ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setLabel(''); seeded.current = null }
+  // Editing a series: start from what it is (once per opening).
+  if (open && editing && seeded.current !== editing.id) {
+    seeded.current = editing.id
+    const [h, m] = editing.time.split(':').map(Number)
+    setText(`${h % 12 || 12}:${String(m).padStart(2, '0')}`)
+    setPm(h >= 12)
+    setRepeat(editing.repeat)
+    setWarnings(editing.alarms.filter(o => o > 0))
+    setLabel(editing.label)
+  }
   const { wrapRef, menuRef, menuStyle, above } = useAnchoredMenu(open && !sheet, close)
   const area = useVisibleArea(open && sheet)
 
@@ -118,7 +135,10 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const set = (e?: FormEvent) => {
     e?.preventDefault()
     if (!time || ring === null) return
-    act.setAlarm({ time, at: ring, repeat, warnings, label: label.trim() })
+    if (editing) {
+      const alarms = [...new Set(warnings.filter(w => w > 0))].sort((a, b) => b - a).concat(0)
+      act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms })
+    } else act.setAlarm({ time, at: ring, repeat, warnings, label: label.trim() })
     close()
   }
   const again = (r: RecentAlarm) => {
@@ -138,10 +158,10 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const form = (
     <form className="alarm-pick" onSubmit={set}>
       <header className="alarm-pick__head">
-        <span className="alarm-pick__title">New alarm</span>
+        <span className="alarm-pick__title">{editing ? 'Edit alarm' : 'New alarm'}</span>
         <button type="button" className="alarm-pick__close" aria-label="Close" onClick={close}><XMarkIcon aria-hidden /></button>
       </header>
-      {recent.length > 0 && (
+      {!editing && recent.length > 0 && (
         <div className="alarm-pick__recent" aria-label="Recent alarms">
           {recent.map(r => (
             <button key={`${r.time}|${r.label}|${JSON.stringify(r.repeat)}|${r.warnings.join()}`} type="button" className="alarm-pick__again glow-box" onClick={() => again(r)}>
@@ -172,10 +192,10 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
           ? `${repeat ? `${describeRepeat(repeat)} · first ` : ''}${when} · ${formatRelativeShort(ring - now)}`
           : typed ? 'Never, on these days' : 'Type a time: 7, 730, 7:30, 1730 or 7p'}
       </div>
-      {section('Repeat', <RepeatPicker value={repeat} onChange={setRepeat} allowOnce />)}
+      {section('Repeat', <RepeatPicker value={repeat} onChange={r => setRepeat(r ?? repeat)} allowOnce={!editing} />)}
       {section('Warn before', (
         <div className="alarm-pick__row" role="group" aria-label="Warnings before it">
-          {WARN_CHOICES_MS.map(ms => (
+          {[...new Set([...WARN_CHOICES_MS, ...warnings])].sort((a, b) => a - b).map(ms => (
             <button key={ms} type="button" className={`repeat-chip glow-box${warnings.includes(ms) ? ' is-on' : ''}`} aria-pressed={warnings.includes(ms)}
               aria-label={`Warn ${warnText(ms)} before`} onClick={() => toggleWarn(ms)}>{warnText(ms)}</button>
           ))}
@@ -183,8 +203,18 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
       ))}
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
       <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null}>
-        {ring === null ? 'Set alarm' : `Set alarm · ${when}`}
+        {editing
+          ? (ring === null || !time ? 'Save' : `Save · ${describeRepeat(repeat ?? editing.repeat)} ${formatClockCompact(ring, false)}`)
+          : ring === null ? 'Set alarm' : `Set alarm · ${when}`}
       </button>
+      {editing && (
+        <div className="alarm-pick__manage">
+          <button type="button" className="alarm-link glow-box" onClick={() => { act.setSeriesPaused(editing.id, !editing.paused); close() }}>
+            {editing.paused ? 'Resume' : 'Pause'}
+          </button>
+          <button type="button" className="alarm-link alarm-link--all glow-box" onClick={() => { act.endSeries(editing.id); close() }}>End series</button>
+        </div>
+      )}
     </form>
   )
 

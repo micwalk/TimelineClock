@@ -932,6 +932,18 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
   return first?.id
 }
 
+/**
+ * Edits a series from the Alarms tab: its name, time of day, repeat and alarms. Its untouched
+ * occurrences ahead take the change in place (refreshSeries); ones changed on their own keep
+ * theirs.
+ */
+export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms'>>) {
+  const series = entities.getGroup(seriesId)
+  if (!series) return
+  entities.putGroup({ ...series, ...patch })
+  refreshSeries(seriesId)
+}
+
 /** Ends a series now: its occurrences ahead go (those that passed stay as history). */
 export function endSeries(seriesId: string) {
   const series = entities.getGroup(seriesId)

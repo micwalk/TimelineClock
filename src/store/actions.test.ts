@@ -853,6 +853,18 @@ describe('repeating series (TLC-2)', () => {
     expect(occurrences(seriesId).every(i => i.label === 'Rise')).toBe(true)
   })
 
+  it('editing a series from the Alarms tab moves its untouched occurrences, not those changed on their own', () => {
+    const { seriesId } = start()
+    const [, second, third] = occurrences(seriesId)
+    act.renameInstant(second.id, 'Lie in')
+    act.updateSeries(seriesId, { label: 'Up', time: '06:45', alarms: [10 * MINUTE, 0] })
+    const t = instant(third.id)
+    expect(t.label).toBe('Up')
+    expect(new Date(t.tsEpochMs).getHours() * 60 + new Date(t.tsEpochMs).getMinutes()).toBe(6 * 60 + 45)
+    expect(t.alarms?.map(a => a.offsetMs)).toEqual([10 * MINUTE, 0])
+    expect(instant(second.id).label).toBe('Lie in')
+  })
+
   it('a computed occurrence (past the horizon) is stored when tapped', () => {
     const { seriesId } = start()
     const date = dateKey(Date.now() + 30 * 24 * HOUR)

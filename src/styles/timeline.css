@@ -367,18 +367,20 @@
    axis instead of a full line, and one summary chip stands for them. */
 .tl-col--line.is-rhythm { --accent: var(--c-alarm); --halo: var(--c-alarm); }
 .tl-col--line.is-rhythm .tl-col__line {
-  top: calc(var(--tl-axis) - 7px);
+  top: calc(var(--tl-axis) - 10px);
+  left: -1.5px;
+  width: 3px;
   bottom: auto;
-  height: 16px;
+  height: 22px;
   background: var(--c-alarm);
   box-shadow: 0 0 calc(5px * var(--glow)) var(--c-alarm);
 }
 .timeline[data-orientation='vertical'] .tl-col--line.is-rhythm .tl-col__line {
-  top: -1px;
-  left: calc(var(--tl-axis) - 7px);
+  top: -1.5px;
+  left: calc(var(--tl-axis) - 10px);
   right: auto;
-  width: 16px;
-  height: 2px;
+  width: 22px;
+  height: 3px;
 }
 .tl-series { --accent: color-mix(in srgb, var(--c-alarm) 70%, transparent); --halo: var(--c-alarm); }
 .chip--series { gap: 7px; padding: 0 10px 0 8px; border-style: dashed; }

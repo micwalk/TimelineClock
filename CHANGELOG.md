@@ -37,7 +37,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   one and says plainly which day and time it set ("Tue 7:00a · in 7h"), with AM/PM buttons to
   switch. Recent alarms are one tap away.
 - **Alarms tab** in the Agenda: every alarm, like a clock app: repeating ones with a switch to
-  pause them, upcoming ones with a button to cancel them, and what rang in the last day.
+  pause them and a pencil to edit them (time, days, warnings, name; occurrences you changed on
+  their own keep their changes), upcoming ones with a button to cancel them, and what rang in
+  the last day. Set a new alarm from there too.
 - Backups include repeating series.
 - **Zoomed out, repeats stay calm**: a repeat whose occurrences crowd turns into small ticks on
   the axis and one chip for the series ("⟳ Wake Up · Daily 9:00a · in 3d 8h"); tap it to zoom in.

@@ -33,8 +33,12 @@ export interface UiState {
   droppedId: string | null
   /** The Timer button's length picker (also opened by T). */
   timerMenuOpen: boolean
-  /** The Alarm button's picker (also opened by L). */
+  /** The Alarm button's picker (also opened by L, and from the Alarms tab). */
   alarmMenuOpen: boolean
+  /** Opened from the Alarms tab (a sheet on every screen, not a menu from the button). */
+  alarmMenuFromList: boolean
+  /** The series the picker edits (from the Alarms tab), or null for a new alarm. */
+  alarmEditSeries: string | null
   /** The Help / About dialog. */
   helpOpen: boolean
   plusMorph: PlusMorph | null
@@ -59,6 +63,8 @@ export const useUi = create<UiState>(() => ({
   droppedId: null,
   timerMenuOpen: false,
   alarmMenuOpen: false,
+  alarmMenuFromList: false,
+  alarmEditSeries: null,
   helpOpen: false,
   plusMorph: null,
   plusHidden: false,
@@ -92,7 +98,9 @@ export const ui = {
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
-  setAlarmMenu: (alarmMenuOpen: boolean) => useUi.setState({ alarmMenuOpen }),
+  setAlarmMenu: (alarmMenuOpen: boolean) => useUi.setState({ alarmMenuOpen, alarmMenuFromList: false, alarmEditSeries: null }),
+  /** From the Alarms tab: a new alarm, or editing a series. */
+  openAlarmEditor: (seriesId: string | null) => useUi.setState({ alarmMenuOpen: true, alarmMenuFromList: true, alarmEditSeries: seriesId }),
   toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
   closeLaneTools: () => useUi.setState({ laneTools: null }),
   setPlusMorph: (plusMorph: PlusMorph | null) => useUi.setState({ plusMorph }),
