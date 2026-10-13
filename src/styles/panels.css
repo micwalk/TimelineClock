@@ -98,6 +98,44 @@
 .ctl-btn--quick { --accent: var(--c-favorite); --halo: var(--c-favorite); }
 
 .timer-menu { width: 236px; }
+/* The Alarm button's picker (AlarmButton.tsx). */
+.alarm-menu { --accent: var(--c-alarm); --halo: var(--c-alarm); width: min(320px, calc(100vw - 24px)); }
+.alarm-menu__form { display: flex; flex-direction: column; gap: 10px; }
+.alarm-menu__recent { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); }
+.alarm-menu__again { --accent: var(--c-favorite); height: 32px; padding: 0 10px; border-radius: 8px; background: var(--surface); color: var(--ink); font: 650 13px/1 var(--font-ui); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alarm-menu__time { display: flex; align-items: center; gap: 8px; }
+.alarm-menu__input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--c-alarm);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  caret-color: var(--c-alarm);
+  font: 700 24px/1 var(--font-mono);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  outline: none;
+}
+.alarm-menu__input.is-invalid { border-color: var(--c-danger); }
+.alarm-menu__ampm { display: flex; gap: 4px; }
+.alarm-menu__lands { color: var(--c-alarm); font: 700 14px/1.2 var(--font-ui); }
+.alarm-menu__warn { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.alarm-menu__key { color: var(--ink-dim); font: 650 13px/1 var(--font-ui); margin-right: 2px; }
+.alarm-menu__name {
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--ink);
+  font: 600 14px/1 var(--font-ui);
+  outline: none;
+}
+.alarm-menu__name:focus { border-color: var(--c-alarm); }
+.alarm-menu__set { height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--c-alarm) 45%, transparent); color: #fff; font: 800 15px/1 var(--font-ui); }
+.alarm-menu__set:disabled { opacity: 0.4; cursor: default; }
 .timer-menu__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .timer-menu__grid--recent { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); }
 .timer-menu__choice {
@@ -554,7 +592,7 @@
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.7fr;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.6fr 1.2fr;
   grid-template-rows: repeat(2, minmax(44px, auto));
   gap: 8px;
   padding: 8px 12px 10px;

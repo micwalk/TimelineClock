@@ -25,8 +25,8 @@ import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
-import type { Repeat } from '../domain/series.ts'
-import { OCCURRENCE_HORIZON_MAX_MS, OCCURRENCE_HORIZON_MS, dateKey, occurrenceTs, planOccurrences, remakeable, ruleFromOccurrence, seriesFromInstant } from '../domain/series.ts'
+import type { Repeat, SeriesRecord } from '../domain/series.ts'
+import { OCCURRENCE_HORIZON_MAX_MS, OCCURRENCE_HORIZON_MS, dateKey, newGroupId, occurrenceTs, planOccurrences, remakeable, ruleFromOccurrence, seriesFromInstant } from '../domain/series.ts'
 import { newAlarmId, newInstantId } from '../domain/entities.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
@@ -881,6 +881,31 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
   for (const i of useEntities.getState().instants) {
     if (i.seriesId === series.id && i.occurrence && i.occurrence >= date) deleteInstant(i.id)
   }
+}
+
+/**
+ * The Alarm button (TLC-3): an alarm at a wall-clock time, with warnings before it, once (an
+ * instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
+ * Returns the instant (the first occurrence of a series).
+ */
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string }): string | undefined {
+  void primeNotifications()
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label })
+  const offsets = [...new Set(a.warnings.filter(w => w > 0))].sort((x, y) => y - x).concat(0)
+  if (!a.repeat) {
+    const id = entities.createInstant(a.at, a.label)
+    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })) }))
+    revealInstant(id)
+    return id
+  }
+  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label: a.label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()) }
+  entities.putGroup(series)
+  syncSeries()
+  const first = useEntities.getState().instants
+    .filter(i => i.seriesId === series.id && i.tsEpochMs > Date.now())
+    .sort((x, y) => x.tsEpochMs - y.tsEpochMs)[0]
+  if (first) revealInstant(first.id)
+  return first?.id
 }
 
 /** Ends a series now: its occurrences ahead go (those that passed stay as history). */

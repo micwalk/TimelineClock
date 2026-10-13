@@ -197,9 +197,10 @@ export function describeRepeat(r: Repeat): string {
 // Storage
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/
-const CLOCK_KEY = /^([01]\d|2[0-3]):[0-5]\d$/
+/** "HH:MM", 24-hour. */
+export const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
-function sanitizeRepeat(raw: unknown): Repeat | null {
+export function sanitizeRepeat(raw: unknown): Repeat | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   if (r.kind === 'interval' && typeof r.every === 'number' && Number.isInteger(r.every) && r.every >= 1 && r.every <= 365) return { kind: 'interval', every: r.every }
@@ -219,7 +220,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
     const r = x as Record<string, unknown>
     const repeat = sanitizeRepeat(r.repeat)
     if (r.kind !== 'series' || typeof r.id !== 'string' || seen.has(r.id) || !repeat) return []
-    if (typeof r.time !== 'string' || !CLOCK_KEY.test(r.time) || typeof r.from !== 'string' || !DATE_KEY.test(r.from)) return []
+    if (typeof r.time !== 'string' || !CLOCK_RE.test(r.time) || typeof r.from !== 'string' || !DATE_KEY.test(r.from)) return []
     seen.add(r.id)
     const alarms = Array.isArray(r.alarms) ? r.alarms.filter((a): a is number => typeof a === 'number' && Number.isFinite(a) && a >= 0) : []
     const skips = Array.isArray(r.skips) ? r.skips.filter((d): d is string => typeof d === 'string' && DATE_KEY.test(d)) : []

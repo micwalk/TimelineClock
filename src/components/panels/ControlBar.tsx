@@ -10,6 +10,7 @@ import type { TimeIncrement } from '../../domain/time.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { CtlButton } from './CtlButton.tsx'
 import { StopwatchButton, TimerButton } from './QuickButtons.tsx'
+import { AlarmButton } from './AlarmButton.tsx'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact } from '../../domain/format.ts'
 import { useView, view } from '../../store/view.ts'
@@ -94,7 +95,7 @@ export function ControlBar() {
 
   if (vertical) {
     // A two-row grid that follows the screen: row 1 is "− ▲ step-up", row 2 is "+ ▼ step-down", NOW spans both rows,
-    // then Stopwatch over Timer.
+    // then Stopwatch over Timer, and Alarm spanning both rows.
     // "Up the screen" is earlier when the future runs down (dir 1) and later when it runs up (dir -1).
     const up: 1 | -1 = dir === 1 ? -1 : 1
     const down: 1 | -1 = up === 1 ? -1 : 1
@@ -111,6 +112,7 @@ export function ControlBar() {
         <IncrementButton direction={down} cell={cell(2, 3)} compact />
         <StopwatchButton style={cell(1, 5)} />
         <TimerButton style={cell(2, 5)} />
+        <AlarmButton style={cell(1, 6, 2)} />
       </nav>
     )
   }
@@ -127,6 +129,7 @@ export function ControlBar() {
       <span className="controls__sep" aria-hidden />
       <StopwatchButton />
       <TimerButton />
+      <AlarmButton />
     </nav>
   )
 }

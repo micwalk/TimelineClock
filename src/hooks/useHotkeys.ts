@@ -31,6 +31,7 @@ export function useHotkeys() {
         case 'v': return run(act.rotate)
         case 'h': return run(act.toggleCursorHidden)
         case 't': return run(() => ui.setTimerMenu(!useUi.getState().timerMenuOpen))
+        case 'l': return run(() => ui.setAlarmMenu(!useUi.getState().alarmMenuOpen))
         case 'q': return run(() => act.navigateFocusHistory(-1))
         case 'e': return run(() => act.navigateFocusHistory(1))
         case '?': return run(ui.openHelp)

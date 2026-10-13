@@ -33,6 +33,8 @@ export interface UiState {
   droppedId: string | null
   /** The Timer button's length picker (also opened by T). */
   timerMenuOpen: boolean
+  /** The Alarm button's picker (also opened by L). */
+  alarmMenuOpen: boolean
   /** The Help / About dialog. */
   helpOpen: boolean
   plusMorph: PlusMorph | null
@@ -56,6 +58,7 @@ export const useUi = create<UiState>(() => ({
   agendaOpen: false,
   droppedId: null,
   timerMenuOpen: false,
+  alarmMenuOpen: false,
   helpOpen: false,
   plusMorph: null,
   plusHidden: false,
@@ -89,6 +92,7 @@ export const ui = {
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
+  setAlarmMenu: (alarmMenuOpen: boolean) => useUi.setState({ alarmMenuOpen }),
   toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
   closeLaneTools: () => useUi.setState({ laneTools: null }),
   setPlusMorph: (plusMorph: PlusMorph | null) => useUi.setState({ plusMorph }),
