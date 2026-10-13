@@ -21,6 +21,7 @@ const KEYS: [string[], string][] = [
   [['V'], 'Rotate the timeline'],
   [['H'], 'Hide or show the cursor'],
   [['T'], 'Start a timer (pick a length)'],
+  [['L'], 'Set an alarm (time, repeat, warnings)'],
   [['Esc'], 'Deselect, or cancel a move'],
   [['Enter'], 'Confirm a move'],
   [['?'], 'This help'],
@@ -100,7 +101,7 @@ function HelpContent() {
             <dt>Span</dt>
             <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one. Spans that follow each other share a lane (a stopwatch’s laps); names that would crowd it fold into “N spans”, which zooms in when tapped.</dd>
             <dt>Agenda</dt>
-            <dd>The list of every instant, your favorites, and your saved spans. Tap a row to go there.</dd>
+            <dd>The list of every instant, your favorites, your saved spans, and your alarms. Tap a row to go there.</dd>
           </dl>
         </section>
 
@@ -115,7 +116,8 @@ function HelpContent() {
             <li>Drag slowly over an instant (or Now) and the cursor catches it: it glides onto its line and shows its time, so you can see where it will land when you let go, and the ＋ tucks into the instant’s chip (over Now, the Cursor tag merges into the Now tag). Other chips step out of the ＋’s way.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
-            <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
+            <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. <b>Alarm</b> (or L) sets one at a time you type (7, 730, 1730, 7p: it shows which day and AM or PM it took), once or repeating, with warnings before it; it remembers your recent ones. They just make instants, spans and series, kept as history.</li>
+            <li><b>Repeat</b>: the ⟳ tool on a selected chip makes it repeat (daily, weekdays, weekends, chosen days, every N days). Repeats show ⟳ on their chips and are made two weeks ahead (further as you look further). Change one on its own and it offers <b>Apply to all future</b>; delete one, or it and all later ones; pause, resume or end the series from the ⟳ tool or the <b>Alarms</b> tab, which lists every alarm: repeating, upcoming and recent.</li>
             <li>The <b>star</b> on a favorite’s lane unfavorites it, and its lane goes. Dismissing a timer’s alarm unfavorites its end.</li>
             <li><b>Alarms</b>: the bell tool on a selected chip adds an alarm, a bell beside the chip. <b>Drag the bell earlier</b> to ring before the instant (say 15 minutes before a meeting); add more bells for more warnings. Each one stays tied to its instant and moves with it. Tap a bell to type how long before, or delete it. Zoomed out, bells close to their instant fold into its bell, which then shows how many there are (3🔔). An instant with an alarm still to ring can’t be hidden; answered alarms show as hollow bells when you select their instant.</li>
             <li><b>Snooze</b> adds another bell to the same instant (⟲): 5 minutes, until the instant starts (for a warning), or <b>Other…</b> to type a length; or drag a ringing bell later to snooze until there. A warning before an instant never snoozes past it: it lands on the instant. <b>Cancel</b> is the opposite: the bell-slash tool on a selected chip cancels its warnings (keeping the alarm at the instant) or all its alarms, and a ringing alarm offers <b>Dismiss all</b>. Cancelled alarms that hadn’t rung are simply gone.</li>

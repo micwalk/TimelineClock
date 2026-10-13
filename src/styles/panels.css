@@ -243,6 +243,56 @@
 .list-row--cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); }
 .list-row--cursor .list-row__name { color: var(--c-cursor); }
 
+/* The Alarms tab (AlarmsList.tsx): a clock app's list. */
+.alarms-list { display: flex; flex-direction: column; gap: 8px; }
+.alarms-list__head { margin: 8px 2px 0; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; }
+.alarms-empty { margin: 16px 4px; color: var(--ink-dim); font: 600 14px/1.4 var(--font-ui); }
+.alarm-row {
+  --accent: color-mix(in srgb, var(--c-alarm) 60%, transparent);
+  --halo: var(--c-alarm);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--box-bg);
+  cursor: pointer;
+}
+.alarm-row:hover { background: var(--box-bg-raised); }
+.alarm-row__time { color: #fff; font: 700 22px/1 var(--font-mono); }
+.alarm-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.alarm-row__name { font: 700 15px/1.2 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alarm-row__sub { color: var(--ink-dim); font: 600 12px/1.2 var(--font-ui); }
+.alarm-row__when { color: var(--c-alarm); font: 700 13px/1 var(--font-ui); white-space: nowrap; }
+.alarm-row.is-paused { --accent: color-mix(in srgb, var(--ink) 25%, transparent); --halo: transparent; }
+.alarm-row.is-paused .alarm-row__time, .alarm-row.is-paused .alarm-row__when { color: var(--ink-dim); }
+.alarm-row--past { --accent: color-mix(in srgb, var(--ink) 25%, transparent); --halo: transparent; }
+.alarm-row--past .alarm-row__time { color: var(--ink); font-size: 17px; }
+.alarm-row--past .alarm-row__when { color: var(--ink-dim); }
+.alarm-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  background: rgba(0, 0, 0, 0.4);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.alarm-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.alarm-switch.is-on { border-color: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 40%, transparent); box-shadow: 0 0 calc(8px * var(--glow)) var(--c-alarm); }
+.alarm-switch.is-on .alarm-switch__knob { transform: translateX(18px); background: #fff; }
+@media (prefers-reduced-motion: reduce) { .alarm-switch, .alarm-switch__knob { transition: none; } }
+
 .list-row--instant { grid-template-columns: minmax(140px, 2fr) minmax(170px, 1.3fr) minmax(120px, 1.1fr); }
 .list-row__name {
   display: flex;

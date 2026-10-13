@@ -24,11 +24,13 @@ import { useLayout } from '../../store/layout.ts'
 import { useFlip } from '../../hooks/useFlip.ts'
 import { HelpButton } from './Help.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
+import { AlarmsList } from './AlarmsList.tsx'
 
 const TABS: { key: ListTab; label: string }[] = [
   { key: 'instants', label: 'All Instants' },
   { key: 'favorites', label: 'Favorites' },
   { key: 'spans', label: 'All Spans' },
+  { key: 'alarms', label: 'Alarms' },
 ]
 
 /** Scrolls the row marked data-focused into view whenever `focusKey` changes. */
@@ -311,7 +313,7 @@ export function Agenda() {
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">
-        {tab === 'spans' ? <SpansList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
+        {tab === 'spans' ? <SpansList /> : tab === 'alarms' ? <AlarmsList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
       </div>
     </section>
   )

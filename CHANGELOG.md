@@ -26,6 +26,18 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   yet are simply gone; only alarms that rang stay as history.
 - An alarm bell's line to its instant still shows when the bell itself is off screen.
 - A timer finishes when the last of its snoozes is dismissed, not when it is first snoozed.
+- **Repeating alarms** (TLC-2): the ⟳ tool on any instant makes it repeat: daily, on weekdays,
+  weekends, chosen days, or every few days. Repeats show ⟳ on their chips, are made two weeks
+  ahead (further as you look further ahead) and stay as history once they pass. Change one on
+  its own (move it, rename it, change its bells) and it offers **Apply to all future**. Delete
+  one, or it and all later ones; pause, resume or end a series from its ⟳ tool.
+- **Alarm button** (TLC-3, or L): type a time ("7", "730", "1730", "7p"), pick once or a repeat,
+  add warnings (5m, 15m, 30m, 1h) and a name. A time that could be AM or PM takes the sooner
+  one and says plainly which day and time it set ("Tue 7:00a · in 7h"), with AM/PM buttons to
+  switch. Recent alarms are one tap away.
+- **Alarms tab** in the Agenda: every alarm, like a clock app: repeating ones with a switch to
+  pause them, upcoming ones with a button to cancel them, and what rang in the last day.
+- Backups include repeating series.
 
 ## 0.3.0 — 2026-10-12
 
