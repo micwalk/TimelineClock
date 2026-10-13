@@ -106,6 +106,7 @@ describe('stored alarms', () => {
 })
 
 describe('snoozeLanding', () => {
+  const SNOOZE_JOIN = 60 * SECOND
   const ts = now + 10 * MINUTE
   const wake = (alarms: AlarmRecord[]) => withAlarms('wake', 10 * MINUTE, alarms)
   it('lands a snooze at its time: before the instant, or after it for the alarm at the instant', () => {
@@ -127,6 +128,12 @@ describe('snoozeLanding', () => {
     const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
     expect(snoozeLanding(w, w.alarms![0], ts - 30 * SECOND, now)).toEqual({ joins: 'at', ringTs: ts })
     expect(snoozeLanding(w, w.alarms![0], ts - 90 * SECOND, now)).toEqual({ offsetMs: 90 * SECOND, ringTs: ts - 90 * SECOND })
+  })
+  it('takes a typed length as said (exact): past the instant, joining only on the very same second', () => {
+    const w = wake([{ id: 'w3', offsetMs: 3 * MINUTE }, { id: 'at', offsetMs: 0 }])
+    expect(snoozeLanding(w, w.alarms![0], ts + 2 * MINUTE, now, SNOOZE_JOIN, true)).toEqual({ offsetMs: -2 * MINUTE, ringTs: ts + 2 * MINUTE })
+    expect(snoozeLanding(w, w.alarms![0], ts - 20 * SECOND, now, SNOOZE_JOIN, true)).toEqual({ offsetMs: 20 * SECOND, ringTs: ts - 20 * SECOND })
+    expect(snoozeLanding(w, w.alarms![0], ts + 300, now, SNOOZE_JOIN, true)).toEqual({ joins: 'at', ringTs: ts })
   })
   it('keeps a snooze of the alarm at the instant after it, by at least a second', () => {
     const w = wake([{ id: 'at', offsetMs: 0 }])

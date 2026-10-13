@@ -69,18 +69,25 @@ export function alarmLabel(inst: InstantRecord, a: AlarmRecord): string {
  *   it (a moment before the instant's own alarm), lands on the instant: it joins the alarm
  *   already there, or becomes it (offset exactly 0).
  * - A snooze of the alarm at (or after) its instant stays after it: at least a second.
+ * `exact` (a typed snooze length): it lands exactly then, past the instant or not; it only
+ * joins the instant's alarm when it lands on the very same second.
  */
 export type SnoozeLanding = { offsetMs: number; ringTs: number } | { joins: string; ringTs: number }
 
 /** How close before its instant a snoozed warning joins the instant (a tunable overrides it: Settings > Advanced). */
 export const SNOOZE_JOIN_MS = 60 * SECOND
 
-export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: number, now: number, joinMs = SNOOZE_JOIN_MS): SnoozeLanding {
+export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: number, now: number, joinMs = SNOOZE_JOIN_MS, exact = false): SnoozeLanding {
   const ts = inst.tsEpochMs
   let offsetMs = Math.round((ts - at) / SECOND) * SECOND
+  const atInstant = () => inst.alarms?.find(a => a.id !== alarm.id && a.offsetMs === 0 && !a.answered && ts >= now)
+  if (exact) {
+    const there = offsetMs === 0 ? atInstant() : undefined
+    return there ? { joins: there.id, ringTs: ts } : { offsetMs, ringTs: ts - offsetMs }
+  }
   if (alarm.offsetMs > 0 && offsetMs < Math.max(SECOND, joinMs)) {
-    const atInstant = inst.alarms?.find(a => a.id !== alarm.id && a.offsetMs === 0 && !a.answered && ts >= now)
-    return atInstant ? { joins: atInstant.id, ringTs: ts } : { offsetMs: 0, ringTs: ts }
+    const there = atInstant()
+    return there ? { joins: there.id, ringTs: ts } : { offsetMs: 0, ringTs: ts }
   }
   if (alarm.offsetMs <= 0) offsetMs = Math.min(offsetMs, -SECOND)
   return { offsetMs, ringTs: ts - offsetMs }

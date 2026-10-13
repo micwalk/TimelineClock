@@ -18,8 +18,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   before it, it rings with the instant itself (a 3-minute warning snoozed for 5 minutes rings
   at the instant, not 2 minutes late, and never as a second alarm at the same moment).
 - A cleaner ringing alarm: Dismiss and Snooze 5m (saying when it will ring again), then Until
-  start for a warning, Other… to type any length right there (the keyboard comes up, and it
-  shows when it will ring as you type), and Dismiss all when the instant has more alarms. Or drag
+  start for a warning, Other… to type any length right there (the keyboard comes up, it shows
+  when it will ring as you type, and it rings exactly then, even after the start), and Dismiss all when the instant has more alarms. Or drag
   a ringing bell later on the timeline to snooze until there.
 - **Cancel alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool
   cancels its warnings (keeping the alarm at the instant) or all of them. Alarms that hadn't rung

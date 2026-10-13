@@ -10,6 +10,7 @@
 // ("10", "1h30"), in place, with the keyboard up and where it lands shown as you type.
 import { useRef, useState } from 'react'
 import { BellAlertIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
+import { PencilIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import type { RingingAlarm } from '../../domain/alarms.ts'
@@ -35,10 +36,11 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
   const name = displayName(inst?.label, clock(ts))
 
   const typedMs = parseTimerInput(text)
-  const typedLanding = typedMs !== null ? act.snoozeLandingFor(key, act.nowTime() + typedMs) : null
+  // A typed length is taken as said: no landing on the instant.
+  const typedLanding = typedMs !== null ? act.snoozeLandingFor(key, act.nowTime() + typedMs, true) : null
   const submitCustom = () => {
     if (typedMs === null) return
-    act.snoozeAlarmUntil(key, act.nowTime() + typedMs)
+    act.snoozeAlarmUntil(key, act.nowTime() + typedMs, true)
   }
   const openCustom = () => {
     setCustom(true)
@@ -76,7 +78,9 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
               Until start <span className="alarm-link__at">{clock(untilStartLink.ringTs)}</span>
             </button>
           )}
-          <button type="button" className="alarm-link" tabIndex={custom ? -1 : 0} onClick={openCustom}>Other…</button>
+          <button type="button" className="alarm-other" tabIndex={custom ? -1 : 0} onClick={openCustom} aria-label="Snooze for another length">
+            <span>Other…</span><PencilIcon aria-hidden />
+          </button>
           {choices && choices.others > 0 && (
             <button type="button" className="alarm-link alarm-link--all" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId, 'all')}
               title="Dismiss this and cancel the instant's other alarms">
@@ -92,7 +96,7 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
             onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') closeCustom() }}
             onBlur={() => { if (!text) closeCustom() }}
-            placeholder="10, 25m, 1h30"
+            placeholder="Snooze for… 10, 25m, 1h30"
             aria-label="Snooze for (minutes, or like 1h30)"
             aria-invalid={text !== '' && typedMs === null}
             enterKeyHint="done"

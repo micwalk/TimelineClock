@@ -752,19 +752,22 @@ export function snoozeAlarm(key: string, minutes = SNOOZE_MINUTES): string | und
   return snoozeAlarmUntil(key, nowTime() + minutes * MINUTE)
 }
 
-/** Snoozes an alarm until `at` (a ringing bell dragged later), and goes to its instant. */
-export function snoozeAlarmUntil(key: string, at: number): string | undefined {
-  const next = snoozeUntil(key, at)
+/**
+ * Snoozes an alarm until `at` (a ringing bell dragged later), and goes to its instant. `exact` (a
+ * typed length): exactly then, even past the instant (domain/alarms snoozeLanding).
+ */
+export function snoozeAlarmUntil(key: string, at: number, exact = false): string | undefined {
+  const next = snoozeUntil(key, at, exact)
   if (next) revealInstant(parseRingKey(key).instantId)
   return next
 }
 
 /** Where snoozing an alarm (by ring key) until `at` would land, for the snooze buttons' labels. */
-export function snoozeLandingFor(key: string, at: number): SnoozeLanding | null {
+export function snoozeLandingFor(key: string, at: number, exact = false): SnoozeLanding | null {
   const { instantId, alarmId } = parseRingKey(key)
   const inst = entities.getInstant(instantId)
   const alarm = findAlarm(inst, alarmId)
-  return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND) : null
+  return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND, exact) : null
 }
 
 export { cancelAlarms } from '../services/AlarmScheduler.ts'

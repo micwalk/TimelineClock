@@ -117,12 +117,12 @@ export const SNOOZE_MINUTES = 5
  * it lands on it, or joins the alarm already there). Returns the ring key of the alarm that rings
  * next, or undefined when there was nothing to snooze.
  */
-export function snoozeUntil(key: string, at: number): string | undefined {
+export function snoozeUntil(key: string, at: number, exact = false): string | undefined {
   const { instantId, alarmId } = parseRingKey(key)
   const inst = entities.getInstant(instantId)
   const alarm = findAlarm(inst, alarmId)
   if (!inst || !alarm || alarm.answered) { stopRinging(instantId, [alarmId]); return }
-  const landing = snoozeLanding(inst, alarm, at, Date.now(), getTunables().snoozeJoinSec * SECOND)
+  const landing = snoozeLanding(inst, alarm, at, Date.now(), getTunables().snoozeJoinSec * SECOND, exact)
   entities.answerAlarms(instantId, [alarmId], 'snoozed')
   const nextId = 'joins' in landing ? landing.joins : entities.addAlarm(instantId, { offsetMs: landing.offsetMs, snoozeOf: alarmId })
   stopRinging(instantId, [alarmId])
