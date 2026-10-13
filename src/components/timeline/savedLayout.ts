@@ -41,8 +41,8 @@ export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused:
   // The bell beside the chip, selected: its tools instead (type the offset, delete).
   if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell && a.offsetMs <= 0)) return BELL_TOOLS
   if (!o.selected) return 0
-  // Favorite, add an alarm (ahead only), skip alarms (any unanswered), move (focused), hide (not with an alarm to ring), delete.
-  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
+  // Favorite, add an alarm (ahead only), cancel alarms (any unanswered), repeat, move (focused), hide (not with an alarm to ring), delete.
+  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + 1 + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
 }
 
 /** A bell before its instant (BellMarker): its button, and its tools (delete, type the offset) while selected. */

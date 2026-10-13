@@ -839,9 +839,11 @@ export function repeatInstant(id: string, repeat: Repeat) {
     remakeSeries(series.id)
     return
   }
+  // The instant is the first occurrence before the series exists: saving the series makes its
+  // occurrences at once (services/seriesSync), and this date must already be taken.
   const series = seriesFromInstant(inst, repeat)
-  entities.putGroup(series)
   entities.patchInstant(id, () => ({ seriesId: series.id, occurrence: dateKey(inst.tsEpochMs), seriesEdited: false }))
+  entities.putGroup(series)
   syncSeries()
 }
 

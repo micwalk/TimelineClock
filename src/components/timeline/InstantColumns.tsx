@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowsRightLeftIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
@@ -31,6 +31,8 @@ import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
 import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
 import { InstantLines } from './InstantLines.tsx'
+import { RepeatPicker } from '../common/RepeatPicker.tsx'
+import { describeRepeat } from '../../domain/series.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
 import { useMorphChip } from './plusMorph.ts'
@@ -82,6 +84,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const ringingIds = useAlarms(useShallow(s => s.ringing.filter(r => r.instantId === inst.id).map(r => r.alarmId)))
   const draggingBell = useUi(s => s.draggingBell)
   const selectedBell = useUi(s => s.selectedBell)
+  const seriesHint = useUi(s => s.seriesHint === inst.id)
   const groupRef = useRef<HTMLDivElement>(null)
   const chipRef = useRef<HTMLDivElement>(null)
   // The layout measures the chip with its bell (the group); the ＋ flows into the chip itself.
@@ -138,11 +141,14 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
       {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* An alarm still to ring is never hidden. */}
+      <RepeatTool inst={inst} />
       {(inst.hidden || !armed) && (
         <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
           color="var(--ink-dim)" bare onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
       )}
-      <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />
+      {inst.seriesId
+        ? <DeleteOccurrenceTool inst={inst} />
+        : <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
     </>
   ) : moving ? (
     <>
@@ -193,6 +199,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {!unnamed && <span className="chip__name">{name}</span>}
+            {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
               {moving ? <LiveText compute={f => formatClockCompact(f.center, true)} /> : formatClockCompact(ts, withSeconds)}
             </span>
@@ -202,6 +209,12 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
           </>
         )}
       </div>
+      {seriesHint && !editing && (
+        <button type="button" className="tl-col__apply glow-box" onClick={() => act.applyToFutureOccurrences(inst.id)}
+          title="Make every later occurrence like this one: name, time of day and alarms">
+          {REPEAT_MARK} Apply to all future
+        </button>
+      )}
       {foldCount > 0 && (
         <button type="button" className="tl-col__fold glow-box glow-text" aria-label={`${foldCount} snooze${foldCount > 1 ? 's' : ''}, zoom to fit`} onClick={zoomToFold}>
           {SNOOZE_MARK}{foldCount}
@@ -251,6 +264,62 @@ function CancelTool({ inst }: { inst: InstantRecord }) {
           </button>
           <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'all'); setOpen(false) }}>
             {label}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The mark on an occurrence of a repeating series. */
+const REPEAT_MARK = '⟳'
+
+/**
+ * Repeat: makes an instant repeat (it becomes the first occurrence of a series), or, on an
+ * occurrence, changes how its series repeats from now on, pauses it, or ends it.
+ */
+function RepeatTool({ inst }: { inst: InstantRecord }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  usePopoverDismiss(ref, () => setOpen(false), open)
+  const series = useEntities(s => (inst.seriesId ? s.groups?.find(g => g.id === inst.seriesId) : undefined))
+  return (
+    <div ref={ref} className="skip-tool">
+      <IconButton icon={ArrowPathIcon} label={series ? `Repeats ${describeRepeat(series.repeat)}: change` : 'Repeat'} color="var(--c-alarm)" bare pressed={open || !!series}
+        onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Repeat">
+          <div className="repeat-menu__title">{series ? `Repeats ${describeRepeat(series.repeat).toLowerCase()} at ${formatClockCompact(inst.tsEpochMs, false)}` : `Repeat at ${formatClockCompact(inst.tsEpochMs, false)}`}</div>
+          <RepeatPicker value={series?.repeat ?? null} onChange={r => { if (r) act.repeatInstant(inst.id, r) }} />
+          {series && (
+            <div className="repeat-menu__actions">
+              <button type="button" className="alarm-link glow-box" onClick={() => { act.setSeriesPaused(series.id, !series.paused); setOpen(false) }}>
+                {series.paused ? 'Resume' : 'Pause'}
+              </button>
+              <button type="button" className="alarm-link alarm-link--all glow-box" onClick={() => { act.endSeries(series.id); setOpen(false) }}>End series</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Delete, on an occurrence: this one, or this and all later ones (earlier ones stay as history). */
+function DeleteOccurrenceTool({ inst }: { inst: InstantRecord }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  usePopoverDismiss(ref, () => setOpen(false), open)
+  return (
+    <div ref={ref} className="skip-tool">
+      <IconButton icon={TrashIcon} label="Delete…" color="var(--c-danger)" className="glow-box" pressed={open} onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Delete">
+          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.deleteOccurrences(inst.id, 'this'); setOpen(false) }}>
+            Delete this one
+          </button>
+          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.deleteOccurrences(inst.id, 'later'); setOpen(false) }}>
+            This and all later <span className="skip-menu__note">earlier ones stay</span>
           </button>
         </div>
       )}
