@@ -361,6 +361,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
         gapPx: sid => (vertical ? t.rhythmGapPx : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
         // Its summary chip sits on screen (clear of the edges) when it can.
         view: { lo: vertical ? CHIP_HEIGHT : 120, hi: f.mainSize - (vertical ? CHIP_HEIGHT : 120) },
+        // Vertical summaries are wide: two side by side would run off screen, so they stack along time.
+        spacing: vertical ? CHIP_HEIGHT + t.chipGapPx : 0,
       },
     )
     const items = layoutItems(visible.filter(i => !rhythm.collapsed[i.id]), {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { InstantRecord } from './entities.ts'
 import type { SeriesRecord } from './series.ts'
 import {
-  EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, dateKey, daysBetween, describeRepeat, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
+  EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, dateKey, daysBetween, describeRepeat, describeRepeatShort, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
   parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant, virtualOccurrences,
 } from './series.ts'
 import { DAY, MINUTE } from './time.ts'
@@ -115,6 +115,12 @@ describe('describeRepeat', () => {
     expect(describeRepeat({ kind: 'weekly', days: [0, 6] })).toBe('Weekends')
     expect(describeRepeat({ kind: 'weekly', days: [5, 1, 3] })).toBe('Mon, Wed, Fri')
     expect(describeRepeat({ kind: 'interval', every: 3 })).toBe('Every 3 days')
+  })
+  it('has a short form for tight spots', () => {
+    expect(describeRepeatShort({ kind: 'weekly', days: [5, 1, 3] })).toBe('MWF')
+    expect(describeRepeatShort({ kind: 'weekly', days: [2, 4] })).toBe('TuTh')
+    expect(describeRepeatShort({ kind: 'weekly', days: WEEKDAYS })).toBe('Wkdays')
+    expect(describeRepeatShort({ kind: 'interval', every: 3 })).toBe('Every 3d')
   })
 })
 

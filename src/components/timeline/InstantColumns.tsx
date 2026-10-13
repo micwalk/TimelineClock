@@ -34,7 +34,7 @@ import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } 
 import { InstantLines } from './InstantLines.tsx'
 import { useTimelineInstants } from './timelineInstants.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
-import { describeRepeat, occurrenceTs } from '../../domain/series.ts'
+import { describeRepeat, describeRepeatShort, occurrenceTs } from '../../domain/series.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { seriesItemId } from '../../domain/rhythm.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
@@ -502,7 +502,10 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
   const series = useEntities(s => s.groups?.find(g => g.id === summary.seriesId))
   const vertical = useLayout(s => s.orientation === 'vertical')
   if (!series) return null
-  const rule = `${describeRepeat(series.repeat)} ${formatClockCompact(occurrenceTs(series, series.from), false)}`
+  const clock = formatClockCompact(occurrenceTs(series, series.from), false)
+  const rule = `${describeRepeat(series.repeat)} ${clock}`
+  // Vertical chips have little room across: the short form ("MWF 6:15p").
+  const shown = vertical ? `${describeRepeatShort(series.repeat)} ${clock}` : rule
   const name = displayName(series.label, 'Repeat')
   const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
   return (
@@ -512,8 +515,9 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
           title={`${name}: ${summary.count} on screen, ${rule}. Tap to zoom in`}>
           <span className="chip-series__mark" aria-hidden>{REPEAT_MARK}</span>
           <span className="chip__name">{name}</span>
-          <span className="chip-series__rule">{rule}</span>
-          {series.alarms.length > 0 && <BellAlertIcon className="chip-series__bell" aria-label="with alarms" />}
+          <span className="chip-series__rule">{shown}</span>
+          {/* Vertical: the yellow left edge says "with alarms"; the icon would crowd the rule. */}
+          {series.alarms.length > 0 && !vertical && <BellAlertIcon className="chip-series__bell" aria-label="with alarms" />}
           <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />
         </button>
       </div>

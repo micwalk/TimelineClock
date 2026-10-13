@@ -43,7 +43,14 @@ export const RHYTHM_MIN = 3
  */
 export function planRhythm(
   members: readonly RhythmMember[],
-  o: { now: number; gapPx: (seriesId: string) => number; /** The screen, px: the summary sits on it when it can. */ view?: { lo: number; hi: number } },
+  o: {
+    now: number
+    gapPx: (seriesId: string) => number
+    /** The screen, px: the summary sits on it when it can. */
+    view?: { lo: number; hi: number }
+    /** Keep summaries this far apart along time when they can be (vertical: a chip's height), px. */
+    spacing?: number
+  },
 ): RhythmPlan {
   const bySeries = new Map<string, RhythmMember[]>()
   for (const m of members) {
@@ -53,6 +60,8 @@ export function planRhythm(
   }
   const collapsed: Record<string, string> = {}
   const summaries: SeriesSummary[] = []
+  const taken: number[] = []
+  const free = (pos: number) => !o.spacing || taken.every(p => Math.abs(p - pos) >= o.spacing!)
   for (const [seriesId, list] of [...bySeries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (list.length < RHYTHM_MIN) continue
     const sorted = [...list].sort((a, b) => a.ts - b.ts)
@@ -64,8 +73,10 @@ export function planRhythm(
     for (const m of folded) collapsed[m.id] = seriesId
     const onScreen = o.view ? folded.filter(m => m.pos >= o.view!.lo && m.pos <= o.view!.hi) : folded
     const pool = onScreen.length > 0 ? onScreen : folded
-    // The first still ahead; with none ahead, the latest (the nearest to Now).
-    const anchor = pool.find(m => m.ts >= o.now) ?? pool[pool.length - 1]
+    // The first still ahead (clear of other summaries when one is); with none ahead, the latest (the nearest to Now).
+    const ahead = pool.filter(m => m.ts >= o.now)
+    const anchor = ahead.find(m => free(m.pos)) ?? ahead[0] ?? pool[pool.length - 1]
+    taken.push(anchor.pos)
     const after = folded[folded.indexOf(anchor) + 1]
     summaries.push({ seriesId, anchorId: anchor.id, anchorTs: anchor.ts, count: folded.length, nextTs: after?.ts ?? null })
   }

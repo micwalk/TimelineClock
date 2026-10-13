@@ -257,6 +257,16 @@ export function describeRepeat(r: Repeat): string {
   return [...r.days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => DAY_NAMES[d]).join(', ')
 }
 
+/** The same, short, for tight spots: "Daily", "Wkdays", "Wkends", "MWF", "Every 3d". */
+export function describeRepeatShort(r: Repeat): string {
+  if (r.kind === 'interval') return r.every <= 1 ? 'Daily' : `Every ${r.every}d`
+  if (sameDays(r.days, EVERY_DAY)) return 'Daily'
+  if (sameDays(r.days, WEEKDAYS)) return 'Wkdays'
+  if (sameDays(r.days, WEEKENDS)) return 'Wkends'
+  const letters = ['Su', 'M', 'Tu', 'W', 'Th', 'F', 'Sa']
+  return [...r.days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => letters[d]).join('')
+}
+
 // ---------------------------------------------------------------------------
 // Storage
 

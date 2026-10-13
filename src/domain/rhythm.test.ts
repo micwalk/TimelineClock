@@ -31,6 +31,13 @@ describe('planRhythm', () => {
     expect(plan.summaries[0].anchorId).toBe('g5') // g2 (the next ahead) is off screen at 40px
   })
 
+  it('keeps summaries apart along time when it can', () => {
+    const a = daily('a', 6, 20)
+    const b = daily('b', 6, 20).map(m => ({ ...m, pos: m.pos + 5, ts: m.ts + 1000 }))
+    const plan = planRhythm([...a, ...b], { now, gapPx: () => 56, spacing: 34 })
+    expect(plan.summaries.map(s => s.anchorId)).toEqual(['a2', 'b4']) // b2 is only 5px from a2; b3 25px
+  })
+
   it('needs at least two to fold besides the exceptions', () => {
     expect(planRhythm(daily('g', 3, 10, [0, 1]), { now, gapPx: () => 56 }).summaries).toEqual([])
   })

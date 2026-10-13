@@ -39,6 +39,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **Alarms tab** in the Agenda: every alarm, like a clock app: repeating ones with a switch to
   pause them, upcoming ones with a button to cancel them, and what rang in the last day.
 - Backups include repeating series.
+- **Zoomed out, repeats stay calm**: a repeat whose occurrences crowd turns into small ticks on
+  the axis and one chip for the series ("⟳ Wake Up · Daily 9:00a · in 3d 8h"); tap it to zoom in.
+  Occurrences changed on their own keep their own chips. Zoomed out past hours, chips also drop
+  their "in 3d 8h".
+- The Alarm picker is a sheet at the top of the screen on phones, clear of the keyboard, with a
+  cleaner layout; popovers on chips near an edge stay on screen.
 
 ## 0.3.0 — 2026-10-12
 

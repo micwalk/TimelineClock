@@ -387,6 +387,11 @@
 .chip-series__rule { color: var(--c-alarm); font: 700 13px/1 var(--font-ui); white-space: nowrap; }
 .chip-series__bell { width: 14px; height: 14px; color: var(--c-alarm); }
 .tl-series .chip { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+/* Vertical: a summary never runs off the right edge; only its rule gives way (the name and
+   "in 3d" stay whole). */
+.timeline[data-orientation='vertical'] .chip--series { max-width: calc(100vw - var(--tl-chip-start) - 10px); }
+.chip--series > * { flex: none; }
+.chip--series > .chip-series__rule { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .tl-series .chip { animation: none; } }
 
 /* The skip tool's two choices. */
