@@ -3,7 +3,7 @@ import type { InstantRecord } from './entities.ts'
 import type { SeriesRecord } from './series.ts'
 import {
   EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, dateKey, daysBetween, describeRepeat, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
-  planOccurrences, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant,
+  parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant, virtualOccurrences,
 } from './series.ts'
 import { DAY, MINUTE } from './time.ts'
 
@@ -79,6 +79,32 @@ describe('remaking after a rule change', () => {
     ] }
     expect(ruleFromOccurrence(inst)).toEqual({ label: 'Up!', time: '06:30', alarms: [10 * MINUTE, 0] })
     expect(seriesFromInstant(inst, { kind: 'weekly', days: WEEKENDS }, 'g2')).toMatchObject({ id: 'g2', from: '2026-10-14', time: '06:30' })
+  })
+})
+
+describe('computed occurrences (past the horizon)', () => {
+  it('are computed for the window, never where an instant exists, never in the past, and are marked virtual', () => {
+    const have: InstantRecord = { id: 'x', tsEpochMs: at(14, 7), label: 'Wake up', seriesId: 'g', occurrence: '2026-10-14' }
+    const out = virtualOccurrences([series(), series({ id: 'p', paused: true })], [have], at(13, 8), at(12), at(16, 23))
+    expect(out.map(i => i.occurrence)).toEqual(['2026-10-15', '2026-10-16'])
+    expect(out[0]).toMatchObject({ id: 'v:g@2026-10-15', virtual: true, seriesId: 'g', tsEpochMs: at(15, 7) })
+    expect(out[0].alarms?.map(a => a.offsetMs)).toEqual([0, 15 * MINUTE])
+    expect(parseVirtualId(out[0].id)).toEqual({ seriesId: 'g', date: '2026-10-15' })
+    expect(parseVirtualId('i_123')).toBeNull()
+  })
+})
+
+describe('refreshOccurrence', () => {
+  const inst: InstantRecord = { id: 'o', tsEpochMs: at(14, 7), label: 'Wake up', seriesId: 'g', occurrence: '2026-10-14',
+    alarms: [{ id: 'keep', offsetMs: 0 }, { id: 'drop', offsetMs: 15 * MINUTE }] }
+  it('takes the new time, name and alarms in place, keeping alarm ids at offsets it had', () => {
+    const next = refreshOccurrence(series({ time: '06:30', label: 'Up', alarms: [0, 5 * MINUTE] }), inst, at(13), () => 'new')
+    expect(next).toMatchObject({ id: 'o', tsEpochMs: at(14, 6, 30), label: 'Up', alarms: [{ id: 'keep', offsetMs: 0 }, { id: 'new', offsetMs: 5 * MINUTE }] })
+  })
+  it('goes when the rule no longer runs that day, the series is paused, or its new time has passed', () => {
+    expect(refreshOccurrence(series({ repeat: { kind: 'weekly', days: [1] } }), inst, at(13), () => 'n')).toBeNull()
+    expect(refreshOccurrence(series({ paused: true }), inst, at(13), () => 'n')).toBeNull()
+    expect(refreshOccurrence(series({ time: '06:00' }), inst, at(14, 6, 30), () => 'n')).toBeNull()
   })
 })
 

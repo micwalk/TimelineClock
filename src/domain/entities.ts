@@ -17,6 +17,11 @@ export interface InstantRecord {
   occurrence?: string
   /** Changed on its own (name, time, alarms): the series' rule changes leave it alone. */
   seriesEdited?: boolean
+  /**
+   * Shown only, never stored: an occurrence past the horizon, computed for the timeline
+   * (domain/series virtualOccurrences). Tapping it stores it.
+   */
+  virtual?: true
 }
 
 /** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */

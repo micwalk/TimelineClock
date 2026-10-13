@@ -359,6 +359,10 @@
 .repeat-every { min-width: 24px; text-align: center; font-weight: 700; }
 .repeat-every__unit { color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
 
+/* A computed occurrence (past the horizon, shown only): its bells aren't handles until it is
+   tapped (and stored); the chip itself is. */
+.tl-col.is-virtual .chip-bell, .tl-bell.is-virtual { pointer-events: none; }
+
 /* The skip tool's two choices. */
 .skip-tool { position: relative; display: inline-flex; }
 .skip-menu { --accent: var(--c-alarm); display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: max-content; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }

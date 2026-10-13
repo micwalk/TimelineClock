@@ -26,7 +26,9 @@ import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
-import { OCCURRENCE_HORIZON_MAX_MS, OCCURRENCE_HORIZON_MS, dateKey, newGroupId, occurrenceTs, planOccurrences, remakeable, ruleFromOccurrence, seriesFromInstant } from '../domain/series.ts'
+import {
+  OCCURRENCE_HORIZON_MS, dateKey, newGroupId, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
+} from '../domain/series.ts'
 import { newAlarmId, newInstantId } from '../domain/entities.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
@@ -800,30 +802,52 @@ function touchOccurrence(id: string, offerApply = true) {
   if (offerApply) ui.showSeriesHint(id)
 }
 
-/** How far ahead occurrences are made: the horizon, or as far as the view reaches (up to the cap). */
-let occurrencesUntil = 0
-
 /**
- * Makes the occurrences due within the horizon (or `until`, as far as the view reaches, capped):
- * called on start, hourly, when series change, and as the view moves further ahead.
+ * Makes the occurrences due within the horizon (14 days, as far as the Android app gets alarms
+ * ahead): called on start, hourly and when series change. Further ahead they are only computed,
+ * for the timeline (components/timeline/timelineInstants).
  */
-export function syncSeries(until?: number) {
+export function syncSeries() {
   const now = Date.now()
-  const want = Math.min(now + OCCURRENCE_HORIZON_MAX_MS, Math.max(now + OCCURRENCE_HORIZON_MS, until ?? 0, occurrencesUntil > now ? occurrencesUntil : 0))
-  occurrencesUntil = want
   const { groups, instants } = useEntities.getState()
   if (!groups || groups.length === 0) return
-  entities.addInstants(planOccurrences(groups, instants, now, want, { instant: newInstantId, alarm: newAlarmId }))
+  entities.addInstants(planOccurrences(groups, instants, now, now + OCCURRENCE_HORIZON_MS, { instant: newInstantId, alarm: newAlarmId }))
 }
 
-/** Remakes a series' untouched occurrences ahead (after its rule changed). */
-function remakeSeries(seriesId: string) {
+/**
+ * After a series' rule changed: its untouched occurrences ahead take the new time, name and
+ * alarms in place (keeping their ids, so a selected one stays selected); those the rule no longer
+ * has, or whose new time has passed, go; then any new dates are made.
+ */
+function refreshSeries(seriesId: string) {
   const series = entities.getGroup(seriesId)
   if (!series) return
-  const gone = remakeable(series, useEntities.getState().instants, Date.now())
-  for (const i of gone) { dismissInstant(i.id); view.forgetInstant(i.id) }
-  entities.deleteInstants(gone.map(i => i.id))
+  const now = Date.now()
+  const gone: string[] = []
+  for (const inst of remakeable(series, useEntities.getState().instants, now)) {
+    const next = refreshOccurrence(series, inst, now, newAlarmId)
+    if (next) entities.patchInstant(inst.id, () => next)
+    else gone.push(inst.id)
+  }
+  for (const id of gone) { dismissInstant(id); view.forgetInstant(id) }
+  entities.deleteInstants(gone)
   syncSeries()
+}
+
+/**
+ * Stores a computed occurrence (past the horizon, shown only) when it is tapped: anything done
+ * to it from then on is kept. Returns its instant's id (the id itself for a stored one).
+ */
+export function materializeOccurrence(id: string): string | undefined {
+  const v = parseVirtualId(id)
+  if (!v) return entities.getInstant(id) ? id : undefined
+  const series = entities.getGroup(v.seriesId)
+  if (!series) return
+  const have = useEntities.getState().instants.find(i => i.seriesId === series.id && i.occurrence === v.date)
+  if (have) return have.id
+  const inst = newOccurrence(series, v.date, { instant: newInstantId, alarm: newAlarmId })
+  entities.addInstants([inst])
+  return inst.id
 }
 
 /**
@@ -836,7 +860,7 @@ export function repeatInstant(id: string, repeat: Repeat) {
   if (inst.seriesId && entities.getGroup(inst.seriesId)) {
     const series = entities.getGroup(inst.seriesId)!
     entities.putGroup({ ...series, repeat })
-    remakeSeries(series.id)
+    refreshSeries(series.id)
     return
   }
   // The instant is the first occurrence before the series exists: saving the series makes its
@@ -855,7 +879,7 @@ export function applyToFutureOccurrences(id: string) {
   entities.putGroup({ ...series, ...ruleFromOccurrence(inst) })
   entities.patchInstant(id, () => ({ seriesEdited: false }))
   ui.showSeriesHint(null)
-  remakeSeries(series.id)
+  refreshSeries(series.id)
 }
 
 /** Pauses a series (its untouched occurrences ahead go; none are made) or runs it again. */
@@ -863,7 +887,7 @@ export function setSeriesPaused(seriesId: string, paused: boolean) {
   const series = entities.getGroup(seriesId)
   if (!series) return
   entities.putGroup({ ...series, paused })
-  if (paused) remakeSeries(seriesId)
+  if (paused) refreshSeries(seriesId)
   else syncSeries()
 }
 

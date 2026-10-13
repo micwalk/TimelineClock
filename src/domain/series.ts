@@ -1,12 +1,14 @@
 // Repeating alarm series (TLC-2): a group whose members are made from a rule. Pure.
 //
 // A series keeps a rule (a wall-clock time and which days), a template of alarms, and the dates
-// it runs over. Its occurrences are ordinary instants (seriesId + occurrence date), made a
-// rolling window ahead (planOccurrences), so bells, snoozes, the Android app's alarms, the Agenda
-// and navigation all work on them unchanged, and the future never fills up: only the window is
-// made. Occurrences that pass stay as history. Editing one occurrence edits that instant (it is
-// marked seriesEdited, so rule changes leave it alone); "apply to all future" folds it back into
-// the rule. Deleting one occurrence skips its date; deleting it and all later ones ends the series.
+// it runs over. Its occurrences are ordinary instants (seriesId + occurrence date), made 14 days
+// ahead (planOccurrences; the Android app gets their alarms that far ahead), so bells, snoozes,
+// the Android app's alarms, the Agenda and navigation all work on them unchanged, and the future
+// never fills up. Further ahead they are only computed, for the timeline (virtualOccurrences).
+// Occurrences that pass stay as history. A rule change updates the untouched ones ahead in place
+// (refreshOccurrence). Editing one occurrence edits that instant (it is marked seriesEdited, so
+// rule changes leave it alone); "apply to all future" folds it back into the rule. Deleting one
+// occurrence skips its date; deleting it and all later ones ends the series.
 //
 // Wall-clock time: "07:00" stays 7:00 local across DST and timezone changes (a time a DST jump
 // skips lands where Date puts it, an hour later).
@@ -107,10 +109,52 @@ export function nextOccurrence(s: SeriesRecord, now: number): { date: string; ts
 /** An occurrence: an instant made by a series. */
 export const isOccurrence = (i: InstantRecord): i is InstantRecord & { seriesId: string; occurrence: string } => !!i.seriesId && !!i.occurrence
 
-/** How far ahead occurrences are made at least (the Android app gets their alarms ahead of time). */
+/** How far ahead occurrences are made (stored): as far as the Android app gets alarms ahead of time. */
 export const OCCURRENCE_HORIZON_MS = 14 * DAY
-/** And at most, however far ahead you look. */
-export const OCCURRENCE_HORIZON_MAX_MS = 366 * DAY
+
+/** Most occurrences computed for the timeline at once (a year of a daily series, zoomed right out). */
+export const MAX_VIRTUAL_OCCURRENCES = 400
+
+/** A computed occurrence's id: "v:<series>@<date>". */
+export const virtualId = (seriesId: string, date: string) => `v:${seriesId}@${date}`
+
+/** The series and date a computed occurrence's id names, or null. */
+export function parseVirtualId(id: string): { seriesId: string; date: string } | null {
+  const m = /^v:(.+)@(\d{4}-\d{2}-\d{2})$/.exec(id)
+  return m ? { seriesId: m[1], date: m[2] } : null
+}
+
+/**
+ * Occurrences between `from` and `to` that aren't stored (past the horizon), computed for the
+ * timeline: for each running series, every date it runs on whose occurrence is still ahead of
+ * `now` and has no instant yet. Shown only (`virtual`); never stored unless tapped.
+ */
+export function virtualOccurrences(groups: readonly GroupRecord[], instants: readonly InstantRecord[], now: number, from: number, to: number): InstantRecord[] {
+  const have = new Set(instants.filter(isOccurrence).map(i => `${i.seriesId}@${i.occurrence}`))
+  const out: InstantRecord[] = []
+  const last = dateKey(to)
+  for (const s of groups) {
+    if (s.kind !== 'series' || s.paused) continue
+    const first = dateKey(Math.max(from, now))
+    for (let date = first < s.from ? s.from : first; date <= last && out.length < MAX_VIRTUAL_OCCURRENCES; date = nextDateKey(date)) {
+      if (s.until && date > s.until) break
+      if (have.has(`${s.id}@${date}`) || !occursOn(s, date)) continue
+      const ts = occurrenceTs(s, date)
+      if (ts <= now || ts < from || ts > to) continue
+      const id = virtualId(s.id, date)
+      out.push({
+        id,
+        tsEpochMs: ts,
+        label: s.label,
+        ...(s.alarms.length > 0 ? { alarms: s.alarms.map((offsetMs, k) => ({ id: `${id}#${k}`, offsetMs })) } : {}),
+        seriesId: s.id,
+        occurrence: date,
+        virtual: true,
+      })
+    }
+  }
+  return out
+}
 
 /** A new occurrence instant for `date`, with the series' alarms. */
 export function newOccurrence(s: SeriesRecord, date: string, ids: { instant: () => string; alarm: () => string }): InstantRecord {
@@ -158,6 +202,26 @@ export function planOccurrences(
  */
 export function remakeable(s: SeriesRecord, instants: readonly InstantRecord[], now: number): InstantRecord[] {
   return instants.filter(i => i.seriesId === s.id && i.tsEpochMs > now && !i.seriesEdited && !i.alarms?.some(a => a.answered))
+}
+
+/**
+ * An untouched occurrence after its series' rule changed: its new time, name and alarms (alarms
+ * at an offset it already had keep their ids), or null when it should go (the series no longer
+ * runs on its date, is paused, or its new time has already passed).
+ */
+export function refreshOccurrence(s: SeriesRecord, inst: InstantRecord, now: number, newAlarmId: () => string): InstantRecord | null {
+  if (s.paused || !inst.occurrence || !occursOn(s, inst.occurrence)) return null
+  const ts = occurrenceTs(s, inst.occurrence)
+  if (ts <= now) return null
+  const old = [...(inst.alarms ?? [])]
+  const alarms = s.alarms.map(offsetMs => {
+    const k = old.findIndex(a => a.offsetMs === offsetMs && !a.snoozeOf)
+    const keep = k >= 0 ? old.splice(k, 1)[0] : null
+    return { id: keep?.id ?? newAlarmId(), offsetMs }
+  })
+  const { alarms: _drop, ...rest } = inst
+  void _drop
+  return { ...rest, tsEpochMs: ts, label: s.label, ...(alarms.length > 0 ? { alarms } : {}) }
 }
 
 /** The rule parts an occurrence carries: its name, time of day and alarms (not its snoozes). */

@@ -5,7 +5,7 @@ import { useAlarms } from './alarms.ts'
 import { ringKey } from '../domain/alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
-import { DAY, HOUR, MINUTE } from '../domain/time.ts'
+import { HOUR, MINUTE } from '../domain/time.ts'
 import { EVERY_DAY, dateKey } from '../domain/series.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
@@ -838,8 +838,27 @@ describe('repeating series (TLC-2)', () => {
     act.deleteOccurrences(third.id, 'later')
     expect(occurrences(seriesId).map(i => i.occurrence)).toEqual([dateKey(instant(occurrences(seriesId)[0].id).tsEpochMs)])
     expect((entities.getGroup(seriesId)?.until ?? '') < (third.occurrence ?? '')).toBe(true)
-    act.syncSeries(Date.now() + 30 * DAY)
+    act.syncSeries()
     expect(occurrences(seriesId)).toHaveLength(1)
+  })
+
+  it('only 14 days are stored; a rule change updates them in place (same ids)', () => {
+    const { id, seriesId } = start()
+    const list = occurrences(seriesId)
+    expect(list[list.length - 1].tsEpochMs - Date.now()).toBeLessThanOrEqual(14 * 24 * HOUR)
+    const ids = list.map(i => i.id)
+    act.renameInstant(id, 'Rise')
+    act.applyToFutureOccurrences(id)
+    expect(occurrences(seriesId).map(i => i.id)).toEqual(ids)
+    expect(occurrences(seriesId).every(i => i.label === 'Rise')).toBe(true)
+  })
+
+  it('a computed occurrence (past the horizon) is stored when tapped', () => {
+    const { seriesId } = start()
+    const date = dateKey(Date.now() + 30 * 24 * HOUR)
+    const stored = act.materializeOccurrence(`v:${seriesId}@${date}`)!
+    expect(instant(stored)).toMatchObject({ seriesId, occurrence: date, label: 'Wake up' })
+    expect(act.materializeOccurrence(`v:${seriesId}@${date}`)).toBe(stored)
   })
 
   it('pausing removes the untouched occurrences ahead; running it again makes them again', () => {

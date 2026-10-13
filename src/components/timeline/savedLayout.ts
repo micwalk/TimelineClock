@@ -22,6 +22,7 @@ import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/a
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
+import { useTimelineInstants } from './timelineInstants.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
 export const CULL_MARGIN_PX = 400
@@ -544,7 +545,7 @@ export function clusterAt(l: SavedLayout, id: string): ClusterInfo | undefined {
 export function useSavedLayoutSource(laneCount = 0): number {
   const orientation = useLayout(s => s.orientation)
   const dir = useLayout(s => s.dir)
-  const instants = useEntities(s => s.instants)
+  const instants = useTimelineInstants()
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,
     focusedInstantId: s.focusedInstantId,

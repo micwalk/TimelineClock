@@ -31,6 +31,7 @@ import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
 import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
 import { InstantLines } from './InstantLines.tsx'
+import { useTimelineInstants } from './timelineInstants.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { describeRepeat } from '../../domain/series.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
@@ -120,6 +121,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   // Whether the chip was focused when a double-tap began (its first tap may focus it).
   const firstTap = useRef<{ wasFocused: boolean } | null>(null)
   const onTap = (e: React.MouseEvent) => {
+    // A computed occurrence (past the horizon) is stored as it is tapped, then selected.
+    if (inst.virtual) { const id = act.materializeOccurrence(inst.id); if (id) act.selectInstant(id); return }
     if (e.detail <= 1) firstTap.current = { wasFocused: act.isInstantFocused(inst.id) }
     if (bellSelected) ui.selectBell(null)
     if (moving) setTyping(true)
@@ -425,7 +428,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
   return (
     <>
       <div ref={linkRef} className={`tl-bell-link${past ? ' is-past' : ''}`} aria-hidden />
-      <div ref={ref} className={`tl-col tl-col--label tl-bell${selected ? ' is-selected' : ''}${past ? ' is-past' : ''}${dragging ? ' is-dragging' : ''}`} role="group" aria-label={label}>
+      <div ref={ref} className={`tl-col tl-col--label tl-bell${selected ? ' is-selected' : ''}${past ? ' is-past' : ''}${dragging ? ' is-dragging' : ''}${inst.virtual ? ' is-virtual' : ''}`} role="group" aria-label={label}>
         <div className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
           <div ref={stubRef} className="tl-bell__stub" aria-hidden />
           <button type="button" data-no-pan className={`chip-bell glow-box${ringing ? ' is-ringing' : ''}${selected ? ' is-selected' : ''}`}
@@ -500,7 +503,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   const linked = bellLinked && !moving
 
   return (
-    <div ref={ref} className={`tl-col tl-col--label ${stateClass}`} role="group" aria-label={`Instant ${name}`}>
+    <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}`} role="group" aria-label={`Instant ${name}`}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
       <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
@@ -511,7 +514,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
 
 export function SavedInstantColumns() {
   const layout = useSavedLayoutStructure()
-  const instants = useEntities(s => s.instants)
+  const instants = useTimelineInstants()
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,
