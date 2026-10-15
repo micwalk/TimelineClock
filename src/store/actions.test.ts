@@ -456,7 +456,7 @@ describe('double-taps', () => {
     act.activateNow()
     const added = useEntities.getState().instants.at(-1)!
     expect(useEntities.getState().instants).toHaveLength(before + 1)
-    expect(view().editingInstantId).toBe(added.id)
+    expect(view()).toMatchObject({ editingInstantId: added.id, currentSelectedInstantId: added.id, viewFocusMode: 'now' })
   })
 })
 

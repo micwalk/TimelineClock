@@ -171,7 +171,15 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   ) : null
   // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it).
   const toolsBelow = toolButtons !== null && chipToolsBelow({ moving, vertical })
-  const tools = toolButtons && <div className="tl-col__tools">{toolButtons}</div>
+  // While the chip is being named, a tool keeps the pointer from taking focus (the row would
+  // shift as the name box closes, under the tap), ends naming (the name commits), then acts.
+  const tools = toolButtons && (
+    <div className="tl-col__tools"
+      onMouseDown={editing ? e => e.preventDefault() : undefined}
+      onClickCapture={editing ? () => act.endNaming() : undefined}>
+      {toolButtons}
+    </div>
+  )
 
   return (
     <div ref={groupRef} className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>

@@ -86,10 +86,10 @@ export function activateInstant(id: string, wasFocused = isInstantFocused(id)) {
   else focusInstant(id)
 }
 
-/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now with its name editor open. */
+/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now, selected with its name box open (as its ＋ does). */
 export function activateNow() {
   if (v().viewFocusMode !== 'now') { focusNow(); return }
-  view.editInstant(dropInstant())
+  dropAndName(nowTime())
 }
 
 /**
@@ -383,13 +383,15 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
 }
 
 /**
- * The Cursor tag's ＋: drop an unnamed instant at the cursor with its name box open (the ＋
- * turns into its chip). Leaving it empty keeps it unnamed; moving the cursor or tapping
- * elsewhere ends naming. Returns the new id.
+ * A tag's ＋ (the Cursor's, or Now's while following Now): drop an unnamed instant at `ts` (the
+ * cursor by default), selected but not focused, with its name box open: the chip's own naming,
+ * with its time and tools under it (the Cursor's ＋ turns into the chip). Leaving it empty keeps
+ * it unnamed; moving the cursor, tapping elsewhere or a tool ends naming. Returns the new id.
  */
-export function dropAndName(): string {
-  const ts = cursorTime()
+export function dropAndName(ts = cursorTime()): string {
+  endNaming()
   const id = entities.createInstant(ts, '')
+  view.selectInstant(id)
   view.editInstant(id)
   return id
 }

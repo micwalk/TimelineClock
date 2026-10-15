@@ -226,6 +226,18 @@ describe('chip polish: renaming and vertical tools', () => {
     expect(screen.getByText(formatClockCompact(t, true))).toHaveClass('chip__time')
   })
 
+  it('while naming, a tool ends naming (the name commits) and does its thing, without taking focus first', () => {
+    const id = entities.createInstant(engine.getFrame().now + 20 * MINUTE, '')
+    useView.setState({ currentSelectedInstantId: id, editingInstantId: id })
+    render(<Columns />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Instant name' }), { target: { value: 'Tea' } })
+    const bell = screen.getByRole('button', { name: 'Set alarm' })
+    expect(fireEvent.mouseDown(bell)).toBe(false) // default prevented: the name box keeps focus
+    fireEvent.click(bell)
+    expect(entities.getInstant(id)).toMatchObject({ label: 'Tea', alarms: [{ offsetMs: 0 }] })
+    expect(useView.getState().editingInstantId).toBeNull()
+  })
+
   it('puts a vertical selected chip\'s tools in the row below it', () => {
     const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
     useView.setState({ currentSelectedInstantId: id })

@@ -22,6 +22,11 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - The ★ on a favorite’s lane is now a badge, not a button, so the stop is the chip’s only
   button and a near miss can’t unfavorite it. To stop tracking without saving, tap the lane
   and use the star tool, as on the instant’s chip (it replaces the eye there).
+- **The ＋ opens the new chip selected, with its tools** (#14): the name box, its time and the
+  tool row (favorite, bell, repeat, hide, delete) at once, the same as renaming any selected
+  chip. Tapping a tool keeps what you typed and does its thing.
+- **A ＋ on the Now tag** while following Now: drops an instant at Now, selected with its name
+  open, so there is a ＋ on the timeline in the most common state too.
 
 ## 0.3.1 — 2026-10-14
 
