@@ -227,7 +227,7 @@ recent instant undo itself.
 - **Click guard:** a mouse drag ends with a click on whatever is under the pointer, and
   that one click is swallowed. Touch drags produce no click, so the guard lasts only
   for the current event (`setTimeout(…, 0)`). Otherwise it would eat the next real tap.
-- **Wheel** zooms (about 10% per notch) in horizontal and pans in vertical; Ctrl+wheel and **pinch** zoom. Drags follow the main axis (x or y). A flick glides (see Layout) and stops where it rests, without snapping.
+- **Wheel** zooms (about 10% per notch) in both orientations, and Shift+wheel pans (domain/wheel.ts); a sideways swipe pans in horizontal; Ctrl+wheel and **pinch** zoom. Drags follow the main axis (x or y). A flick glides (see Layout) and stops where it rests, without snapping.
 - **Where the cursor comes to rest** (`settleCursor`): a drag released at almost no
   speed (below `snapMaxReleaseSpeed`, 0.05 px/ms) that ends within 8px (mouse) or 12px (touch)
   of Now or an instant focuses it, hiding the cursor; failing that it eases to the nearest

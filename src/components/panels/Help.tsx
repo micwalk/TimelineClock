@@ -109,7 +109,7 @@ function HelpContent() {
           <h3>Touch and mouse</h3>
           <ul className="help__list">
             <li><b>Drag</b> to move through time; <b>flick</b> to glide.</li>
-            <li><b>Pinch</b> or <b>Ctrl + wheel</b> to zoom. The wheel zooms (horizontal) or scrolls (vertical).</li>
+            <li>The <b>wheel</b>, <b>pinch</b> or <b>Ctrl + wheel</b> zooms; <b>Shift + wheel</b> moves through time.</li>
             <li><b>Tap</b> a chip to select it and show its tools; <b>double-tap</b> it to focus it, and again to rename it. The same goes for a span’s chip; once a span is focused, double-tap its length (or its clock tool) to type a new length.</li>
             <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span. Double-tap the Now tag to go to Now, and again to add an instant there and name it.</li>
             <li>The round <b>＋</b> across the axis from the Cursor tag drops an instant at the cursor and opens its name: type one, or just tap elsewhere or move on to leave it unnamed. Double-tap the Cursor tag to drop one without naming it.</li>
