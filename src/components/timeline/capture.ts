@@ -1,6 +1,6 @@
 // What the cursor is on, once per frame (domain/capture): the focused instant; or, with a free
 // cursor, an instant or Now within the landing radius while a drag is held and moving slowly
-// (where a slow release lands), or right under it at rest.
+// (where a slow release lands), or right under it at rest. A hidden cursor catches nothing.
 //
 // This is the one source for everything that shows it: captureAt is the state (the tag's
 // colour and time, the chip lighting up, where a release lands), and captureFlowAt the one
@@ -18,6 +18,7 @@ import { omegaFor, springSettled, stepSpring } from '../../domain/spring.ts'
 import { clamp, smoothstep } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
+import { useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 
 /** At rest only an exact hit captures, px (as for typed times and ± steps). */
@@ -57,7 +58,7 @@ export function captureAt(f: Frame): Capture | null {
   if (!v.moveMode && v.viewFocusMode === 'instant' && v.focusedInstantId) {
     const inst = instants.find(i => i.id === v.focusedInstantId)
     if (inst) result = { id: inst.id, kind: 'instant', ts: inst.tsEpochMs, preview: false }
-  } else if (!v.moveMode && v.viewFocusMode === 'cursor') {
+  } else if (!v.moveMode && v.viewFocusMode === 'cursor' && !useUi.getState().cursorHidden) {
     const t = getTunables()
     const speed = gesture.dragging ? dragSpeed() : 0
     const slow = speed < (prevId ? CAPTURE_HOLD_SPEED : CAPTURE_MAX_SPEED)

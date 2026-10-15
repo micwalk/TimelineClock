@@ -115,7 +115,9 @@ smoothly and never teleport. Springs ask for frames only while they move.
   the name box so it commits; ended in place, the cursor lands on the new instant.
 - **Hiding the cursor**: CSS (`.is-collapsed` on the Cursor marker): the tag scales into its
   arrowhead, pivoting on the arrow's tip, and the line fades; `useVisibleLanes` drops the
-  Selected→Cursor lane.
+  Selected→Cursor lane. A hidden cursor is on nothing: `captureAt` and `exactHit` ignore
+  instants and Now, so it never glides onto or lands on them, and a tap on a chip under it
+  only selects it.
 - **The Cursor tag and the Now tag** (`domain/tagAvoid.ts`, written per frame by `CursorTag` as
   `--lift`): a continuous function of their distance, so the tag moves with the pan itself. In
   horizontal it arcs over the Now tag (`cursorLift`: it starts to rise a ramp away, is clear of

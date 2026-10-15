@@ -13,6 +13,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 - In vertical, the mouse wheel zooms, as it does in horizontal; **Shift + wheel** moves through
   time in both (#16).
+- A hidden cursor passes over instants and Now: it no longer glides onto them, lands on them or
+  selects them, so you can look around without changing what is focused (#17).
 
 ## 0.3.1 — 2026-10-14
 

@@ -4,6 +4,7 @@ import { setDragging } from '../../engine/gesture.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { useSettings } from '../../store/settings.ts'
+import { useUi } from '../../store/ui.ts'
 import { captureAt } from './capture.ts'
 
 beforeEach(() => {
@@ -11,7 +12,7 @@ beforeEach(() => {
   useEntities.setState({ instants: [], spans: [] })
   useView.setState(initialViewState())
 })
-afterEach(() => setDragging(false, false))
+afterEach(() => { setDragging(false, false); useUi.setState({ cursorHidden: false }) })
 
 /** A free cursor `px` pixels from an instant (at the current zoom), an hour from Now. */
 function cursorNear(px: number) {
@@ -42,6 +43,16 @@ describe('captureAt', () => {
     setDragging(false)
     expect(captureAt(engine.sample())).toBeNull()
     setDragging(true, false)
+    expect(captureAt(engine.sample())).toBeNull()
+  })
+
+  it('a hidden cursor catches nothing, at rest or dragging (instants and Now alike)', () => {
+    cursorNear(0)
+    useUi.setState({ cursorHidden: true })
+    expect(captureAt(engine.sample())).toBeNull()
+    setDragging(true, true)
+    expect(captureAt(engine.sample())).toBeNull()
+    useView.setState({ timeCenter: engine.sample().now })
     expect(captureAt(engine.sample())).toBeNull()
   })
 

@@ -95,7 +95,7 @@ function HelpContent() {
             <dt className="help__now">Now</dt>
             <dd>The red line. It follows the clock.</dd>
             <dt className="help__cursor">Cursor</dt>
-            <dd>The centre of the timeline when you move away from Now. Its tag shows the time there and how far it is from Now. Its eye badge folds it into a small arrowhead (and hides its line and lane) while you just look around; tap the arrowhead to bring it back.</dd>
+            <dd>The centre of the timeline when you move away from Now. Its tag shows the time there and how far it is from Now. Its eye badge folds it into a small arrowhead (and hides its line and lane) while you just look around: hidden, it passes over instants and Now without catching or landing on them. Tap the arrowhead to bring it back.</dd>
             <dt>Instant</dt>
             <dd>A saved point in time, shown as a chip. Drop one with no name; later, tap it and then its “name…” hint. Star it as a favorite to keep its time to Now in view (its lane), or give a future one an alarm.</dd>
             <dt>Span</dt>

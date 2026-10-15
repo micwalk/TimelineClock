@@ -626,6 +626,21 @@ describe('cursor landing on instants', () => {
     expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
+  it('a hidden cursor lands on nothing: stepping onto an instant or Now, or tapping one under it', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t - 30 * MINUTE, false)
+    act.setCursorHidden(true)
+    act.moveCursorBy(30 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+    act.selectInstant(id)
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: id })
+    act.focusCursorAt(Date.now() - 10 * MINUTE, false)
+    act.moveCursorBy(10 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+    act.setCursorHidden(false)
+  })
+
   it('tapping an instant away from the cursor only selects it', () => {
     const t = Date.now() - HOUR
     const id = entities.createInstant(t, 'Rice')

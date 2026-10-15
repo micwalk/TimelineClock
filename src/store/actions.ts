@@ -168,8 +168,9 @@ export function moveCursorBy(deltaMs: number) {
 const EXACT_LANDING_PX = 2
 const EXACT_LANDING_MAX_MS = 500
 
-/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. */
+/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing. */
 function exactHit(ts: number, withNow: boolean): LandingTarget | null {
+  if (useUi.getState().cursorHidden) return null
   const f = frame()
   const id = findCapture({
     instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })),
@@ -338,11 +339,11 @@ export function toggleCursorLock() {
 // ---------------------------------------------------------------------------
 // Selection & editing
 
-/** Selects an instant; if it's under the free cursor, the cursor lands on it instead. */
+/** Selects an instant; if it's under the free cursor (shown), the cursor lands on it instead. */
 export function selectInstant(id: string) {
   const inst = entities.getInstant(id)
   const s = v()
-  if (inst && s.viewFocusMode === 'cursor' && !s.moveMode) {
+  if (inst && s.viewFocusMode === 'cursor' && !s.moveMode && !useUi.getState().cursorHidden) {
     const f = frame()
     if (Math.abs(f.pos(inst.tsEpochMs) - f.mainSize / 2) <= UNDER_CURSOR_PX) {
       focusInstant(id)
