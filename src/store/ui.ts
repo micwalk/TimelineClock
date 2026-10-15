@@ -1,7 +1,7 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
 
-export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms'
+export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'repeats'
 
 /** Which time-entry popover is open, if any. */
 export type TimeInputTarget =

@@ -171,6 +171,11 @@
 .alarm-pick__section { display: flex; flex-direction: column; gap: 7px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
 .alarm-pick__label { color: var(--ink-dim); font: 700 11px/1 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; }
 .alarm-pick__row { display: flex; gap: 6px; flex-wrap: wrap; }
+/* "Other": a box among the warning chips; a typed length becomes a chip of its own. */
+.alarm-pick__other { width: 64px; padding: 0 8px; border: 1px dashed color-mix(in srgb, var(--c-alarm) 45%, transparent); outline: none; }
+.alarm-pick__other::placeholder { color: var(--ink-dim); font-weight: 600; }
+.alarm-pick__other:focus { border-style: solid; border-color: var(--c-alarm); }
+.alarm-pick__other.is-invalid { border-color: var(--c-danger); }
 .alarm-pick__name {
   height: 38px;
   padding: 0 12px;
@@ -245,8 +250,35 @@
   gap: 18px;
   flex: 1 1 auto;
   min-width: 0;
+  /* Never under the buttons beside it: too many tabs scroll (sideways, no bar). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.list-tabs::-webkit-scrollbar { display: none; }
+.list-header > :not(.list-tabs) { flex: none; }
+.list-tab__short, .list-header__title { display: none; }
+/* A narrow Agenda (side dock, drawer, a phone): the buttons get a row of their own (with a
+   title) and the tabs, with short names, the full width under it. */
+.list-panel { container-type: inline-size; }
+@container (max-width: 560px) {
+  .list-header { flex-wrap: wrap; row-gap: 0; padding-top: 6px; }
+  .list-header > .list-header__title {
+    display: block;
+    flex: 1 1 auto;
+    color: var(--ink-faint);
+    font: 700 11px/1 var(--font-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .list-tabs { order: 1; flex: 1 0 100%; gap: 10px; justify-content: space-between; }
+  .list-tab { font-size: 14px; }
+  .list-tab__long { display: none; }
+  .list-tab__short { display: inline; }
 }
 .list-tab {
+  flex: none;
+  white-space: nowrap;
   position: relative;
   padding: 10px 2px;
   font: 650 15px/1 var(--font-ui);
@@ -414,6 +446,14 @@
   .list-row--instant .list-row__dt { display: none; }
   .ctl-btn__text { display: none; }
   .ctl-btn--now .ctl-btn__text, .ctl-split .ctl-btn__text, .ctl-btn--quick .ctl-btn__text { display: inline; }
+}
+
+/* The same compact rows in a narrow Agenda on a wide screen (side dock, drawer). */
+@container (max-width: 560px) {
+  .list-row--span { grid-template-columns: 56px 1fr 1fr 30px; }
+  .list-row--span > :nth-child(3), .list-row--span > :nth-child(4), .list-row--span > :nth-child(6), .list-row--span > :nth-child(7) { display: none; }
+  .list-row--instant { grid-template-columns: 1fr auto; }
+  .list-row--instant .list-row__dt { display: none; }
 }
 
 /* --- Ringing alarms ------------------------------------------------------ */
@@ -606,6 +646,18 @@
   color: var(--ink-dim);
 }
 .settings__row--check { grid-template-columns: auto 1fr; cursor: pointer; }
+.settings__row--wrap { grid-template-columns: 1fr; gap: 6px; }
+.settings__text {
+  grid-column: 2 / 4;
+  width: 150px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 13px;
+}
+.settings__text.is-invalid { border-color: var(--c-danger); }
 .settings__row input[type='range'] { width: 130px; accent-color: var(--c-cursor); }
 .settings__row input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--c-cursor); }
 .settings__row output { min-width: 36px; text-align: right; color: var(--ink); font-size: 13px; }
@@ -661,6 +713,7 @@
 /* In the column layouts the wrapper vanishes, so the timeline and controls lay out as before. */
 .app__main { display: contents; }
 
+/* The side dock sits on the left, where the drawer slides out from (App renders it first). */
 .app[data-agenda='side'] { flex-direction: row; }
 .app[data-agenda='side'] .app__main {
   display: flex;
@@ -676,7 +729,7 @@
   margin: 0;
   padding: 0 12px 12px;
   height: 100%;
-  border-left: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
+  border-right: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
 }
 
 .agenda-scrim {

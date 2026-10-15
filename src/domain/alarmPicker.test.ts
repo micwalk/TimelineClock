@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hour24, isAmbiguous, nextAt, parseAlarmTime, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm } from './alarmPicker.ts'
-import { MINUTE } from './time.ts'
+import { DEFAULT_RING_DEFAULTS, parseWarningList, sanitizeRingDefaults, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm, warnText } from './alarmPicker.ts'
+import { HOUR, MINUTE } from './time.ts'
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime()
 
@@ -52,5 +52,37 @@ describe('recent alarms', () => {
   it('keep well-formed ones from storage', () => {
     expect(sanitizeRecentAlarms([wake, { ...wake, repeat: null }, { ...wake, time: '7' }, { ...wake, repeat: { kind: 'weekly', days: [] } }, 'x']))
       .toEqual([wake, { ...wake, repeat: null }])
+  })
+})
+
+describe('rings', () => {
+  it('reads a typed warning length, under a day', () => {
+    expect(parseWarning('20')).toBe(20 * MINUTE)
+    expect(parseWarning('1h30')).toBe(90 * MINUTE)
+    expect(parseWarning('25h')).toBeNull()
+    expect(parseWarning('soon')).toBeNull()
+    expect(warnText(90 * MINUTE)).toBe('1h 30m')
+  })
+
+  it('warnings latest first, then the time itself unless left out', () => {
+    expect(pickerOffsets([5 * MINUTE, HOUR, 5 * MINUTE], true)).toEqual([HOUR, 5 * MINUTE, 0])
+    expect(pickerOffsets([5 * MINUTE], false)).toEqual([5 * MINUTE])
+    expect(pickerOffsets([], false)).toEqual([])
+  })
+
+  it('a recent alarm remembers being warnings only', () => {
+    const r = { time: '07:00', repeat: null, warnings: [5 * MINUTE], label: '', onTime: false as const }
+    expect(sanitizeRecentAlarms([r])).toEqual([r])
+    expect(sanitizeRecentAlarms([{ ...r, warnings: [] }])[0].onTime).toBeUndefined()
+  })
+})
+
+describe('ring defaults (Settings)', () => {
+  it('reads the offered warnings and keeps a new alarm ringing somehow', () => {
+    expect(parseWarningList('5m, 15, 1h30')).toEqual([5 * MINUTE, 15 * MINUTE, 90 * MINUTE])
+    expect(parseWarningList('5m, soon')).toBeNull()
+    expect(sanitizeRingDefaults(null)).toEqual(DEFAULT_RING_DEFAULTS)
+    expect(sanitizeRingDefaults({ choices: [], onTime: false, warnings: [] }).onTime).toBe(true)
+    expect(sanitizeRingDefaults({ choices: [HOUR], onTime: false, warnings: [HOUR] })).toEqual({ choices: [HOUR], onTime: false, warnings: [HOUR] })
   })
 })

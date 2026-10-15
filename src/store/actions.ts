@@ -27,11 +27,12 @@ import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
-  OCCURRENCE_HORIZON_MS, dateKey, newGroupId, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
+  OCCURRENCE_HORIZON_MS, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
 } from '../domain/series.ts'
 import { newAlarmId, newInstantId } from '../domain/entities.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
-import { findAlarm, hasArmedAlarm, parseRingKey, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
+import { pickerOffsets } from '../domain/alarmPicker.ts'
+import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -611,6 +612,14 @@ export function createTestAlarm(delayMs = 3000) {
 // ---------------------------------------------------------------------------
 // Move mode: the instant follows the cursor until confirmed or cancelled.
 
+/** Moves an instant; alarms it already answered whose time is ahead again ring again (domain/alarms rearmAfterMove). */
+function setInstantTime(id: string, ts: number) {
+  entities.setInstantTime(id, ts)
+  const inst = entities.getInstant(id)
+  const alarms = inst && rearmAfterMove(inst, Date.now())
+  if (alarms) entities.patchInstant(id, () => ({ alarms }))
+}
+
 export function enterMove(id: string) {
   const inst = entities.getInstant(id)
   if (!inst) return
@@ -623,7 +632,7 @@ export function enterMove(id: string) {
 export function confirmMove() {
   const mm = v().moveMode
   if (!mm) return
-  entities.setInstantTime(mm.instantId, frame().center)
+  setInstantTime(mm.instantId, frame().center)
   touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId, false)
@@ -634,7 +643,7 @@ export function moveInstantTo(ts: number) {
   const mm = v().moveMode
   if (!mm) return
   view.setTimeCenter(ts)
-  entities.setInstantTime(mm.instantId, ts)
+  setInstantTime(mm.instantId, ts)
   touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId)
@@ -710,7 +719,7 @@ export function setSpanLength(spanId: string, ms: number) {
   const end = entities.getInstant(sp.endInstantId)
   if (!start || !end) return
   const dir = end.tsEpochMs >= start.tsEpochMs ? 1 : -1
-  entities.setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
+  setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
   if (v().viewFocusMode === 'span' && v().focusedSpanId === spanId) focusSpan(spanId)
 }
 
@@ -784,22 +793,33 @@ export function snoozeLandingFor(key: string, at: number, exact = false): Snooze
   return inst && alarm ? snoozeLanding(inst, alarm, at, nowTime(), getTunables().snoozeJoinSec * SECOND, exact) : null
 }
 
-/** Cancels an instant's warnings or all its alarms (services/AlarmScheduler); on an occurrence, that one only. */
-export function cancelAlarms(instantId: string, which: 'warnings' | 'all') {
-  cancelAlarmsNow(instantId, which)
-  touchOccurrence(instantId, false) // that day's alarms only: nothing to apply to the rule
+/**
+ * Cancels all of an instant's alarms (services/AlarmScheduler; adding one back is a tap). On an
+ * occurrence, that day's only, offering "Apply to all future" (which then takes no alarms).
+ */
+export function cancelAlarms(instantId: string) {
+  cancelAlarmsNow(instantId)
+  touchOccurrence(instantId)
+  if (entities.getInstant(instantId)?.seriesId) cancelledOccurrence = instantId
 }
 
 // ---------------------------------------------------------------------------
 // Repeating series (TLC-2; domain/series). Occurrences are ordinary instants made a rolling
 // window ahead; editing one edits that one (and offers "Apply to all future").
 
+/**
+ * The occurrence whose alarms were just cancelled: applying it to all future takes no alarms
+ * (the ones that rang stay on it as history, but aren't the rule any more).
+ */
+let cancelledOccurrence: string | null = null
+
 /** Marks an occurrence as edited on its own (rule changes leave it alone) and offers to apply the edit to all future ones. */
-function touchOccurrence(id: string, offerApply = true) {
+function touchOccurrence(id: string) {
   const inst = entities.getInstant(id)
   if (!inst?.seriesId) return
+  cancelledOccurrence = null
   if (!inst.seriesEdited) entities.patchInstant(id, () => ({ seriesEdited: true }))
-  if (offerApply) ui.showSeriesHint(id)
+  ui.showSeriesHint(id)
 }
 
 /**
@@ -809,8 +829,12 @@ function touchOccurrence(id: string, offerApply = true) {
  */
 export function syncSeries() {
   const now = Date.now()
-  const { groups, instants } = useEntities.getState()
+  const { groups } = useEntities.getState()
   if (!groups || groups.length === 0) return
+  // Repairs data from a bug that made a second copy of occurrences (one per series and date).
+  const dupes = duplicateOccurrences(useEntities.getState().instants)
+  if (dupes.length > 0) { for (const id of dupes) { dismissInstant(id); view.forgetInstant(id) } entities.deleteInstants(dupes) }
+  const { instants } = useEntities.getState()
   entities.addInstants(planOccurrences(groups, instants, now, now + OCCURRENCE_HORIZON_MS, { instant: newInstantId, alarm: newAlarmId }))
 }
 
@@ -826,7 +850,8 @@ function refreshSeries(seriesId: string) {
   const gone: string[] = []
   for (const inst of remakeable(series, useEntities.getState().instants, now)) {
     const next = refreshOccurrence(series, inst, now, newAlarmId)
-    if (next) entities.patchInstant(inst.id, () => next)
+    // `alarms` explicitly: a rule with none clears them (the patch merges).
+    if (next) entities.patchInstant(inst.id, () => ({ ...next, alarms: next.alarms }))
     else gone.push(inst.id)
   }
   for (const id of gone) { dismissInstant(id); view.forgetInstant(id) }
@@ -871,15 +896,56 @@ export function repeatInstant(id: string, repeat: Repeat) {
   syncSeries()
 }
 
-/** "Apply to all future": an edited occurrence's name, time of day and alarms become its series' rule. */
+/**
+ * Repeat > Once on an occurrence: the series stops after it (later occurrences go). If nothing
+ * else was ever made by it, this is a plain instant again and the series is gone.
+ */
+export function stopRepeating(id: string) {
+  const inst = entities.getInstant(id)
+  const series = entities.getGroup(inst?.seriesId)
+  if (!inst?.occurrence || !series) return
+  const date = inst.occurrence
+  entities.putGroup({ ...series, until: series.until && series.until < date ? series.until : date })
+  for (const i of useEntities.getState().instants) {
+    if (i.seriesId === series.id && i.occurrence && i.occurrence > date) deleteInstant(i.id)
+  }
+  if (useEntities.getState().instants.some(i => i.seriesId === series.id && i.id !== id)) return
+  entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined }))
+  entities.removeGroup(series.id)
+  ui.showSeriesHint(null)
+}
+
+/**
+ * "Apply to all future": an edited occurrence's name, time of day and alarms become the rule from
+ * its date on. Occurrences before it that are still ahead keep the old rule: the series splits
+ * there (the old one ends the day before; this one and later ones join a new series).
+ */
 export function applyToFutureOccurrences(id: string) {
   const inst = entities.getInstant(id)
   const series = entities.getGroup(inst?.seriesId)
-  if (!inst || !series) return
-  entities.putGroup({ ...series, ...ruleFromOccurrence(inst) })
-  entities.patchInstant(id, () => ({ seriesEdited: false }))
+  if (!inst?.occurrence || !series) return
+  const rule = ruleFromOccurrence(inst)
+  if (cancelledOccurrence === id) rule.alarms = []
+  cancelledOccurrence = null
   ui.showSeriesHint(null)
-  refreshSeries(series.id)
+  const date = inst.occurrence
+  if (!occursAheadBefore(series, date, Date.now())) {
+    entities.putGroup({ ...series, ...rule })
+    entities.patchInstant(id, () => ({ seriesEdited: false }))
+    refreshSeries(series.id)
+    return
+  }
+  const [old, next] = splitSeries(series, date, rule)
+  // Occurrences move to the new series before it is saved: saving a series makes its missing
+  // occurrences at once (services/seriesSync), and these dates must already be taken.
+  for (const i of useEntities.getState().instants) {
+    if (i.seriesId === series.id && i.occurrence && i.occurrence >= date) {
+      entities.patchInstant(i.id, () => ({ seriesId: next.id, ...(i.id === id ? { seriesEdited: false } : {}) }))
+    }
+  }
+  entities.putGroup(next)
+  entities.putGroup(old)
+  refreshSeries(next.id)
 }
 
 /** Pauses a series (its untouched occurrences ahead go; none are made) or runs it again. */
@@ -908,14 +974,15 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
 }
 
 /**
- * The Alarm button (TLC-3): an alarm at a wall-clock time, with warnings before it, once (an
- * instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
+ * The Alarm button (TLC-3): an alarm at a wall-clock time, with warnings before it (and at the
+ * time itself unless `onTime` is false), once (an instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
  * Returns the instant (the first occurrence of a series).
  */
-export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string }): string | undefined {
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean }): string | undefined {
+  const offsets = pickerOffsets(a.warnings, a.onTime !== false)
+  if (offsets.length === 0) return
   void primeNotifications()
-  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label })
-  const offsets = [...new Set(a.warnings.filter(w => w > 0))].sort((x, y) => y - x).concat(0)
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}) })
   if (!a.repeat) {
     const id = entities.createInstant(a.at, a.label)
     entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })) }))

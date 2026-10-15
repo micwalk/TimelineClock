@@ -5,6 +5,8 @@ import { loadJson, saveJson } from './storage.ts'
 import type { AgendaSetting, OrientationSetting } from '../domain/layoutMode.ts'
 import type { TunableKey, Tunables } from '../domain/tunables.ts'
 import { clampTunable, resolveTunables, sanitizeTunableOverrides } from '../domain/tunables.ts'
+import type { AlarmRingDefaults } from '../domain/alarmPicker.ts'
+import { sanitizeRingDefaults } from '../domain/alarmPicker.ts'
 
 /** When favorites get their lane to Now: only while selected (default), or always. */
 export type FavoriteLanes = 'selected' | 'always'
@@ -29,6 +31,8 @@ export interface SettingsState {
   stopwatchKeepStart: boolean
   /** Where the Agenda lives: Auto docks when there is room, Docked prefers a dock, Drawer always uses the drawer. */
   agendaPlacement: AgendaSetting
+  /** The Alarm picker's rings: what a new alarm starts with, and the warnings it offers. */
+  alarmRings: AlarmRingDefaults
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -45,13 +49,14 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     tickSnap: r.tickSnap !== false,
     stopwatchKeepStart: r.stopwatchKeepStart !== false,
     agendaPlacement: r.agendaPlacement === 'docked' || r.agendaPlacement === 'drawer' ? r.agendaPlacement : 'auto',
+    alarmRings: sanitizeRingDefaults(r.alarmRings),
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
   }
 }
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -72,6 +77,7 @@ export const settings = {
   setStopwatchKeepStart: (stopwatchKeepStart: boolean) => useSettings.setState({ stopwatchKeepStart }),
   setAgendaPlacement: (agendaPlacement: AgendaSetting) => useSettings.setState({ agendaPlacement }),
   setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
+  setAlarmRings: (alarmRings: AlarmRingDefaults) => useSettings.setState({ alarmRings: sanitizeRingDefaults(alarmRings) }),
   setTunable: (key: TunableKey, value: number) => {
     if (!Number.isFinite(value)) return
     useSettings.setState(s => ({ tunables: { ...s.tunables, [key]: clampTunable(key, value) } }))

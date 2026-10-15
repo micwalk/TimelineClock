@@ -2,11 +2,12 @@
 // them it only makes ordinary things: an instant with alarms, or a repeating series.
 //
 //   NEW ALARM                                             ✕
-//   [Wake Up 7:00a · Weekdays] [6:15a · Once]              ← recent: one tap sets it again
+//   [Wake Up 7:00a · Weekdays] [6:15a · Once]              ← recent: one tap fills the form in from it
 //   [  7:00         ]  ( AM | PM )                         ← AM/PM only when ambiguous
 //   Tue 7:00a · in 7h 34m                                  ← where it lands, plainly (TLC-7)
 //   REPEAT   (Once)(Daily)(Weekdays)(Weekends) / M T W T F S S / Every − 2 + days
-//   WARN BEFORE   [5m][15m][30m][1h]                       ← extra bells before it
+//   RINGS    [On time][−5m][−15m][−30m][−1h][other]        ← at the time and/or before it; "20" in
+//                                                            other adds a −20m (and a fresh box)
 //   NAME     [ optional ]
 //   [            Set alarm · Tue 7:00a            ]
 //
@@ -21,12 +22,13 @@ import { createPortal } from 'react-dom'
 import { BellIcon } from '@heroicons/react/24/solid'
 import { XMarkIcon } from '@heroicons/react/20/solid'
 import type { RecentAlarm } from '../../domain/alarmPicker.ts'
-import { WARN_CHOICES_MS, clockText, hour24, isAmbiguous, nextAt, parseAlarmTime, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
+import { clockText, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
 import type { Repeat } from '../../domain/series.ts'
 import { dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
+import { useSettings } from '../../store/settings.ts'
 import { useEntities } from '../../store/entities.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
@@ -86,23 +88,44 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const editId = useUi(s => s.alarmEditSeries)
   const editing = useEntities(s => (editId ? s.groups?.find(g => g.id === editId) : undefined))
   const recent = useQuick(s => s.recentAlarms ?? [])
+  const ringDefaults = useSettings(s => s.alarmRings)
   const sheet = useSheet() || fromList
   const [text, setText] = useState('')
   const [pm, setPm] = useState<boolean | null>(null)
   const [repeat, setRepeat] = useState<Repeat | null>(null)
   const [warnings, setWarnings] = useState<number[]>([])
+  /** Whether it rings at the time itself (else only its warnings do). */
+  const [onTime, setOnTime] = useState(true)
+  /** Warning lengths typed in "other" (they stay as choices while the picker is open). */
+  const [extras, setExtras] = useState<number[]>([])
+  const [other, setOther] = useState('')
   const [label, setLabel] = useState('')
   const seeded = useRef<string | null>(null)
-  const close = () => { ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setLabel(''); seeded.current = null }
-  // Editing a series: start from what it is (once per opening).
-  if (open && editing && seeded.current !== editing.id) {
-    seeded.current = editing.id
-    const [h, m] = editing.time.split(':').map(Number)
+  const close = () => {
+    ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel('')
+    seeded.current = null
+  }
+  /** Fills the form in: a series being edited, or a recent alarm. */
+  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string }) => {
+    const [h, m] = a.time.split(':').map(Number)
     setText(`${h % 12 || 12}:${String(m).padStart(2, '0')}`)
     setPm(h >= 12)
-    setRepeat(editing.repeat)
-    setWarnings(editing.alarms.filter(o => o > 0))
-    setLabel(editing.label)
+    setRepeat(a.repeat)
+    setWarnings(a.warnings)
+    setExtras(a.warnings)
+    setOnTime(a.onTime)
+    setLabel(a.label)
+  }
+  // Start from what is being edited, else from the defaults (Settings > Alarms), once per opening.
+  const seedKey = editing?.id ?? 'new'
+  if (open && seeded.current !== seedKey) {
+    seeded.current = seedKey
+    if (editing) {
+      fill({ ...editing, warnings: editing.alarms.filter(o => o > 0), onTime: editing.alarms.includes(0) })
+    } else {
+      setWarnings(ringDefaults.warnings)
+      setOnTime(ringDefaults.onTime)
+    }
   }
   const { wrapRef, menuRef, menuStyle, above } = useAnchoredMenu(open && !sheet, close)
   const area = useVisibleArea(open && sheet)
@@ -131,23 +154,32 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const time = typed ? clockText(hour24(typed, usePm), typed.m) : null
   const ring = time ? firstRing(time, repeat, now) : null
   const when = ring !== null ? `${dayFmt.format(ring)} ${formatClockCompact(ring, false)}` : ''
+  const otherMs = parseWarning(other)
+  // A length still in "other" counts as picked (Set may be tapped without leaving the box).
+  const allWarnings = otherMs !== null && !warnings.includes(otherMs) ? [...warnings, otherMs] : warnings
+  const rings = pickerOffsets(allWarnings, onTime)
 
   const set = (e?: FormEvent) => {
     e?.preventDefault()
-    if (!time || ring === null) return
-    if (editing) {
-      const alarms = [...new Set(warnings.filter(w => w > 0))].sort((a, b) => b - a).concat(0)
-      act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms })
-    } else act.setAlarm({ time, at: ring, repeat, warnings, label: label.trim() })
+    // A repeat may have no alarm (made with the ⟳ tool); a new alarm must ring.
+    if (!time || ring === null || (!editing && rings.length === 0)) return
+    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings })
+    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime })
     close()
   }
+  /** A recent alarm fills the form in (nothing is set until Set): change what you like first. */
   const again = (r: RecentAlarm) => {
-    const at = firstRing(r.time, r.repeat, act.nowTime())
-    if (at === null) return
-    act.setAlarm({ ...r, at })
-    close()
+    fill({ ...r, onTime: r.onTime !== false })
+    timeRef.current?.focus()
   }
   const toggleWarn = (ms: number) => setWarnings(w => (w.includes(ms) ? w.filter(x => x !== ms) : [...w, ms]))
+  /** "Other": the typed length becomes a picked choice of its own, and the box is free for another. */
+  const addOther = () => {
+    if (otherMs === null) return
+    setExtras(x => (x.includes(otherMs) ? x : [...x, otherMs]))
+    setWarnings(w => (w.includes(otherMs) ? w : [...w, otherMs]))
+    setOther('')
+  }
   const section = (title: string, body: ReactNode) => (
     <div className="alarm-pick__section">
       <div className="alarm-pick__label">{title}</div>
@@ -158,11 +190,11 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const form = (
     <form className="alarm-pick" onSubmit={set}>
       <header className="alarm-pick__head">
-        <span className="alarm-pick__title">{editing ? 'Edit alarm' : 'New alarm'}</span>
+        <span className="alarm-pick__title">{editing ? (editing.alarms.length > 0 ? 'Edit alarm' : 'Edit repeat') : 'New alarm'}</span>
         <button type="button" className="alarm-pick__close" aria-label="Close" onClick={close}><XMarkIcon aria-hidden /></button>
       </header>
       {!editing && recent.length > 0 && (
-        <div className="alarm-pick__recent" aria-label="Recent alarms">
+        <div className="alarm-pick__recent" aria-label="Recent alarms (fill the form in)">
           {recent.map(r => (
             <button key={`${r.time}|${r.label}|${JSON.stringify(r.repeat)}|${r.warnings.join()}`} type="button" className="alarm-pick__again glow-box" onClick={() => again(r)}>
               {recentText(r)}
@@ -192,20 +224,26 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
           ? `${repeat ? `${describeRepeat(repeat)} · first ` : ''}${when} · ${formatRelativeShort(ring - now)}`
           : typed ? 'Never, on these days' : 'Type a time: 7, 730, 7:30, 1730 or 7p'}
       </div>
-      {section('Repeat', <RepeatPicker value={repeat} onChange={r => setRepeat(r ?? repeat)} allowOnce={!editing} />)}
-      {section('Warn before', (
-        <div className="alarm-pick__row" role="group" aria-label="Warnings before it">
-          {[...new Set([...WARN_CHOICES_MS, ...warnings])].sort((a, b) => a - b).map(ms => (
+      {/* Editing a series it always repeats (no Once); otherwise Once is null. */}
+      {section('Repeat', <RepeatPicker value={repeat} onChange={r => setRepeat(editing ? r ?? repeat : r)} allowOnce={!editing} />)}
+      {section('Rings', (
+        <div className="alarm-pick__row" role="group" aria-label="When it rings">
+          <button type="button" className={`repeat-chip glow-box${onTime ? ' is-on' : ''}`} aria-pressed={onTime}
+            aria-label="Ring at the time" onClick={() => setOnTime(o => !o)}>On time</button>
+          {[...new Set([...ringDefaults.choices, ...extras, ...warnings])].sort((a, b) => a - b).map(ms => (
             <button key={ms} type="button" className={`repeat-chip glow-box${warnings.includes(ms) ? ' is-on' : ''}`} aria-pressed={warnings.includes(ms)}
-              aria-label={`Warn ${warnText(ms)} before`} onClick={() => toggleWarn(ms)}>{warnText(ms)}</button>
+              aria-label={`Warn ${warnText(ms)} before`} onClick={() => toggleWarn(ms)}>−{warnText(ms)}</button>
           ))}
+          <input className={`repeat-chip alarm-pick__other mono${other && otherMs === null ? ' is-invalid' : ''}`} aria-label="Another warning: how long before (20, 1h30)"
+            aria-invalid={!!other && otherMs === null} placeholder="other" value={other} onChange={e => setOther(e.target.value)} onBlur={addOther}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }} enterKeyHint="done" autoComplete="off" />
         </div>
       ))}
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
-      <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null}>
+      <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null || (!editing && rings.length === 0)}>
         {editing
           ? (ring === null || !time ? 'Save' : `Save · ${describeRepeat(repeat ?? editing.repeat)} ${formatClockCompact(ring, false)}`)
-          : ring === null ? 'Set alarm' : `Set alarm · ${when}`}
+          : ring === null ? 'Set alarm' : rings.length === 0 ? 'Pick when it rings' : `Set alarm · ${when}`}
       </button>
       {editing && (
         <div className="alarm-pick__manage">

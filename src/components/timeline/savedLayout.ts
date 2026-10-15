@@ -475,6 +475,8 @@ export interface SavedLayoutStructure {
   bellIds: string[]
   bellFolded: Record<string, number>
   seriesChips: SeriesSummary[]
+  /** Occurrences collapsed into a rhythm (they leave the chips, so the chips' change covers it). */
+  rhythm: Record<string, string>
   rowsUsed: number
 }
 
@@ -504,6 +506,7 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   bellIds: l.bellIds,
   bellFolded: l.bellFolded,
   seriesChips: l.seriesChips,
+  rhythm: l.rhythm,
   rowsUsed: l.rowsUsed,
 })
 

@@ -62,6 +62,12 @@ export function nextDateKey(key: string): string {
   return dateKey(new Date(y, m - 1, d + 1, 12).getTime())
 }
 
+/** The date before `key`. */
+export function prevDateKey(key: string): string {
+  const [y, m, d] = parseKey(key)
+  return dateKey(new Date(y, m - 1, d - 1, 12).getTime())
+}
+
 /** Whole days from `a` to `b` (calendar days, DST-proof). */
 export function daysBetween(a: string, b: string): number {
   const [ay, am, ad] = parseKey(a)
@@ -198,6 +204,28 @@ export function planOccurrences(
 }
 
 /**
+ * Spare copies of an occurrence (the same series and date more than once): all but the one to
+ * keep (edited on its own, else with an alarm answered, else the first stored), and only copies
+ * nothing was done to, so nothing anyone touched is ever lost.
+ */
+export function duplicateOccurrences(instants: readonly InstantRecord[]): string[] {
+  const byKey = new Map<string, InstantRecord[]>()
+  for (const i of instants) {
+    if (!isOccurrence(i)) continue
+    const key = `${i.seriesId}@${i.occurrence}`
+    byKey.set(key, [...(byKey.get(key) ?? []), i])
+  }
+  const touched = (i: InstantRecord) => !!i.seriesEdited || !!i.alarms?.some(a => a.answered)
+  const out: string[] = []
+  for (const list of byKey.values()) {
+    if (list.length < 2) continue
+    const keep = list.find(i => i.seriesEdited) ?? list.find(touched) ?? list[0]
+    for (const i of list) if (i !== keep && !touched(i)) out.push(i.id)
+  }
+  return out
+}
+
+/**
  * The series' occurrences that a rule change remakes: those still ahead, never edited on their
  * own, and with no alarm answered yet (anything touched stays as it is).
  */
@@ -232,6 +260,33 @@ export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'lab
     time: clockKey(inst.tsEpochMs),
     alarms: (inst.alarms ?? []).filter(a => !a.snoozeOf).map(a => a.offsetMs).sort((a, b) => b - a),
   }
+}
+
+/** Whether the series still rings before `date`: an occurrence on an earlier date that is ahead of `now`. */
+export function occursAheadBefore(s: SeriesRecord, date: string, now: number): boolean {
+  if (s.paused) return false
+  for (let d = dateKey(now) < s.from ? s.from : dateKey(now); d < date; d = nextDateKey(d)) {
+    if (s.until && d > s.until) return false
+    if (occursOn(s, d) && occurrenceTs(s, d) > now) return true
+  }
+  return false
+}
+
+/**
+ * A series split at `date` ("apply to all future" on an occurrence while earlier ones are still
+ * ahead): the old one ends the day before, keeping its rule; the new one runs from `date` with
+ * `rule`. Skipped dates go with the part they fall in.
+ */
+export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'repeat'>>, id = newGroupId()): [SeriesRecord, SeriesRecord] {
+  const prev = prevDateKey(date)
+  const before = s.skips?.filter(d => d < date) ?? []
+  const after = s.skips?.filter(d => d >= date) ?? []
+  const { skips: _s, until: _u, ...base } = s
+  void _s
+  void _u
+  const old: SeriesRecord = { ...base, until: s.until && s.until < prev ? s.until : prev, ...(before.length > 0 ? { skips: before } : {}) }
+  const next: SeriesRecord = { ...base, ...rule, id, from: date, ...(s.until ? { until: s.until } : {}), ...(after.length > 0 ? { skips: after } : {}) }
+  return [old, next]
 }
 
 /** A new series that `inst` starts (it becomes the first occurrence). */

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { InstantRecord } from './entities.ts'
 import type { SeriesRecord } from './series.ts'
 import {
-  EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, dateKey, daysBetween, describeRepeat, describeRepeatShort, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
-  parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant, virtualOccurrences,
+  EVERY_DAY, WEEKDAYS, WEEKENDS, clockKey, duplicateOccurrences, dateKey, daysBetween, describeRepeat, describeRepeatShort, nextDateKey, nextOccurrence, occurrenceTs, occursOn,
+  occursAheadBefore, parseVirtualId, planOccurrences, prevDateKey, splitSeries, refreshOccurrence, remakeable, ruleFromOccurrence, sanitizeGroups, seriesFromInstant, virtualOccurrences,
 } from './series.ts'
 import { DAY, MINUTE } from './time.ts'
 
@@ -129,5 +129,31 @@ describe('sanitizeGroups', () => {
     const good = series({ until: '2026-12-01', skips: ['2026-10-14', 'bad'], paused: true })
     const out = sanitizeGroups([good, { ...good, id: 'g' }, { ...series({ id: 'h' }), time: '25:00' }, { ...series({ id: 'k' }), repeat: { kind: 'weekly', days: [] } }, 'junk'])
     expect(out).toEqual([{ ...good, skips: ['2026-10-14'] }])
+  })
+})
+
+describe('splitting a series ("apply to all future" while earlier ones are ahead)', () => {
+  it('knows whether an earlier occurrence is still ahead', () => {
+    expect(occursAheadBefore(series(), '2026-10-14', at(12, 8))).toBe(true) // Tue the 13th is ahead
+    expect(occursAheadBefore(series(), '2026-10-13', at(12, 8))).toBe(false) // Mon the 12th has passed
+    expect(occursAheadBefore(series({ paused: true }), '2026-10-14', at(12, 8))).toBe(false)
+  })
+
+  it('ends the old part the day before; the new part runs from that date with the new rule', () => {
+    const s = series({ skips: ['2026-10-13', '2026-10-20'], until: '2026-12-31' })
+    const [old, next] = splitSeries(s, '2026-10-15', { label: 'Up', time: '06:30', alarms: [0] }, 'g2')
+    expect(prevDateKey('2026-11-01')).toBe('2026-10-31')
+    expect(old).toMatchObject({ id: 'g', label: 'Wake up', time: '07:00', until: '2026-10-14', skips: ['2026-10-13'] })
+    expect(next).toMatchObject({ id: 'g2', label: 'Up', time: '06:30', alarms: [0], from: '2026-10-15', until: '2026-12-31', skips: ['2026-10-20'] })
+    expect(occursOn(next, '2026-10-14')).toBe(false)
+    expect(occursOn(next, '2026-10-16')).toBe(true)
+  })
+})
+
+describe('duplicateOccurrences', () => {
+  it('drops spare untouched copies of a series date, keeping the edited one', () => {
+    const occ = (id: string, o: Partial<InstantRecord> = {}): InstantRecord => ({ id, tsEpochMs: at(13, 7), label: 'x', seriesId: 'g', occurrence: '2026-10-13', ...o })
+    expect(duplicateOccurrences([occ('a'), occ('b', { seriesEdited: true }), occ('c'), occ('d', { occurrence: '2026-10-14' })])).toEqual(['a', 'c'])
+    expect(duplicateOccurrences([occ('a', { alarms: [{ id: 'r', offsetMs: 0, answered: 'dismissed' }] }), occ('b', { seriesEdited: true })])).toEqual([])
   })
 })

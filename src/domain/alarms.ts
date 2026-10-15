@@ -93,13 +93,32 @@ export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: numbe
   return { offsetMs, ringTs: ts - offsetMs }
 }
 
+/**
+ * An instant's alarms after it moved: an answered alarm (not a snooze) whose ring time is ahead
+ * again rings again, and the snoozes that answered it go (it rang too early to count). Others
+ * stay as they were. Null when nothing changes.
+ */
+export function rearmAfterMove(inst: InstantRecord, now: number): AlarmRecord[] | null {
+  const alarms = inst.alarms ?? []
+  const rearmed = new Set(alarms.filter(a => a.answered && !a.snoozeOf && ringTime(inst, a) > now).map(a => a.id))
+  if (rearmed.size === 0) return null
+  const byId = new Map(alarms.map(a => [a.id, a]))
+  /** The alarm a snooze chain started from. */
+  const root = (a: AlarmRecord) => {
+    let r = a
+    for (let k = 0; r.snoozeOf && byId.has(r.snoozeOf) && k < alarms.length; k++) r = byId.get(r.snoozeOf)!
+    return r
+  }
+  return alarms.flatMap(a => {
+    if (rearmed.has(a.id)) { const { answered: _a, ...rest } = a; void _a; return [rest] }
+    return a.snoozeOf && rearmed.has(root(a).id) ? [] : [a]
+  })
+}
+
 /** A warning: an alarm before its instant. */
 export const isWarning = (a: AlarmRecord) => a.offsetMs > 0
 
-/** The alarms "Cancel warnings" covers: unanswered warnings (the alarm at the instant stays). */
-export const warningsToCancel = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered && isWarning(a))
-
-/** The alarms "Cancel all" covers: every unanswered one. */
+/** The alarms cancelling covers: every unanswered one. */
 export const alarmsToCancel = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered)
 
 /** What a ringing alarm's card offers (components/panels/RingingAlarms). */

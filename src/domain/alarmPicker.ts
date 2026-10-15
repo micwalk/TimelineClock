@@ -6,7 +6,8 @@
 // other; typing "7p", "7am" or "19" settles it.
 import type { Repeat } from './series.ts'
 import { CLOCK_RE, sanitizeRepeat } from './series.ts'
-import { DAY, HOUR, MINUTE } from './time.ts'
+import { formatTimerLength, parseTimerInput } from './quickCreate.ts'
+import { DAY, MINUTE } from './time.ts'
 
 export interface AlarmTime {
   h: number
@@ -64,11 +65,51 @@ export function soonerIsPm(t: AlarmTime, now: number): boolean {
 /** "HH:MM" for a 24-hour hour and minute. */
 export const clockText = (h24: number, m: number) => `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 
-/** Warnings the picker offers (how long before the alarm). */
+/** Warnings the picker offers (how long before the alarm), unless Settings say otherwise. */
 export const WARN_CHOICES_MS = [5, 15, 30, 60].map(m => m * MINUTE)
 
-/** "+5m", "+1h". */
-export const warnText = (ms: number) => (ms >= HOUR ? `${ms / HOUR}h` : `${ms / MINUTE}m`)
+/** Settings > Alarms: the warnings the picker offers, and what a new alarm starts with. */
+export interface AlarmRingDefaults {
+  /** Warning lengths offered as chips, ms. */
+  choices: number[]
+  /** Rings at the time itself to start with. */
+  onTime: boolean
+  /** Warnings picked to start with, ms (offered too). */
+  warnings: number[]
+}
+
+export const DEFAULT_RING_DEFAULTS: AlarmRingDefaults = { choices: WARN_CHOICES_MS, onTime: true, warnings: [] }
+
+const warningList = (raw: unknown): number[] =>
+  Array.isArray(raw) ? [...new Set(raw.filter((w): w is number => typeof w === 'number' && w > 0 && w < DAY))].sort((a, b) => a - b).slice(0, 8) : []
+
+export function sanitizeRingDefaults(raw: unknown): AlarmRingDefaults {
+  if (!raw || typeof raw !== 'object') return DEFAULT_RING_DEFAULTS
+  const r = raw as Record<string, unknown>
+  const warnings = warningList(r.warnings)
+  // Starting with no ring at all would make every new alarm need fixing: then it rings on time.
+  return { choices: Array.isArray(r.choices) ? warningList(r.choices) : WARN_CHOICES_MS, onTime: r.onTime !== false || warnings.length === 0, warnings }
+}
+
+/** "5m, 15m, 1h 30m" read back as lengths (each like a typed warning); null when any part isn't one. */
+export function parseWarningList(text: string): number[] | null {
+  const parts = text.split(',').map(p => p.trim()).filter(Boolean)
+  const out = parts.map(parseWarning)
+  return out.every((w): w is number => w !== null) ? warningList(out) : null
+}
+
+/** "5m", "1h", "1h 30m". */
+export const warnText = (ms: number) => formatTimerLength(ms)
+
+/** A typed warning length ("20", "20m", "1h30", "1:30"), under a day; null when it isn't one. */
+export function parseWarning(text: string): number | null {
+  const ms = parseTimerInput(text)
+  return ms !== null && ms < DAY ? ms : null
+}
+
+/** The alarms an alarm set from the picker gets: its warnings (latest first), then the one at its time unless left out. */
+export const pickerOffsets = (warnings: readonly number[], onTime: boolean) =>
+  [...new Set(warnings.filter(w => w > 0))].sort((a, b) => b - a).concat(onTime ? [0] : [])
 
 // ---------------------------------------------------------------------------
 // Recently set alarms: one tap sets the same again.
@@ -81,12 +122,14 @@ export interface RecentAlarm {
   /** Warnings before it, ms. */
   warnings: number[]
   label: string
+  /** False: only the warnings ring, not the time itself. */
+  onTime?: false
 }
 
 export const MAX_RECENT_ALARMS = 3
 
 const sameRecent = (a: RecentAlarm, b: RecentAlarm) =>
-  a.time === b.time && a.label === b.label && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
+  a.time === b.time && a.label === b.label && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
 
 export function pushRecentAlarm(list: readonly RecentAlarm[], a: RecentAlarm): RecentAlarm[] {
   return [a, ...list.filter(x => !sameRecent(x, a))].slice(0, MAX_RECENT_ALARMS)
@@ -101,6 +144,7 @@ export function sanitizeRecentAlarms(raw: unknown): RecentAlarm[] {
     const repeat = r.repeat === null ? null : sanitizeRepeat(r.repeat)
     if (repeat === null && r.repeat !== null) return []
     const warnings = Array.isArray(r.warnings) ? r.warnings.filter((w): w is number => typeof w === 'number' && w > 0 && w < DAY) : []
-    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '' }]
+    const onTime = r.onTime === false && warnings.length > 0 ? { onTime: false as const } : {}
+    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime }]
   }).slice(0, MAX_RECENT_ALARMS)
 }

@@ -400,17 +400,14 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }, { id: warnId, offsetMs: 3 * MINUTE, answered: 'snoozed' }])
   })
 
-  it('cancelling deletes alarms still to ring (warnings only, or all); one that rang is dismissed, as history', () => {
+  it('cancelling deletes every alarm still to ring; one that rang is dismissed, as history', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Meeting', { alarm: true })
-    const atId = instant(id).alarms![0].id
     const w = act.addAlarm(id)!
     entities.setAlarmOffset(id, w, 15 * MINUTE)
-    act.cancelAlarms(id, 'warnings')
-    expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }])
     const ringingW = act.addAlarm(id)!
     entities.setAlarmOffset(id, ringingW, HOUR + MINUTE) // due a minute ago: it rang
     useAlarms.setState({ ringing: [{ instantId: id, alarmId: ringingW, label: 'Meeting in 1h', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
-    act.cancelAlarms(id, 'all')
+    act.cancelAlarms(id)
     expect(instant(id).alarms).toEqual([{ id: ringingW, offsetMs: HOUR + MINUTE, answered: 'dismissed' }])
     expect(useAlarms.getState().ringing).toEqual([])
   })
@@ -561,6 +558,16 @@ describe('move mode', () => {
     act.confirmMove()
     expect(instant(id).tsEpochMs).toBeCloseTo(t + 10 * MINUTE, -2)
     expect(view()).toMatchObject({ moveMode: null, viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('moved so a dismissed alarm is ahead again, it rings again (its snoozes go)', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rang', { alarm: true })
+    const atId = instant(id).alarms![0].id
+    entities.answerAlarms(id, [atId], 'snoozed')
+    entities.addAlarm(id, { offsetMs: -4 * MINUTE, snoozeOf: atId })
+    act.enterMove(id)
+    act.moveInstantTo(Date.now() + HOUR)
+    expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }])
   })
 
   it('cancel leaves the instant where it was', () => {
@@ -824,8 +831,28 @@ describe('repeating series (TLC-2)', () => {
     expect(occurrences(seriesId)[2].label).toBe('Wake up')
     expect(useUi.getState().seriesHint).toBe(second.id)
     act.applyToFutureOccurrences(second.id)
-    expect(entities.getGroup(seriesId)?.label).toBe('Sleep in')
-    expect(occurrences(seriesId).slice(1).every(i => i.label === 'Sleep in')).toBe(true)
+    // The first is still ahead: it keeps the old rule, and the series splits at the second.
+    const old = entities.getGroup(seriesId)!
+    expect(old).toMatchObject({ label: 'Wake up', until: dateKey(Date.now() + HOUR) })
+    expect(occurrences(seriesId).map(i => i.label)).toEqual(['Wake up'])
+    const next = instant(second.id).seriesId!
+    expect(next).not.toBe(seriesId)
+    expect(entities.getGroup(next)).toMatchObject({ label: 'Sleep in', from: second.occurrence })
+    expect(instant(second.id).seriesEdited).toBe(false)
+    expect(occurrences(next).length).toBeGreaterThan(5)
+    expect(occurrences(next).every(i => i.label === 'Sleep in')).toBe(true)
+    // One instant per series and date: the split made no second copies.
+    const keys = useEntities.getState().instants.filter(i => i.occurrence).map(i => `${i.seriesId}@${i.occurrence}`)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("cancelling an occurrence's alarms offers to apply that too: later ones then have none", () => {
+    const { id, seriesId } = start()
+    act.cancelAlarms(id)
+    expect(useUi.getState().seriesHint).toBe(id)
+    act.applyToFutureOccurrences(id)
+    expect(entities.getGroup(seriesId)?.alarms).toEqual([])
+    expect(occurrences(seriesId).slice(1).every(i => !i.alarms?.length)).toBe(true)
   })
 
   it('deleting one occurrence skips its date; deleting it and all later ones ends the series there', () => {
@@ -871,6 +898,20 @@ describe('repeating series (TLC-2)', () => {
     const stored = act.materializeOccurrence(`v:${seriesId}@${date}`)!
     expect(instant(stored)).toMatchObject({ seriesId, occurrence: date, label: 'Wake up' })
     expect(act.materializeOccurrence(`v:${seriesId}@${date}`)).toBe(stored)
+  })
+
+  it('Once on the first occurrence makes it a plain instant again; on a later one, the series stops after it', () => {
+    const { id, seriesId } = start()
+    act.stopRepeating(id)
+    expect(instant(id).seriesId).toBeUndefined()
+    expect(entities.getGroup(seriesId)).toBeUndefined()
+    expect(occurrences(seriesId)).toHaveLength(0)
+    const again = start()
+    const third = occurrences(again.seriesId)[2]
+    act.stopRepeating(third.id)
+    expect(occurrences(again.seriesId).map(i => i.id)).toEqual(occurrences(again.seriesId).slice(0, 3).map(i => i.id))
+    expect(occurrences(again.seriesId)).toHaveLength(3)
+    expect(entities.getGroup(again.seriesId)?.until).toBe(third.occurrence)
   })
 
   it('pausing removes the untouched occurrences ahead; running it again makes them again', () => {

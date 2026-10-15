@@ -11,11 +11,13 @@ export default function App() {
   const agenda = useLayout(s => s.agendaPlacement)
   return (
     <div className="app" data-agenda={agenda}>
+      {/* Docked at the side, the Agenda is on the left, where the drawer slides out from. */}
+      {agenda === 'side' && <AgendaShell />}
       <div className="app__main">
         <Timeline />
         <ControlBar />
       </div>
-      <AgendaShell />
+      {agenda !== 'side' && <AgendaShell />}
       <RingingAlarms />
       <HelpDialog />
     </div>

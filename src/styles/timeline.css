@@ -344,6 +344,10 @@
 .repeat-menu__actions { display: flex; gap: 6px; }
 .repeat-picker { display: flex; flex-direction: column; gap: 8px; }
 .repeat-picker__row, .repeat-picker__days, .repeat-picker__every { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+/* Choice chips glow softly (a row of them at full glow is a wall of light): a fraction of the
+   global --glow, taken on the row so the chips can use it without referring to themselves. */
+.repeat-picker, .alarm-pick__row { --glow-soft: calc(var(--glow) * 0.3); }
+:is(.repeat-picker, .alarm-pick__row) :is(.repeat-chip, .repeat-day, .repeat-step) { --glow: var(--glow-soft); }
 .repeat-chip, .repeat-day, .repeat-step {
   --accent: color-mix(in srgb, var(--c-alarm) 55%, transparent);
   height: 30px;
@@ -363,24 +367,77 @@
    tapped (and stored); the chip itself is. */
 .tl-col.is-virtual .chip-bell, .tl-bell.is-virtual { pointer-events: none; }
 
-/* Repeats zoomed out (domain/rhythm): each collapsed occurrence is a short amber tick across the
-   axis instead of a full line, and one summary chip stands for them. */
-.tl-col--line.is-rhythm { --accent: var(--c-alarm); --halo: var(--c-alarm); }
+/* Repeats zoomed out (domain/rhythm): each collapsed occurrence draws like an instant's line,
+   but from the axis out on the saved side only (below it; right of it in vertical), a third of
+   the way to the edge, fading and tapering to a point; one summary chip stands for them.
+   Collapsing animates: the line's shape (a clip that interpolates from the whole line to the
+   taper), its fade (registered stops, --rh-solid / --rh-end) and width glide over --rh-ms; a
+   series with alarms turns amber from the axis out (::after grows over the line). Only series
+   lines carry the clip, so plain lines cost nothing. The taper clips the glow: the column glows. */
+/* A chip collapsing into its series' rhythm shrinks in height to nothing (toward the axis in
+   horizontal), then goes (InstantColumns useCollapsingChips). */
+.tl-col--label.is-leaving { pointer-events: none; }
+.tl-col--label.is-leaving > * { transform-origin: 50% 0; animation: chip-collapse 260ms cubic-bezier(0.4, 0, 0.8, 0.6) forwards; }
+.timeline[data-orientation='vertical'] .tl-col--label.is-leaving > * { transform-origin: 50% 50%; }
+@keyframes chip-collapse { 70% { opacity: 1; } 100% { scale: 1 0; opacity: 0; } }
+@property --rh-solid { syntax: '<length-percentage>'; inherits: false; initial-value: 100%; }
+@property --rh-end { syntax: '<length-percentage>'; inherits: false; initial-value: 100%; }
+.tl-col--line.is-series { --rh-ms: 320ms; }
+.tl-col--line.is-series .tl-col__line {
+  --rh-solid: calc(100% - 40px);
+  --rh-end: 100%;
+  background: linear-gradient(to bottom, transparent 0, var(--accent) 18px, var(--accent) var(--rh-solid), transparent var(--rh-end));
+  clip-path: polygon(-24px 0, calc(100% + 24px) 0, calc(100% + 24px) 100%, -24px 100%);
+  transition: clip-path var(--rh-ms) ease, --rh-solid var(--rh-ms) ease, --rh-end var(--rh-ms) ease,
+    left var(--rh-ms) ease, width var(--rh-ms) ease, top var(--rh-ms) ease, height var(--rh-ms) ease, box-shadow var(--rh-ms) ease;
+}
+.tl-col--line.is-rhythm { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--halo, var(--accent))); }
+.tl-col--line.is-rhythm.is-alarmed { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-alarm)); }
 .tl-col--line.is-rhythm .tl-col__line {
-  top: calc(var(--tl-axis) - 10px);
-  left: -1.5px;
-  width: 3px;
-  bottom: auto;
-  height: 22px;
-  background: var(--c-alarm);
-  box-shadow: 0 0 calc(5px * var(--glow)) var(--c-alarm);
+  --rh-solid: calc(var(--tl-axis) + (100% - var(--tl-axis)) * 0.35 / 3);
+  --rh-end: calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3);
+  left: -2px;
+  width: 4px;
+  box-shadow: none;
+  clip-path: polygon(0 var(--tl-axis), 100% var(--tl-axis), 50% calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3), 50% calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3));
+}
+/* Alarmed: amber grows from the axis out until it is the whole line. */
+.tl-col--line.is-series.is-alarmed .tl-col__line::after {
+  content: '';
+  position: absolute;
+  top: var(--tl-axis);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to bottom, var(--c-alarm) 0, var(--c-alarm) calc(100% * 0.35 / 3), transparent calc(100% / 3));
+  transform-origin: 50% 0;
+  scale: 1 0;
+  transition: scale var(--rh-ms) ease;
+}
+.tl-col--line.is-rhythm.is-alarmed .tl-col__line::after { scale: 1 1; }
+.timeline[data-orientation='vertical'] .tl-col--line.is-series .tl-col__line {
+  background: linear-gradient(to right, transparent 0, var(--accent) 18px, var(--accent) var(--rh-solid), transparent var(--rh-end));
+  clip-path: polygon(0 -24px, 100% -24px, 100% calc(100% + 24px), 0 calc(100% + 24px));
 }
 .timeline[data-orientation='vertical'] .tl-col--line.is-rhythm .tl-col__line {
-  top: -1.5px;
-  left: calc(var(--tl-axis) - 10px);
-  right: auto;
-  width: 22px;
-  height: 3px;
+  left: 0;
+  width: auto;
+  top: -2px;
+  height: 4px;
+  clip-path: polygon(var(--tl-axis) 0, calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3) 50%, calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3) 50%, var(--tl-axis) 100%);
+}
+.timeline[data-orientation='vertical'] .tl-col--line.is-series.is-alarmed .tl-col__line::after {
+  top: 0;
+  bottom: 0;
+  left: var(--tl-axis);
+  right: 0;
+  background: linear-gradient(to right, var(--c-alarm) 0, var(--c-alarm) calc(100% * 0.35 / 3), transparent calc(100% / 3));
+  transform-origin: 0 50%;
+  scale: 0 1;
+}
+.timeline[data-orientation='vertical'] .tl-col--line.is-rhythm.is-alarmed .tl-col__line::after { scale: 1 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tl-col--line.is-series .tl-col__line, .tl-col--line.is-series .tl-col__line::after { transition: none; }
 }
 .tl-series { --accent: color-mix(in srgb, var(--c-alarm) 70%, transparent); --halo: var(--c-alarm); }
 .chip--series { gap: 7px; padding: 0 10px 0 8px; border-style: dashed; }

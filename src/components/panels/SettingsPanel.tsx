@@ -14,6 +14,7 @@ import { ShellStatus } from './ShellStatus.tsx'
 import { ShellDiagnostics } from './ShellDiagnostics.tsx'
 import { DataSettings } from './DataSettings.tsx'
 import { panelPosition } from './panelPosition.ts'
+import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
 
@@ -140,6 +141,7 @@ export function SettingsPanel() {
                 <option value="snooze">Snooze 5 min</option>
               </select>
             </label>
+            <AlarmRingSettings />
           </section>
 
           <section className="settings__group">
@@ -167,6 +169,40 @@ export function SettingsPanel() {
         </div>,
         document.body,
       )}
+    </>
+  )
+}
+
+/** Settings > Alarms: the warnings the Alarm picker offers, and what a new alarm starts with. */
+function AlarmRingSettings() {
+  const rings = useSettings(s => s.alarmRings)
+  const listText = rings.choices.map(warnText).join(', ')
+  const [text, setText] = useState(listText)
+  const [bad, setBad] = useState(false)
+  useEffect(() => { setText(listText); setBad(false) }, [listText])
+  const commit = () => {
+    const choices = parseWarningList(text)
+    if (!choices) { setBad(true); return }
+    settings.setAlarmRings({ ...rings, choices, warnings: rings.warnings.filter(w => choices.includes(w)) })
+  }
+  const toggle = (ms: number) => settings.setAlarmRings({ ...rings, warnings: rings.warnings.includes(ms) ? rings.warnings.filter(w => w !== ms) : [...rings.warnings, ms] })
+  const chip = (label: string, on: boolean, aria: string, onClick: () => void) => (
+    <button key={label} type="button" className={`repeat-chip glow-box${on ? ' is-on' : ''}`} aria-pressed={on} aria-label={aria} onClick={onClick}>{label}</button>
+  )
+  return (
+    <>
+      <label className="settings__row">
+        <span>Warnings offered</span>
+        <input className={`settings__text mono${bad ? ' is-invalid' : ''}`} aria-invalid={bad} value={text} placeholder="5m, 15m, 1h"
+          onChange={e => { setText(e.target.value); setBad(false) }} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit() }} />
+      </label>
+      <div className="settings__row settings__row--wrap">
+        <span>New alarms ring</span>
+        <div className="alarm-pick__row" role="group" aria-label="New alarms ring">
+          {chip('On time', rings.onTime, 'New alarms ring at the time', () => settings.setAlarmRings({ ...rings, onTime: !rings.onTime }))}
+          {rings.choices.map(ms => chip(`−${warnText(ms)}`, rings.warnings.includes(ms), `New alarms warn ${warnText(ms)} before`, () => toggle(ms)))}
+        </div>
+      </div>
     </>
   )
 }

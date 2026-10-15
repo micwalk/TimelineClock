@@ -1,6 +1,6 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
-import { alarmLabel, alarmsToCancel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, ringTime, snoozeLanding, warningsToCancel } from '../domain/alarms.ts'
+import { alarmLabel, alarmsToCancel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, ringTime, snoozeLanding } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE, SECOND } from '../domain/time.ts'
 import { getTunables } from '../store/settings.ts'
@@ -134,16 +134,15 @@ export const snooze = (key: string, minutes = SNOOZE_MINUTES, at?: number): stri
   snoozeUntil(key, at ?? Date.now() + minutes * MINUTE)
 
 /**
- * Cancels an instant's alarms (the opposite of a snooze): its warnings (the alarm at the instant
- * stays), or all of them. Those that rang (ringing, or due already) are dismissed and stay as
- * history; those still to ring are deleted, as if never set.
+ * Cancels all of an instant's alarms (the opposite of a snooze). Those that rang (ringing, or due
+ * already) are dismissed and stay as history; those still to ring are deleted, as if never set.
  */
-export function cancelAlarms(instantId: string, which: 'warnings' | 'all') {
+export function cancelAlarms(instantId: string) {
   const inst = entities.getInstant(instantId)
   if (!inst) return
   const now = Date.now()
   const ringing = new Set(useAlarms.getState().ringing.filter(r => r.instantId === instantId).map(r => r.alarmId))
-  for (const a of which === 'warnings' ? warningsToCancel(inst) : alarmsToCancel(inst)) {
+  for (const a of alarmsToCancel(inst)) {
     if (ringing.has(a.id) || ringTime(inst, a) <= now) dismiss(ringKey(instantId, a.id))
     else entities.removeAlarm(instantId, a.id)
   }

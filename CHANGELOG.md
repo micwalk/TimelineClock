@@ -7,7 +7,7 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
-## 0.3.1 — 2026-10-13
+## 0.3.1 — 2026-10-14
 
 **Android app: web only** (nothing to install; it updates itself).
 
@@ -22,27 +22,36 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   when it will ring as you type, and it rings exactly then, even after the start), and Dismiss all when the instant has more alarms. Or drag
   a ringing bell later on the timeline to snooze until there.
 - **Cancel alarms** before they ring, the opposite of a snooze: a selected chip's bell-slash tool
-  cancels its warnings (keeping the alarm at the instant) or all of them. Alarms that hadn't rung
-  yet are simply gone; only alarms that rang stay as history.
+  cancels all of them in one tap (adding one back is a tap too). Alarms that hadn't rung yet are
+  simply gone; only alarms that rang stay as history.
+- Moving an instant so an alarm it already answered is ahead again makes that alarm ring again.
 - An alarm bell's line to its instant still shows when the bell itself is off screen.
 - A timer finishes when the last of its snoozes is dismissed, not when it is first snoozed.
 - **Repeating alarms** (TLC-2): the ⟳ tool on any instant makes it repeat: daily, on weekdays,
   weekends, chosen days, or every few days. Repeats show ⟳ on their chips. The next two weeks
   are kept (and set on the Android app), further ahead they are shown as you look, and they stay
   as history once they pass. Changing the repeat updates the ones ahead. Change one on its own
-  (move it, rename it, change its bells) and it offers **Apply to all future**. Delete
-  one, or it and all later ones; pause, resume or end a series from its ⟳ tool.
+  (move it, rename it, change or cancel its bells) and it offers **Apply to all future**, which
+  changes that one and the ones after it, never earlier ones still to come. Delete
+  one, or it and all later ones; pause, resume or end a series from its ⟳ tool, or pick Once
+  there to stop it repeating after that one.
+- **Repeats tab** in the Agenda: every repeat, with or without alarms.
+- The Agenda docked beside a vertical timeline sits on the left, where its drawer slides out
+  from, and its tabs no longer run under its buttons when it is narrow.
 - **Alarm button** (TLC-3, or L): type a time ("7", "730", "1730", "7p"), pick once or a repeat,
-  add warnings (5m, 15m, 30m, 1h) and a name. A time that could be AM or PM takes the sooner
+  pick when it rings (on time, and warnings 5m, 15m, 30m, 1h before or any length typed in
+  "other"; or only the warnings) and a name. A time that could be AM or PM takes the sooner
   one and says plainly which day and time it set ("Tue 7:00a · in 7h"), with AM/PM buttons to
-  switch. Recent alarms are one tap away.
+  switch. Recent alarms are one tap away: a tap fills the picker in from one, to change before
+  setting it. Settings > Alarms picks which warnings it offers and what a new alarm starts with.
 - **Alarms tab** in the Agenda: every alarm, like a clock app: repeating ones with a switch to
   pause them and a pencil to edit them (time, days, warnings, name; occurrences you changed on
   their own keep their changes), upcoming ones with a button to cancel them, and what rang in
   the last day. Set a new alarm from there too.
 - Backups include repeating series.
-- **Zoomed out, repeats stay calm**: a repeat whose occurrences crowd turns into small ticks on
-  the axis and one chip for the series ("⟳ Wake Up · Daily 9:00a · in 3d 8h"); tap it to zoom in.
+- **Zoomed out, repeats stay calm**: a repeat whose occurrences crowd turns into amber lines
+  that start at the axis and fade to a point on the chips' side (amber when it has alarms). Zooming
+  out animates it: the chips shrink away, the lines draw in to the axis and turn amber from it and one chip for the series ("⟳ Wake Up · Daily 9:00a · in 3d 8h"); tap it to zoom in.
   Occurrences changed on their own keep their own chips. Zoomed out past hours, chips also drop
   their "in 3d 8h".
 - The Alarm picker is a sheet at the top of the screen on phones, clear of the keyboard, with a

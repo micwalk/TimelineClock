@@ -82,7 +82,7 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
             <span>Other…</span><PencilIcon aria-hidden />
           </button>
           {choices && choices.others > 0 && (
-            <button type="button" className="alarm-link alarm-link--all glow-box" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId, 'all')}
+            <button type="button" className="alarm-link alarm-link--all glow-box" tabIndex={custom ? -1 : 0} onClick={() => act.cancelAlarms(alarm.instantId)}
               title="Dismiss this and cancel the instant's other alarms">
               Dismiss all {choices.others + 1}
             </button>

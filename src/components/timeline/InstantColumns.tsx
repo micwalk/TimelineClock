@@ -1,6 +1,6 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
@@ -11,7 +11,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
-import { hasArmedAlarm, openAlarms, ringKey, ringTime, warningsToCancel } from '../../domain/alarms.ts'
+import { hasArmedAlarm, openAlarms, ringKey, ringTime } from '../../domain/alarms.ts'
 import { bellItemId, isLiveAlarm } from '../../domain/bells.ts'
 import { displayName } from '../../domain/entities.ts'
 import { endpointName } from '../../domain/spans.ts'
@@ -66,6 +66,8 @@ interface SavedFlags {
   moving: boolean
   /** Zoomed in far enough that every chip shows seconds. */
   fineSeconds: boolean
+  /** Collapsing into its series' rhythm: it shrinks away, then goes (useCollapsingChips). */
+  leaving?: boolean
 }
 
 interface ChipProps {
@@ -250,36 +252,12 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   )
 }
 
-/**
- * Cancel an instant's alarms (the opposite of a snooze): its warnings, keeping the alarm at the
- * instant, or all of them. One tap when there is no choice; a menu when there is.
- */
+/** Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap too. */
 function CancelTool({ inst }: { inst: InstantRecord }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  usePopoverDismiss(ref, () => setOpen(false), open)
-  const warnings = warningsToCancel(inst).length
   const all = openAlarms(inst).length
-  // A menu only when there is a choice (warnings and the alarm at the instant); otherwise the tap cancels.
-  const choice = warnings > 0 && warnings < all
-  useKeepOnScreen(menuRef, open && choice)
-  const label = all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'
   return (
-    <div ref={ref} className="skip-tool">
-      <IconButton icon={BellSlashIcon} label={choice ? 'Cancel alarms…' : label} color={bellColor} bare pressed={open}
-        onClick={() => (choice ? setOpen(o => !o) : act.cancelAlarms(inst.id, 'all'))} />
-      {open && choice && (
-        <div ref={menuRef} className="popover popover--chip skip-menu glow-box" role="menu" aria-label="Cancel alarms">
-          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'warnings'); setOpen(false) }}>
-            Cancel warnings <span className="skip-menu__note">keep the alarm at {formatClockCompact(inst.tsEpochMs, false)}</span>
-          </button>
-          <button type="button" role="menuitem" className="skip-menu__item" onClick={() => { act.cancelAlarms(inst.id, 'all'); setOpen(false) }}>
-            {label}
-          </button>
-        </div>
-      )}
-    </div>
+    <IconButton icon={BellSlashIcon} label={all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'} color={bellColor} bare
+      onClick={() => act.cancelAlarms(inst.id)} />
   )
 }
 
@@ -307,7 +285,8 @@ function RepeatTool({ inst }: { inst: InstantRecord }) {
       {open && (
         <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Repeat">
           <div className="repeat-menu__title">{series ? `Repeats ${describeRepeat(series.repeat).toLowerCase()} at ${formatClockCompact(inst.tsEpochMs, false)}` : `Repeat at ${formatClockCompact(inst.tsEpochMs, false)}`}</div>
-          <RepeatPicker value={series?.repeat ?? null} onChange={r => { if (r) act.repeatInstant(inst.id, r) }} />
+          {/* Once: stop repeating (after this one). */}
+          <RepeatPicker value={series?.repeat ?? null} allowOnce={!!series} onChange={r => (r ? act.repeatInstant(inst.id, r) : act.stopRepeating(inst.id))} />
           {series && (
             <div className="repeat-menu__actions">
               <button type="button" className="alarm-link glow-box" onClick={() => { act.setSeriesPaused(series.id, !series.paused); setOpen(false) }}>
@@ -529,7 +508,7 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured }:
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
   { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: number; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
@@ -568,7 +547,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   const linked = bellLinked && !moving
 
   return (
-    <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}`} role="group" aria-label={`Instant ${name}`}>
+    <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
       <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
@@ -577,8 +556,34 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   )
 })
 
+/** How long a chip collapsing into its series' rhythm takes to shrink away, ms (timeline.css chip-collapse). */
+const CHIP_COLLAPSE_MS = 260
+
+/**
+ * Chips that just collapsed into their series' rhythm: kept a moment longer (same key, so they
+ * stay mounted where they were) while they shrink away. Worked out during render, so a chip
+ * never unmounts for a frame in between.
+ */
+function useCollapsingChips(chipIds: readonly string[], rhythm: Readonly<Record<string, string>>): string[] {
+  const key = chipIds.join(',')
+  const [track, setTrack] = useState({ key, ids: chipIds, leaving: [] as string[] })
+  if (track.key !== key) {
+    const shown = new Set(chipIds)
+    const gone = reducedMotion() ? [] : track.ids.filter(id => !shown.has(id) && rhythm[id])
+    setTrack({ key, ids: chipIds, leaving: [...new Set([...track.leaving.filter(id => !shown.has(id)), ...gone])] })
+  }
+  useEffect(() => {
+    if (track.leaving.length === 0) return
+    const ids = track.leaving
+    const t = setTimeout(() => setTrack(s => ({ ...s, leaving: s.leaving.filter(id => !ids.includes(id)) })), CHIP_COLLAPSE_MS)
+    return () => clearTimeout(t)
+  }, [track.leaving])
+  return track.leaving
+}
+
 export function SavedInstantColumns() {
   const layout = useSavedLayoutStructure()
+  const leaving = useCollapsingChips(layout.chipIds, layout.rhythm)
   const instants = useTimelineInstants()
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
@@ -652,7 +657,7 @@ export function SavedInstantColumns() {
   return (
     <>
       <InstantLines instants={instants} lineClass={lineClass} movingId={v.moving} ghostTs={moving ? moving.tsEpochMs : null} />
-      {layout.chipIds.map(id => {
+      {[...layout.chipIds, ...leaving].map(id => {
         const inst = byId.get(id)
         if (!inst) return null
         return (
@@ -671,6 +676,7 @@ export function SavedInstantColumns() {
             moving={v.moving === id}
             fineSeconds={fineSeconds}
             captured={capturedId === id}
+            leaving={leaving.includes(id)}
           />
         )
       })}

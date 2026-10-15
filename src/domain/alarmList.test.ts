@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord } from './entities.ts'
 import type { SeriesRecord } from './series.ts'
-import { alarmList, nextRing } from './alarmList.ts'
+import { alarmList, nextRing, repeatList } from './alarmList.ts'
 import { HOUR, MINUTE } from './time.ts'
 
 const now = 1_800_000_000_000
@@ -30,5 +30,14 @@ describe('alarmList', () => {
   it('finds an instant’s next ring among its alarms still to ring', () => {
     expect(nextRing(list[0], now)).toBe(now + 90 * MINUTE)
     expect(nextRing(list[2], now)).toBeNull()
+  })
+})
+
+describe('repeatList', () => {
+  it('every series not ended, alarms or not, the next one first; the Alarms tab only those with alarms', () => {
+    const groups = [series('quiet', { alarms: [] }), series('loud'), series('old', { until: '2020-01-01' })]
+    const instants = [inst('q1', 3 * HOUR, { seriesId: 'quiet', occurrence: '2027-01-01' }), inst('l1', HOUR, { seriesId: 'loud', occurrence: '2027-01-01', alarms: [{ id: 'a', offsetMs: 0 }] })]
+    expect(repeatList(instants, groups, now).map(r => [r.series.id, r.next?.id])).toEqual([['loud', 'l1'], ['quiet', 'q1']])
+    expect(alarmList(instants, groups, now).repeating.map(r => r.series.id)).toEqual(['loud'])
   })
 })

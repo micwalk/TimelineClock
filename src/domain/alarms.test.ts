@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  alarmLabel, alarmsToCancel, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, ringingChoices, snoozeBaseLabel, snoozeLabel,
-  snoozeLanding, syncAlarmVisibility, warningsToCancel,
+  alarmLabel, alarmsToCancel, rearmAfterMove, findDueAlarms, hasArmedAlarm, nextAlarmTime, parseRingKey, parseSnoozeLabel, ringKey, ringingChoices, snoozeBaseLabel, snoozeLabel,
+  snoozeLanding, syncAlarmVisibility,
 } from './alarms.ts'
 import { findAdjacent, pushFocusHistory, stepFocusHistory } from './navigation.ts'
 import type { AlarmRecord, InstantRecord } from './entities.ts'
 import { legacyAlarmId, sanitizeInstants } from './entities.ts'
-import { MINUTE, SECOND } from './time.ts'
+import { HOUR as HOUR_MS, MINUTE, SECOND } from './time.ts'
 
 const now = 1_800_000_000_000
 /** An instant `offsetMs` from now with one alarm at it (none when `alarm` is false); its ring key is its id. */
@@ -160,11 +160,10 @@ describe('ringingChoices', () => {
 })
 
 describe('cancelling', () => {
-  it('covers warnings but keeps the alarm at the instant; or all unanswered ones', () => {
+  it('covers every unanswered alarm', () => {
     const w = withAlarms('w', 10 * MINUTE, [
       { id: 'w15', offsetMs: 15 * MINUTE }, { id: 'w5', offsetMs: 5 * MINUTE }, { id: 'at', offsetMs: 0 }, { id: 'heard', offsetMs: 7 * MINUTE, answered: 'dismissed' },
     ])
-    expect(warningsToCancel(w).map(a => a.id)).toEqual(['w15', 'w5'])
     expect(alarmsToCancel(w).map(a => a.id)).toEqual(['w15', 'w5', 'at'])
   })
 })
@@ -209,5 +208,18 @@ describe('navigation', () => {
     expect(h).toEqual({ focusHistory: ['a', 'b'], focusHistoryIndex: 1 })
     expect(stepFocusHistory(h, -1)).toBe(0)
     expect(stepFocusHistory(h, 1)).toBeNull()
+  })
+})
+
+describe('rearmAfterMove', () => {
+  it('an answered alarm ahead again rings again, and its snoozes go; others stay', () => {
+    const moved = withAlarms('m', HOUR_MS, [
+      { id: 'at', offsetMs: 0, answered: 'snoozed' },
+      { id: 's1', offsetMs: -5 * MINUTE, snoozeOf: 'at', answered: 'snoozed' },
+      { id: 's2', offsetMs: -10 * MINUTE, snoozeOf: 's1' },
+      { id: 'w', offsetMs: 2 * HOUR_MS, answered: 'dismissed' }, // still in the past: history
+    ])
+    expect(rearmAfterMove(moved, now)).toEqual([{ id: 'at', offsetMs: 0 }, { id: 'w', offsetMs: 2 * HOUR_MS, answered: 'dismissed' }])
+    expect(rearmAfterMove(withAlarms('p', -HOUR_MS, [{ id: 'at', offsetMs: 0, answered: 'dismissed' }]), now)).toBeNull()
   })
 })
