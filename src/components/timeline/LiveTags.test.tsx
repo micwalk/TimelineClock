@@ -40,7 +40,19 @@ describe('NowTag', () => {
     const [inst] = useEntities.getState().instants
     expect(inst).toBeDefined()
     expect(inst.label).toBe('')
-    expect(useView.getState().editingInstantId).toBe(inst.id)
+    expect(useView.getState()).toMatchObject({ editingInstantId: inst.id, currentSelectedInstantId: inst.id, viewFocusMode: 'now' })
+  })
+
+  it('has a ＋ while following Now that drops at Now, selected with its name box open; none off Now', () => {
+    useView.setState({ viewFocusMode: 'cursor' })
+    const { rerender } = render(<NowTag />)
+    expect(screen.queryByRole('button', { name: 'Drop an instant at Now and name it' })).toBeNull()
+    act(() => useView.setState({ viewFocusMode: 'now' }))
+    rerender(<NowTag />)
+    fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at Now and name it' }))
+    const [inst] = useEntities.getState().instants
+    expect(Math.abs(inst.tsEpochMs - engine.sample().now)).toBeLessThan(2000)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'now', editingInstantId: inst.id, currentSelectedInstantId: inst.id })
   })
 
   it('opens its tools on click: save as favorite, set a time', () => {
@@ -110,15 +122,18 @@ describe('CursorTag', () => {
     expect(screen.getByRole('button', { name: /^Cursor/ })).toBeInTheDocument()
   })
 
-  it('has a round + button that drops an instant at the cursor with its name box open', () => {
+  it('has a round + button that drops an instant at the cursor, selected (not focused) with its name box open', () => {
     cursorMode()
+    const before = entities.createInstant(engine.getFrame().now - 3_600_000, 'Rice')
+    useView.setState({ currentSelectedInstantId: before })
     render(<CursorTag />)
     const center = useView.getState().timeCenter
     fireEvent.click(screen.getByRole('button', { name: 'Drop an instant at the cursor and name it' }))
-    const [inst] = useEntities.getState().instants
+    const inst = useEntities.getState().instants[1]
     expect(inst.label).toBe('')
     expect(Math.abs(inst.tsEpochMs - center)).toBeLessThan(2000)
-    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: inst.id, currentSelectedInstantId: null })
+    // Selected like any chip: the previous selection's lane to it shows.
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'cursor', editingInstantId: inst.id, currentSelectedInstantId: inst.id, secondarySelectedInstantId: before })
   })
 
   it('ends naming when the cursor moves away, keeping the instant unnamed', () => {

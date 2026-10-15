@@ -128,6 +128,31 @@ describe('Timer and Stopwatch buttons', () => {
     expect(view().focusedSpanId).toBe(runs[0].id)
   })
 
+  it('a lap and the stop save the spans to Now they end (the same records, so their lanes flow across)', () => {
+    act.startStopwatch()
+    const total = entities.nowSpanOf(sw().marks[0])!.id
+    act.lapStopwatch()
+    act.lapStopwatch()
+    const [s0, l1, l2] = sw().marks
+    const lap2 = entities.nowSpanOf(l1) // already ended: lap 2 was l1's span to Now
+    expect(lap2).toBeUndefined()
+    const tracked = entities.nowSpanOf(l2)!.id
+    act.stopStopwatch()
+    const [, , , stop] = sw().marks
+    expect(entities.getSpan(tracked)).toMatchObject({ startInstantId: l2, endInstantId: stop, endIsNow: false, label: 'Lap 3' })
+    expect(entities.getSpan(total)).toMatchObject({ startInstantId: s0, endInstantId: stop, endIsNow: false, label: 'Stopwatch' })
+    expect(spans().filter(sp => sp.startInstantId === s0 && sp.endInstantId === stop)).toHaveLength(1)
+    expect(view().focusedSpanId).toBe(total)
+  })
+
+  it('the stop on a running stopwatch’s lane stops the stopwatch', () => {
+    act.startStopwatch()
+    act.lapStopwatch()
+    act.stopNowSpan(sw().marks[1])
+    expect(sw().stopped).toBe(true)
+    expect(sw().marks).toHaveLength(3)
+  })
+
   it('reset while running stops tracking the current span', () => {
     act.startStopwatch()
     const [s0] = sw().marks
@@ -431,7 +456,7 @@ describe('double-taps', () => {
     act.activateNow()
     const added = useEntities.getState().instants.at(-1)!
     expect(useEntities.getState().instants).toHaveLength(before + 1)
-    expect(view().editingInstantId).toBe(added.id)
+    expect(view()).toMatchObject({ editingInstantId: added.id, currentSelectedInstantId: added.id, viewFocusMode: 'now' })
   })
 })
 
@@ -451,6 +476,34 @@ describe('setSpanLength', () => {
     const toNow = entities.nowSpanOf(id)!
     act.setSpanLength(toNow.id, MINUTE)
     expect(instant(id).tsEpochMs).toBeLessThan(Date.now() - 50 * MINUTE)
+  })
+})
+
+describe('stopNowSpan (the stop on a favorite’s live lane)', () => {
+  it('ends the span to Now at a new unnamed instant at Now: the same span, saved, and no longer a favorite', () => {
+    const now = engine.sample().now
+    const id = entities.createInstant(now - 26 * MINUTE, 'Rice')
+    act.setFavorite(id, true)
+    const spanId = entities.nowSpanOf(id)!.id
+    act.stopNowSpan(id)
+    const end = useEntities.getState().instants.find(i => i.id !== id)!
+    expect(end.label).toBe('')
+    expect(Math.abs(end.tsEpochMs - now)).toBeLessThan(1000)
+    expect(entities.getSpan(spanId)).toMatchObject({ startInstantId: id, endInstantId: end.id, endIsNow: false, visible: true })
+    expect(instant(id).favorite).toBe(false)
+    expect(entities.nowSpanOf(id)).toBeUndefined()
+    expect(useUi.getState().droppedId).toBe(end.id)
+  })
+
+  it('does nothing for a countdown to a favorite ahead, or an instant that is not a favorite', () => {
+    const now = engine.sample().now
+    const ahead = entities.createInstant(now + 10 * MINUTE, 'Tea')
+    act.setFavorite(ahead, true)
+    const plain = entities.createInstant(now - 10 * MINUTE, 'Rice')
+    act.stopNowSpan(ahead)
+    act.stopNowSpan(plain)
+    expect(useEntities.getState().instants).toHaveLength(2)
+    expect(entities.nowSpanOf(ahead)).toBeDefined()
   })
 })
 
@@ -624,6 +677,21 @@ describe('cursor landing on instants', () => {
     act.focusCursorAt(t + MINUTE, false) // a few px away at the default zoom
     act.selectInstant(id)
     expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('a hidden cursor lands on nothing: stepping onto an instant or Now, or tapping one under it', () => {
+    const t = Date.now() - HOUR
+    const id = entities.createInstant(t, 'Rice')
+    act.focusCursorAt(t - 30 * MINUTE, false)
+    act.setCursorHidden(true)
+    act.moveCursorBy(30 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+    act.selectInstant(id)
+    expect(view()).toMatchObject({ viewFocusMode: 'cursor', currentSelectedInstantId: id })
+    act.focusCursorAt(Date.now() - 10 * MINUTE, false)
+    act.moveCursorBy(10 * MINUTE)
+    expect(view().viewFocusMode).toBe('cursor')
+    act.setCursorHidden(false)
   })
 
   it('tapping an instant away from the cursor only selects it', () => {

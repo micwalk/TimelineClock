@@ -101,18 +101,41 @@ describe('live and saved lanes', () => {
     expect(screen.getAllByText('Long walk').length).toBeGreaterThan(0)
   })
 
-  it('a favorite’s span to Now ends in a star that unfavorites it, without opening the lane’s tools', () => {
+  /** Tea (`agoMin` ago, or ahead when negative), a favorite, its live lane rendered. */
+  function favoriteLane(agoMin: number) {
     const now = engine.getFrame().now
-    const a = entities.createInstant(now - 5 * MINUTE, 'Tea')
+    const a = entities.createInstant(now - agoMin * MINUTE, 'Tea')
     entities.setFavorite(a, true)
     useView.setState({ currentSelectedInstantId: a })
     const { result } = renderHook(() => useVisibleLanes())
     const lanes = partitionLanes(result.current).live
     render(<BottomLanes lanes={lanes.map((l, i) => ({ ...l, top: 10 + i * 24, index: i }))} />)
+    return a
+  }
+
+  it('a favorite’s span to Now ends in a stop: the span is saved (the same record) and the lane’s tools stay shut', () => {
+    const a = favoriteLane(5)
+    const spanId = entities.nowSpanOf(a)?.id
+    // The star is a badge now, not a button.
+    expect(screen.queryByRole('button', { name: 'Unfavorite Tea' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Tea here: save its span' }))
+    expect(entities.getInstant(a)?.favorite).toBe(false)
+    expect(entities.nowSpanOf(a)).toBeUndefined()
+    expect(entities.getSpan(spanId!)).toMatchObject({ startInstantId: a, endIsNow: false, visible: true })
+    expect(useUi.getState().laneTools).toBeNull()
+  })
+
+  it('unfavoriting moves into the lane’s tools (the star tool, as on the instant’s chip)', () => {
+    const a = favoriteLane(5)
+    fireEvent.click(screen.getByText('Tea'))
     fireEvent.click(screen.getByRole('button', { name: 'Unfavorite Tea' }))
     expect(entities.getInstant(a)?.favorite).toBe(false)
     expect(entities.nowSpanOf(a)).toBeUndefined()
-    expect(useUi.getState().laneTools).toBeNull()
+  })
+
+  it('a countdown to a favorite ahead has no stop', () => {
+    favoriteLane(-5)
+    expect(screen.queryByRole('button', { name: /^Stop Tea/ })).toBeNull()
   })
 })
 

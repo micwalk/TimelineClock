@@ -6,6 +6,7 @@ import type { RefObject } from 'react'
 import { clamp } from '../domain/time.ts'
 import { releaseVelocity, shouldGlide } from '../domain/glide.ts'
 import type { PointerSample } from '../domain/glide.ts'
+import { wheelEffect } from '../domain/wheel.ts'
 import { glide } from './glide.ts'
 import { beginPan, endPan, panByPixels, wheelPan, zoomBy } from '../store/actions.ts'
 import { captureAt } from '../components/timeline/capture.ts'
@@ -142,14 +143,12 @@ export function usePanZoom(ref: RefObject<HTMLElement | null>) {
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
       const dx = clamp(e.deltaX * unit, -400, 400)
       const dy = clamp(e.deltaY * unit, -400, 400)
-      const zoom = (d: number) => { if (d !== 0) zoomBy(Math.exp(d * WHEEL_ZOOM_PER_PX)) }
-      if (e.ctrlKey) return zoom(dy) // trackpad pinch arrives as ctrl+wheel
-      if (useLayout.getState().orientation === 'vertical') {
-        if (dy !== 0) wheelPan(dy)
-      } else {
-        zoom(dy)
-        if (dx !== 0) wheelPan(dx)
-      }
+      const { zoom, pan } = wheelEffect({
+        dx, dy, ctrl: e.ctrlKey, shift: e.shiftKey,
+        vertical: useLayout.getState().orientation === 'vertical',
+      })
+      if (zoom !== 0) zoomBy(Math.exp(zoom * WHEEL_ZOOM_PER_PX))
+      if (pan !== 0) wheelPan(pan)
     }
 
     el.addEventListener('pointerdown', onPointerDown)

@@ -7,6 +7,27 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.3.2 — 2026-10-14
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- In vertical, the mouse wheel zooms, as it does in horizontal; **Shift + wheel** moves through
+  time in both (#16).
+- A hidden cursor passes over instants and Now: it no longer glides onto them, lands on them or
+  selects them, so you can look around without changing what is focused (#17).
+- **Stop a favorite’s lane** (#13): a favorite counting up ends its live lane chip in a ■ stop.
+  One tap drops an instant at Now and saves the time since the favorite as a span; the lane
+  slides over to the saved spans and the instant stops being a favorite. On a running
+  stopwatch’s lane it stops the stopwatch, whose lap and run lanes now slide over the same way.
+- The ★ on a favorite’s lane is now a badge, not a button, so the stop is the chip’s only
+  button and a near miss can’t unfavorite it. To stop tracking without saving, tap the lane
+  and use the star tool, as on the instant’s chip (it replaces the eye there).
+- **The ＋ opens the new chip selected, with its tools** (#14): the name box, its time and the
+  tool row (favorite, bell, repeat, hide, delete) at once, the same as renaming any selected
+  chip. Tapping a tool keeps what you typed and does its thing.
+- **A ＋ on the Now tag** while following Now: drops an instant at Now, selected with its name
+  open, so there is a ＋ on the timeline in the most common state too.
+
 ## 0.3.1 — 2026-10-14
 
 **Android app: web only** (nothing to install; it updates itself).

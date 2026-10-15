@@ -136,6 +136,18 @@ export const entities = {
     return rec.id
   },
 
+  /**
+   * Ends the instant's span to Now at `endInstantId`: the same record becomes a saved span
+   * (same id, so its lane flows from the live side to the saved side), or a new one when it has
+   * none. Unfavoriting afterwards then deletes nothing. Returns the span's id.
+   */
+  closeNowSpan(startInstantId: string, endInstantId: string, label = ''): string {
+    const found = entities.nowSpanOf(startInstantId)
+    if (!found) return entities.createSpan(startInstantId, endInstantId, label, { visible: true })
+    patchSpan(found.id, { endIsNow: false, endInstantId, label, visible: true })
+    return found.id
+  },
+
   nowSpanOf: (startInstantId: string) => get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow),
 
   /**

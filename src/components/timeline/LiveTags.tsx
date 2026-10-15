@@ -1,6 +1,8 @@
 // Now and the Cursor as arrow tags on the live side of the axis. A tap opens the tag's tools.
 // A double-tap on the Cursor tag drops a nameless instant there (it also has a ＋ button); on
-// the Now tag it goes to Now, then drops an instant at Now with its name editor open.
+// the Now tag it goes to Now, then drops an instant at Now with its name box open. Following
+// Now, the Now tag has a ＋ of its own (the Cursor's is gone then): pinned across the axis on
+// the Now line, it never moves or merges with anything (chips may pass under it).
 import { useRef } from 'react'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
@@ -67,6 +69,7 @@ export function NowTag() {
         onDismissMenu={ui.closeTagMenu}
         menu={<TagMenu label="Now tools" items={items} onClose={ui.closeTagMenu} />}
         popover={clockOpen ? clockPopover('now') : undefined}
+        action={focused ? { label: 'Drop an instant at Now and name it', onClick: () => act.dropAndName(act.nowTime()) } : undefined}
       >
         {/* The spaces keep words apart in the accessible name; flex layout ignores them. */}
         <span className="tl-tag__caption">NOW</span>{' '}

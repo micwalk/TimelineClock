@@ -1,13 +1,14 @@
 // Span lanes below the timeline: implied spans for the selection, then saved spans (the focused one first).
 import { useLayoutEffect, useState } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
-import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
+import { StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
+import { useFrameValue } from '../../engine/hooks.ts'
 import { durationStep, formatDurationTo, truncateText } from '../../domain/format.ts'
 import { SECOND } from '../../domain/time.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
-import { endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
+import { canStopNowSpan, endpointName, isFavoriteNowSpan, resolveTimeRef, spanEndName, spanHeader } from '../../domain/spans.ts'
 import { useView, view } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
@@ -82,13 +83,25 @@ function PinButton({ a, b }: { a: TimeRef; b: TimeRef }) {
   return <IconButton icon={MapPinIcon} label="Save this span" className="glow-box" onClick={() => act.saveSpanRefs(a, b)} />
 }
 
-function SavedSpanTools({ spanId, visible, onTypeLength }: { spanId: string; visible: boolean; onTypeLength?: () => void }) {
+/**
+ * A saved span's tools. A favorite's span to Now has the star instead of the eye, as on its
+ * instant's chip: unfavoriting stops tracking it (the lane goes, nothing is saved).
+ */
+function SavedSpanTools({ spanId, visible, onTypeLength, favoriteOf }: {
+  spanId: string
+  visible: boolean
+  onTypeLength?: () => void
+  favoriteOf?: InstantRecord
+}) {
   return (
     <>
       <IconButton icon={PencilIcon} label="Rename span" color="#a3e635" bare onClick={() => view.editSpan(spanId)} />
       {onTypeLength && <IconButton icon={ClockIcon} label="Type the length" color="var(--c-cursor)" bare onClick={onTypeLength} />}
-      <IconButton icon={visible ? EyeIcon : EyeSlashIcon} label={visible ? 'Hide span' : 'Show span'} color="var(--ink)" bare
-        pressed={visible} onClick={() => act.toggleSpanVisible(spanId)} />
+      {favoriteOf
+        ? <IconButton icon={StarSolid} label={`Unfavorite ${endpointName(favoriteOf)}`} color="var(--c-favorite)" bare pressed
+            onClick={() => act.setFavorite(favoriteOf.id, false)} />
+        : <IconButton icon={visible ? EyeIcon : EyeSlashIcon} label={visible ? 'Hide span' : 'Show span'} color="var(--ink)" bare
+            pressed={visible} onClick={() => act.toggleSpanVisible(spanId)} />}
       <IconButton icon={TrashIcon} label="Delete span" color="var(--c-danger)" bare onClick={() => act.deleteSpan(spanId)} />
     </>
   )
@@ -126,6 +139,7 @@ function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
   const name = liveName ? truncateText(liveName, LIVE_NAME_MAX) : undefined
   return (
     <span className="span-chip__text">
+      {isFavoriteNowSpan(r) && <><StarSolid className="span-chip__star" aria-hidden /><span className="sr-only">Favorite </span></>}
       {nameBox ?? (name ? (
         <>
           <span className="span-chip__name" title={liveName}>{name}</span>
@@ -137,19 +151,23 @@ function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
   )
 }
 
-/** A favorite's span to Now ends in its star; tapping the star unfavorites the instant (the lane goes). */
-function FavoriteStar({ instant }: { instant: InstantRecord }) {
-  const label = `Unfavorite ${endpointName(instant)}`
+/**
+ * A favorite's span to Now, counting up, ends in a stop (the chip's only button, so a tap near
+ * it can't hit anything worse than the chip): an instant at Now ends the span, which is saved
+ * and flows to the saved side; the instant stops being a favorite.
+ */
+function StopButton({ instant }: { instant: InstantRecord }) {
+  const label = `Stop ${endpointName(instant)} here: save its span`
   return (
     <button
       type="button"
-      className="span-chip__star-btn"
+      className="span-chip__end-btn"
       aria-label={label}
       title={label}
-      onClick={e => { e.stopPropagation(); act.setFavorite(instant.id, false) }}
+      onClick={e => { e.stopPropagation(); act.stopNowSpan(instant.id) }}
       onDoubleClick={e => e.stopPropagation()}
     >
-      <StarSolid className="span-chip__star" aria-hidden />
+      <StopIcon className="span-chip__stop" aria-hidden />
     </button>
   )
 }
@@ -177,6 +195,8 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
   // A span between two instants can have its length typed (its end moves): a tool, or a double-tap on the length once focused.
   const [typingLength, setTypingLength] = useState(false)
   const lengthTypable = !!r.end && !live
+  // A countdown to a favorite ahead becomes stoppable once it passes (and counts up).
+  const stoppable = useFrameValue(f => canStopNowSpan(r, f.now))
   const typeLength = lengthTypable ? () => setTypingLength(true) : undefined
   const lengthEntry = typingLength && r.end ? (
     <TimeEntry
@@ -209,10 +229,11 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       arrows={controls}
       barOnly={!controls}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
-      chipEnd={isFavoriteNowSpan(r) ? <FavoriteStar instant={r.start} /> : undefined}
+      chipEnd={stoppable ? <StopButton instant={r.start} /> : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
-      tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength} /> }) : undefined}
+      tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength}
+        favoriteOf={isFavoriteNowSpan(r) ? r.start : undefined} /> }) : undefined}
       below={lengthEntry}
     />
   )

@@ -51,6 +51,12 @@ export const spanEndTs = (r: ResolvedSpan, now: number) => (r.end ? r.end.tsEpoc
 /** Favorite instants own a hidden-label span to Now; it shows a star instead of a header. */
 export const isFavoriteNowSpan = (r: ResolvedSpan) => !!r.span.endIsNow && !!r.start.favorite
 
+/**
+ * A favorite's span to Now can be stopped (pinned to a new instant at Now, a saved span) while
+ * it counts up; a countdown to a favorite ahead has nothing to stop yet.
+ */
+export const canStopNowSpan = (r: ResolvedSpan, now: number) => isFavoriteNowSpan(r) && r.start.tsEpochMs <= now
+
 export const spanHeader = (r: ResolvedSpan): string | undefined =>
   isFavoriteNowSpan(r) || !r.span.label ? undefined : r.span.label
 

@@ -2,6 +2,7 @@
 // Components and hotkeys call these; they are the app's behavior in one place.
 import { engine } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
+import { noteLaneFlow } from '../engine/laneFlow.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
@@ -85,10 +86,10 @@ export function activateInstant(id: string, wasFocused = isInstantFocused(id)) {
   else focusInstant(id)
 }
 
-/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now with its name editor open. */
+/** Double-tap on the Now tag: go to Now; once there, drop an instant at Now, selected with its name box open (as its ＋ does). */
 export function activateNow() {
   if (v().viewFocusMode !== 'now') { focusNow(); return }
-  view.editInstant(dropInstant())
+  dropAndName(nowTime())
 }
 
 /**
@@ -168,8 +169,9 @@ export function moveCursorBy(deltaMs: number) {
 const EXACT_LANDING_PX = 2
 const EXACT_LANDING_MAX_MS = 500
 
-/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. */
+/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing. */
 function exactHit(ts: number, withNow: boolean): LandingTarget | null {
+  if (useUi.getState().cursorHidden) return null
   const f = frame()
   const id = findCapture({
     instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })),
@@ -338,11 +340,11 @@ export function toggleCursorLock() {
 // ---------------------------------------------------------------------------
 // Selection & editing
 
-/** Selects an instant; if it's under the free cursor, the cursor lands on it instead. */
+/** Selects an instant; if it's under the free cursor (shown), the cursor lands on it instead. */
 export function selectInstant(id: string) {
   const inst = entities.getInstant(id)
   const s = v()
-  if (inst && s.viewFocusMode === 'cursor' && !s.moveMode) {
+  if (inst && s.viewFocusMode === 'cursor' && !s.moveMode && !useUi.getState().cursorHidden) {
     const f = frame()
     if (Math.abs(f.pos(inst.tsEpochMs) - f.mainSize / 2) <= UNDER_CURSOR_PX) {
       focusInstant(id)
@@ -381,13 +383,15 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
 }
 
 /**
- * The Cursor tag's ＋: drop an unnamed instant at the cursor with its name box open (the ＋
- * turns into its chip). Leaving it empty keeps it unnamed; moving the cursor or tapping
- * elsewhere ends naming. Returns the new id.
+ * A tag's ＋ (the Cursor's, or Now's while following Now): drop an unnamed instant at `ts` (the
+ * cursor by default), selected but not focused, with its name box open: the chip's own naming,
+ * with its time and tools under it (the Cursor's ＋ turns into the chip). Leaving it empty keeps
+ * it unnamed; moving the cursor, tapping elsewhere or a tool ends naming. Returns the new id.
  */
-export function dropAndName(): string {
-  const ts = cursorTime()
+export function dropAndName(ts = cursorTime()): string {
+  endNaming()
   const id = entities.createInstant(ts, '')
+  view.selectInstant(id)
   view.editInstant(id)
   return id
 }
@@ -459,17 +463,31 @@ export function startStopwatch() {
   trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
 }
 
+/** Ends an instant's span to Now at `endId` (entities.closeNowSpan); its lane flows to the saved side. */
+function closeNowSpan(startId: string, endId: string, label?: string) {
+  const sp = entities.nowSpanOf(startId)
+  if (sp) noteLaneFlow(sp.id)
+  return entities.closeNowSpan(startId, endId, label)
+}
+
 /** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
 function closeStopwatchSpan(stopping: boolean) {
   const { marks } = stopwatch()
   const prev = marks[marks.length - 1]
   const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
-  entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
-  // The lap just ended stops being tracked; the start stays favorited through laps (a setting)
-  // until the stopwatch stops.
+  const label = closedSpanLabel(marks.length, stopping)
+  // The lap just ended stops being tracked: its span to Now becomes the lap (its lane flows to
+  // the saved side). The start stays favorited through laps (a setting) until the stopwatch
+  // stops, when its span to Now becomes the whole run.
   const keepStart = useSettings.getState().stopwatchKeepStart && !stopping
-  if (prev !== marks[0] || !keepStart) setFavorite(prev, false)
-  if (stopping && marks[0] !== prev) setFavorite(marks[0], false)
+  if (prev !== marks[0] || !keepStart) {
+    closeNowSpan(prev, id, label)
+    setFavorite(prev, false)
+  } else entities.createSpan(prev, id, label, { visible: true })
+  if (stopping && marks[0] !== prev) {
+    closeNowSpan(marks[0], id, stopwatchStartLabel)
+    setFavorite(marks[0], false)
+  }
   quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
   return id
 }
@@ -498,6 +516,27 @@ export function stopStopwatch() {
   const run = existing?.id ?? entities.createSpan(start, stop, stopwatchStartLabel, { visible: true })
   focusSpan(run)
   view.selectSpan(run)
+}
+
+/**
+ * The ■ on a favorite's live lane: an instant at Now ends its span to Now, which becomes a saved
+ * span (the same record, so the lane flows to the saved side), and the instant stops being a
+ * favorite. A running stopwatch's lane stops the stopwatch. Nothing is selected or focused.
+ */
+export function stopNowSpan(instantId: string) {
+  const inst = entities.getInstant(instantId)
+  const sp = entities.nowSpanOf(instantId)
+  if (!inst?.favorite || !sp || inst.tsEpochMs > nowTime()) return
+  ui.closeLaneTools()
+  if (stopwatchPhase(stopwatch()) === 'running' && stopwatch().marks.includes(instantId)) {
+    stopStopwatch()
+    return
+  }
+  endNaming()
+  const id = entities.createInstant(nowTime())
+  ui.markDropped(id)
+  closeNowSpan(instantId, id, sp.label)
+  setFavorite(instantId, false)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
