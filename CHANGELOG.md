@@ -15,6 +15,13 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   time in both (#16).
 - A hidden cursor passes over instants and Now: it no longer glides onto them, lands on them or
   selects them, so you can look around without changing what is focused (#17).
+- **Stop a favorite’s lane** (#13): a favorite counting up ends its live lane chip in a ■ stop.
+  One tap drops an instant at Now and saves the time since the favorite as a span; the lane
+  slides over to the saved spans and the instant stops being a favorite. On a running
+  stopwatch’s lane it stops the stopwatch, whose lap and run lanes now slide over the same way.
+- The ★ on a favorite’s lane is now a badge, not a button, so the stop is the chip’s only
+  button and a near miss can’t unfavorite it. To stop tracking without saving, tap the lane
+  and use the star tool, as on the instant’s chip (it replaces the eye there).
 
 ## 0.3.1 — 2026-10-14
 

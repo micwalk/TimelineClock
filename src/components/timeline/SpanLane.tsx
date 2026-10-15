@@ -1,7 +1,7 @@
 // One span lane (a horizontal line, or a vertical bar at the right or, for live lanes, left edge): a glowing line between two times, off-screen chevrons,
 // endpoint arrows on the line at its visible ends, and a chip centered on the visible part of the line with tools on either side.
 // Geometry is written per frame; React only re-renders when content changes.
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/react/20/solid'
 import { useFrameListener, useFrameValue } from '../../engine/hooks.ts'
@@ -13,6 +13,7 @@ import { focusInstant, focusNow } from '../../store/actions.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { observeLaneChip, rightSideLayout } from './rightSideLayout.ts'
 import { laneChipLayout } from './laneChipLayout.ts'
+import { followLaneFlow, playLaneFlow, registerLaneLayers } from '../../engine/laneFlow.ts'
 
 /** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
 export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
@@ -87,6 +88,7 @@ export function SpanLane(props: SpanLaneProps) {
   const startEndRef = useRef<HTMLDivElement>(null)
   const finishEndRef = useRef<HTMLDivElement>(null)
   const chipWrapRef = useRef<HTMLDivElement>(null)
+  const linesLayerRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
   const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false })
@@ -159,6 +161,15 @@ export function SpanLane(props: SpanLaneProps) {
     return observeLaneChip(layoutKey, el)
   }, [layoutKey, hasChip])
 
+  // A lane that changes sides (a span to Now stopped) flows there from where it was (engine/laneFlow).
+  useLayoutEffect(() => {
+    const els = [linesLayerRef.current, labelsRef.current].filter((el): el is HTMLDivElement => !!el)
+    if (!layoutKey || els.length < 2) return
+    return registerLaneLayers(layoutKey, els)
+  }, [layoutKey])
+  useLayoutEffect(() => { if (layoutKey) playLaneFlow(layoutKey) }, [live, layoutKey])
+  useLayoutEffect(() => { if (layoutKey) followLaneFlow(layoutKey) }, [top, index, layoutKey])
+
   // Which endpoint is on the left only changes when a moving endpoint crosses the other.
   const aIsLeft = useFrameValue(f => resolveTimeRef(a, f.now, f.center) <= resolveTimeRef(b, f.now, f.center))
   const extra = showTools ? tools?.({ aIsLeft }) : undefined
@@ -172,7 +183,7 @@ export function SpanLane(props: SpanLaneProps) {
   // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
   return (
     <>
-      <div className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
+      <div ref={linesLayerRef} className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
         <div ref={lineRef} className="tl-lane__line" />
         <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
         <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />

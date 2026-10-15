@@ -2,6 +2,7 @@
 // Components and hotkeys call these; they are the app's behavior in one place.
 import { engine } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
+import { noteLaneFlow } from '../engine/laneFlow.ts'
 import type { NavTarget } from '../domain/navigation.ts'
 import { findAdjacent, stepFocusHistory } from '../domain/navigation.ts'
 import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewport.ts'
@@ -460,17 +461,31 @@ export function startStopwatch() {
   trackSpan(entities.nowSpanOf(id)?.id, STOPWATCH_MIN_WIDTH)
 }
 
+/** Ends an instant's span to Now at `endId` (entities.closeNowSpan); its lane flows to the saved side. */
+function closeNowSpan(startId: string, endId: string, label?: string) {
+  const sp = entities.nowSpanOf(startId)
+  if (sp) noteLaneFlow(sp.id)
+  return entities.closeNowSpan(startId, endId, label)
+}
+
 /** Closes the tracked span at a new instant at Now (a lap or the stop); returns the new instant's id. */
 function closeStopwatchSpan(stopping: boolean) {
   const { marks } = stopwatch()
   const prev = marks[marks.length - 1]
   const id = entities.createInstant(nowTime(), stopping ? stopwatchStopLabel : lapLabel(marks.length))
-  entities.createSpan(prev, id, closedSpanLabel(marks.length, stopping), { visible: true })
-  // The lap just ended stops being tracked; the start stays favorited through laps (a setting)
-  // until the stopwatch stops.
+  const label = closedSpanLabel(marks.length, stopping)
+  // The lap just ended stops being tracked: its span to Now becomes the lap (its lane flows to
+  // the saved side). The start stays favorited through laps (a setting) until the stopwatch
+  // stops, when its span to Now becomes the whole run.
   const keepStart = useSettings.getState().stopwatchKeepStart && !stopping
-  if (prev !== marks[0] || !keepStart) setFavorite(prev, false)
-  if (stopping && marks[0] !== prev) setFavorite(marks[0], false)
+  if (prev !== marks[0] || !keepStart) {
+    closeNowSpan(prev, id, label)
+    setFavorite(prev, false)
+  } else entities.createSpan(prev, id, label, { visible: true })
+  if (stopping && marks[0] !== prev) {
+    closeNowSpan(marks[0], id, stopwatchStartLabel)
+    setFavorite(marks[0], false)
+  }
   quick.setStopwatch({ marks: [...marks, id], stopped: stopping })
   return id
 }
@@ -499,6 +514,27 @@ export function stopStopwatch() {
   const run = existing?.id ?? entities.createSpan(start, stop, stopwatchStartLabel, { visible: true })
   focusSpan(run)
   view.selectSpan(run)
+}
+
+/**
+ * The ■ on a favorite's live lane: an instant at Now ends its span to Now, which becomes a saved
+ * span (the same record, so the lane flows to the saved side), and the instant stops being a
+ * favorite. A running stopwatch's lane stops the stopwatch. Nothing is selected or focused.
+ */
+export function stopNowSpan(instantId: string) {
+  const inst = entities.getInstant(instantId)
+  const sp = entities.nowSpanOf(instantId)
+  if (!inst?.favorite || !sp || inst.tsEpochMs > nowTime()) return
+  ui.closeLaneTools()
+  if (stopwatchPhase(stopwatch()) === 'running' && stopwatch().marks.includes(instantId)) {
+    stopStopwatch()
+    return
+  }
+  endNaming()
+  const id = entities.createInstant(nowTime())
+  ui.markDropped(id)
+  closeNowSpan(instantId, id, sp.label)
+  setFavorite(instantId, false)
 }
 
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */

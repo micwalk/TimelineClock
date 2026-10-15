@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { resolveSpan, savedSpanLanes, spanGeometry } from './spans.ts'
+import { canStopNowSpan, resolveSpan, savedSpanLanes, spanGeometry } from './spans.ts'
 import { HOUR } from './time.ts'
 
 describe('spanGeometry', () => {
@@ -13,6 +13,20 @@ describe('spanGeometry', () => {
     expect(spanGeometry(-500, -10, 1000).onScreen).toBe(false)
     expect(spanGeometry(1100, 1200, 1000).onScreen).toBe(false)
     expect(spanGeometry(300, 300, 1000).onScreen).toBe(false)
+  })
+})
+
+describe('canStopNowSpan', () => {
+  const start = (ts: number, favorite = true): InstantRecord => ({ id: 'a', tsEpochMs: ts, label: 'Rice', favorite })
+  const toNow: SpanRecord = { id: 's', startInstantId: 'a', endInstantId: '', label: '', visible: true, endIsNow: true }
+  it('stops a favorite’s span to Now once it counts up', () => {
+    expect(canStopNowSpan({ span: toNow, start: start(0) }, HOUR)).toBe(true)
+    expect(canStopNowSpan({ span: toNow, start: start(HOUR) }, HOUR)).toBe(true)
+  })
+  it('not a countdown to a favorite ahead, a span between instants, or a non-favorite', () => {
+    expect(canStopNowSpan({ span: toNow, start: start(2 * HOUR) }, HOUR)).toBe(false)
+    expect(canStopNowSpan({ span: { ...toNow, endIsNow: false }, start: start(0), end: start(HOUR) }, 2 * HOUR)).toBe(false)
+    expect(canStopNowSpan({ span: toNow, start: start(0, false) }, HOUR)).toBe(false)
   })
 })
 
