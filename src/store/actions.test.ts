@@ -6,6 +6,7 @@ import { ringKey } from '../domain/alarms.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { HOUR, MINUTE } from '../domain/time.ts'
+import { EVERY_DAY, dateKey } from '../domain/series.ts'
 import { nearestFinestTick } from '../domain/ticks.ts'
 import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
@@ -15,7 +16,7 @@ import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
-  useEntities.setState({ instants: [], spans: [] })
+  useEntities.setState({ instants: [], spans: [], groups: [] })
   useView.setState(initialViewState())
   useAlarms.setState({ ringing: [] })
 })
@@ -309,30 +310,29 @@ describe('favorites and alarms', () => {
     expect(entities.nowSpanOf(id)).toBeUndefined()
   })
 
-  it('snoozing creates a numbered alarm, links it, and answers the original (kept as history)', () => {
+  it('snoozing adds another alarm on the same instant, and answers the original (kept as history)', () => {
     const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
     const alarmId = instant(id).alarms![0].id
     useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const first = act.snoozeAlarm(ringKey(id, alarmId), 5)!
-    expect(instant(first)).toMatchObject({ label: 'Snooze 1: Wake', alarms: [{ offsetMs: 0 }], snoozeOriginalId: id })
-    expect(instant(id).alarms).toEqual([{ id: alarmId, offsetMs: 0, done: true }])
+    const next = act.snoozeAlarm(ringKey(id, alarmId), 5)!
+    const [first, snoozed] = instant(id).alarms!
+    expect(first).toEqual({ id: alarmId, offsetMs: 0, answered: 'snoozed' })
+    expect(snoozed.snoozeOf).toBe(alarmId)
+    expect(snoozed.offsetMs).toBeLessThan(-4 * MINUTE)
+    expect(next).toBe(ringKey(id, snoozed.id))
+    expect(useEntities.getState().instants).toHaveLength(1)
     expect(useAlarms.getState().ringing).toEqual([])
-
-    const firstAlarm = instant(first).alarms![0].id
-    useAlarms.setState({ ringing: [{ instantId: first, alarmId: firstAlarm, label: 'Snooze 1: Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const second = act.snoozeAlarm(ringKey(first, firstAlarm), 5)!
-    expect(instant(second).label).toBe('Snooze 2: Wake')
-    expect(instant(second).snoozeOriginalId).toBe(id)
+    expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
-  it('snoozing goes to the snooze: its span from the alarm is focused and selected', () => {
-    const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
-    const alarmId = instant(id).alarms![0].id
-    useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
-    const snoozed = act.snoozeAlarm(ringKey(id, alarmId), 5)!
-    const span = useEntities.getState().spans.find(s => s.startInstantId === id && s.endInstantId === snoozed)!
-    expect(span.visible).toBe(true)
-    expect(view()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: span.id, selectedSpanId: span.id })
+  it('a timer finishes when the last alarm of its snooze chain is dismissed, not when it is snoozed', () => {
+    const end = act.startTimer(MINUTE)
+    const alarmId = instant(end).alarms![0].id
+    useAlarms.setState({ ringing: [{ instantId: end, alarmId, label: '1m timer', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    const next = act.snoozeAlarm(ringKey(end, alarmId), 5)!
+    expect(instant(end).favorite).toBe(true)
+    act.dismissAlarm(next)
+    expect(instant(end).favorite).toBe(false)
   })
 })
 
@@ -378,15 +378,38 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toBeUndefined()
   })
 
-  it('snoozing an alarm before its instant makes a snooze but no span back to the instant', () => {
+  it('snoozing a warning keeps it before its instant', () => {
     const id = entities.createInstant(Date.now() + 15 * MINUTE - 1000, 'Wake')
     const alarmId = act.addAlarm(id)!
     entities.setAlarmOffset(id, alarmId, 15 * MINUTE)
     useAlarms.setState({ ringing: [{ instantId: id, alarmId, label: 'Wake in 15m', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
-    const snoozed = act.snoozeAlarm(ringKey(id, alarmId), 5)!
-    expect(instant(snoozed)).toMatchObject({ label: 'Snooze 1: Wake', snoozeOriginalId: id })
-    expect(useEntities.getState().spans.some(sp => sp.startInstantId === id && sp.endInstantId === snoozed)).toBe(false)
-    expect(instant(id).alarms).toEqual([{ id: alarmId, offsetMs: 15 * MINUTE, done: true }])
+    act.snoozeAlarm(ringKey(id, alarmId), 5)
+    const [warning, snoozed] = instant(id).alarms!
+    expect(warning).toEqual({ id: alarmId, offsetMs: 15 * MINUTE, answered: 'snoozed' })
+    expect(snoozed.offsetMs).toBeGreaterThan(9 * MINUTE)
+    expect(snoozed.offsetMs).toBeLessThan(10 * MINUTE)
+  })
+
+  it('a warning snoozed past its instant joins the alarm at the instant instead', () => {
+    const id = entities.createInstant(Date.now() + 3 * MINUTE, 'Meeting', { alarm: true })
+    const atId = instant(id).alarms![0].id
+    const warnId = act.addAlarm(id)!
+    entities.setAlarmOffset(id, warnId, 3 * MINUTE)
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId: warnId, label: 'Meeting in 3m', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
+    expect(act.snoozeAlarm(ringKey(id, warnId), 5)).toBe(ringKey(id, atId))
+    expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }, { id: warnId, offsetMs: 3 * MINUTE, answered: 'snoozed' }])
+  })
+
+  it('cancelling deletes every alarm still to ring; one that rang is dismissed, as history', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Meeting', { alarm: true })
+    const w = act.addAlarm(id)!
+    entities.setAlarmOffset(id, w, 15 * MINUTE)
+    const ringingW = act.addAlarm(id)!
+    entities.setAlarmOffset(id, ringingW, HOUR + MINUTE) // due a minute ago: it rang
+    useAlarms.setState({ ringing: [{ instantId: id, alarmId: ringingW, label: 'Meeting in 1h', tsEpochMs: instant(id).tsEpochMs, triggeredAt: Date.now() }] })
+    act.cancelAlarms(id)
+    expect(instant(id).alarms).toEqual([{ id: ringingW, offsetMs: HOUR + MINUTE, answered: 'dismissed' }])
+    expect(useAlarms.getState().ringing).toEqual([])
   })
 })
 
@@ -535,6 +558,16 @@ describe('move mode', () => {
     act.confirmMove()
     expect(instant(id).tsEpochMs).toBeCloseTo(t + 10 * MINUTE, -2)
     expect(view()).toMatchObject({ moveMode: null, viewFocusMode: 'instant', focusedInstantId: id })
+  })
+
+  it('moved so a dismissed alarm is ahead again, it rings again (its snoozes go)', () => {
+    const id = entities.createInstant(Date.now() - MINUTE, 'Rang', { alarm: true })
+    const atId = instant(id).alarms![0].id
+    entities.answerAlarms(id, [atId], 'snoozed')
+    entities.addAlarm(id, { offsetMs: -4 * MINUTE, snoozeOf: atId })
+    act.enterMove(id)
+    act.moveInstantTo(Date.now() + HOUR)
+    expect(instant(id).alarms).toEqual([{ id: atId, offsetMs: 0 }])
   })
 
   it('cancel leaves the instant where it was', () => {
@@ -769,5 +802,124 @@ describe('backup export and import', () => {
     settings.setGlow(0.5)
     act.importBackup(backup, { settings: false, data: true, mode: 'combine' })
     expect(useSettings.getState().glow).toBe(0.5)
+  })
+})
+
+describe('repeating series (TLC-2)', () => {
+  const occurrences = (seriesId: string) => useEntities.getState().instants.filter(i => i.seriesId === seriesId).sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+  const daily = { kind: 'weekly' as const, days: EVERY_DAY }
+  const start = () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Wake up', { alarm: true })
+    act.repeatInstant(id, daily)
+    return { id, seriesId: instant(id).seriesId! }
+  }
+
+  it('repeating an instant makes it the first occurrence and makes the next two weeks', () => {
+    const { id, seriesId } = start()
+    const list = occurrences(seriesId)
+    expect(list[0].id).toBe(id)
+    expect(list.length).toBeGreaterThanOrEqual(14)
+    expect(list[1].tsEpochMs - list[0].tsEpochMs).toBeGreaterThan(22 * HOUR) // a day apart (DST-proof)
+    expect(list[1]).toMatchObject({ label: 'Wake up', alarms: [{ offsetMs: 0 }] })
+  })
+
+  it('editing one occurrence changes that one only, and offers to apply it to all future ones', () => {
+    const { seriesId } = start()
+    const second = occurrences(seriesId)[1]
+    act.renameInstant(second.id, 'Sleep in')
+    expect(instant(second.id)).toMatchObject({ label: 'Sleep in', seriesEdited: true })
+    expect(occurrences(seriesId)[2].label).toBe('Wake up')
+    expect(useUi.getState().seriesHint).toBe(second.id)
+    act.applyToFutureOccurrences(second.id)
+    // The first is still ahead: it keeps the old rule, and the series splits at the second.
+    const old = entities.getGroup(seriesId)!
+    expect(old).toMatchObject({ label: 'Wake up', until: dateKey(Date.now() + HOUR) })
+    expect(occurrences(seriesId).map(i => i.label)).toEqual(['Wake up'])
+    const next = instant(second.id).seriesId!
+    expect(next).not.toBe(seriesId)
+    expect(entities.getGroup(next)).toMatchObject({ label: 'Sleep in', from: second.occurrence })
+    expect(instant(second.id).seriesEdited).toBe(false)
+    expect(occurrences(next).length).toBeGreaterThan(5)
+    expect(occurrences(next).every(i => i.label === 'Sleep in')).toBe(true)
+    // One instant per series and date: the split made no second copies.
+    const keys = useEntities.getState().instants.filter(i => i.occurrence).map(i => `${i.seriesId}@${i.occurrence}`)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("cancelling an occurrence's alarms offers to apply that too: later ones then have none", () => {
+    const { id, seriesId } = start()
+    act.cancelAlarms(id)
+    expect(useUi.getState().seriesHint).toBe(id)
+    act.applyToFutureOccurrences(id)
+    expect(entities.getGroup(seriesId)?.alarms).toEqual([])
+    expect(occurrences(seriesId).slice(1).every(i => !i.alarms?.length)).toBe(true)
+  })
+
+  it('deleting one occurrence skips its date; deleting it and all later ones ends the series there', () => {
+    const { seriesId } = start()
+    const [, second, third] = occurrences(seriesId)
+    act.deleteOccurrences(second.id, 'this')
+    expect(entities.getGroup(seriesId)?.skips).toEqual([second.occurrence])
+    act.syncSeries()
+    expect(occurrences(seriesId).some(i => i.occurrence === second.occurrence)).toBe(false)
+    act.deleteOccurrences(third.id, 'later')
+    expect(occurrences(seriesId).map(i => i.occurrence)).toEqual([dateKey(instant(occurrences(seriesId)[0].id).tsEpochMs)])
+    expect((entities.getGroup(seriesId)?.until ?? '') < (third.occurrence ?? '')).toBe(true)
+    act.syncSeries()
+    expect(occurrences(seriesId)).toHaveLength(1)
+  })
+
+  it('only 14 days are stored; a rule change updates them in place (same ids)', () => {
+    const { id, seriesId } = start()
+    const list = occurrences(seriesId)
+    expect(list[list.length - 1].tsEpochMs - Date.now()).toBeLessThanOrEqual(14 * 24 * HOUR)
+    const ids = list.map(i => i.id)
+    act.renameInstant(id, 'Rise')
+    act.applyToFutureOccurrences(id)
+    expect(occurrences(seriesId).map(i => i.id)).toEqual(ids)
+    expect(occurrences(seriesId).every(i => i.label === 'Rise')).toBe(true)
+  })
+
+  it('editing a series from the Alarms tab moves its untouched occurrences, not those changed on their own', () => {
+    const { seriesId } = start()
+    const [, second, third] = occurrences(seriesId)
+    act.renameInstant(second.id, 'Lie in')
+    act.updateSeries(seriesId, { label: 'Up', time: '06:45', alarms: [10 * MINUTE, 0] })
+    const t = instant(third.id)
+    expect(t.label).toBe('Up')
+    expect(new Date(t.tsEpochMs).getHours() * 60 + new Date(t.tsEpochMs).getMinutes()).toBe(6 * 60 + 45)
+    expect(t.alarms?.map(a => a.offsetMs)).toEqual([10 * MINUTE, 0])
+    expect(instant(second.id).label).toBe('Lie in')
+  })
+
+  it('a computed occurrence (past the horizon) is stored when tapped', () => {
+    const { seriesId } = start()
+    const date = dateKey(Date.now() + 30 * 24 * HOUR)
+    const stored = act.materializeOccurrence(`v:${seriesId}@${date}`)!
+    expect(instant(stored)).toMatchObject({ seriesId, occurrence: date, label: 'Wake up' })
+    expect(act.materializeOccurrence(`v:${seriesId}@${date}`)).toBe(stored)
+  })
+
+  it('Once on the first occurrence makes it a plain instant again; on a later one, the series stops after it', () => {
+    const { id, seriesId } = start()
+    act.stopRepeating(id)
+    expect(instant(id).seriesId).toBeUndefined()
+    expect(entities.getGroup(seriesId)).toBeUndefined()
+    expect(occurrences(seriesId)).toHaveLength(0)
+    const again = start()
+    const third = occurrences(again.seriesId)[2]
+    act.stopRepeating(third.id)
+    expect(occurrences(again.seriesId).map(i => i.id)).toEqual(occurrences(again.seriesId).slice(0, 3).map(i => i.id))
+    expect(occurrences(again.seriesId)).toHaveLength(3)
+    expect(entities.getGroup(again.seriesId)?.until).toBe(third.occurrence)
+  })
+
+  it('pausing removes the untouched occurrences ahead; running it again makes them again', () => {
+    const { seriesId } = start()
+    const n = occurrences(seriesId).length
+    act.setSeriesPaused(seriesId, true)
+    expect(occurrences(seriesId)).toHaveLength(0)
+    act.setSeriesPaused(seriesId, false)
+    expect(occurrences(seriesId).length).toBe(n)
   })
 })

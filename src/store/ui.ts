@@ -1,7 +1,7 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
 
-export type ListTab = 'instants' | 'favorites' | 'spans'
+export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'repeats'
 
 /** Which time-entry popover is open, if any. */
 export type TimeInputTarget =
@@ -33,6 +33,12 @@ export interface UiState {
   droppedId: string | null
   /** The Timer button's length picker (also opened by T). */
   timerMenuOpen: boolean
+  /** The Alarm button's picker (also opened by L, and from the Alarms tab). */
+  alarmMenuOpen: boolean
+  /** Opened from the Alarms tab (a sheet on every screen, not a menu from the button). */
+  alarmMenuFromList: boolean
+  /** The series the picker edits (from the Alarms tab), or null for a new alarm. */
+  alarmEditSeries: string | null
   /** The Help / About dialog. */
   helpOpen: boolean
   plusMorph: PlusMorph | null
@@ -44,6 +50,8 @@ export interface UiState {
   selectedBell: string | null
   /** The bell being dragged (its alarm's id): it follows the pointer (timeline/bellDrag). */
   draggingBell: string | null
+  /** An occurrence of a repeating series just edited on its own: its chip offers "Apply to all future" for a while. */
+  seriesHint: string | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -54,13 +62,21 @@ export const useUi = create<UiState>(() => ({
   agendaOpen: false,
   droppedId: null,
   timerMenuOpen: false,
+  alarmMenuOpen: false,
+  alarmMenuFromList: false,
+  alarmEditSeries: null,
   helpOpen: false,
   plusMorph: null,
   plusHidden: false,
   cursorHidden: false,
   selectedBell: null,
   draggingBell: null,
+  seriesHint: null,
 }))
+
+/** How long an edited occurrence offers "Apply to all future". */
+export const SERIES_HINT_MS = 8000
+let seriesHintTimer: ReturnType<typeof setTimeout> | null = null
 
 export const DROP_HIGHLIGHT_MS = 900
 let dropTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,10 +98,19 @@ export const ui = {
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
+  setAlarmMenu: (alarmMenuOpen: boolean) => useUi.setState({ alarmMenuOpen, alarmMenuFromList: false, alarmEditSeries: null }),
+  /** From the Alarms tab: a new alarm, or editing a series. */
+  openAlarmEditor: (seriesId: string | null) => useUi.setState({ alarmMenuOpen: true, alarmMenuFromList: true, alarmEditSeries: seriesId }),
   toggleLaneTools: (key: string) => useUi.setState(s => ({ laneTools: s.laneTools === key ? null : key })),
   closeLaneTools: () => useUi.setState({ laneTools: null }),
   setPlusMorph: (plusMorph: PlusMorph | null) => useUi.setState({ plusMorph }),
   setPlusHidden: (plusHidden: boolean) => useUi.setState({ plusHidden }),
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
+  showSeriesHint(id: string | null) {
+    if (seriesHintTimer) clearTimeout(seriesHintTimer)
+    seriesHintTimer = null
+    useUi.setState({ seriesHint: id })
+    if (id) seriesHintTimer = setTimeout(() => { seriesHintTimer = null; useUi.setState(s => (s.seriesHint === id ? { seriesHint: null } : s)) }, SERIES_HINT_MS)
+  },
 }

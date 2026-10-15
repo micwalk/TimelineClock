@@ -1,30 +1,37 @@
-// Saved instants and spans. Persisted to the same localStorage keys and record
-// shapes the original app used, so existing data loads unchanged.
+// Saved instants, spans and groups (repeating series). Instants and spans persist to the same
+// localStorage keys and record shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
-import type { AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
+import type { AlarmAnswer, AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
 import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
 import { syncAlarmVisibility } from '../domain/alarms.ts'
+import type { GroupRecord } from '../domain/series.ts'
+import { sanitizeGroups } from '../domain/series.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
 const SPANS_KEY = 'timeline.spans.v1'
+const GROUPS_KEY = 'timeline.groups.v1'
 
 export interface EntitiesState {
   instants: InstantRecord[]
   spans: SpanRecord[]
+  /** Repeating series (domain/series); their occurrences are instants. */
+  groups: GroupRecord[]
 }
 
 const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
 const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
+const loadGroups = () => sanitizeGroups(loadJson<unknown>(GROUPS_KEY, []))
 
 export const useEntities = create<EntitiesState>(() => {
   const { instants, spans } = syncFavorites(loadInstants(), loadSpans())
-  return { instants: syncAlarmVisibility(instants, Date.now()), spans }
+  return { instants: syncAlarmVisibility(instants, Date.now()), spans, groups: loadGroups() }
 })
 
 useEntities.subscribe((s, prev) => {
   if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, s.instants)
   if (s.spans !== prev.spans) saveJson(SPANS_KEY, s.spans)
+  if (s.groups !== prev.groups && s.groups) saveJson(GROUPS_KEY, s.groups)
 })
 
 const set = useEntities.setState
@@ -53,18 +60,34 @@ export const entities = {
   getSpan: (id: string | null | undefined) => (id ? get().spans.find(s => s.id === id) : undefined),
 
   /** A new instant, never a favorite yet (setFavorite adds the span to Now that makes one). */
-  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean; snoozeOriginalId?: string } = {}): string {
+  createInstant(tsEpochMs: number, label = '', opts: { alarm?: boolean } = {}): string {
     const rec: InstantRecord = {
       id: newInstantId(),
       tsEpochMs,
       label,
       favorite: false,
       ...(opts.alarm ? { alarms: [{ id: newAlarmId(), offsetMs: 0 }] } : {}),
-      ...(opts.snoozeOriginalId ? { snoozeOriginalId: opts.snoozeOriginalId } : {}),
     }
     set(s => ({ instants: [...s.instants, rec] }))
     return rec.id
   },
+
+  getGroup: (id: string | null | undefined) => (id ? (get().groups ?? []).find(g => g.id === id) : undefined),
+  /** Adds or replaces a group. */
+  putGroup: (g: GroupRecord) => set(s => ({ groups: [...(s.groups ?? []).filter(x => x.id !== g.id), g] })),
+  removeGroup: (id: string) => set(s => ({ groups: (s.groups ?? []).filter(g => g.id !== id) })),
+  /** Adds ready-made instants (a series' occurrences). */
+  addInstants: (list: readonly InstantRecord[]) => { if (list.length > 0) set(s => ({ instants: [...s.instants, ...list] })) },
+  /** Deletes instants (and spans that reference them). */
+  deleteInstants(ids: readonly string[]) {
+    if (ids.length === 0) return
+    const gone = new Set(ids)
+    set(s => ({
+      instants: s.instants.filter(i => !gone.has(i.id)),
+      spans: s.spans.filter(sp => !gone.has(sp.startInstantId) && !gone.has(sp.endInstantId)),
+    }))
+  },
+  patchInstant,
 
   /** Deletes the instant and any spans that reference it. */
   deleteInstant(id: string) {
@@ -79,17 +102,21 @@ export const entities = {
   setFavoriteFlag: (id: string, favorite: boolean) => patchInstant(id, () => ({ favorite })),
   setHiddenFlag: (id: string, hidden: boolean) => patchInstant(id, () => ({ hidden })),
 
-  /** Adds an alarm at the instant (offset 0); returns its id. An alarm still to ring is never hidden, so this shows the instant. */
-  addAlarm(id: string): string {
-    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: 0 }
+  /**
+   * Adds an alarm (at the instant, or `offsetMs` before it; a snooze names the alarm it snoozed);
+   * returns its id. An alarm still to ring is never hidden, so this shows the instant.
+   */
+  addAlarm(id: string, opts: { offsetMs?: number; snoozeOf?: string } = {}): string {
+    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: Math.round(opts.offsetMs ?? 0), ...(opts.snoozeOf ? { snoozeOf: opts.snoozeOf } : {}) }
     patchInstant(id, i => ({ alarms: [...(i.alarms ?? []), alarm], ...(i.hidden ? { hidden: false } : {}) }))
     return alarm.id
   },
   removeAlarm: (id: string, alarmId: string) => patchAlarms(id, list => list.filter(a => a.id !== alarmId)),
   setAlarmOffset: (id: string, alarmId: string, offsetMs: number) =>
-    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.max(0, Math.round(offsetMs)) } : a))),
-  /** Answered (dismissed or snoozed): it stays as history and never rings again. */
-  markAlarmDone: (id: string, alarmId: string) => patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, done: true } : a))),
+    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.round(offsetMs) } : a))),
+  /** Answers alarms that rang (dismissed, snoozed): they stay as history and never ring again. */
+  answerAlarms: (id: string, alarmIds: readonly string[], answer: AlarmAnswer) =>
+    patchAlarms(id, list => list.map(a => (alarmIds.includes(a.id) && !a.answered ? { ...a, answered: answer } : a))),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId, label, visible: opts.visible ?? false, endIsNow: false }
@@ -128,5 +155,4 @@ export const entities = {
   setSpanLabel: (id: string, label: string) => patchSpan(id, { label }),
   setSpanVisible: (id: string, visible: boolean) => patchSpan(id, { visible }),
 
-  snoozeCount: (originalId: string) => get().instants.filter(i => i.snoozeOriginalId === originalId).length,
 }

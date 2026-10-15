@@ -10,6 +10,8 @@ import { MINUTE } from '../../domain/time.ts'
 import { useQuick } from '../../store/quick.ts'
 import { useUi } from '../../store/ui.ts'
 import { IDLE_STOPWATCH } from '../../domain/quickCreate.ts'
+import { useSettings } from '../../store/settings.ts'
+import { DEFAULT_RING_DEFAULTS } from '../../domain/alarmPicker.ts'
 
 beforeEach(() => {
   useLayout.setState({ orientation: 'horizontal', dir: 1 })
@@ -179,5 +181,66 @@ describe('Stopwatch and Timer buttons', () => {
   it('NOW / ＋ shows the time under it', () => {
     render(<ControlBar />)
     expect(screen.getByRole('button', { name: 'Drop an instant at Now' }).querySelector('.ctl-btn__sub')).toBeTruthy()
+  })
+})
+
+describe('the alarm picker', () => {
+  const open = (recentAlarms: ReturnType<typeof useQuick.getState>['recentAlarms'] = []) => {
+    useUi.setState({ alarmMenuOpen: false, alarmMenuFromList: false, alarmEditSeries: null })
+    useQuick.setState({ recentAlarms })
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Set an alarm/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^Time/ }), { target: { value: '1730' } })
+  }
+  const press = (name: string) => fireEvent.click(screen.getByRole('button', { name }))
+
+  it('Once can be picked again after a repeat', () => {
+    open()
+    press('Weekdays')
+    press('Once')
+    expect(screen.getByRole('button', { name: 'Once' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.submit(screen.getByRole('textbox', { name: /^Time/ }))
+    expect(useEntities.getState().groups ?? []).toHaveLength(0)
+    expect(useEntities.getState().instants).toHaveLength(1)
+  })
+
+  it('a typed warning becomes a choice of its own; it may ring only before the time', () => {
+    open()
+    const other = screen.getByRole('textbox', { name: /Another warning/ })
+    fireEvent.change(other, { target: { value: '20' } })
+    fireEvent.keyDown(other, { key: 'Enter' })
+    expect(screen.getByRole('button', { name: 'Warn 20m before' }).getAttribute('aria-pressed')).toBe('true')
+    expect((other as HTMLInputElement).value).toBe('')
+    press('Ring at the time')
+    fireEvent.submit(other)
+    expect(useEntities.getState().instants[0].alarms?.map(a => a.offsetMs)).toEqual([20 * MINUTE])
+  })
+})
+
+describe('the alarm picker, filled in', () => {
+  it('a recent alarm fills the form in without setting anything', () => {
+    useSettings.setState({ alarmRings: DEFAULT_RING_DEFAULTS })
+    useUi.setState({ alarmMenuOpen: false, alarmMenuFromList: false, alarmEditSeries: null })
+    useQuick.setState({ recentAlarms: [{ time: '06:15', repeat: null, warnings: [20 * MINUTE], label: 'Run', onTime: false }] })
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Set an alarm/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Run/ }))
+    expect(useEntities.getState().instants).toHaveLength(0)
+    expect((screen.getByRole('textbox', { name: /^Time/ }) as HTMLInputElement).value).toBe('6:15')
+    expect((screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement).value).toBe('Run')
+    expect(screen.getByRole('button', { name: 'Warn 20m before' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Ring at the time' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('starts from the defaults in Settings', () => {
+    useSettings.setState({ alarmRings: { choices: [10 * MINUTE], onTime: false, warnings: [10 * MINUTE] } })
+    useUi.setState({ alarmMenuOpen: false, alarmMenuFromList: false, alarmEditSeries: null })
+    useQuick.setState({ recentAlarms: [] })
+    render(<ControlBar />)
+    fireEvent.click(screen.getByRole('button', { name: /Set an alarm/ }))
+    expect(screen.queryByRole('button', { name: 'Warn 5m before' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Warn 10m before' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Ring at the time' }).getAttribute('aria-pressed')).toBe('false')
+    useSettings.setState({ alarmRings: DEFAULT_RING_DEFAULTS })
   })
 })

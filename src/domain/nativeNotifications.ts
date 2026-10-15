@@ -45,7 +45,7 @@ export const alarmNotificationIds = (instants: readonly InstantRecord[]) =>
   assignNotificationIds(instants.flatMap(i => (i.alarms ?? []).map(a => ringKey(i.id, a.id))))
 
 /** A timer's end: an open (unanswered) alarm at the instant itself. */
-const hasOpenAlarmAtInstant = (i: InstantRecord) => !!i.alarms?.some(a => !a.done && a.offsetMs === 0)
+const hasOpenAlarmAtInstant = (i: InstantRecord) => !!i.alarms?.some(a => !a.answered && a.offsetMs === 0)
 
 /**
  * A live notification's id: stable for its kind and instant, so the native side can replace a
@@ -108,7 +108,7 @@ export function desiredNativeAlarms(
 ): NativeAlarm[] {
   const ids = alarmNotificationIds(instants)
   return instants
-    .flatMap(inst => (inst.alarms ?? []).filter(a => !a.done && ringTime(inst, a) > now - ringMs).map(alarm => ({ inst, alarm, at: ringTime(inst, alarm) })))
+    .flatMap(inst => (inst.alarms ?? []).filter(a => !a.answered && ringTime(inst, a) > now - ringMs).map(alarm => ({ inst, alarm, at: ringTime(inst, alarm) })))
     .sort((a, b) => a.at - b.at)
     .slice(0, MAX_NATIVE_ALARMS)
     .map(({ inst, alarm, at }) => {
@@ -116,6 +116,9 @@ export function desiredNativeAlarms(
       const clock = formatClockCompact(inst.tsEpochMs, true)
       if (alarm.offsetMs > 0) {
         return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `${formatDuration(alarm.offsetMs, { exact: true })} to go · ${clock}`, liveId: 0 }
+      }
+      if (alarm.offsetMs < 0) {
+        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `Snoozed · was due ${clock}`, liveId: 0 }
       }
       const timer = timerSpanFor(inst.id, instants, spans)
       return {

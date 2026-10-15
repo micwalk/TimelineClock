@@ -36,8 +36,13 @@ describe('bellsToShow', () => {
     expect(ids(bellsToShow([wake], opts({ lo: now, hi: now + 30 * MINUTE })))).toEqual([])
   })
 
+  it('keeps a bell off screen while its line to its instant crosses the screen', () => {
+    // On screen: 55m to 70m. m15 rings at 45m (off screen); its line runs to the instant at 60m.
+    expect(ids(bellsToShow([wake], opts({ lo: now + 55 * MINUTE, hi: now + 70 * MINUTE })))).toEqual(['m15'])
+  })
+
   it('shows history (answered or missed) only while its instant is selected or focused, hollow', () => {
-    const standup = inst('standup', -60 * MINUTE, [{ id: 'heard', offsetMs: 30 * MINUTE, done: true }, { id: 'missed', offsetMs: 20 * MINUTE }])
+    const standup = inst('standup', -60 * MINUTE, [{ id: 'heard', offsetMs: 30 * MINUTE, answered: 'dismissed' }, { id: 'missed', offsetMs: 20 * MINUTE }])
     expect(ids(bellsToShow([standup], opts()))).toEqual([])
     const r = bellsToShow([standup], opts({ revealPast: new Set(['standup']) }))
     expect(r.shown.map(b => [b.alarm.id, b.past])).toEqual([['heard', true], ['missed', true]])

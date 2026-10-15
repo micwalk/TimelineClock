@@ -6,6 +6,7 @@
 import type { AlarmRecord, InstantRecord } from './entities.ts'
 import { displayName, legacyAlarmId } from './entities.ts'
 import { formatClockCompact, formatDuration } from './format.ts'
+import { SECOND } from './time.ts'
 
 export interface RingingAlarm {
   instantId: string
@@ -35,19 +36,110 @@ export function parseRingKey(key: string): { instantId: string; alarmId: string 
 export const ringTime = (inst: InstantRecord, a: AlarmRecord) => inst.tsEpochMs - a.offsetMs
 
 /** An alarm still to ring: not answered, and its time is ahead. */
-export const isArmed = (inst: InstantRecord, a: AlarmRecord, now: number) => !a.done && ringTime(inst, a) > now
+export const isArmed = (inst: InstantRecord, a: AlarmRecord, now: number) => !a.answered && ringTime(inst, a) > now
 
 export const hasArmedAlarm = (inst: InstantRecord, now: number) => !!inst.alarms?.some(a => isArmed(inst, a, now))
 
 /** Alarms not answered yet (ahead, ringing, or missed). */
-export const openAlarms = (inst: InstantRecord) => inst.alarms?.filter(a => !a.done) ?? []
+export const openAlarms = (inst: InstantRecord) => inst.alarms?.filter(a => !a.answered) ?? []
 
 export const findAlarm = (inst: InstantRecord | undefined, alarmId: string) => inst?.alarms?.find(a => a.id === alarmId)
 
-/** "Wake up" for an alarm at its instant; "Wake up in 15m" for one before it. Unnamed instants read as their time. */
+/**
+ * "Wake up" for an alarm at its instant; "Wake up in 15m" for a warning before it; "Wake up
+ * (snoozed)" for a snooze after it. Unnamed instants read as their time.
+ */
 export function alarmLabel(inst: InstantRecord, a: AlarmRecord): string {
-  if (a.offsetMs <= 0) return inst.label
-  return `${displayName(inst.label, formatClockCompact(inst.tsEpochMs, false))} in ${formatDuration(a.offsetMs, { exact: true })}`
+  if (a.offsetMs === 0) return inst.label
+  const name = displayName(inst.label, formatClockCompact(inst.tsEpochMs, false))
+  return a.offsetMs > 0 ? `${name} in ${formatDuration(a.offsetMs, { exact: true })}` : `${name} (snoozed)`
+}
+
+// ---------------------------------------------------------------------------
+// Snoozing and skipping. A snooze is another alarm on the same instant, never a new instant.
+
+/**
+ * Where snoozing an alarm until `at` lands:
+ * - `{ offsetMs }`: a new alarm, that far before its instant (negative: after it).
+ * - `{ joins }`: nothing new; the instant's own alarm (that id) still rings and covers it.
+ * Snoozes land on whole seconds ("+5:00", not "+5:04.815"), and the instant rules apply to
+ * that rounded time, so rounding can never make a second alarm at the instant or move one
+ * across it:
+ * - A warning (before its instant) that would land past the instant, or within `joinMs` before
+ *   it (a moment before the instant's own alarm), lands on the instant: it joins the alarm
+ *   already there, or becomes it (offset exactly 0).
+ * - A snooze of the alarm at (or after) its instant stays after it: at least a second.
+ * `exact` (a typed snooze length): it lands exactly then, past the instant or not; it only
+ * joins the instant's alarm when it lands on the very same second.
+ */
+export type SnoozeLanding = { offsetMs: number; ringTs: number } | { joins: string; ringTs: number }
+
+/** How close before its instant a snoozed warning joins the instant (a tunable overrides it: Settings > Advanced). */
+export const SNOOZE_JOIN_MS = 60 * SECOND
+
+export function snoozeLanding(inst: InstantRecord, alarm: AlarmRecord, at: number, now: number, joinMs = SNOOZE_JOIN_MS, exact = false): SnoozeLanding {
+  const ts = inst.tsEpochMs
+  let offsetMs = Math.round((ts - at) / SECOND) * SECOND
+  const atInstant = () => inst.alarms?.find(a => a.id !== alarm.id && a.offsetMs === 0 && !a.answered && ts >= now)
+  if (exact) {
+    const there = offsetMs === 0 ? atInstant() : undefined
+    return there ? { joins: there.id, ringTs: ts } : { offsetMs, ringTs: ts - offsetMs }
+  }
+  if (alarm.offsetMs > 0 && offsetMs < Math.max(SECOND, joinMs)) {
+    const there = atInstant()
+    return there ? { joins: there.id, ringTs: ts } : { offsetMs: 0, ringTs: ts }
+  }
+  if (alarm.offsetMs <= 0) offsetMs = Math.min(offsetMs, -SECOND)
+  return { offsetMs, ringTs: ts - offsetMs }
+}
+
+/**
+ * An instant's alarms after it moved: an answered alarm (not a snooze) whose ring time is ahead
+ * again rings again, and the snoozes that answered it go (it rang too early to count). Others
+ * stay as they were. Null when nothing changes.
+ */
+export function rearmAfterMove(inst: InstantRecord, now: number): AlarmRecord[] | null {
+  const alarms = inst.alarms ?? []
+  const rearmed = new Set(alarms.filter(a => a.answered && !a.snoozeOf && ringTime(inst, a) > now).map(a => a.id))
+  if (rearmed.size === 0) return null
+  const byId = new Map(alarms.map(a => [a.id, a]))
+  /** The alarm a snooze chain started from. */
+  const root = (a: AlarmRecord) => {
+    let r = a
+    for (let k = 0; r.snoozeOf && byId.has(r.snoozeOf) && k < alarms.length; k++) r = byId.get(r.snoozeOf)!
+    return r
+  }
+  return alarms.flatMap(a => {
+    if (rearmed.has(a.id)) { const { answered: _a, ...rest } = a; void _a; return [rest] }
+    return a.snoozeOf && rearmed.has(root(a).id) ? [] : [a]
+  })
+}
+
+/** A warning: an alarm before its instant. */
+export const isWarning = (a: AlarmRecord) => a.offsetMs > 0
+
+/** The alarms cancelling covers: every unanswered one. */
+export const alarmsToCancel = (inst: InstantRecord) => (inst.alarms ?? []).filter(a => !a.answered)
+
+/** What a ringing alarm's card offers (components/panels/RingingAlarms). */
+export interface RingingChoices {
+  /** Snooze 5 minutes: shown for a warning only while 5 minutes still lands before its instant. */
+  snooze: { ringTs: number } | null
+  /** A warning: snooze until its instant starts. */
+  untilStart: { ringTs: number } | null
+  /** The instant's other alarms still to answer ("Dismiss all" when there are any). */
+  others: number
+}
+
+export function ringingChoices(inst: InstantRecord, alarm: AlarmRecord, now: number, snoozeMs: number, joinMs = SNOOZE_JOIN_MS): RingingChoices {
+  const five = snoozeLanding(inst, alarm, now + snoozeMs, now, joinMs)
+  const warning = isWarning(alarm)
+  const lands = !warning || ('offsetMs' in five && five.offsetMs > 0)
+  return {
+    snooze: lands ? { ringTs: five.ringTs } : null,
+    untilStart: warning ? { ringTs: inst.tsEpochMs } : null,
+    others: (inst.alarms ?? []).filter(a => a.id !== alarm.id && !a.answered).length,
+  }
 }
 
 export interface DueAlarm {
@@ -65,7 +157,7 @@ export function findDueAlarms(instants: readonly InstantRecord[], now: number, r
   for (const inst of instants) {
     for (const alarm of inst.alarms ?? []) {
       const at = ringTime(inst, alarm)
-      if (!alarm.done && at <= now && now - at <= graceMs && !ringingKeys.has(ringKey(inst.id, alarm.id))) out.push({ inst, alarm })
+      if (!alarm.answered && at <= now && now - at <= graceMs && !ringingKeys.has(ringKey(inst.id, alarm.id))) out.push({ inst, alarm })
     }
   }
   return out
@@ -76,7 +168,7 @@ export function nextAlarmTime(instants: readonly InstantRecord[], now: number): 
   for (const inst of instants) {
     for (const a of inst.alarms ?? []) {
       const at = ringTime(inst, a)
-      if (!a.done && at > now && (best === null || at < best)) best = at
+      if (!a.answered && at > now && (best === null || at < best)) best = at
     }
   }
   return best

@@ -1,7 +1,8 @@
 // Which alarm bells the timeline draws, and where (spec: TLC-1 offset alarms). Pure.
 //
-// An alarm at its instant is a bell on the instant's chip. One before it is its own bell at
-// the time it rings, tied back to the instant. Rules:
+// An alarm at its instant is a bell on the instant's chip. One before it (a warning), or after
+// it (a snooze of the alarm at it), is its own bell at the time it rings, tied back to the
+// instant. Rules:
 //   - A live alarm (still to ring, or ringing) is never hidden: it is a bell of its own, or,
 //     when it is too close to its instant to stand apart (zoomed out), it folds into the
 //     instant's chip, which counts it (one bell reads as a bell; more as "3🔔").
@@ -37,7 +38,7 @@ export interface BellOptions {
 
 /** Still to ring, or ringing now. */
 export const isLiveAlarm = (inst: InstantRecord, a: AlarmRecord, now: number, ringingKeys: ReadonlySet<string>) =>
-  !a.done && (ringTime(inst, a) > now || ringingKeys.has(ringKey(inst.id, a.id)))
+  !a.answered && (ringTime(inst, a) > now || ringingKeys.has(ringKey(inst.id, a.id)))
 
 export interface BellLayout {
   shown: ShownBell[]
@@ -56,7 +57,7 @@ export function bellsToShow(instants: readonly InstantRecord[], o: BellOptions):
         shown.push({ inst, alarm, ringTs: o.dragging!.ringTs, past: false })
         continue
       }
-      if (alarm.offsetMs <= 0) continue // on the chip
+      if (alarm.offsetMs === 0) continue // on the chip
       const live = isLiveAlarm(inst, alarm, o.now, o.ringingKeys)
       if (!live && !o.revealPast.has(inst.id)) continue
       const ringTs = ringTime(inst, alarm)
@@ -64,7 +65,8 @@ export function bellsToShow(instants: readonly InstantRecord[], o: BellOptions):
         if (live) folded[inst.id] = (folded[inst.id] ?? 0) + 1
         continue
       }
-      if (ringTs < o.lo || ringTs > o.hi) continue
+      // Off screen, a bell still counts while its line to its instant crosses the screen.
+      if (Math.max(ringTs, inst.tsEpochMs) < o.lo || Math.min(ringTs, inst.tsEpochMs) > o.hi) continue
       shown.push({ inst, alarm, ringTs, past: !live })
     }
   }

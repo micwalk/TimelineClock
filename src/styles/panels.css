@@ -98,6 +98,107 @@
 .ctl-btn--quick { --accent: var(--c-favorite); --halo: var(--c-favorite); }
 
 .timer-menu { width: 236px; }
+/* The Alarm button's picker (AlarmButton.tsx): a menu from the button on wide screens, a sheet
+   at the top of what is visible on phones. */
+.alarm-menu { --accent: var(--c-alarm); --halo: var(--c-alarm); width: 340px; padding: 14px; }
+.alarm-sheet__scrim { position: fixed; inset: 0; z-index: var(--z-alarm); background: rgba(0, 0, 8, 0.55); animation: popover-in 160ms ease-out; }
+.alarm-sheet {
+  --accent: var(--c-alarm);
+  --halo: var(--c-alarm);
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--box-bg-strong);
+  animation: sheet-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Opened from the Alarms tab on a wide screen: a sheet too, centred and no wider than a phone's. */
+@media (min-width: 640px) {
+  .alarm-sheet { left: 50%; right: auto; width: 420px; translate: -50% 0; }
+}
+.alarm-pick__manage { display: flex; gap: 8px; }
+.alarm-pick__manage > button { flex: 1; justify-content: center; }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+.alarm-pick { display: flex; flex-direction: column; gap: 12px; }
+.alarm-pick__head { display: flex; align-items: center; justify-content: space-between; }
+.alarm-pick__title { color: var(--c-alarm); font: 800 13px/1 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; }
+.alarm-pick__close { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--ink-dim); background: rgba(255, 255, 255, 0.06); }
+.alarm-pick__close > svg { width: 18px; height: 18px; }
+.alarm-pick__recent { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.alarm-pick__again {
+  --accent: color-mix(in srgb, var(--c-favorite) 70%, transparent);
+  flex: none;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font: 650 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.alarm-pick__time { display: flex; align-items: stretch; gap: 10px; }
+.alarm-pick__input {
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  padding: 0 14px;
+  border: 2px solid var(--c-alarm);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  caret-color: var(--c-alarm);
+  font: 700 32px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 calc(10px * var(--glow)) color-mix(in srgb, var(--c-alarm) 40%, transparent);
+  outline: none;
+}
+.alarm-pick__input::placeholder { color: color-mix(in srgb, var(--ink) 25%, transparent); }
+.alarm-pick__input.is-invalid { border-color: var(--c-danger); }
+/* AM | PM: one segmented switch; quiet when the time isn't ambiguous. */
+.alarm-pick__ampm { display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--c-alarm); border-radius: 12px; }
+.alarm-pick__ampm > button { flex: 1; width: 52px; color: var(--ink-dim); font: 800 13px/1 var(--font-ui); background: rgba(0, 0, 0, 0.35); }
+.alarm-pick__ampm > button + button { border-top: 1px solid color-mix(in srgb, var(--c-alarm) 45%, transparent); }
+.alarm-pick__ampm > button.is-on { color: #fff; background: color-mix(in srgb, var(--c-alarm) 45%, transparent); }
+.alarm-pick__ampm.is-idle { border-color: color-mix(in srgb, var(--ink) 18%, transparent); opacity: 0.45; }
+.alarm-pick__ampm.is-idle > button.is-on { background: rgba(255, 255, 255, 0.08); }
+.alarm-pick__lands { margin-top: -4px; color: var(--c-alarm); font: 700 15px/1.25 var(--font-ui); }
+.alarm-pick__lands.is-hint { color: var(--ink-dim); font-weight: 600; font-size: 13px; }
+.alarm-pick__section { display: flex; flex-direction: column; gap: 7px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.alarm-pick__label { color: var(--ink-dim); font: 700 11px/1 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; }
+.alarm-pick__row { display: flex; gap: 6px; flex-wrap: wrap; }
+/* "Other": a box among the warning chips; a typed length becomes a chip of its own. */
+.alarm-pick__other { width: 64px; padding: 0 8px; border: 1px dashed color-mix(in srgb, var(--c-alarm) 45%, transparent); outline: none; }
+.alarm-pick__other::placeholder { color: var(--ink-dim); font-weight: 600; }
+.alarm-pick__other:focus { border-style: solid; border-color: var(--c-alarm); }
+.alarm-pick__other.is-invalid { border-color: var(--c-danger); }
+.alarm-pick__name {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 25%, transparent);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  font: 600 15px/1 var(--font-ui);
+  outline: none;
+}
+.alarm-pick__name:focus { border-color: var(--c-alarm); }
+.alarm-pick__set {
+  position: sticky;
+  bottom: 0;
+  height: 46px;
+  margin-top: 2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c-alarm) 50%, #1a1206);
+  color: #fff;
+  font: 800 16px/1 var(--font-ui);
+}
+.alarm-pick__set:disabled { background: color-mix(in srgb, var(--c-alarm) 15%, #0c0a08); color: var(--ink-dim); cursor: default; }
+@media (prefers-reduced-motion: reduce) { .alarm-sheet, .alarm-sheet__scrim { animation: none; } }
 .timer-menu__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .timer-menu__grid--recent { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); }
 .timer-menu__choice {
@@ -149,8 +250,35 @@
   gap: 18px;
   flex: 1 1 auto;
   min-width: 0;
+  /* Never under the buttons beside it: too many tabs scroll (sideways, no bar). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.list-tabs::-webkit-scrollbar { display: none; }
+.list-header > :not(.list-tabs) { flex: none; }
+.list-tab__short, .list-header__title { display: none; }
+/* A narrow Agenda (side dock, drawer, a phone): the buttons get a row of their own (with a
+   title) and the tabs, with short names, the full width under it. */
+.list-panel { container-type: inline-size; }
+@container (max-width: 560px) {
+  .list-header { flex-wrap: wrap; row-gap: 0; padding-top: 6px; }
+  .list-header > .list-header__title {
+    display: block;
+    flex: 1 1 auto;
+    color: var(--ink-faint);
+    font: 700 11px/1 var(--font-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .list-tabs { order: 1; flex: 1 0 100%; gap: 10px; justify-content: space-between; }
+  .list-tab { font-size: 14px; }
+  .list-tab__long { display: none; }
+  .list-tab__short { display: inline; }
 }
 .list-tab {
+  flex: none;
+  white-space: nowrap;
   position: relative;
   padding: 10px 2px;
   font: 650 15px/1 var(--font-ui);
@@ -205,6 +333,70 @@
 .list-row--cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); }
 .list-row--cursor .list-row__name { color: var(--c-cursor); }
 
+/* The Alarms tab (AlarmsList.tsx): a clock app's list. */
+.alarms-list { display: flex; flex-direction: column; gap: 8px; }
+.alarms-list__head { margin: 8px 2px 0; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; }
+.alarms-new {
+  --accent: var(--c-alarm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c-alarm) 18%, transparent);
+  color: #fff;
+  font: 700 14px/1 var(--font-ui);
+}
+.alarms-new > svg { width: 18px; height: 18px; color: var(--c-alarm); }
+.alarms-new:hover { background: color-mix(in srgb, var(--c-alarm) 30%, transparent); }
+.alarms-empty { margin: 16px 4px; color: var(--ink-dim); font: 600 14px/1.4 var(--font-ui); }
+.alarm-row {
+  --accent: color-mix(in srgb, var(--c-alarm) 60%, transparent);
+  --halo: var(--c-alarm);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--box-bg);
+  cursor: pointer;
+}
+.alarm-row:hover { background: var(--box-bg-raised); }
+.alarm-row__time { color: #fff; font: 700 22px/1 var(--font-mono); }
+.alarm-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.alarm-row__name { font: 700 15px/1.2 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alarm-row__sub { color: var(--ink-dim); font: 600 12px/1.2 var(--font-ui); }
+.alarm-row__when { color: var(--c-alarm); font: 700 13px/1 var(--font-ui); white-space: nowrap; }
+.alarm-row.is-paused { --accent: color-mix(in srgb, var(--ink) 25%, transparent); --halo: transparent; }
+.alarm-row.is-paused .alarm-row__time, .alarm-row.is-paused .alarm-row__when { color: var(--ink-dim); }
+.alarm-row--past { --accent: color-mix(in srgb, var(--ink) 25%, transparent); --halo: transparent; }
+.alarm-row--past .alarm-row__time { color: var(--ink); font-size: 17px; }
+.alarm-row--past .alarm-row__when { color: var(--ink-dim); }
+.alarm-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  background: rgba(0, 0, 0, 0.4);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.alarm-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.alarm-switch.is-on { border-color: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 40%, transparent); box-shadow: 0 0 calc(8px * var(--glow)) var(--c-alarm); }
+.alarm-switch.is-on .alarm-switch__knob { transform: translateX(18px); background: #fff; }
+@media (prefers-reduced-motion: reduce) { .alarm-switch, .alarm-switch__knob { transition: none; } }
+
 .list-row--instant { grid-template-columns: minmax(140px, 2fr) minmax(170px, 1.3fr) minmax(120px, 1.1fr); }
 .list-row__name {
   display: flex;
@@ -254,6 +446,14 @@
   .list-row--instant .list-row__dt { display: none; }
   .ctl-btn__text { display: none; }
   .ctl-btn--now .ctl-btn__text, .ctl-split .ctl-btn__text, .ctl-btn--quick .ctl-btn__text { display: inline; }
+}
+
+/* The same compact rows in a narrow Agenda on a wide screen (side dock, drawer). */
+@container (max-width: 560px) {
+  .list-row--span { grid-template-columns: 56px 1fr 1fr 30px; }
+  .list-row--span > :nth-child(3), .list-row--span > :nth-child(4), .list-row--span > :nth-child(6), .list-row--span > :nth-child(7) { display: none; }
+  .list-row--instant { grid-template-columns: 1fr auto; }
+  .list-row--instant .list-row__dt { display: none; }
 }
 
 /* --- Ringing alarms ------------------------------------------------------ */
@@ -317,6 +517,88 @@
   background: rgba(255, 255, 255, 0.08);
 }
 .alarm-btn--silence svg { width: 18px; height: 18px; }
+/* The card: name and time, the live time to its instant, Dismiss / Snooze, then a row of quieter
+   choices that turns into the custom snooze box in place (the two cross-fade in one grid cell). */
+.alarm-card { position: relative; }
+.alarm-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.alarm-card__head .alarm-card__time { margin: 0; }
+.alarm-card__rel { display: block; margin: 3px 0 10px; color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
+.alarm-btn__at { font-weight: 600; opacity: 0.8; }
+.alarm-card__more { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 8px; }
+.alarm-card__links,
+.alarm-card__custom {
+  grid-area: 1 / 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.alarm-card__links { flex-wrap: wrap; gap: 6px; }
+.alarm-card__custom { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.alarm-card__more.is-custom .alarm-card__links { opacity: 0; transform: translateY(-6px); pointer-events: none; }
+.alarm-card__more.is-custom .alarm-card__custom { opacity: 1; transform: none; pointer-events: auto; }
+/* The quieter choices are still buttons: outlined boxes, each in its action's colour. */
+.alarm-link {
+  --accent: var(--c-alarm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font: 700 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.alarm-link:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+/* "Other…": drawn as a box you type into, so it reads as the way to a custom length. */
+.alarm-other {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1 1 96px;
+  min-width: 96px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1.5px solid color-mix(in srgb, var(--c-alarm) 55%, transparent);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--ink-dim);
+  font: 600 13px/1 var(--font-ui);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: text;
+}
+.alarm-other > svg { width: 13px; height: 13px; color: var(--c-alarm); }
+.alarm-other:hover { border-color: var(--c-alarm); }
+.alarm-link__at { color: color-mix(in srgb, var(--accent) 70%, #fff); font-weight: 600; opacity: 0.85; }
+.alarm-link--all { --accent: var(--c-danger); margin-left: auto; }
+.alarm-link--go { flex: none; background: color-mix(in srgb, var(--accent) 45%, transparent); color: #fff; }
+.alarm-link--go:disabled { opacity: 0.4; cursor: default; }
+.alarm-custom__input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 2px solid var(--c-alarm);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  caret-color: var(--c-alarm);
+  color: #fff;
+  font: 700 15px/1 var(--font-mono);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--c-alarm) 45%, transparent);
+  outline: none;
+}
+.alarm-custom__input::placeholder { color: var(--ink-faint); font-weight: 600; }
+.alarm-custom__input[aria-invalid='true'] { border-color: var(--c-danger); }
+.alarm-custom__at { flex: none; min-width: 0; color: var(--c-alarm); font-size: 13px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .alarm-card__links, .alarm-card__custom { transition: none; }
+}
 
 /* Bell icon on the timeline while ringing */
 .icon-btn.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }
@@ -364,6 +646,18 @@
   color: var(--ink-dim);
 }
 .settings__row--check { grid-template-columns: auto 1fr; cursor: pointer; }
+.settings__row--wrap { grid-template-columns: 1fr; gap: 6px; }
+.settings__text {
+  grid-column: 2 / 4;
+  width: 150px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 13px;
+}
+.settings__text.is-invalid { border-color: var(--c-danger); }
 .settings__row input[type='range'] { width: 130px; accent-color: var(--c-cursor); }
 .settings__row input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--c-cursor); }
 .settings__row output { min-width: 36px; text-align: right; color: var(--ink); font-size: 13px; }
@@ -419,6 +713,7 @@
 /* In the column layouts the wrapper vanishes, so the timeline and controls lay out as before. */
 .app__main { display: contents; }
 
+/* The side dock sits on the left, where the drawer slides out from (App renders it first). */
 .app[data-agenda='side'] { flex-direction: row; }
 .app[data-agenda='side'] .app__main {
   display: flex;
@@ -434,7 +729,7 @@
   margin: 0;
   padding: 0 12px 12px;
   height: 100%;
-  border-left: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
+  border-right: 1.5px solid color-mix(in srgb, var(--c-axis-glow) 50%, transparent);
 }
 
 .agenda-scrim {
@@ -472,7 +767,7 @@
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.7fr;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.6fr 1.2fr;
   grid-template-rows: repeat(2, minmax(44px, auto));
   gap: 8px;
   padding: 8px 12px 10px;

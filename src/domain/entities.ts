@@ -12,19 +12,39 @@ export interface InstantRecord {
   snoozeOriginalId?: string
   /** Hidden from the timeline (no line or chip) by the user; its spans and Agenda row stay. */
   hidden?: boolean
+  /** An occurrence of a repeating series (domain/series): the series, and its date ("YYYY-MM-DD"). */
+  seriesId?: string
+  occurrence?: string
+  /** Changed on its own (name, time, alarms): the series' rule changes leave it alone. */
+  seriesEdited?: boolean
+  /**
+   * Shown only, never stored: an occurrence past the horizon, computed for the timeline
+   * (domain/series virtualOccurrences). Tapping it stores it.
+   */
+  virtual?: true
 }
+
+/** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */
+export type AlarmAnswer = 'dismissed' | 'snoozed'
 
 /**
  * One alarm on an instant. It rings `offsetMs` before the instant: when the instant's span to
- * Now shrinks below the offset. Answered alarms stay as history (`done`) and never ring again.
+ * Now shrinks below the offset. Answered alarms stay as history and never ring again.
  */
 export interface AlarmRecord {
   id: string
-  /** How long before its instant it rings, ms (>= 0; 0 = at the instant). */
+  /**
+   * How long before its instant it rings, ms: > 0 a warning before it, 0 at it, < 0 after it
+   * (only a snooze of the alarm at the instant rings after it).
+   */
   offsetMs: number
-  /** Answered (dismissed, snoozed): kept as history, never rings again. */
-  done?: boolean
+  /** A snooze: the alarm it snoozed (which is answered 'snoozed'). */
+  snoozeOf?: string
+  /** Answered after it rang: dismissed, or snoozed (another alarm rings later). */
+  answered?: AlarmAnswer
 }
+
+const ANSWERS: readonly string[] = ['dismissed', 'snoozed'] satisfies AlarmAnswer[]
 
 export const NOW_SENTINEL = '__NOW__'
 
@@ -56,8 +76,15 @@ function sanitizeAlarms(data: unknown): AlarmRecord[] {
     if (!x || typeof x !== 'object') return []
     const r = x as Record<string, unknown>
     if (typeof r.id !== 'string' || seen.has(r.id) || typeof r.offsetMs !== 'number' || !Number.isFinite(r.offsetMs)) return []
+    // 'skipped' (a test build): cancelled before it rang, which now deletes it.
+    if (r.answered === 'skipped') return []
     seen.add(r.id)
-    return [{ id: r.id, offsetMs: Math.max(0, r.offsetMs), ...(r.done === true ? { done: true } : {}) }]
+    // `done: true` was 0.3's answered alarm.
+    const answered = typeof r.answered === 'string' && ANSWERS.includes(r.answered) ? r.answered as AlarmAnswer : r.done === true ? 'dismissed' : undefined
+    const snoozeOf = typeof r.snoozeOf === 'string' ? r.snoozeOf : undefined
+    // Only a snooze rings after its instant.
+    const offsetMs = snoozeOf ? r.offsetMs : Math.max(0, r.offsetMs)
+    return [{ id: r.id, offsetMs, ...(snoozeOf ? { snoozeOf } : {}), ...(answered ? { answered } : {}) }]
   })
 }
 

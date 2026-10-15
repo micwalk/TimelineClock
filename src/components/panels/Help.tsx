@@ -21,6 +21,7 @@ const KEYS: [string[], string][] = [
   [['V'], 'Rotate the timeline'],
   [['H'], 'Hide or show the cursor'],
   [['T'], 'Start a timer (pick a length)'],
+  [['L'], 'Set an alarm (time, repeat, warnings)'],
   [['Esc'], 'Deselect, or cancel a move'],
   [['Enter'], 'Confirm a move'],
   [['?'], 'This help'],
@@ -100,7 +101,7 @@ function HelpContent() {
             <dt>Span</dt>
             <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one. Spans that follow each other share a lane (a stopwatch’s laps); names that would crowd it fold into “N spans”, which zooms in when tapped.</dd>
             <dt>Agenda</dt>
-            <dd>The list of every instant, your favorites, and your saved spans. Tap a row to go there.</dd>
+            <dd>The list of every instant, your favorites, your saved spans, your alarms, and what repeats. Tap a row to go there.</dd>
           </dl>
         </section>
 
@@ -115,9 +116,11 @@ function HelpContent() {
             <li>Drag slowly over an instant (or Now) and the cursor catches it: it glides onto its line and shows its time, so you can see where it will land when you let go, and the ＋ tucks into the instant’s chip (over Now, the Cursor tag merges into the Now tag). Other chips step out of the ＋’s way.</li>
             <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
             <li>The other buttons zoom, step the cursor, and jump to the previous or next instant.</li>
-            <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. Both just make instants and spans, kept as history.</li>
+            <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. <b>Alarm</b> (or L) sets one at a time you type (7, 730, 1730, 7p: it shows which day and AM or PM it took), once or repeating, on time and/or with warnings before it (pick 5m to 1h, or type any length in <i>other</i>); tap a recent one to fill the picker in from it. Settings &gt; Alarms sets which warnings it offers and what a new alarm starts with. They just make instants, spans and series, kept as history.</li>
+            <li><b>Repeat</b>: the ⟳ tool on a selected chip makes it repeat (daily, weekdays, weekends, chosen days, every N days). Repeats show ⟳ on their chips; the next two weeks are kept (and sent to the Android app), and further ahead they’re shown as you look. Change one on its own and it offers <b>Apply to all future</b> (that one and later ones; earlier ones keep the old rule); delete one, or it and all later ones; pick <b>Once</b> in the ⟳ tool to stop it repeating after that one; pause, resume or end the series from the ⟳ tool, the <b>Repeats</b> tab (every repeat, alarms or not) or the <b>Alarms</b> tab, which lists every alarm (repeating, upcoming and recent), sets new ones, and edits a repeat’s time, days, warnings and name (the pencil). Zoomed out, a repeat whose occurrences crowd becomes a row of amber lines fading out from the axis and one chip for the series (“⟳ Wake Up · Daily 9:00a · in 3d”); tap it to zoom in.</li>
             <li>The <b>star</b> on a favorite’s lane unfavorites it, and its lane goes. Dismissing a timer’s alarm unfavorites its end.</li>
             <li><b>Alarms</b>: the bell tool on a selected chip adds an alarm, a bell beside the chip. <b>Drag the bell earlier</b> to ring before the instant (say 15 minutes before a meeting); add more bells for more warnings. Each one stays tied to its instant and moves with it. Tap a bell to type how long before, or delete it. Zoomed out, bells close to their instant fold into its bell, which then shows how many there are (3🔔). An instant with an alarm still to ring can’t be hidden; answered alarms show as hollow bells when you select their instant.</li>
+            <li><b>Snooze</b> adds another bell to the same instant (⟲): 5 minutes, until the instant starts (for a warning), or <b>Other…</b> to type a length; or drag a ringing bell later to snooze until there. A warning before an instant never snoozes past it: it lands on the instant. <b>Cancel</b> is the opposite: the bell-slash tool on a selected chip cancels all its alarms, and a ringing alarm offers <b>Dismiss all</b>. Cancelled alarms that hadn’t rung are simply gone. Move an instant so an alarm it already answered is ahead again and that alarm rings again.</li>
             <li>In a browser, alarms ring while the app is open. The <a href={ANDROID_URL} target="_blank" rel="noreferrer">Android app</a> also rings them when it’s closed, and shows a running timer or stopwatch in the notifications.</li>
             <li>Typing a time: digits fill from the right, so <b>930</b> is 9:30 and <b>13</b> is 13 minutes. A clock time starts with the hour: <b>9</b> is 9:00.</li>
             <li>Moving an instant: drag the timeline, or tap the moving chip to type the time or an offset from Now.</li>
