@@ -11,6 +11,7 @@ import { ui } from '../../store/ui.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { formatClockCompact } from '../../domain/format.ts'
 import { MINUTE } from '../../domain/time.ts'
+import { nextSunEvent } from '../../domain/sun.ts'
 
 function Columns() {
   useSavedLayoutSource()
@@ -258,5 +259,32 @@ describe('chip polish: renaming and vertical tools', () => {
     rerender(<Columns />)
     expect(container.querySelector('.tl-col__below')).toBeNull()
     expect(container.querySelector('.tl-col__tools')).not.toBeNull()
+  })
+})
+
+describe('a kept sunset', () => {
+  const SF = { lat: 37.77, lon: -122.42 }
+  // A sunset already shows every day: its ⟳ only means something once it has an alarm (a repeating sunset alarm).
+  it('offers ⟳ only once it has an alarm', () => {
+    const ts = nextSunEvent(Date.now(), SF, 'sunset')!
+    const id = entities.createInstant(ts, 'Sunset')
+    entities.patchInstant(id, () => ({ sun: { event: 'sunset', ...SF } }))
+    useView.setState({ viewFocusMode: 'instant', focusedInstantId: id, currentSelectedInstantId: id, timeCenter: ts })
+    render(<Columns />)
+    expect(screen.queryByRole('button', { name: 'Repeat' })).toBeNull()
+    act(() => { entities.patchInstant(id, () => ({ alarms: [{ id: 'a1', offsetMs: 30 * MINUTE }] })) })
+    fireEvent.click(screen.getByRole('button', { name: 'Repeat' }))
+    expect(screen.getByText('Repeat this alarm at each sunset')).toBeTruthy()
+  })
+
+  it('is hidden, never deleted (the sun still sets), and never moved', () => {
+    const ts = nextSunEvent(Date.now(), SF, 'sunset')!
+    const id = entities.createInstant(ts, 'Sunset')
+    entities.patchInstant(id, () => ({ sun: { event: 'sunset', ...SF } }))
+    useView.setState({ viewFocusMode: 'instant', focusedInstantId: id, currentSelectedInstantId: id, timeCenter: ts })
+    render(<Columns />)
+    expect(screen.queryByRole('button', { name: 'Delete instant' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Move instant' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Hide from the timeline (spans stay)' })).toBeTruthy()
   })
 })

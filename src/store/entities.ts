@@ -2,7 +2,7 @@
 // localStorage keys and record shapes the original app used, so existing data loads unchanged.
 import { create } from 'zustand'
 import type { AlarmAnswer, AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
-import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, syncFavorites } from '../domain/entities.ts'
+import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, storedInstants, syncFavorites } from '../domain/entities.ts'
 import { syncAlarmVisibility } from '../domain/alarms.ts'
 import type { GroupRecord } from '../domain/series.ts'
 import { sanitizeGroups } from '../domain/series.ts'
@@ -29,7 +29,8 @@ export const useEntities = create<EntitiesState>(() => {
 })
 
 useEntities.subscribe((s, prev) => {
-  if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, s.instants)
+  // Virtual instants held while selected are never saved.
+  if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, storedInstants(s.instants))
   if (s.spans !== prev.spans) saveJson(SPANS_KEY, s.spans)
   if (s.groups !== prev.groups && s.groups) saveJson(GROUPS_KEY, s.groups)
 })
@@ -37,8 +38,21 @@ useEntities.subscribe((s, prev) => {
 const set = useEntities.setState
 const get = useEntities.getState
 
+/** A changed instant is real: a virtual one held while selected is saved from then on (same id). */
+const real = (i: InstantRecord): InstantRecord => {
+  if (!i.virtual) return i
+  const { virtual: _v, ...rest } = i
+  void _v
+  return rest
+}
+
 const patchInstant = (id: string, patch: (i: InstantRecord) => Partial<InstantRecord>) =>
-  set(s => ({ instants: s.instants.map(i => (i.id === id ? { ...i, ...patch(i) } : i)) }))
+  set(s => ({ instants: s.instants.map(i => (i.id === id ? real({ ...i, ...patch(i) }) : i)) }))
+
+/** Makes held virtual instants real (a span saved to one). */
+const realize = (ids: readonly string[]) => {
+  if (get().instants.some(i => i.virtual && ids.includes(i.id))) set(s => ({ instants: s.instants.map(i => (ids.includes(i.id) ? real(i) : i)) }))
+}
 
 /** Changes an instant's alarms; an empty list drops the field. */
 const patchAlarms = (id: string, change: (list: AlarmRecord[]) => AlarmRecord[]) =>
@@ -47,7 +61,7 @@ const patchAlarms = (id: string, change: (list: AlarmRecord[]) => AlarmRecord[])
       if (i.id !== id) return i
       const { alarms, ...rest } = i
       const next = change(alarms ?? [])
-      return next.length > 0 ? { ...rest, alarms: next } : rest
+      return real(next.length > 0 ? { ...rest, alarms: next } : rest)
     }),
   }))
 
@@ -89,6 +103,13 @@ export const entities = {
   },
   patchInstant,
 
+  /** Holds a virtual instant (selected or focused) in the list, so everything finds it; it isn't saved. */
+  holdInstant: (rec: InstantRecord) => { if (!get().instants.some(i => i.id === rec.id)) set(s => ({ instants: [...s.instants, { ...rec, virtual: true }] })) },
+  /** Lets go of held virtual instants nothing refers to any more. */
+  releaseInstants(keep: ReadonlySet<string>) {
+    if (get().instants.some(i => i.virtual && !keep.has(i.id))) set(s => ({ instants: s.instants.filter(i => !i.virtual || keep.has(i.id)) }))
+  },
+
   /** Deletes the instant and any spans that reference it. */
   deleteInstant(id: string) {
     set(s => ({
@@ -119,6 +140,7 @@ export const entities = {
     patchAlarms(id, list => list.map(a => (alarmIds.includes(a.id) && !a.answered ? { ...a, answered: answer } : a))),
 
   createSpan(startInstantId: string, endInstantId: string, label = '', opts: { visible?: boolean } = {}): string {
+    realize([startInstantId, endInstantId])
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId, label, visible: opts.visible ?? false, endIsNow: false }
     set(s => ({ spans: [...s.spans, rec] }))
     return rec.id
@@ -126,6 +148,7 @@ export const entities = {
 
   /** Ensures the instant has a span to Now (a favorite's); returns its id. */
   upsertNowSpan(startInstantId: string, visible: boolean): string {
+    realize([startInstantId])
     const found = get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow)
     if (found) {
       patchSpan(found.id, { visible, label: '' })

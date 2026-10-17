@@ -1,5 +1,6 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
+import { storedInstants } from '../domain/entities.ts'
 import { alarmLabel, alarmsToCancel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, ringTime, snoozeLanding } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
 import { MINUTE, SECOND } from '../domain/time.ts'
@@ -50,7 +51,7 @@ function check() {
   }
 
   const ringingKeys = new Set(useAlarms.getState().ringing.map(r => ringKey(r.instantId, r.alarmId)))
-  const due = findDueAlarms(useEntities.getState().instants, now, ringingKeys, autoDismissMs)
+  const due = findDueAlarms(storedInstants(useEntities.getState().instants), now, ringingKeys, autoDismissMs)
   if (due.length > 0) {
     useAlarms.setState(s => ({
       ringing: [...s.ringing, ...due.map(({ inst, alarm }) => ({ instantId: inst.id, alarmId: alarm.id, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: now }))],
@@ -67,7 +68,7 @@ function check() {
 function schedule() {
   if (timer) clearTimeout(timer)
   const now = Date.now()
-  const next = nextAlarmTime(useEntities.getState().instants, now)
+  const next = nextAlarmTime(storedInstants(useEntities.getState().instants), now)
   let wait = IDLE_RECHECK_MS
   if (next !== null) wait = Math.max(MIN_WAIT_MS, Math.min(next - now, MAX_WAIT_MS))
   if (hasRinging()) wait = Math.min(wait, MAX_WAIT_MS) // for auto-dismiss

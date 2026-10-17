@@ -49,10 +49,23 @@
   --c-cursor-on-glow: var(--c-instant-glow);
   --c-favorite: #facc15;
   --c-alarm: #fbbf24;
+  --c-sun: #fb923c; /* sunrise and sunset chips */
   --c-danger: #f43f5e;
   --c-ok: #22c55e;
   --c-past: #fca5a5;
   --c-future: #93c5fd;
+
+  /* The sky behind the timeline (#11; domain/sun.ts SkyKey), by the sun's altitude: strong
+     changes through the twilights, only a shade between day and noon, and dark and midnight.
+     Translucent over the page's background; --sky-strength scales them all (0 = no sky). */
+  --sky-strength: 1;
+  --sky-midnight: rgb(0 0 0 / 0.34);
+  --sky-dark: rgb(2 4 16 / 0.2);
+  --sky-astro: rgb(46 34 120 / 0.42);
+  --sky-nautical: rgb(122 52 160 / 0.46);
+  --sky-horizon: rgb(244 114 72 / 0.46);
+  --sky-day: rgb(64 140 230 / 0.34);
+  --sky-noon: rgb(96 170 245 / 0.42);
 
   /* One knob for every glow in the app (0 = flat, 1 = default, 2 = extra neon). */
   --glow: 1;

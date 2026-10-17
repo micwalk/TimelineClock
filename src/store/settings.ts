@@ -6,12 +6,36 @@ import type { AgendaSetting, OrientationSetting } from '../domain/layoutMode.ts'
 import type { TunableKey, Tunables } from '../domain/tunables.ts'
 import { clampTunable, resolveTunables, sanitizeTunableOverrides } from '../domain/tunables.ts'
 import type { AlarmRingDefaults } from '../domain/alarmPicker.ts'
+import type { SunEvent } from '../domain/sun.ts'
+import { SUN_EVENTS } from '../domain/sun.ts'
 import { sanitizeRingDefaults } from '../domain/alarmPicker.ts'
 
 /** When favorites get their lane to Now: only while selected (default), or always. */
 export type FavoriteLanes = 'selected' | 'always'
 
 export type VerticalDir = 'down' | 'up'
+
+/** The timeline's sky shading: Auto follows the sun at the location (else a fixed 6a–6p day), Fixed always uses 6a–6p. */
+export type SkyMode = 'auto' | 'fixed' | 'off'
+
+/** Where the sun is computed for; coordinates rounded to two places (about a kilometre). */
+export interface SkyLocation {
+  lat: number
+  lon: number
+  /** What the user looked up or picked ("94103, San Francisco, US"), shown in Settings. */
+  name: string
+}
+
+/** A location from untrusted JSON, or null. */
+export function sanitizeSkyLocation(raw: unknown): SkyLocation | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const { lat, lon } = r
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
+  const round = (v: number) => Math.round(v * 100) / 100
+  return { lat: round(lat), lon: round(lon), name: typeof r.name === 'string' ? r.name.slice(0, 80) : '' }
+}
 
 const SETTINGS_KEY = 'timeline.settings.v1'
 
@@ -33,6 +57,11 @@ export interface SettingsState {
   agendaPlacement: AgendaSetting
   /** The Alarm picker's rings: what a new alarm starts with, and the warnings it offers. */
   alarmRings: AlarmRingDefaults
+  /** Sky shading behind the timeline (#11). */
+  sky: SkyMode
+  skyLocation: SkyLocation | null
+  /** Which of sunrise and sunset show on the timeline (once a location is set); switched in the Agenda's Repeats tab. */
+  sunEvents: SunEvent[]
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -50,13 +79,17 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     stopwatchKeepStart: r.stopwatchKeepStart !== false,
     agendaPlacement: r.agendaPlacement === 'docked' || r.agendaPlacement === 'drawer' ? r.agendaPlacement : 'auto',
     alarmRings: sanitizeRingDefaults(r.alarmRings),
+    sky: r.sky === 'fixed' || r.sky === 'off' ? r.sky : 'auto',
+    skyLocation: sanitizeSkyLocation(r.skyLocation),
+    // Was one on/off switch for both.
+    sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
   }
 }
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyLocation: s.skyLocation, sunEvents: s.sunEvents, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -76,6 +109,11 @@ export const settings = {
   setTickSnap: (tickSnap: boolean) => useSettings.setState({ tickSnap }),
   setStopwatchKeepStart: (stopwatchKeepStart: boolean) => useSettings.setState({ stopwatchKeepStart }),
   setAgendaPlacement: (agendaPlacement: AgendaSetting) => useSettings.setState({ agendaPlacement }),
+  setSky: (sky: SkyMode) => useSettings.setState({ sky }),
+  /** Shows or hides sunrises (or sunsets) on the timeline. */
+  setSunEventShown: (event: SunEvent, shown: boolean) =>
+    useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),
+  setSkyLocation: (loc: SkyLocation | null) => useSettings.setState({ skyLocation: loc && sanitizeSkyLocation(loc) }),
   setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
   setAlarmRings: (alarmRings: AlarmRingDefaults) => useSettings.setState({ alarmRings: sanitizeRingDefaults(alarmRings) }),
   setTunable: (key: TunableKey, value: number) => {

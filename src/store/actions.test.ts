@@ -13,6 +13,8 @@ import { parseBackup } from '../domain/backup.ts'
 import { useUi } from './ui.ts'
 import { useQuick } from './quick.ts'
 import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
+import { nextSunEvent } from '../domain/sun.ts'
+import { isAtSun, sunVirtualId, virtualSunEvents } from '../domain/sunEvents.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -989,5 +991,92 @@ describe('repeating series (TLC-2)', () => {
     expect(occurrences(seriesId)).toHaveLength(0)
     act.setSeriesPaused(seriesId, false)
     expect(occurrences(seriesId).length).toBe(n)
+  })
+})
+
+describe('sunrise and sunset (#11)', () => {
+  const SF = { lat: 37.77, lon: -122.42, name: 'San Francisco' }
+  beforeEach(() => settings.setSkyLocation(SF))
+  afterEach(() => settings.setSkyLocation(null))
+
+  it('a tapped sunset is stored as an instant named for it that follows the sun; repeating it repeats at each sunset', () => {
+    const ts = nextSunEvent(Date.now(), SF, 'sunset')!
+    const id = act.materializeOccurrence(sunVirtualId('sunset', ts))!
+    expect(instant(id)).toMatchObject({ label: 'Sunset', tsEpochMs: ts, sun: { event: 'sunset', lat: 37.77, lon: -122.42 } })
+    expect(act.materializeOccurrence(sunVirtualId('sunset', ts))).toBe(id)
+    act.repeatInstant(id, { kind: 'weekly', days: EVERY_DAY })
+    const series = entities.getGroup(instant(id).seriesId)!
+    expect(series.sun?.event).toBe('sunset')
+    const next = useEntities.getState().instants.filter(i => i.seriesId === series.id).sort((a, b) => a.tsEpochMs - b.tsEpochMs)[1]
+    expect(isAtSun(next)).toBe(true)
+  })
+
+  it('the Alarm picker sets an alarm 30 minutes before sunset, once or every day', () => {
+    const at = nextSunEvent(Date.now(), SF, 'sunset')!
+    const once = act.setAlarm({ time: '18:30', at, repeat: null, warnings: [30 * MINUTE], label: '', onTime: false, sun: 'sunset' })!
+    expect(instant(once)).toMatchObject({ label: 'Sunset', tsEpochMs: at, sun: { event: 'sunset' } })
+    expect(instant(once).alarms?.map(a => a.offsetMs)).toEqual([30 * MINUTE])
+    const first = act.setAlarm({ time: '18:30', at, repeat: { kind: 'weekly', days: EVERY_DAY }, warnings: [30 * MINUTE], label: 'Beach', onTime: false, sun: 'sunset' })!
+    const series = entities.getGroup(instant(first).seriesId)!
+    expect(series).toMatchObject({ label: 'Beach', alarms: [30 * MINUTE], sun: { event: 'sunset' } })
+    expect(useEntities.getState().instants.filter(i => i.seriesId === series.id).every(i => isAtSun(i))).toBe(true)
+  })
+})
+
+describe('virtual instants (#11): held while selected, real once changed', () => {
+  const SF = { lat: 37.77, lon: -122.42, name: 'San Francisco' }
+  beforeEach(() => settings.setSkyLocation(SF))
+  afterEach(() => settings.setSkyLocation(null))
+  const sunset = () => {
+    const ts = nextSunEvent(Date.now(), SF, 'sunset')!
+    return { id: sunVirtualId('sunset', ts), tsEpochMs: ts, label: 'Sunset', sun: { event: 'sunset' as const, lat: SF.lat, lon: SF.lon }, virtual: true as const }
+  }
+  const saved = () => JSON.parse(localStorage.getItem('timeline.saved.v1') ?? '[]') as { id: string }[]
+
+  it('selecting or focusing one stores nothing, and it is let go once nothing selects it', () => {
+    const v = sunset()
+    act.holdVirtual(v)
+    act.selectInstant(v.id)
+    act.focusInstant(v.id)
+    expect(view().focusedInstantId).toBe(v.id)
+    expect(instant(v.id).virtual).toBe(true)
+    expect(saved().map(i => i.id)).not.toContain(v.id)
+    act.focusNow()
+    act.clearSelection()
+    expect(entities.getInstant(v.id)).toBeUndefined()
+  })
+
+  it('a change makes it real under the same id (selection carries over), saved from then on', () => {
+    const v = sunset()
+    act.holdVirtual(v)
+    act.selectInstant(v.id)
+    act.renameInstant(v.id, 'Beach')
+    expect(instant(v.id)).toMatchObject({ label: 'Beach', sun: { event: 'sunset' } })
+    expect(instant(v.id).virtual).toBeUndefined()
+    expect(view().currentSelectedInstantId).toBe(v.id)
+    expect(saved().map(i => i.id)).toContain(v.id)
+    act.clearSelection()
+    expect(entities.getInstant(v.id)).toBeDefined()
+  })
+
+  it('a sunset never moves: no move mode, and a span ending there keeps its length', () => {
+    const v = sunset()
+    const id = act.materializeOccurrence(v.id)!
+    act.enterMove(id)
+    expect(view().moveMode).toBeNull()
+    const start = entities.createInstant(v.tsEpochMs - HOUR, 'Walk')
+    const span = entities.createSpan(start, id)
+    act.setSpanLength(span, 30 * MINUTE)
+    expect(instant(id).tsEpochMs).toBe(v.tsEpochMs)
+  })
+
+  it('hiding a sunset keeps it, hidden, so its chip stays off the timeline', () => {
+    const v = sunset()
+    act.holdVirtual(v)
+    act.selectInstant(v.id)
+    act.setInstantHidden(v.id, true)
+    act.clearSelection()
+    expect(instant(v.id)).toMatchObject({ hidden: true })
+    expect(virtualSunEvents(SF, useEntities.getState().instants, v.tsEpochMs - HOUR, v.tsEpochMs + HOUR)).toEqual([])
   })
 })

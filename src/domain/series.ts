@@ -12,7 +12,14 @@
 //
 // Wall-clock time: "07:00" stays 7:00 local across DST and timezone changes (a time a DST jump
 // skips lands where Date puts it, an hour later).
+//
+// Sun times (#11): a series with a `sun` anchor runs at each day's sunrise or sunset at a place
+// instead of a clock time (`time` then only remembers roughly when, for sorting). Its occurrences
+// carry the anchor too; a day the sun doesn't rise or set (polar) has none.
 import type { InstantRecord } from './entities.ts'
+import type { SunAnchor } from './sunEvents.ts'
+import { isAtSun, sanitizeSunAnchor } from './sunEvents.ts'
+import { sunEventOnDay } from './sun.ts'
 import { DAY } from './time.ts'
 
 /** Which days a series runs on: days of the week (0 = Sunday), or every N days from its first date. */
@@ -23,8 +30,10 @@ export interface SeriesRecord {
   /** Groups to come (TLC-9: hand-picked sets, TLC-6: sunrise and sunset) share this record shape. */
   kind: 'series'
   label: string
-  /** Local wall-clock time, "HH:MM". */
+  /** Local wall-clock time, "HH:MM" (with `sun`, only roughly when). */
   time: string
+  /** Runs at each day's sunrise or sunset at a place, not at `time`. */
+  sun?: SunAnchor
   repeat: Repeat
   /** The alarms every occurrence gets: how long before it each rings (0 = at it). */
   alarms: number[]
@@ -81,19 +90,23 @@ export function clockKey(ts: number): string {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-/** When a series' occurrence on `date` is. */
-export function occurrenceTs(s: Pick<SeriesRecord, 'time'>, date: string): number {
+/** When a series' occurrence on `date` is (NaN for a sun time on a day without one). */
+export function occurrenceTs(s: Pick<SeriesRecord, 'time' | 'sun'>, date: string): number {
   const [y, m, d] = parseKey(date)
+  if (s.sun) return sunEventOnDay(new Date(y, m - 1, d, 12).getTime(), s.sun, s.sun.event) ?? NaN
   const [hh, mm] = s.time.split(':').map(Number)
   return new Date(y, m - 1, d, hh, mm).getTime()
 }
 
+/** A sun time exists on `date` (the sun rises or sets); a clock time always does. */
+const hasTime = (s: SeriesRecord, date: string) => !s.sun || Number.isFinite(occurrenceTs(s, date))
+
 /** Whether the series runs on `date` (inside its dates, not skipped, and on its days). */
 export function occursOn(s: SeriesRecord, date: string): boolean {
   if (date < s.from || (s.until && date > s.until) || s.skips?.includes(date)) return false
-  if (s.repeat.kind === 'interval') return daysBetween(s.from, date) % Math.max(1, s.repeat.every) === 0
+  if (s.repeat.kind === 'interval') return daysBetween(s.from, date) % Math.max(1, s.repeat.every) === 0 && hasTime(s, date)
   const [y, m, d] = parseKey(date)
-  return s.repeat.days.includes(new Date(y, m - 1, d, 12).getDay())
+  return s.repeat.days.includes(new Date(y, m - 1, d, 12).getDay()) && hasTime(s, date)
 }
 
 /** The series' next occurrence after `now` (searching a little over a year), or null. */
@@ -137,6 +150,7 @@ export function parseVirtualId(id: string): { seriesId: string; date: string } |
  */
 export function virtualOccurrences(groups: readonly GroupRecord[], instants: readonly InstantRecord[], now: number, from: number, to: number): InstantRecord[] {
   const have = new Set(instants.filter(isOccurrence).map(i => `${i.seriesId}@${i.occurrence}`))
+  const ids = new Set(instants.map(i => i.id))
   const out: InstantRecord[] = []
   const last = dateKey(to)
   for (const s of groups) {
@@ -149,6 +163,8 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
       const ts = occurrenceTs(s, date)
       if (ts <= now || ts < from || ts > to) continue
       const id = virtualId(s.id, date)
+      // A stored one keeps the id it had as a virtual one.
+      if (ids.has(id)) continue
       out.push({
         id,
         tsEpochMs: ts,
@@ -156,6 +172,7 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
         ...(s.alarms.length > 0 ? { alarms: s.alarms.map((offsetMs, k) => ({ id: `${id}#${k}`, offsetMs })) } : {}),
         seriesId: s.id,
         occurrence: date,
+        ...(s.sun ? { sun: s.sun } : {}),
         virtual: true,
       })
     }
@@ -173,6 +190,7 @@ export function newOccurrence(s: SeriesRecord, date: string, ids: { instant: () 
     ...(s.alarms.length > 0 ? { alarms: s.alarms.map(offsetMs => ({ id: ids.alarm(), offsetMs })) } : {}),
     seriesId: s.id,
     occurrence: date,
+    ...(s.sun ? { sun: s.sun } : {}),
   }
 }
 
@@ -248,17 +266,23 @@ export function refreshOccurrence(s: SeriesRecord, inst: InstantRecord, now: num
     const keep = k >= 0 ? old.splice(k, 1)[0] : null
     return { id: keep?.id ?? newAlarmId(), offsetMs }
   })
-  const { alarms: _drop, ...rest } = inst
+  const { alarms: _drop, sun: _sun, ...rest } = inst
   void _drop
-  return { ...rest, tsEpochMs: ts, label: s.label, ...(alarms.length > 0 ? { alarms } : {}) }
+  void _sun
+  return { ...rest, tsEpochMs: ts, label: s.label, ...(alarms.length > 0 ? { alarms } : {}), ...(s.sun ? { sun: s.sun } : {}) }
 }
 
-/** The rule parts an occurrence carries: its name, time of day and alarms (not its snoozes). */
-export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'label' | 'time' | 'alarms'> {
+/**
+ * The rule parts an occurrence carries: its name, time of day and alarms (not its snoozes), and
+ * its sun anchor while it still sits on its sunrise or sunset (`sun` is then undefined: moved off
+ * it, the rule becomes that clock time).
+ */
+export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'sun'> {
   return {
     label: inst.label,
     time: clockKey(inst.tsEpochMs),
     alarms: (inst.alarms ?? []).filter(a => !a.snoozeOf).map(a => a.offsetMs).sort((a, b) => b - a),
+    sun: isAtSun(inst) ? inst.sun : undefined,
   }
 }
 
@@ -277,7 +301,7 @@ export function occursAheadBefore(s: SeriesRecord, date: string, now: number): b
  * ahead): the old one ends the day before, keeping its rule; the new one runs from `date` with
  * `rule`. Skipped dates go with the part they fall in.
  */
-export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'repeat'>>, id = newGroupId()): [SeriesRecord, SeriesRecord] {
+export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'repeat' | 'sun'>>, id = newGroupId()): [SeriesRecord, SeriesRecord] {
   const prev = prevDateKey(date)
   const before = s.skips?.filter(d => d < date) ?? []
   const after = s.skips?.filter(d => d >= date) ?? []
@@ -289,9 +313,10 @@ export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<Se
   return [old, next]
 }
 
-/** A new series that `inst` starts (it becomes the first occurrence). */
+/** A new series that `inst` starts (it becomes the first occurrence; at a sunset, it repeats at each sunset). */
 export function seriesFromInstant(inst: InstantRecord, repeat: Repeat, id = newGroupId()): SeriesRecord {
-  return { id, kind: 'series', ...ruleFromOccurrence(inst), repeat, from: dateKey(inst.tsEpochMs) }
+  const { sun, ...rule } = ruleFromOccurrence(inst)
+  return { id, kind: 'series', ...rule, ...(sun ? { sun } : {}), repeat, from: dateKey(inst.tsEpochMs) }
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +379,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
     seen.add(r.id)
     const alarms = Array.isArray(r.alarms) ? r.alarms.filter((a): a is number => typeof a === 'number' && Number.isFinite(a) && a >= 0) : []
     const skips = Array.isArray(r.skips) ? r.skips.filter((d): d is string => typeof d === 'string' && DATE_KEY.test(d)) : []
+    const sun = sanitizeSunAnchor(r.sun)
     return [{
       id: r.id,
       kind: 'series',
@@ -365,6 +391,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
       ...(typeof r.until === 'string' && DATE_KEY.test(r.until) ? { until: r.until } : {}),
       ...(skips.length > 0 ? { skips } : {}),
       ...(r.paused === true ? { paused: true } : {}),
+      ...(sun ? { sun } : {}),
     }]
   })
 }

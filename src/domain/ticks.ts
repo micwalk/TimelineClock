@@ -55,11 +55,20 @@ export function labelSpacingPx(orientation: Orientation): number {
   return orientation === 'vertical' ? VERTICAL_LABEL_SPACING_PX : HORIZONTAL_LABEL_SPACING_PX
 }
 
-/** Picks three consecutive units: the first one spaced at least `minLabelSpacingPx` is the middle tier. */
+/**
+ * How much closer than `minLabelSpacingPx` a unit's labels may sit. Hour labels are short
+ * ("8PM", "12AM"), so every hour is labeled down to about half the usual spacing, instead of
+ * dropping to 6-hourly labels (6AM, 12PM) while there is still room for each hour.
+ */
+export function labelSpacingFactor(unit: TickUnit): number {
+  return unit.ms === HOUR ? 0.45 : 1
+}
+
+/** Picks three consecutive units: the first one spaced at least its label spacing is the middle tier. */
 export function pickTickTiers(pxPerMs: number, minLabelSpacingPx = HORIZONTAL_LABEL_SPACING_PX): [TickUnit, TickUnit, TickUnit] {
   let mid = TICK_UNITS.length - 1
   for (let i = 0; i < TICK_UNITS.length; i++) {
-    if (TICK_UNITS[i].ms * pxPerMs >= minLabelSpacingPx) { mid = i; break }
+    if (TICK_UNITS[i].ms * pxPerMs >= minLabelSpacingPx * labelSpacingFactor(TICK_UNITS[i])) { mid = i; break }
   }
   const lo = Math.max(0, mid - 1)
   const hi = Math.min(TICK_UNITS.length - 1, mid + 1)
@@ -166,15 +175,16 @@ export function formatTickLabel(t: number, unit: TickUnit): string {
 
 /**
  * All ticks in [start, end]. When tiers coincide on the same timestamp they merge
- * into one tick: the tallest mark wins, and the label comes from whichever tier
- * currently shows its label most strongly. Output is sorted by time.
+ * into one tick: the tallest mark wins, the label shows as strongly as the strongest tier's,
+ * and its text and weight come from the coarsest tier showing one, so an hour among half hours
+ * reads "8PM", not "08:00", and midnight among hours reads "Oct 15". Output is sorted by time.
  */
 export function generateTicks(start: number, end: number, pxPerMs: number, maxPerTier = 600, minLabelSpacingPx = HORIZONTAL_LABEL_SPACING_PX): Tick[] {
   const tiers = pickTickTiers(pxPerMs, minLabelSpacingPx)
   const byTime = new Map<number, Tick>()
   tiers.forEach((unit, i) => {
     const tier = i as TickTier
-    const style = computeTickStyle(tier, unit.ms * pxPerMs, minLabelSpacingPx)
+    const style = computeTickStyle(tier, unit.ms * pxPerMs, minLabelSpacingPx * labelSpacingFactor(unit))
     for (const t of unitTimes(unit, start, end, maxPerTier)) {
       const label = style.labelAlpha > 0 ? formatTickLabel(t, unit) : null
       const prev = byTime.get(t)
@@ -182,17 +192,18 @@ export function generateTicks(start: number, end: number, pxPerMs: number, maxPe
         byTime.set(t, { t, tier, style, label })
         continue
       }
-      const labelFromNew = style.labelAlpha > prev.style.labelAlpha
+      // Tiers come finest first, so this one is the coarser.
+      const textFromNew = style.labelAlpha > 0 || prev.style.labelAlpha === 0
       byTime.set(t, {
         t,
         tier: Math.max(prev.tier, tier) as TickTier,
         style: {
           halfHeight: Math.max(prev.style.halfHeight, style.halfHeight),
-          labelAlpha: labelFromNew ? style.labelAlpha : prev.style.labelAlpha,
-          fontSizePx: labelFromNew ? style.fontSizePx : prev.style.fontSizePx,
-          bold: labelFromNew ? style.bold : prev.style.bold,
+          labelAlpha: Math.max(prev.style.labelAlpha, style.labelAlpha),
+          fontSizePx: Math.max(prev.style.fontSizePx, style.fontSizePx),
+          bold: textFromNew ? style.bold : prev.style.bold,
         },
-        label: labelFromNew ? label : prev.label,
+        label: textFromNew ? label : prev.label,
       })
     }
   })

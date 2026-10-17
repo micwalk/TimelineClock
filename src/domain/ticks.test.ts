@@ -41,8 +41,23 @@ describe('30-minute tier and orientation spacing', () => {
     const hour = ticks.find(t => t.t === new Date(2026, 9, 2, 13, 0).getTime())!
     expect(hour.label).toBe('1PM')
     expect(hour.style.labelAlpha).toBe(1)
-    // Horizontal at the same zoom: the 70px hour is too tight to be the labeled tier.
-    expect(pickTickTiers(pxPerMs)[1].ms).toBe(6 * HOUR)
+    // Horizontal at the same zoom: hour labels are short, so 70px still labels every hour.
+    expect(pickTickTiers(pxPerMs)[1].ms).toBe(HOUR)
+  })
+
+  it('labels every hour down to 45px apart in horizontal, then falls back to 6-hourly', () => {
+    expect(pickTickTiers(46 / HOUR)[1].ms).toBe(HOUR)
+    expect(pickTickTiers(40 / HOUR)[1].ms).toBe(6 * HOUR)
+    expect(pickTickTiers(22 / HOUR, labelSpacingPx('vertical'))[1].ms).toBe(HOUR)
+  })
+
+  it('takes the coarser tier’s text where tiers meet: an hour among half hours reads "8PM"', () => {
+    const pxPerMs = 330 / HOUR // half hours 165px apart: both tiers' labels fully shown
+    expect(pickTickTiers(pxPerMs).map(u => u.ms)).toEqual([15 * MINUTE, 30 * MINUTE, HOUR])
+    const t = new Date(2026, 9, 2, 20, 0).getTime()
+    const ticks = generateTicks(t - HOUR, t + HOUR, pxPerMs)
+    expect(ticks.find(k => k.t === t)!.label).toBe('8PM')
+    expect(ticks.find(k => k.t === t + 30 * MINUTE)!.label).toBe('08:30')
   })
 
   it('snaps to the same ticks it draws in vertical', () => {

@@ -22,6 +22,7 @@ import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/a
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { planRhythm, seriesItemId } from '../../domain/rhythm.ts'
+import { SUN_RHYTHM } from '../../domain/sunEvents.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
 import { useTimelineInstants } from './timelineInstants.ts'
@@ -351,14 +352,17 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     // Repeats zoomed out collapse into a rhythm (domain/rhythm): ticks and one summary chip.
     const ringingIds = new Set(c.ringing.map(k => parseRingKey(k).instantId))
     const worked = new Set([c.selected, c.secondary, c.mode === 'instant' ? c.focusedInstantId : null, c.editing, c.moving].filter(Boolean))
+    // Computed sunrises and sunsets collapse the same way, as one group (a tapped one is an instant of its own).
+    const rhythmGroup = (i: InstantRecord) => i.seriesId ?? (i.virtual && i.sun ? SUN_RHYTHM : undefined)
     const rhythm = planRhythm(
-      visible.filter(i => i.seriesId).map(i => ({
-        id: i.id, seriesId: i.seriesId!, pos: f.pos(i.tsEpochMs), ts: i.tsEpochMs,
+      visible.filter(i => rhythmGroup(i)).map(i => ({
+        id: i.id, seriesId: rhythmGroup(i)!, pos: f.pos(i.tsEpochMs), ts: i.tsEpochMs,
         keep: !!i.seriesEdited || worked.has(i.id) || ringingIds.has(i.id),
       })),
       {
         now: f.now,
-        gapPx: sid => (vertical ? t.rhythmGapPx : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
+        // Sun times collapse sooner in vertical (6 chips' height), so they gather before they fade out (sunHideDayPx).
+        gapPx: sid => (vertical ? (sid === SUN_RHYTHM ? Math.max(t.rhythmGapPx, 6 * CHIP_HEIGHT) : t.rhythmGapPx) : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
         // Its summary chip sits on screen (clear of the edges) when it can.
         view: sid => {
           // Clear of the ends by a chip's height (vertical) or half its own width (horizontal).

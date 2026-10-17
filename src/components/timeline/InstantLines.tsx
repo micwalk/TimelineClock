@@ -33,7 +33,11 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
   // collapsing into a rhythm animates from the line they already are (timeline.css).
   const seriesClass = useMemo(() => {
     const out = new Map<string, string>()
-    for (const i of instants) if (i.seriesId) out.set(i.id, i.alarms?.some(a => !a.answered) ? ' is-series is-alarmed' : ' is-series')
+    for (const i of instants) {
+      if (i.seriesId) out.set(i.id, i.alarms?.some(a => !a.answered) ? ' is-series is-alarmed' : ' is-series')
+      // Computed sunrises and sunsets: the same shape, in the sun's colour, fading out zoomed out (--sun-fade).
+      else if (i.virtual && i.sun) out.set(i.id, ' is-series is-alarmed is-sun')
+    }
     return out
   }, [instants])
   const cam = useRef({ origin: NaN, k: NaN, mainSize: NaN, orientation: '' as string, base: NaN, nodes: new Map<string, LineNode>() })

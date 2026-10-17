@@ -1,5 +1,7 @@
 // Persisted domain records. Field names match the original localStorage format
 // ('timeline.saved.v1' / 'timeline.spans.v1') so existing data keeps loading.
+import type { SunAnchor } from './sunEvents.ts'
+import { sanitizeSunAnchor } from './sunEvents.ts'
 
 export interface InstantRecord {
   id: string
@@ -17,12 +19,20 @@ export interface InstantRecord {
   occurrence?: string
   /** Changed on its own (name, time, alarms): the series' rule changes leave it alone. */
   seriesEdited?: boolean
+  /** At a sunrise or sunset (domain/sunEvents): it follows the sun while it stays there (isAtSun). */
+  sun?: SunAnchor
   /**
-   * Shown only, never stored: an occurrence past the horizon, computed for the timeline
-   * (domain/series virtualOccurrences). Tapping it stores it.
+   * A virtual instant: computed, never stored. A repeat's occurrence past the horizon (domain/series
+   * virtualOccurrences) or a sunrise or sunset (domain/sunEvents). Selected or focused, it is held
+   * in the instants list (store/entities holdInstant) but never saved or listed; any change to it
+   * makes it real (saved, same id).
    */
   virtual?: true
 }
+
+/** The instants that are stored: without virtual ones held while selected or focused (the same list when there are none). */
+export const storedInstants = (list: readonly InstantRecord[]): InstantRecord[] =>
+  (list.some(i => i.virtual) ? list.filter(i => !i.virtual) : (list as InstantRecord[]))
 
 /** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */
 export type AlarmAnswer = 'dismissed' | 'snoozed'
@@ -97,9 +107,10 @@ export function sanitizeInstants(data: unknown): InstantRecord[] {
   return data
     .filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number' && Number.isFinite(x.tsEpochMs))
     .map(x => {
-      const { alarm, alarms, ...rest } = x as InstantRecord & { alarm?: unknown }
+      const { alarm, alarms, sun, ...rest } = x as InstantRecord & { alarm?: unknown }
       const list = alarms !== undefined ? sanitizeAlarms(alarms) : alarm === true ? [{ id: legacyAlarmId(x.id), offsetMs: 0 }] : []
-      return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}) }
+      const anchor = sanitizeSunAnchor(sun)
+      return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}), ...(anchor ? { sun: anchor } : {}) }
     })
 }
 

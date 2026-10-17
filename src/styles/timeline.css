@@ -61,19 +61,34 @@
 .tl-ticks--labels { z-index: var(--z-ticks-labels); }
 .tl-tick__label:empty { display: none; }
 
-/* Days in view, top left */
-.tl-date {
+/* The sky behind everything (SkyLayer): a gradient band the engine pans. */
+.tl-sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: var(--sky-strength); }
+.tl-sky__band { position: absolute; will-change: transform; }
+
+/* The context header (ContextHeader): what the ticks leave out, stuck at the earlier edge. */
+.tl-context { position: absolute; inset: 0; z-index: var(--z-ticks-labels); overflow: hidden; pointer-events: none; }
+.tl-context__label {
   --accent: var(--c-axis-glow);
   position: absolute;
-  left: 14px;
-  top: 10px;
+  left: 0;
+  top: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--box-bg);
   font: 700 13px/1 var(--font-ui);
   letter-spacing: 0.06em;
-  z-index: var(--z-ticks-labels);
   text-transform: uppercase;
-  color: var(--ink-dim);
-  pointer-events: none;
+  color: var(--ink);
+  text-shadow: 0 0 calc(6px * var(--glow)) var(--c-axis-glow);
   white-space: nowrap;
+  will-change: transform;
+  animation: tl-context-in 250ms ease;
+  transition: opacity 250ms ease;
+}
+.tl-context__label.is-leaving { opacity: 0; }
+@keyframes tl-context-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tl-context__label { animation: none; transition: none; }
 }
 .tl-ticks__inner { position: absolute; left: 0; top: 0; will-change: transform; }
 
@@ -322,6 +337,8 @@
 /* Repeating series: the mark on an occurrence's chip, the Repeat tool's picker, and the
    "Apply to all future" pill an edited occurrence shows for a while (beside the chip). */
 .chip__repeat { color: var(--c-alarm); font: 800 13px/1 var(--font-ui); }
+/* At a sunrise or sunset: a sun before the name. */
+.chip__sun { flex: none; width: 14px; height: 14px; color: var(--c-sun); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-sun)); }
 .tl-col__apply {
   --accent: var(--c-alarm);
   position: absolute;
@@ -392,7 +409,10 @@
     left var(--rh-ms) ease, width var(--rh-ms) ease, top var(--rh-ms) ease, height var(--rh-ms) ease, box-shadow var(--rh-ms) ease;
 }
 .tl-col--line.is-rhythm { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--halo, var(--accent))); }
-.tl-col--line.is-rhythm.is-alarmed { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-alarm)); }
+.tl-col--line.is-rhythm.is-alarmed { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--rh-color, var(--c-alarm))); }
+/* Computed sunrises and sunsets: the rhythm in the sun's colour, fading out as days narrow. */
+.tl-col--line.is-sun { --rh-color: var(--c-sun); opacity: var(--sun-fade, 1); }
+.tl-series--sun { --accent: color-mix(in srgb, var(--c-sun) 70%, transparent); --halo: var(--c-sun); opacity: var(--sun-fade, 1); }
 .tl-col--line.is-rhythm .tl-col__line {
   --rh-solid: calc(var(--tl-axis) + (100% - var(--tl-axis)) * 0.35 / 3);
   --rh-end: calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3);
@@ -409,7 +429,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(to bottom, var(--c-alarm) 0, var(--c-alarm) calc(100% * 0.35 / 3), transparent calc(100% / 3));
+  background: linear-gradient(to bottom, var(--rh-color, var(--c-alarm)) 0, var(--rh-color, var(--c-alarm)) calc(100% * 0.35 / 3), transparent calc(100% / 3));
   transform-origin: 50% 0;
   scale: 1 0;
   transition: scale var(--rh-ms) ease;
@@ -431,7 +451,7 @@
   bottom: 0;
   left: var(--tl-axis);
   right: 0;
-  background: linear-gradient(to right, var(--c-alarm) 0, var(--c-alarm) calc(100% * 0.35 / 3), transparent calc(100% / 3));
+  background: linear-gradient(to right, var(--rh-color, var(--c-alarm)) 0, var(--rh-color, var(--c-alarm)) calc(100% * 0.35 / 3), transparent calc(100% / 3));
   transform-origin: 0 50%;
   scale: 0 1;
 }
@@ -945,8 +965,9 @@
   margin: 0 0 0 -1.5px;
 }
 
-/* Days in view: a slim strip along the top */
-.timeline[data-orientation='vertical'] .tl-date { left: 10px; top: 6px; }
+/* The context header: a spine down the left edge, reading the way time runs */
+.timeline[data-orientation='vertical'] .tl-context__label { top: 0; left: 4px; padding: 8px 3px; writing-mode: vertical-rl; }
+.timeline[data-orientation='vertical'] .tl-context.is-up .tl-context__label span { display: inline-block; transform: rotate(180deg); }
 
 /* Ticks: short horizontal marks across the axis, labels left of it */
 .timeline[data-orientation='vertical'] .tl-tick { left: var(--tl-axis); top: 0; }
@@ -1105,7 +1126,8 @@
 }
 .tl-agenda-btn svg { width: 22px; height: 22px; }
 .tl-agenda-btn:hover { color: var(--ink); }
-.timeline .tl-agenda-btn + .tl-date { left: calc(8px + var(--agenda-btn-size) + 10px); top: calc(4px + (var(--agenda-btn-size) - 13px) / 2); }
+/* Beside the ☰ button, the header's row lines up with it. */
+.timeline[data-orientation='horizontal'] .tl-agenda-btn ~ .tl-context .tl-context__label { top: calc(4px + (var(--agenda-btn-size) - 19px) / 2); }
 
 /* --- Dropping instants ---------------------------------------------------- */
 

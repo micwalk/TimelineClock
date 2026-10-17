@@ -4,6 +4,7 @@
 //   NEW ALARM                                             ✕
 //   [Wake Up 7:00a · Weekdays] [6:15a · Once]              ← recent: one tap fills the form in from it
 //   [  7:00         ]  ( AM | PM )                         ← AM/PM only when ambiguous
+//   (Sunrise)(Sunset)                                      ← with a location (Settings › Sky); or type "sunset"
 //   Tue 7:00a · in 7h 34m                                  ← where it lands, plainly (TLC-7)
 //   REPEAT   (Once)(Daily)(Weekdays)(Weekends) / M T W T F S S / Every − 2 + days
 //   RINGS    [On time][−5m][−15m][−30m][−1h][other]        ← at the time and/or before it; "20" in
@@ -22,9 +23,11 @@ import { createPortal } from 'react-dom'
 import { BellIcon } from '@heroicons/react/24/solid'
 import { XMarkIcon } from '@heroicons/react/20/solid'
 import type { RecentAlarm } from '../../domain/alarmPicker.ts'
-import { clockText, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
+import { clockText, hour24, isAmbiguous, nextAt, parseAlarmTime, parseSunWord, parseWarning, pickerOffsets, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
 import type { Repeat } from '../../domain/series.ts'
-import { dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
+import { clockKey, dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
+import type { GeoPoint, SunEvent } from '../../domain/sun.ts'
+import { SUN_EVENTS, nextSunEvent, sunEventName } from '../../domain/sun.ts'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
@@ -38,16 +41,24 @@ import { CtlButton } from './CtlButton.tsx'
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
 
-/** When an alarm at `time` ("HH:MM") first rings: the next time today or tomorrow, or the series' next occurrence. */
-function firstRing(time: string, repeat: Repeat | null, now: number): number | null {
-  const [h, m] = time.split(':').map(Number)
-  if (!repeat) return nextAt(h, m, now)
-  return nextOccurrence({ id: '', kind: 'series', label: '', time, repeat, alarms: [], from: dateKey(now) }, now)?.ts ?? null
+/**
+ * When an alarm at `time` ("HH:MM"), or at sunrise/sunset at `sun.loc`, first rings: the next
+ * time today or tomorrow (the next sunset), or the series' next occurrence.
+ */
+function firstRing(time: string, repeat: Repeat | null, now: number, sun: { event: SunEvent; loc: GeoPoint } | null = null): number | null {
+  const anchor = sun ? { event: sun.event, lat: sun.loc.lat, lon: sun.loc.lon } : undefined
+  if (!repeat) {
+    if (anchor) return nextSunEvent(now, anchor, anchor.event)
+    const [h, m] = time.split(':').map(Number)
+    return nextAt(h, m, now)
+  }
+  return nextOccurrence({ id: '', kind: 'series', label: '', time, repeat, alarms: [], from: dateKey(now), ...(anchor ? { sun: anchor } : {}) }, now)?.ts ?? null
 }
 
 const recentText = (r: RecentAlarm) => {
   const [h, m] = r.time.split(':').map(Number)
-  return `${r.label ? `${r.label} ` : ''}${formatClockCompact(nextAt(h, m, act.nowTime()), false)} · ${r.repeat ? describeRepeat(r.repeat) : 'Once'}`
+  const when = r.sun ? sunEventName(r.sun) : formatClockCompact(nextAt(h, m, act.nowTime()), false)
+  return `${r.label ? `${r.label} ` : ''}${when} · ${r.repeat ? describeRepeat(r.repeat) : 'Once'}`
 }
 
 /** A narrow screen (or the vertical layout, a phone's): the picker is a sheet. */
@@ -89,6 +100,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const editing = useEntities(s => (editId ? s.groups?.find(g => g.id === editId) : undefined))
   const recent = useQuick(s => s.recentAlarms ?? [])
   const ringDefaults = useSettings(s => s.alarmRings)
+  const loc = useSettings(s => s.skyLocation)
   const sheet = useSheet() || fromList
   const [text, setText] = useState('')
   const [pm, setPm] = useState<boolean | null>(null)
@@ -106,9 +118,9 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     seeded.current = null
   }
   /** Fills the form in: a series being edited, or a recent alarm. */
-  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string }) => {
+  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string; sun?: SunEvent }) => {
     const [h, m] = a.time.split(':').map(Number)
-    setText(`${h % 12 || 12}:${String(m).padStart(2, '0')}`)
+    setText(a.sun ? sunEventName(a.sun) : `${h % 12 || 12}:${String(m).padStart(2, '0')}`)
     setPm(h >= 12)
     setRepeat(a.repeat)
     setWarnings(a.warnings)
@@ -121,7 +133,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   if (open && seeded.current !== seedKey) {
     seeded.current = seedKey
     if (editing) {
-      fill({ ...editing, warnings: editing.alarms.filter(o => o > 0), onTime: editing.alarms.includes(0) })
+      fill({ ...editing, warnings: editing.alarms.filter(o => o > 0), onTime: editing.alarms.includes(0), sun: editing.sun?.event })
     } else {
       setWarnings(ringDefaults.warnings)
       setOnTime(ringDefaults.onTime)
@@ -148,11 +160,16 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   }, [open, sheet])
 
   const now = act.nowTime()
-  const typed = parseAlarmTime(text)
+  const sunWord = parseSunWord(text)
+  // A sun time needs to know where (Settings › Sky); editing a sun series keeps its own place.
+  const sunLoc = sunWord ? (loc ?? editing?.sun ?? null) : null
+  const sun = sunWord && sunLoc ? { event: sunWord, loc: sunLoc } : null
+  const typed = sunWord ? null : parseAlarmTime(text)
   const ambiguous = !!typed && isAmbiguous(typed)
   const usePm = pm ?? (typed ? soonerIsPm(typed, now) : false)
-  const time = typed ? clockText(hour24(typed, usePm), typed.m) : null
-  const ring = time ? firstRing(time, repeat, now) : null
+  const sunRing = sun ? firstRing('00:00', repeat, now, sun) : null
+  const time = typed ? clockText(hour24(typed, usePm), typed.m) : sunRing !== null ? clockKey(sunRing) : null
+  const ring = sun ? sunRing : time ? firstRing(time, repeat, now) : null
   const when = ring !== null ? `${dayFmt.format(ring)} ${formatClockCompact(ring, false)}` : ''
   const otherMs = parseWarning(other)
   // A length still in "other" counts as picked (Set may be tapped without leaving the box).
@@ -163,8 +180,9 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     e?.preventDefault()
     // A repeat may have no alarm (made with the ⟳ tool); a new alarm must ring.
     if (!time || ring === null || (!editing && rings.length === 0)) return
-    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings })
-    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime })
+    const anchor = sun ? { event: sun.event, lat: sun.loc.lat, lon: sun.loc.lon } : undefined
+    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings, sun: anchor })
+    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime, ...(sun ? { sun: sun.event } : {}) })
     close()
   }
   /** A recent alarm fills the form in (nothing is set until Set): change what you like first. */
@@ -205,9 +223,9 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
       <div className="alarm-pick__time">
         <input
           ref={timeRef}
-          className={`alarm-pick__input mono${text && !typed ? ' is-invalid' : ''}`}
-          aria-label="Time (7, 730, 7:30, 1730, 7p)"
-          aria-invalid={!!text && !typed}
+          className={`alarm-pick__input mono${text && !typed && !sunWord ? ' is-invalid' : ''}`}
+          aria-label="Time (7, 730, 7:30, 1730, 7p, or sunrise / sunset)"
+          aria-invalid={!!text && !typed && !sunWord}
           placeholder="7:00"
           value={text}
           onChange={e => { setText(e.target.value); setPm(null) }}
@@ -219,10 +237,19 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
           <button type="button" className={usePm ? 'is-on' : ''} aria-pressed={ambiguous && usePm} disabled={!ambiguous} onClick={() => setPm(true)}>PM</button>
         </div>
       </div>
+      {(loc || sunWord) && (
+        <div className="alarm-pick__row alarm-pick__sun" role="group" aria-label="At sunrise or sunset">
+          {SUN_EVENTS.map(e => (
+            <button key={e} type="button" className={`repeat-chip glow-box${sunWord === e ? ' is-on' : ''}`} aria-pressed={sunWord === e}
+              onClick={() => { setText(sunWord === e ? '' : sunEventName(e)); setPm(null) }}>{sunEventName(e)}</button>
+          ))}
+        </div>
+      )}
       <div className={`alarm-pick__lands${ring === null ? ' is-hint' : ''}`} aria-live="polite">
         {ring !== null
           ? `${repeat ? `${describeRepeat(repeat)} · first ` : ''}${when} · ${formatRelativeShort(ring - now)}`
-          : typed ? 'Never, on these days' : 'Type a time: 7, 730, 7:30, 1730 or 7p'}
+          : sunWord && !sunLoc ? 'Set your location in Settings › Sky for sunrise and sunset'
+          : typed || sunWord ? 'Never, on these days' : 'Type a time: 7, 730, 7:30, 1730 or 7p'}
       </div>
       {/* Editing a series it always repeats (no Once); otherwise Once is null. */}
       {section('Repeat', <RepeatPicker value={repeat} onChange={r => setRepeat(editing ? r ?? repeat : r)} allowOnce={!editing} />)}
@@ -242,7 +269,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
       <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null || (!editing && rings.length === 0)}>
         {editing
-          ? (ring === null || !time ? 'Save' : `Save · ${describeRepeat(repeat ?? editing.repeat)} ${formatClockCompact(ring, false)}`)
+          ? (ring === null || !time ? 'Save' : `Save · ${describeRepeat(repeat ?? editing.repeat)} ${sun ? sunEventName(sun.event).toLowerCase() : formatClockCompact(ring, false)}`)
           : ring === null ? 'Set alarm' : rings.length === 0 ? 'Pick when it rings' : `Set alarm · ${when}`}
       </button>
       {editing && (

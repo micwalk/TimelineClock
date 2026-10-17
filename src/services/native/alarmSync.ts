@@ -3,6 +3,7 @@
 // the answers given from notifications while the page wasn't running, then hands the native
 // side the full list; it works out what to schedule, ring or stop. Decisions:
 // domain/nativeNotifications.
+import { storedInstants } from '../../domain/entities.ts'
 import { findAlarm, parseRingKey } from '../../domain/alarms.ts'
 import { desiredNativeAlarms, replayAlarmActions, sanitizeAlarmActions } from '../../domain/nativeNotifications.ts'
 import { useAlarms } from '../../store/alarms.ts'
@@ -35,7 +36,8 @@ async function syncOnce() {
     snooze: (key, at) => snooze(key, SNOOZE_MINUTES, at),
   })
 
-  const { instants, spans } = useEntities.getState()
+  const { spans } = useEntities.getState()
+  const instants = storedInstants(useEntities.getState().instants)
   const { autoDismissMs, unattended } = useAlarms.getState()
   const status = await timed('sync', Alarms.sync({
     alarms: desiredNativeAlarms(instants, spans, Date.now(), autoDismissMs),
