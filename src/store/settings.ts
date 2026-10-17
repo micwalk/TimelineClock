@@ -62,6 +62,8 @@ export interface SettingsState {
   skyLocation: SkyLocation | null
   /** Which of sunrise and sunset show on the timeline (once a location is set); switched in the Agenda's Repeats tab. */
   sunEvents: SunEvent[]
+  /** Clock changes (daylight saving) on the timeline. */
+  dstShifts: boolean
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -81,6 +83,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     alarmRings: sanitizeRingDefaults(r.alarmRings),
     sky: r.sky === 'fixed' || r.sky === 'off' ? r.sky : 'auto',
     skyLocation: sanitizeSkyLocation(r.skyLocation),
+    dstShifts: r.dstShifts !== false,
     // Was one on/off switch for both.
     sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
@@ -89,7 +92,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyLocation: s.skyLocation, sunEvents: s.sunEvents, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -110,6 +113,7 @@ export const settings = {
   setStopwatchKeepStart: (stopwatchKeepStart: boolean) => useSettings.setState({ stopwatchKeepStart }),
   setAgendaPlacement: (agendaPlacement: AgendaSetting) => useSettings.setState({ agendaPlacement }),
   setSky: (sky: SkyMode) => useSettings.setState({ sky }),
+  setDstShifts: (dstShifts: boolean) => useSettings.setState({ dstShifts }),
   /** Shows or hides sunrises (or sunsets) on the timeline. */
   setSunEventShown: (event: SunEvent, shown: boolean) =>
     useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),

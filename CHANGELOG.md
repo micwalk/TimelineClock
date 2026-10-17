@@ -7,6 +7,20 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.4.2 — 2026-10-17
+
+**Android app: install the new version** (for Export; everything else updates itself).
+
+- **Export works in the Android app**: it opens Android's "Save to…" picker so you choose where
+  the backup goes. (The app ignored the page's download before, so Export did nothing.) An
+  older app says to update instead of doing nothing.
+- **Clock changes** (daylight saving): around a change the header names the zone, "Sun, Nov 1 ·
+  1 AM PDT" and then "· 1 AM PST", so the hour that happens twice reads as two. Each change is
+  an instant on the timeline, "Clocks back 1h · PST", computed like sunsets (Settings ›
+  Timeline can turn them off); it can't be moved or deleted, only hidden.
+- A day's step (± with a 24h step) keeps the clock time across a clock change.
+- Settings no longer has the developer's test-alarm button.
+
 ## 0.4.1 — 2026-10-17
 
 **Android app: web only** (nothing to install; it updates itself).

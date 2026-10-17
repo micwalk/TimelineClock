@@ -7,7 +7,6 @@ import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import { MINUTE } from '../../domain/time.ts'
 import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
-import * as act from '../../store/actions.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
 import { AppVersion } from './AppVersion.tsx'
 import { ShellStatus } from './ShellStatus.tsx'
@@ -28,12 +27,12 @@ export function SettingsPanel() {
   const orientation = useSettings(s => s.orientation)
   const verticalDir = useSettings(s => s.verticalDir)
   const tickSnap = useSettings(s => s.tickSnap)
+  const dstShifts = useSettings(s => s.dstShifts)
   const stopwatchKeepStart = useSettings(s => s.stopwatchKeepStart)
   const agendaPlacement = useSettings(s => s.agendaPlacement)
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
-  const close = () => setPos(null)
 
   useEffect(() => {
     if (!open) return
@@ -126,6 +125,10 @@ export function SettingsPanel() {
                 <option value="always">Always</option>
               </select>
             </label>
+            <label className="settings__row" title="The moments the clocks go forward or back (daylight saving), as instants on the timeline">
+              <span>Clock changes on the timeline</span>
+              <input type="checkbox" checked={dstShifts} onChange={e => settings.setDstShifts(e.target.checked)} />
+            </label>
             <label className="settings__row">
               <span>Snap cursor to ticks</span>
               <input type="checkbox" checked={tickSnap} onChange={e => settings.setTickSnap(e.target.checked)} />
@@ -170,13 +173,6 @@ export function SettingsPanel() {
               <summary><h3>Advanced</h3></summary>
               <AdvancedSettings />
             </details>
-          </section>
-
-          <section className="settings__group">
-            <h3>Dev</h3>
-            <button type="button" className="settings__action glow-box" onClick={() => { act.createTestAlarm(); close() }}>
-              Test alarm (rings in 3s)
-            </button>
           </section>
 
           <AppVersion className="settings__version mono" />

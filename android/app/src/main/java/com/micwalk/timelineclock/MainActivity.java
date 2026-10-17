@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
         Diag.log(this, "activity created" + (savedInstanceState != null ? " (restored)" : ""));
         registerPlugin(AlarmsPlugin.class);
         registerPlugin(LiveNotificationsPlugin.class);
+        registerPlugin(FilesPlugin.class);
 
         String site = null;
         if (BuildConfig.PREVIEW) {

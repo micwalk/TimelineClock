@@ -288,6 +288,10 @@ Netlify builds for every pull request).
     any of the app's notifications (including the tap that started the app). A tap on a
     ringing alarm silences it (`Alarms.silence`: the notification is posted again without
     sound); Silence in the app does the same for every ringing alarm.
+  - `FilesPlugin.java`: saving a file (a backup export). The WebView ignores download links,
+    so `services/fileTransfer.saveText` hands the text to `Files.save`, which opens Android's
+    "Save to…" picker (`ACTION_CREATE_DOCUMENT`, no storage permission) and writes it there.
+    An app from before it answers UNIMPLEMENTED, and the page says to update the app.
 - `src/services/nativeShell.ts` detects the shell (`window.Capacitor`, set by the shell before
   the page runs) and loads `src/services/native/` with a dynamic `import()`, so browsers never
   download it. The decisions are pure and tested in `src/domain/nativeNotifications.ts`.

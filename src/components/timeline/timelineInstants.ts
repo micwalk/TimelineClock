@@ -9,6 +9,7 @@ import { engine } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { virtualOccurrences } from '../../domain/series.ts'
 import { virtualSunEvents } from '../../domain/sunEvents.ts'
+import { virtualDstShifts } from '../../domain/dst.ts'
 import { DAY } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
@@ -22,16 +23,19 @@ export function useTimelineInstants(): InstantRecord[] {
   const range = useFrameValue(dayRange)
   const loc = useSettings(s => (s.sunEvents.length > 0 ? s.skyLocation : null))
   const sunEvents = useSettings(s => s.sunEvents)
+  const dst = useSettings(s => s.dstShifts)
   // Zoomed out, sun chips collapse into a rhythm (savedLayout) and fade (--sun-fade); once days are
   // narrower than the tunable, they are gone: the sky shows it.
   const wide = useFrameValue(f => f.pxPerMs * DAY >= getTunables().sunHideDayPx)
   return useMemo(() => {
     const sun = loc && wide
-    if ((!groups || groups.length === 0) && !sun) return instants
+    if ((!groups || groups.length === 0) && !sun && !dst) return instants
     const [first, last] = range.split(':').map(Number)
     const occurrences = groups && groups.length > 0 ? virtualOccurrences(groups, instants, engine.sample().now, first * DAY, last * DAY) : []
     const withOccurrences = occurrences.length > 0 ? [...instants, ...occurrences] : instants
     const suns = sun ? virtualSunEvents(loc, withOccurrences, first * DAY, last * DAY, sunEvents) : []
-    return suns.length > 0 ? [...withOccurrences, ...suns] : withOccurrences
-  }, [instants, groups, range, loc, wide, sunEvents])
+    // Clock changes (daylight saving): a few a year, always shown while switched on.
+    const shifts = dst ? virtualDstShifts(withOccurrences, first * DAY, last * DAY) : []
+    return suns.length + shifts.length > 0 ? [...withOccurrences, ...suns, ...shifts] : withOccurrences
+  }, [instants, groups, range, loc, wide, sunEvents, dst])
 }

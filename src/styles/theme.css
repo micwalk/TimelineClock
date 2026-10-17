@@ -50,6 +50,7 @@
   --c-favorite: #facc15;
   --c-alarm: #fbbf24;
   --c-sun: #fb923c; /* sunrise and sunset chips */
+  --c-dst: #c084fc; /* clock changes (daylight saving) */
   --c-danger: #f43f5e;
   --c-ok: #22c55e;
   --c-past: #fca5a5;

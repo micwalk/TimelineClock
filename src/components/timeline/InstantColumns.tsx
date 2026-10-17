@@ -37,6 +37,7 @@ import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { describeRepeat, describeRepeatShort, occurrenceTs } from '../../domain/series.ts'
 import { sunEventName } from '../../domain/sun.ts'
 import { SUN_RHYTHM, isAtSun, parseSunVirtualId } from '../../domain/sunEvents.ts'
+import { isAtDstShift } from '../../domain/dst.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { seriesItemId } from '../../domain/rhythm.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
@@ -127,6 +128,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
   // At a sunrise or sunset (and still on it): a sun before its name.
   const atSun = useMemo(() => isAtSun({ tsEpochMs: ts, sun: inst.sun }), [ts, inst.sun])
+  // At a clock change (daylight saving): a clock before its name.
+  const atShift = useMemo(() => isAtDstShift({ id: inst.id, tsEpochMs: ts }), [inst.id, ts])
+  const fixed = atSun || atShift
   const withSeconds = fineSeconds || selected || focused
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
@@ -156,9 +160,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
       {/* A sunrise or sunset never moves. */}
-      {focused && !isAtSun(inst) && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      {focused && !fixed && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* A sunrise or sunset already shows every day: repeating one only means something with an alarm on it. */}
-      {(inst.seriesId || !isAtSun(inst) || openAlarms(inst).length > 0) && <RepeatTool inst={inst} />}
+      {(inst.seriesId || (!atShift && (!atSun || openAlarms(inst).length > 0))) && <RepeatTool inst={inst} />}
       {/* An alarm still to ring is never hidden. */}
       {(inst.hidden || !armed) && (
         <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
@@ -167,7 +171,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
       {inst.seriesId
         ? <DeleteOccurrenceTool inst={inst} />
-        : !isAtSun(inst) && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
+        : !fixed && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
     </>
   ) : moving ? (
     <>
@@ -226,6 +230,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
+            {atShift && <ClockIcon className="chip__dst" aria-label="clock change" />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
