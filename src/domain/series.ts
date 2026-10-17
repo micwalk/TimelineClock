@@ -109,10 +109,19 @@ export function occursOn(s: SeriesRecord, date: string): boolean {
   return s.repeat.days.includes(new Date(y, m - 1, d, 12).getDay()) && hasTime(s, date)
 }
 
+/**
+ * The first date whose occurrence may still be ahead of `now`: today, or for a sun time the day
+ * before (a sunset at the place can fall after midnight here).
+ */
+function firstDateAhead(s: SeriesRecord, now: number): string {
+  const d = s.sun ? prevDateKey(dateKey(now)) : dateKey(now)
+  return d < s.from ? s.from : d
+}
+
 /** The series' next occurrence after `now` (searching a little over a year), or null. */
 export function nextOccurrence(s: SeriesRecord, now: number): { date: string; ts: number } | null {
   if (s.paused) return null
-  let date = dateKey(now) < s.from ? s.from : dateKey(now)
+  let date = firstDateAhead(s, now)
   for (let k = 0; k < 400; k++, date = nextDateKey(date)) {
     if (s.until && date > s.until) return null
     if (!occursOn(s, date)) continue
@@ -155,7 +164,7 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
   const last = dateKey(to)
   for (const s of groups) {
     if (s.kind !== 'series' || s.paused) continue
-    const first = dateKey(Math.max(from, now))
+    const first = from > now ? dateKey(from) : firstDateAhead(s, now)
     const start = out.length
     for (let date = first < s.from ? s.from : first; date <= last && out.length - start < MAX_VIRTUAL_OCCURRENCES; date = nextDateKey(date)) {
       if (s.until && date > s.until) break
@@ -210,7 +219,7 @@ export function planOccurrences(
   const last = dateKey(until)
   for (const s of groups) {
     if (s.kind !== 'series' || s.paused) continue
-    for (let date = dateKey(now) < s.from ? s.from : dateKey(now); date <= last; date = nextDateKey(date)) {
+    for (let date = firstDateAhead(s, now); date <= last; date = nextDateKey(date)) {
       if (s.until && date > s.until) break
       if (have.has(`${s.id}@${date}`) || !occursOn(s, date)) continue
       const ts = occurrenceTs(s, date)
@@ -289,7 +298,7 @@ export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'lab
 /** Whether the series still rings before `date`: an occurrence on an earlier date that is ahead of `now`. */
 export function occursAheadBefore(s: SeriesRecord, date: string, now: number): boolean {
   if (s.paused) return false
-  for (let d = dateKey(now) < s.from ? s.from : dateKey(now); d < date; d = nextDateKey(d)) {
+  for (let d = firstDateAhead(s, now); d < date; d = nextDateKey(d)) {
     if (s.until && d > s.until) return false
     if (occursOn(s, d) && occurrenceTs(s, d) > now) return true
   }

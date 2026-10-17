@@ -25,14 +25,20 @@ describe('sunEventOnDay / nextSunEvent', () => {
 describe('virtualSunEvents', () => {
   const from = day(2026, 10, 15) - 12 * HOUR
   const to = from + 2 * DAY
-  it('gives a sunrise and a sunset each day, named and anchored', () => {
+  it('gives a sunrise and a sunset each day, in order, named and anchored (whatever the device\'s timezone)', () => {
     const list = virtualSunEvents(SF, [], from, to)
-    expect(list.map(i => i.label)).toEqual(['Sunrise', 'Sunset', 'Sunrise', 'Sunset'])
+    expect(list.filter(i => i.label === 'Sunrise')).toHaveLength(2)
+    expect(list.filter(i => i.label === 'Sunset')).toHaveLength(2)
+    for (let k = 1; k < list.length; k++) {
+      expect(list[k].tsEpochMs).toBeGreaterThan(list[k - 1].tsEpochMs)
+      expect(list[k].label).not.toBe(list[k - 1].label)
+    }
     expect(list.every(i => i.virtual && i.sun && isAtSun(i))).toBe(true)
-    expect(parseSunVirtualId(list[1].id)).toEqual({ event: 'sunset', ts: list[1].tsEpochMs })
+    const sunset = list.find(i => i.label === 'Sunset')!
+    expect(parseSunVirtualId(sunset.id)).toEqual({ event: 'sunset', ts: sunset.tsEpochMs })
   })
   it('leaves out one an instant already stands for', () => {
-    const [, sunset] = virtualSunEvents(SF, [], from, to)
+    const sunset = virtualSunEvents(SF, [], from, to).find(i => i.label === 'Sunset')!
     const stored = { id: 'a', tsEpochMs: sunset.tsEpochMs, label: 'Beach', sun: { event: 'sunset' as const, ...SF } }
     expect(virtualSunEvents(SF, [stored], from, to).map(i => i.id)).not.toContain(sunset.id)
   })
