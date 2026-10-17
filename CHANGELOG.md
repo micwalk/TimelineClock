@@ -22,6 +22,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   "○ 8 unnamed" once more than a day is on screen. They are never hidden unless you choose to.
 - Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
   Advanced setting).
+- In horizontal, the NOW button sits right under the timeline's center, so while following Now
+  the red Now line runs straight down into it.
 
 ## 0.4.3 — 2026-10-17
 

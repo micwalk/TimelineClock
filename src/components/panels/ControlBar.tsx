@@ -117,19 +117,26 @@ export function ControlBar() {
     )
   }
 
+  // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
+  // while following Now), with the other buttons gathered to either side of it.
   return (
-    <nav className="controls" aria-label="Timeline controls">
-      <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
-      <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
-      <IncrementButton direction={-1} />
-      {nowButton()}
-      <IncrementButton direction={1} />
-      <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
-      <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
-      <span className="controls__sep" aria-hidden />
-      <StopwatchButton />
-      <TimerButton />
-      <AlarmButton />
+    <nav className="controls controls--horizontal" aria-label="Timeline controls">
+      <div className="controls__side is-before">
+        <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
+        <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
+        <IncrementButton direction={-1} />
+      </div>
+      {/* While following Now, the Now line runs on down into the button. */}
+      <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>{nowButton()}</div>
+      <div className="controls__side is-after">
+        <IncrementButton direction={1} />
+        <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
+        <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
+        <span className="controls__sep" aria-hidden />
+        <StopwatchButton />
+        <TimerButton />
+        <AlarmButton />
+      </div>
     </nav>
   )
 }

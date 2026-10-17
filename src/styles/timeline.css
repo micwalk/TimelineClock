@@ -413,9 +413,9 @@
 /* Computed sunrises and sunsets: the rhythm in the sun's colour. A group's rhythm and summary
    fade out (opacity written per frame) before its zoom hides it (domain/displayGroups). */
 .tl-col--line.is-sun { --rh-color: var(--c-sun); }
-.tl-series--sun { --accent: color-mix(in srgb, var(--c-sun) 70%, transparent); --halo: var(--c-sun); }
+.tl-series.tl-series--sun { --accent: color-mix(in srgb, var(--c-sun) 70%, transparent); --halo: var(--c-sun); }
 /* Unnamed instants gathered: a summary in the instants' own colour. */
-.tl-series--unnamed { --accent: color-mix(in srgb, var(--c-instant-glow) 70%, transparent); --halo: var(--c-instant-glow); }
+.tl-series.tl-series--unnamed { --accent: color-mix(in srgb, var(--c-instant-glow) 70%, transparent); --halo: var(--c-instant-glow); }
 .tl-col--line.is-rhythm .tl-col__line {
   --rh-solid: calc(var(--tl-axis) + (100% - var(--tl-axis)) * 0.35 / 3);
   --rh-end: calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3);
