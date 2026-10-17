@@ -1305,3 +1305,37 @@
 }
 .tl-col__tools, .tl-lane__tools > *, .tl-lane__end > *, .chip__name-hint { animation: tools-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 .timeline:not([data-orientation='vertical']) { transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* Rainbow road: stars behind the sky, and the axis as a shimmering rainbow road. */
+:root[data-sky='rainbow'] .tl-sky {
+  background:
+    radial-gradient(1px 1px at 12% 22%, #fff 99%, transparent),
+    radial-gradient(1px 1px at 31% 71%, #fff 99%, transparent),
+    radial-gradient(1.5px 1.5px at 47% 14%, #fff 99%, transparent),
+    radial-gradient(1px 1px at 63% 52%, #fff 99%, transparent),
+    radial-gradient(1.5px 1.5px at 78% 31%, #fff 99%, transparent),
+    radial-gradient(1px 1px at 89% 81%, #fff 99%, transparent),
+    radial-gradient(1px 1px at 22% 88%, #fff 99%, transparent),
+    radial-gradient(1px 1px at 55% 92%, #fff 99%, transparent);
+  background-size: 260px 180px;
+}
+:root[data-sky='rainbow'] .tl-axis {
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--rainbow)) 0 0 / 600px 100% repeat-x;
+  box-shadow: 0 0 calc(8px * var(--glow)) rgb(255 255 255 / 0.5), 0 0 calc(22px * var(--glow)) rgb(191 90 242 / 0.6);
+  animation: rainbow-road 6s linear infinite;
+}
+:root[data-sky='rainbow'] .timeline[data-orientation='vertical'] .tl-axis {
+  width: 6px;
+  height: auto;
+  margin: 0 0 0 -3px;
+  background: linear-gradient(180deg, var(--rainbow)) 0 0 / 100% 600px repeat-y;
+  animation-name: rainbow-road-v;
+}
+@keyframes rainbow-road { to { background-position: 600px 0; } }
+@keyframes rainbow-road-v { to { background-position: 0 600px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-sky='rainbow'] .tl-axis { animation: none; }
+}

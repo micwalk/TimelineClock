@@ -67,6 +67,10 @@
   --sky-day: rgb(64 140 230 / 0.34);
   --sky-noon: rgb(96 170 245 / 0.42);
 
+  /* Rainbow road (Settings › Sky › Colors): the same bands through the rainbow, night to noon,
+     over stars, with a rainbow axis. Swapped in below by :root[data-sky='rainbow']. */
+  --rainbow: #ff2d55, #ff9500, #ffd60a, #34c759, #0af, #5e5ce6, #bf5af2, #ff2d55;
+
   /* One knob for every glow in the app (0 = flat, 1 = default, 2 = extra neon). */
   --glow: 1;
 
@@ -161,4 +165,15 @@ input { font: inherit; color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* --- Rainbow road ------------------------------------------------------- */
+:root[data-sky='rainbow'] {
+  --sky-midnight: rgb(110 30 170 / 0.42); /* violet */
+  --sky-dark: rgb(80 40 200 / 0.42); /* indigo */
+  --sky-astro: rgb(30 90 230 / 0.46); /* blue */
+  --sky-nautical: rgb(20 190 120 / 0.44); /* green */
+  --sky-horizon: rgb(250 210 30 / 0.5); /* yellow */
+  --sky-day: rgb(255 140 20 / 0.42); /* orange */
+  --sky-noon: rgb(255 50 80 / 0.44); /* red */
 }

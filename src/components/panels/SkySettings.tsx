@@ -12,6 +12,7 @@ type Status = { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; text: strin
 
 export function SkySettings() {
   const mode = useSettings(s => s.sky)
+  const style = useSettings(s => s.skyStyle)
   const loc = useSettings(s => s.skyLocation)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -61,6 +62,13 @@ export function SkySettings() {
           <option value="auto">Sun</option>
           <option value="fixed">Fixed 6a–6p</option>
           <option value="off">Off</option>
+        </select>
+      </label>
+      <label className="settings__row">
+        <span>Colors</span>
+        <select value={style} onChange={e => settings.setSkyStyle(e.target.value === 'rainbow' ? 'rainbow' : 'sky')}>
+          <option value="sky">Sky</option>
+          <option value="rainbow">Rainbow road</option>
         </select>
       </label>
       <div className="settings__row settings__row--wrap">
