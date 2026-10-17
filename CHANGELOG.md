@@ -16,7 +16,7 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   older app says to update instead of doing nothing.
 - **Clock changes** (daylight saving): around a change the header names the zone, "Sun, Nov 1 ·
   1 AM PDT" and then "· 1 AM PST", so the hour that happens twice reads as two. Each change is
-  an instant on the timeline, "Clocks back 1h · PST", computed like sunsets (Settings ›
+  an instant on the timeline, "DST ends (🕰️back)" or "DST begins (🕰️fwd)", computed like sunsets (Settings ›
   Timeline can turn them off); it can't be moved or deleted, only hidden.
 - A day's step (± with a 24h step) keeps the clock time across a clock change.
 - Settings no longer has the developer's test-alarm button.

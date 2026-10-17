@@ -128,7 +128,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
   // At a sunrise or sunset (and still on it): a sun before its name.
   const atSun = useMemo(() => isAtSun({ tsEpochMs: ts, sun: inst.sun }), [ts, inst.sun])
-  // At a clock change (daylight saving): a clock before its name.
+  // At a clock change (daylight saving): never moved or deleted (its name carries the 🕰️).
   const atShift = useMemo(() => isAtDstShift({ id: inst.id, tsEpochMs: ts }), [inst.id, ts])
   const fixed = atSun || atShift
   const withSeconds = fineSeconds || selected || focused
@@ -230,7 +230,6 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
-            {atShift && <ClockIcon className="chip__dst" aria-label="clock change" />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">

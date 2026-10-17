@@ -80,11 +80,9 @@ export function isDstShiftAt(ts: number, timeZone?: string): boolean {
   return utcOffsetMin(ts - MINUTE, timeZone) !== utcOffsetMin(ts, timeZone)
 }
 
-/** "Clocks back 1h · PST", "Clocks forward 1h · PDT" (the zone it changes to); other sizes say so ("30m"). */
-export function describeShift(s: DstShift, timeZone?: string): string {
-  const diff = s.after - s.before
-  const size = Math.abs(diff) % 60 === 0 ? `${Math.abs(diff) / 60}h` : `${Math.abs(diff)}m`
-  return `Clocks ${diff < 0 ? 'back' : 'forward'} ${size} · ${zoneAbbrev(s.ts, timeZone)}`
+/** "DST ends (🕰️back)" when the clocks go back, "DST begins (🕰️fwd)" when they go forward (the header names the zones). */
+export function describeShift(s: DstShift): string {
+  return s.after < s.before ? 'DST ends (🕰️back)' : 'DST begins (🕰️fwd)'
 }
 
 /** A computed clock change's id: "dst:<epoch ms>". */
@@ -104,7 +102,7 @@ export function virtualDstShifts(instants: readonly InstantRecord[], from: numbe
   const ids = new Set(instants.map(i => i.id))
   return dstShifts(from, to, timeZone)
     .filter(s => !ids.has(dstVirtualId(s.ts)))
-    .map(s => ({ id: dstVirtualId(s.ts), tsEpochMs: s.ts, label: describeShift(s, timeZone), virtual: true as const }))
+    .map(s => ({ id: dstVirtualId(s.ts), tsEpochMs: s.ts, label: describeShift(s), virtual: true as const }))
 }
 
 /**

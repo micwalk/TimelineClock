@@ -338,8 +338,6 @@
    "Apply to all future" pill an edited occurrence shows for a while (beside the chip). */
 .chip__repeat { color: var(--c-alarm); font: 800 13px/1 var(--font-ui); }
 /* At a sunrise or sunset: a sun before the name. */
-/* At a clock change (daylight saving): a clock before the name. */
-.chip__dst { flex: none; width: 14px; height: 14px; color: var(--c-dst); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-dst)); }
 .chip__sun { flex: none; width: 14px; height: 14px; color: var(--c-sun); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-sun)); }
 .tl-col__apply {
   --accent: var(--c-alarm);
