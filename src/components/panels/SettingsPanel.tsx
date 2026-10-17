@@ -14,7 +14,6 @@ import { PreviewSwitch } from './PreviewSwitch.tsx'
 import { ShellDiagnostics } from './ShellDiagnostics.tsx'
 import { DataSettings } from './DataSettings.tsx'
 import { SkySettings } from './SkySettings.tsx'
-import { LemonLog } from './LemonLog.tsx'
 import { panelPosition } from './panelPosition.ts'
 import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
 
@@ -164,11 +163,6 @@ export function SettingsPanel() {
               </select>
             </label>
             <AlarmRingSettings />
-          </section>
-
-          <section className="settings__group">
-            <h3>Lemon log</h3>
-            <LemonLog />
           </section>
 
           <section className="settings__group">

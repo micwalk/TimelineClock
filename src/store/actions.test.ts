@@ -12,7 +12,6 @@ import { settings, useSettings } from './settings.ts'
 import { parseBackup } from '../domain/backup.ts'
 import { useUi } from './ui.ts'
 import { useQuick } from './quick.ts'
-import { lemons, useLemons } from './lemons.ts'
 import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
 import { nextSunEvent } from '../domain/sun.ts'
 import { isAtSun, sunVirtualId, virtualSunEvents } from '../domain/sunEvents.ts'
@@ -1079,40 +1078,5 @@ describe('virtual instants (#11): held while selected, real once changed', () =>
     act.clearSelection()
     expect(instant(v.id)).toMatchObject({ hidden: true })
     expect(virtualSunEvents(SF, useEntities.getState().instants, v.tsEpochMs - HOUR, v.tsEpochMs + HOUR)).toEqual([])
-  })
-})
-
-describe('the lemon log: "Are you a sour lemon?"', () => {
-  beforeEach(() => { useLemons.setState({ log: [], asking: null }); useSettings.setState({ askLemon: true }) })
-  it('asks after you name something, and keeps the answer with what you wrote', () => {
-    const id = entities.createInstant(Date.now(), '')
-    act.renameInstant(id, 'Rice')
-    expect(useLemons.getState().asking).toEqual({ text: 'Rice', kind: 'name' })
-    lemons.answer(true, 1000)
-    expect(useLemons.getState().log).toEqual([{ id: expect.any(String), ts: 1000, sour: true, text: 'Rice', kind: 'name' }])
-    expect(useLemons.getState().asking).toBeNull()
-  })
-  it('asks after a timer; not for an empty name, an unchanged one, or when turned off', () => {
-    act.startTimer(13 * MINUTE)
-    expect(useLemons.getState().asking).toEqual({ text: '13m timer', kind: 'timer' })
-    lemons.dismiss()
-    expect(useLemons.getState().log).toEqual([])
-    const id = entities.createInstant(Date.now(), 'Tea')
-    act.renameInstant(id, 'Tea')
-    act.renameInstant(id, '')
-    expect(useLemons.getState().asking).toBeNull()
-    useSettings.setState({ askLemon: false })
-    act.renameInstant(id, 'Coffee')
-    expect(useLemons.getState().asking).toBeNull()
-  })
-  it('goes into backups and comes back (combined with what is here)', () => {
-    lemons.ask({ text: 'Run', kind: 'name' })
-    lemons.answer(false, 5)
-    const backup = parseBackup(JSON.stringify(act.exportBackup()))
-    if (!backup.ok) throw new Error(backup.error)
-    expect(backup.backup.data?.lemons?.map(l => l.text)).toEqual(['Run'])
-    useLemons.setState({ log: [{ id: 'other', ts: 1, sour: true, text: 'Nap', kind: 'name' }] })
-    act.importBackup(backup.backup, { settings: false, data: true, mode: 'combine' })
-    expect(useLemons.getState().log.map(l => l.text)).toEqual(['Nap', 'Run'])
   })
 })
