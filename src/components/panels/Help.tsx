@@ -101,7 +101,7 @@ function HelpContent() {
             <dt>Span</dt>
             <dd>The time between two instants (or an instant and Now or the cursor), drawn as a lane with its length. Lanes appear on their own as you select things; tap the pin to keep one. Spans that follow each other share a lane (a stopwatch’s laps); names that would crowd it fold into “N spans”, which zooms in when tapped.</dd>
             <dt>Sky and header</dt>
-            <dd>The background follows the sun: dark at night, purple and orange through dawn and dusk, blue by day, so a.m. and p.m. never look alike. Set where you are in Settings › Sky (until then day is 6a–6p). Along the top (the left edge when vertical) a header says what the ticks don’t: the day, and the hour when zoomed in to minutes. With a location, <b>Sunrise</b> and <b>Sunset</b> chips show too (zoomed out they gather into one chip, then fade away; the <b>Repeats</b> tab switches each on or off): tap one to select it (it is kept, and listed, only once you change it), give it an alarm (−30m rings half an hour before sunset) or repeat it at every sunset with ⟳. The Alarm button takes “sunset” or “sunrise” as a time as well.</dd>
+            <dd>The background follows the sun: dark at night, purple and orange through dawn and dusk, blue by day, so a.m. and p.m. never look alike. Set where you are in Settings › Sky (until then day is 6a–6p); its Colors can be Rainbow road. Along the top (the left edge when vertical) a header says what the ticks don’t: the day, and the hour when zoomed in to minutes. With a location, <b>Sunrise</b> and <b>Sunset</b> chips show too (zoomed out they gather into one chip, then fade away; the <b>Repeats</b> tab switches each on or off): tap one to select it (it is kept, and listed, only once you change it), give it an alarm (−30m rings half an hour before sunset) or repeat it at every sunset with ⟳. The Alarm button takes “sunset” or “sunrise” as a time as well. Clock changes (daylight saving) show as instants too, and around one the header names the zone (“1 AM PDT”, then “1 AM PST”).</dd>
             <dt>Agenda</dt>
             <dd>The list of every instant, your favorites, your saved spans, your alarms, and what repeats. Tap a row to go there.</dd>
           </dl>
@@ -152,6 +152,7 @@ function HelpContent() {
             this site’s data deletes it. To keep a copy or move it, use Settings › Data to export a backup.
             The Android app keeps its own copy, separate from the browser’s: move data between them the same way.
             The one exception is a zip code or city typed in Settings › Sky, which is looked up once at open-meteo.com.
+            Your answers to “Are you a sour lemon?” are kept here too (Settings › Lemon log), and go into backups.
           </p>
         </section>
 

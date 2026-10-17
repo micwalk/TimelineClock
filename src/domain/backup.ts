@@ -4,6 +4,8 @@ import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants, sanitizeSpans } from './entities.ts'
 import type { GroupRecord } from './series.ts'
 import { sanitizeGroups } from './series.ts'
+import type { LemonEntry } from './lemons.ts'
+import { sanitizeLemons } from './lemons.ts'
 
 export const BACKUP_FORMAT = 'timeline-clock-backup'
 export const BACKUP_VERSION = 1
@@ -13,6 +15,8 @@ export interface BackupData {
   spans: SpanRecord[]
   /** Repeating series (missing from backups made before them). */
   groups?: GroupRecord[]
+  /** The lemon log ("Are you a sour lemon?" answers; missing from backups made before it). */
+  lemons?: LemonEntry[]
 }
 
 /** Settings sections, kept as raw records here; the stores sanitize them on import. */
@@ -78,7 +82,8 @@ export function parseBackup(text: string): ParseResult {
   }
   if (r.data && typeof r.data === 'object') {
     const d = asRecord(r.data)
-    backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups) })
+    const lemons = Array.isArray(d.lemons) ? sanitizeLemons(d.lemons) : null
+    backup.data = { ...cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups) }), ...(lemons ? { lemons } : {}) }
   }
   if (!backup.settings && !backup.data) return { ok: false, error: 'The backup has no settings or data.' }
   return { ok: true, backup }

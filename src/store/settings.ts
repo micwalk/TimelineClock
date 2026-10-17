@@ -18,6 +18,9 @@ export type VerticalDir = 'down' | 'up'
 /** The timeline's sky shading: Auto follows the sun at the location (else a fixed 6a–6p day), Fixed always uses 6a–6p. */
 export type SkyMode = 'auto' | 'fixed' | 'off'
 
+/** The sky's colours: the sky's own, or Rainbow road (the rainbow through the day, stars, a rainbow axis). */
+export type SkyStyle = 'sky' | 'rainbow'
+
 /** Where the sun is computed for; coordinates rounded to two places (about a kilometre). */
 export interface SkyLocation {
   lat: number
@@ -59,9 +62,14 @@ export interface SettingsState {
   alarmRings: AlarmRingDefaults
   /** Sky shading behind the timeline (#11). */
   sky: SkyMode
+  skyStyle: SkyStyle
   skyLocation: SkyLocation | null
   /** Which of sunrise and sunset show on the timeline (once a location is set); switched in the Agenda's Repeats tab. */
   sunEvents: SunEvent[]
+  /** Clock changes (daylight saving) on the timeline. */
+  dstShifts: boolean
+  /** After you put words on the timeline, ask "Are you a sour lemon?" (the lemon log). */
+  askLemon: boolean
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -80,7 +88,10 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     agendaPlacement: r.agendaPlacement === 'docked' || r.agendaPlacement === 'drawer' ? r.agendaPlacement : 'auto',
     alarmRings: sanitizeRingDefaults(r.alarmRings),
     sky: r.sky === 'fixed' || r.sky === 'off' ? r.sky : 'auto',
+    skyStyle: r.skyStyle === 'rainbow' ? 'rainbow' : 'sky',
     skyLocation: sanitizeSkyLocation(r.skyLocation),
+    dstShifts: r.dstShifts !== false,
+    askLemon: r.askLemon !== false,
     // Was one on/off switch for both.
     sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
@@ -89,11 +100,16 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyLocation: s.skyLocation, sunEvents: s.sunEvents, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, askLemon: s.askLemon, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
-  const apply = (s: SettingsState) => document.documentElement.style.setProperty('--glow', String(s.glow))
+  const apply = (s: SettingsState) => {
+    document.documentElement.style.setProperty('--glow', String(s.glow))
+    // theme.css swaps the sky tokens (and the axis) for Rainbow road.
+    if (s.skyStyle === 'rainbow') document.documentElement.dataset.sky = 'rainbow'
+    else delete document.documentElement.dataset.sky
+  }
   apply(useSettings.getState())
   useSettings.subscribe(apply)
 }
@@ -110,6 +126,9 @@ export const settings = {
   setStopwatchKeepStart: (stopwatchKeepStart: boolean) => useSettings.setState({ stopwatchKeepStart }),
   setAgendaPlacement: (agendaPlacement: AgendaSetting) => useSettings.setState({ agendaPlacement }),
   setSky: (sky: SkyMode) => useSettings.setState({ sky }),
+  setSkyStyle: (skyStyle: SkyStyle) => useSettings.setState({ skyStyle }),
+  setDstShifts: (dstShifts: boolean) => useSettings.setState({ dstShifts }),
+  setAskLemon: (askLemon: boolean) => useSettings.setState({ askLemon }),
   /** Shows or hides sunrises (or sunsets) on the timeline. */
   setSunEventShown: (event: SunEvent, shown: boolean) =>
     useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),

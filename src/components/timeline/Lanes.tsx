@@ -1,5 +1,5 @@
 // Span lanes below the timeline: implied spans for the selection, then saved spans (the focused one first).
-import { isAtSun } from '../../domain/sunEvents.ts'
+import { isFixedTime } from '../../domain/dst.ts'
 import { useLayoutEffect, useState } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
@@ -195,8 +195,8 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
   const focused = useView(s => s.viewFocusMode === 'span' && s.focusedSpanId === r.span.id)
   // A span between two instants can have its length typed (its end moves): a tool, or a double-tap on the length once focused.
   const [typingLength, setTypingLength] = useState(false)
-  // Not when its end is a sunrise or sunset (they never move).
-  const lengthTypable = !!r.end && !live && !isAtSun(r.end)
+  // Not when its end is a sunrise, sunset or clock change (they never move).
+  const lengthTypable = !!r.end && !live && !isFixedTime(r.end)
   // A countdown to a favorite ahead becomes stoppable once it passes (and counts up).
   const stoppable = useFrameValue(f => canStopNowSpan(r, f.now))
   const typeLength = lengthTypable ? () => setTypingLength(true) : undefined

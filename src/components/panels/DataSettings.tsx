@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import type { Backup, ImportMode } from '../../domain/backup.ts'
 import { backupFileName, describeBackup, parseBackup } from '../../domain/backup.ts'
 import * as act from '../../store/actions.ts'
-import { downloadText, readFileText } from '../../services/fileTransfer.ts'
+import { readFileText, saveText } from '../../services/fileTransfer.ts'
 
 interface Pending {
   backup: Backup
@@ -18,10 +18,16 @@ export function DataSettings() {
   const [pending, setPending] = useState<Pending | null>(null)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
 
-  const exportAll = () => {
+  const exportAll = async () => {
     const now = new Date()
-    downloadText(backupFileName(now), JSON.stringify(act.exportBackup(now), null, 2))
-    setMessage({ text: 'Exported settings and data.' })
+    try {
+      const result = await saveText(backupFileName(now), JSON.stringify(act.exportBackup(now), null, 2))
+      setMessage(result === 'saved' ? { text: 'Exported settings and data.' }
+        : result === 'cancelled' ? { text: 'Not exported.' }
+        : { text: 'This version of the Android app can’t save files: install the latest from GitHub Releases.', error: true })
+    } catch {
+      setMessage({ text: 'Could not save the file.', error: true })
+    }
   }
 
   const onFile = async (file: File | undefined) => {
