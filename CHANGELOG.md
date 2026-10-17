@@ -23,6 +23,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   at noon, over stars, with the axis as a shimmering rainbow road.
 - A day's step (± with a 24h step) keeps the clock time across a clock change.
 - Settings no longer has the developer's test-alarm button.
+- TC Preview (the test app for pull requests) shows which PR it is in Settings, with a
+  **Change preview** button, so switching doesn't need the launcher shortcut.
 
 ## 0.4.1 — 2026-10-17
 

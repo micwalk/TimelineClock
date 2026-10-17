@@ -882,3 +882,6 @@
 .alarm-row--sun { --accent: color-mix(in srgb, var(--c-sun) 60%, transparent); --halo: var(--c-sun); }
 .alarm-row__sun { width: 14px; height: 14px; color: var(--c-sun); vertical-align: -2px; }
 .alarm-row__time.alarm-row__sun { width: 20px; height: 20px; justify-self: center; }
+
+/* TC Preview's Change preview button (Settings, preview app only) */
+.preview-switch__btn { width: auto; margin-top: 0; padding: 0 12px; grid-column: 2 / 4; }

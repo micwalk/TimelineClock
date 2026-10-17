@@ -240,8 +240,10 @@ Netlify builds for every pull request).
   variable to go back to `preview`. Version tags (`v1.2.3`) are refused: they are the real
   app's releases.
 - **Pick the PR**: on its first start it asks *Which preview?*. Type the pull request's
-  number (or paste a preview address) and tap **Open**; it remembers it. To switch, long-press
-  the app icon › **Change preview**. If the preview can't be loaded (wrong number, or Netlify
+  number (or paste a preview address) and tap **Open**; it remembers it. To switch, open
+  Settings (it shows "Preview of PR #N") › **Change preview**, or long-press the app icon ›
+  **Change preview** (`PreviewPlugin.java` opens the same dialog; the page knows it is TC Preview
+  from its version, "x.y.z-preview"). If the preview can't be loaded (wrong number, or Netlify
   is still building it), it asks again. **Live site** loads the live site instead.
 - It is its own app (`com.micwalk.timelineclock.preview`, version `x.y.z-preview`): it
   installs next to TimelineClock, never replaces it, and has its own data, separate for each

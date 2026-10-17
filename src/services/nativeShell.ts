@@ -46,6 +46,21 @@ export async function silenceNativeAlarms() {
   }
 }
 
+/**
+ * TC Preview: opens its "Which preview?" dialog. False when the app is from before it could
+ * (then only the launcher shortcut can: long-press the icon).
+ */
+export async function changePreview(): Promise<boolean> {
+  if (!isNativeShell()) return false
+  try {
+    await (await import('./native/previewPlugin.ts')).Preview.choose()
+    return true
+  } catch (err) {
+    console.warn('[Native] Could not open the preview chooser', err)
+    return false
+  }
+}
+
 /** Settings › Diagnostics (Android app only): the native and page logs as text, to copy. */
 export async function nativeDiagnostics(): Promise<string> {
   if (!isNativeShell()) return ''

@@ -10,6 +10,7 @@ import { useAlarms } from '../../store/alarms.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
 import { AppVersion } from './AppVersion.tsx'
 import { ShellStatus } from './ShellStatus.tsx'
+import { PreviewSwitch } from './PreviewSwitch.tsx'
 import { ShellDiagnostics } from './ShellDiagnostics.tsx'
 import { DataSettings } from './DataSettings.tsx'
 import { SkySettings } from './SkySettings.tsx'
@@ -76,6 +77,7 @@ export function SettingsPanel() {
       {open && createPortal(
         <div ref={panelRef} className="settings__panel glow-box" role="dialog" aria-label="Settings" style={pos}>
           <h2 className="settings__title glow-text">Settings</h2>
+          <PreviewSwitch />
 
           <section className="settings__group">
             <h3>Appearance</h3>
