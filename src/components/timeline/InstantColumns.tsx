@@ -1,12 +1,12 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
+import { useFrameListener, useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
@@ -20,7 +20,7 @@ import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import { ui, useUi } from '../../store/ui.ts'
-import { getTunables } from '../../store/settings.ts'
+import { getTunables, useSettings } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -30,13 +30,15 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { ClusterChip } from './ClusterChip.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
-import { chipToolsBelow, useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
+import { chipToolsBelow, savedLayoutAt, useChipWidth, useChipWidths, useSavedLayoutStructure } from './savedLayout.ts'
 import { InstantLines } from './InstantLines.tsx'
 import { useTimelineInstants } from './timelineInstants.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { describeRepeat, describeRepeatShort, occurrenceTs } from '../../domain/series.ts'
 import { sunEventName } from '../../domain/sun.ts'
-import { SUN_RHYTHM, isAtSun, parseSunVirtualId } from '../../domain/sunEvents.ts'
+import { isAtSun, parseSunVirtualId } from '../../domain/sunEvents.ts'
+import { SUN_GROUP, UNNAMED_GROUP, displayFor, displayLevel } from '../../domain/displayGroups.ts'
+import { useLongPress } from '../../hooks/useLongPress.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { seriesItemId } from '../../domain/rhythm.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
@@ -474,13 +476,15 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
 })
 
 /**
- * A repeating series zoomed out into a rhythm (domain/rhythm): one chip for its occurrences on
- * screen, at the next one: "⟳ Wake up · Weekdays 9:00a · in 3d 8h". A tap zooms in until they
- * stand apart. Computed sunrises and sunsets collapse the same way (SUN_RHYTHM): "☀ Sunset 6:32p · in 2h".
+ * A gathered group (domain/rhythm, domain/displayGroups): one chip for its instants on screen, at
+ * the next one. A series: "⟳ Wake up · Weekdays 9:00a · in 3d 8h"; the sun: "☀ Sunset 6:32p · in
+ * 2h"; Unnamed: "○ 12 unnamed · 8:30p". A tap zooms in until they stand apart; a long press (or
+ * right click) sets how the group shows at this zoom. It fades out before its zoom hides it.
  */
 const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummary }) {
   const ref = useRef<HTMLDivElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const id = seriesItemId(summary.seriesId)
   useChipWidth(groupRef, id)
   // When it moves on to another occurrence (panned past one), it glides there instead of jumping.
@@ -496,42 +500,86 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
     if (t < 1) engine.requestFrame()
     return f.pos(g.from + (g.to - g.from) * easeInOutCubic(t))
   })
+  // Fading out before the group's zoom hides it (read per frame, not structure).
+  useFrameListener(f => {
+    const el = ref.current
+    if (!el) return
+    const fade = savedLayoutAt(f).groupFade[summary.seriesId]
+    const o = fade === undefined ? '' : String(Math.round(fade * 50) / 50)
+    if (el.style.opacity !== o) el.style.opacity = o
+  })
+  const [menu, setMenu] = useState(false)
+  usePopoverDismiss(menuRef, () => setMenu(false), menu)
+  useKeepOnScreen(menuRef, menu)
+  const { consumeClick, ...press } = useLongPress(() => setMenu(true))
   const series = useEntities(s => s.groups?.find(g => g.id === summary.seriesId))
   const vertical = useLayout(s => s.orientation === 'vertical')
-  const sun = summary.seriesId === SUN_RHYTHM ? parseSunVirtualId(summary.anchorId) : null
+  const forced = useFrameValue(f => displayLevel(displayFor(summary.seriesId, useSettings.getState().groupDisplay), f.end - f.start) === 'mini')
   const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
+  const onClick = () => { if (!consumeClick()) zoomIn() }
+
+  const sun = summary.seriesId === SUN_GROUP ? parseSunVirtualId(summary.anchorId) : null
+  let kind = ''
+  let label = ''
+  let title = ''
+  let body: ReactNode
   if (sun) {
     const what = `${sunEventName(sun.event)} ${formatClockCompact(sun.ts, false)}`
-    return (
-      <div ref={ref} className="tl-col tl-col--label tl-series tl-series--sun" role="group" aria-label={`${what}, and ${summary.count - 1} more sunrises and sunsets`}>
-        <div ref={groupRef} className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
-          <button type="button" className="chip chip--series glow-box" onClick={zoomIn} title={`${what}: ${summary.count} sunrises and sunsets on screen. Tap to zoom in`}>
-            <SunIcon className="chip__sun" aria-hidden />
-            <span className="chip__name">{what}</span>
-            <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(sun.ts - f.now)}`} />
-          </button>
-        </div>
-      </div>
-    )
+    kind = ' tl-series--sun'
+    label = `${what}, and ${summary.count - 1} more sunrises and sunsets`
+    title = `${what}: ${summary.count} sunrises and sunsets on screen`
+    body = <>
+      <SunIcon className="chip__sun" aria-hidden />
+      <span className="chip__name">{what}</span>
+      <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(sun.ts - f.now)}`} />
+    </>
+  } else if (summary.seriesId === UNNAMED_GROUP) {
+    const what = `${summary.count} unnamed`
+    kind = ' tl-series--unnamed'
+    label = `${what} instants, gathered`
+    title = `${what} on screen, gathered`
+    body = <>
+      <span className="chip-series__mark" aria-hidden>○</span>
+      <span className="chip__name">{what}</span>
+      <span className="chip-series__rule">{formatClockCompact(summary.anchorTs, false)}</span>
+      <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />
+    </>
+  } else {
+    if (!series) return null
+    const clock = series.sun ? sunEventName(series.sun.event).toLowerCase() : formatClockCompact(occurrenceTs(series, series.from), false)
+    const rule = `${describeRepeat(series.repeat)} ${clock}`
+    const name = displayName(series.label, 'Repeat')
+    kind = series.alarms.length > 0 ? ' has-alarm' : ''
+    label = `${name}, repeats ${rule}`
+    title = `${name}: ${summary.count} on screen, ${rule}`
+    body = <>
+      <span className="chip-series__mark" aria-hidden>{REPEAT_MARK}</span>
+      <span className="chip__name">{name}</span>
+      {/* Vertical chips have little room across: the short form ("MWF 6:15p"). */}
+      <span className="chip-series__rule">{vertical ? `${describeRepeatShort(series.repeat)} ${clock}` : rule}</span>
+      {/* Vertical: the yellow left edge says "with alarms"; the icon would crowd the rule. */}
+      {series.alarms.length > 0 && !vertical && <BellAlertIcon className="chip-series__bell" aria-label="with alarms" />}
+      <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />
+    </>
   }
-  if (!series) return null
-  const clock = series.sun ? sunEventName(series.sun.event).toLowerCase() : formatClockCompact(occurrenceTs(series, series.from), false)
-  const rule = `${describeRepeat(series.repeat)} ${clock}`
-  // Vertical chips have little room across: the short form ("MWF 6:15p").
-  const shown = vertical ? `${describeRepeatShort(series.repeat)} ${clock}` : rule
-  const name = displayName(series.label, 'Repeat')
+  const zoom = (how: 'chips' | 'gather' | 'hide') => { act.setGroupZoom(summary.seriesId, how); setMenu(false) }
   return (
-    <div ref={ref} className={`tl-col tl-col--label tl-series${series.alarms.length > 0 ? ' has-alarm' : ''}`} role="group" aria-label={`${name}, repeats ${rule}`}>
+    <div ref={ref} className={`tl-col tl-col--label tl-series${kind}`} role="group" aria-label={label}>
       <div ref={groupRef} className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
-        <button type="button" className="chip chip--series glow-box" onClick={zoomIn}
-          title={`${name}: ${summary.count} on screen, ${rule}. Tap to zoom in`}>
-          <span className="chip-series__mark" aria-hidden>{REPEAT_MARK}</span>
-          <span className="chip__name">{name}</span>
-          <span className="chip-series__rule">{shown}</span>
-          {/* Vertical: the yellow left edge says "with alarms"; the icon would crowd the rule. */}
-          {series.alarms.length > 0 && !vertical && <BellAlertIcon className="chip-series__bell" aria-label="with alarms" />}
-          <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />
+        <button type="button" className="chip chip--series glow-box" onClick={onClick} {...press}
+          title={`${title}. Tap to zoom in; hold for how it shows at this zoom`}>
+          {body}
         </button>
+        {menu && (
+          <div ref={menuRef} className="popover popover--chip group-menu glow-box" role="menu" aria-label="How this group shows at this zoom">
+            <div className="repeat-menu__title">At this zoom</div>
+            {forced
+              ? <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => zoom('chips')}>Show as chips</button>
+              : <span className="group-menu__note">Gathered because they crowd here</span>}
+            <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => zoom('hide')}>Hide from here out</button>
+            <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => { setMenu(false); act.showGroupSettings(summary.seriesId) }}>Group settings…</button>
+          </div>
+        )}
       </div>
     </div>
   )

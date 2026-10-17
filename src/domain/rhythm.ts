@@ -50,6 +50,8 @@ export function planRhythm(
     view?: (seriesId: string) => { lo: number; hi: number }
     /** Keep summaries this far apart along time when they can be (vertical: a chip's height), px. */
     spacing?: number
+    /** Groups gathered whether or not they crowd (their zoom says so: domain/displayGroups); two members are enough. */
+    force?: (seriesId: string) => boolean
   },
 ): RhythmPlan {
   const bySeries = new Map<string, RhythmMember[]>()
@@ -63,11 +65,12 @@ export function planRhythm(
   const taken: number[] = []
   const free = (pos: number) => !o.spacing || taken.every(p => Math.abs(p - pos) >= o.spacing!)
   for (const [seriesId, list] of [...bySeries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (list.length < RHYTHM_MIN) continue
+    const forced = !!o.force?.(seriesId)
+    if (!forced && list.length < RHYTHM_MIN) continue
     const sorted = [...list].sort((a, b) => a.ts - b.ts)
     let minGap = Infinity
     for (let k = 1; k < sorted.length; k++) minGap = Math.min(minGap, Math.abs(sorted[k].pos - sorted[k - 1].pos))
-    if (minGap >= o.gapPx(seriesId)) continue
+    if (!forced && minGap >= o.gapPx(seriesId)) continue
     const folded = sorted.filter(m => !m.keep)
     if (folded.length < 2) continue
     for (const m of folded) collapsed[m.id] = seriesId

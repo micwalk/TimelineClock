@@ -410,9 +410,12 @@
 }
 .tl-col--line.is-rhythm { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--halo, var(--accent))); }
 .tl-col--line.is-rhythm.is-alarmed { filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--rh-color, var(--c-alarm))); }
-/* Computed sunrises and sunsets: the rhythm in the sun's colour, fading out as days narrow. */
-.tl-col--line.is-sun { --rh-color: var(--c-sun); opacity: var(--sun-fade, 1); }
-.tl-series--sun { --accent: color-mix(in srgb, var(--c-sun) 70%, transparent); --halo: var(--c-sun); opacity: var(--sun-fade, 1); }
+/* Computed sunrises and sunsets: the rhythm in the sun's colour. A group's rhythm and summary
+   fade out (opacity written per frame) before its zoom hides it (domain/displayGroups). */
+.tl-col--line.is-sun { --rh-color: var(--c-sun); }
+.tl-series--sun { --accent: color-mix(in srgb, var(--c-sun) 70%, transparent); --halo: var(--c-sun); }
+/* Unnamed instants gathered: a summary in the instants' own colour. */
+.tl-series--unnamed { --accent: color-mix(in srgb, var(--c-instant-glow) 70%, transparent); --halo: var(--c-instant-glow); }
 .tl-col--line.is-rhythm .tl-col__line {
   --rh-solid: calc(var(--tl-axis) + (100% - var(--tl-axis)) * 0.35 / 3);
   --rh-end: calc(var(--tl-axis) + (100% - var(--tl-axis)) / 3);
@@ -1305,3 +1308,4 @@
 }
 .tl-col__tools, .tl-lane__tools > *, .tl-lane__end > *, .chip__name-hint { animation: tools-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 .timeline:not([data-orientation='vertical']) { transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.tl-series--unnamed .chip-series__mark, .tl-series--unnamed .chip-series__rule { color: var(--c-instant-glow); }

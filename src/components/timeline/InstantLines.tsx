@@ -7,6 +7,7 @@ import { useMemo, useRef } from 'react'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { useFrameListener } from '../../engine/hooks.ts'
 import { savedLayoutAt } from './savedLayout.ts'
+import { UNNAMED_GROUP, displayGroupOf } from '../../domain/displayGroups.ts'
 import { placeAlong, translateMain as translate } from './axisPlace.ts'
 
 /** Re-base the camera when the container would sit this far off screen (keeps offsets small). */
@@ -16,7 +17,7 @@ const LINE_MARGIN_PX = 24
 /** The ghost line of an instant being moved (where it was). */
 const GHOST = '\u0000ghost'
 
-interface LineNode { el: HTMLDivElement; x: number; cls: string }
+interface LineNode { el: HTMLDivElement; x: number; cls: string; op: string }
 
 export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
   instants: readonly InstantRecord[]
@@ -37,6 +38,8 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
       if (i.seriesId) out.set(i.id, i.alarms?.some(a => !a.answered) ? ' is-series is-alarmed' : ' is-series')
       // Computed sunrises and sunsets: the same shape, in the sun's colour, fading out zoomed out (--sun-fade).
       else if (i.virtual && i.sun) out.set(i.id, ' is-series is-alarmed is-sun')
+      // Unnamed instants may gather too (domain/displayGroups): the shape that animates into a stub.
+      else if (displayGroupOf(i) === UNNAMED_GROUP) out.set(i.id, ' is-series')
     }
     return out
   }, [instants])
@@ -63,17 +66,18 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
     }
 
     const seen = new Set<string>()
-    const place = (key: string, x: number, cls: string) => {
+    const place = (key: string, x: number, cls: string, op = '') => {
       seen.add(key)
       let n = s.nodes.get(key)
       if (!n) {
         const el = document.createElement('div')
         el.appendChild(document.createElement('div')).className = 'tl-col__line'
         world.appendChild(el)
-        n = { el, x: NaN, cls: '\u0000' }
+        n = { el, x: NaN, cls: '\u0000', op: '' }
         s.nodes.set(key, n)
       }
       if (cls !== n.cls) { n.cls = cls; n.el.className = `tl-col tl-col--line${cls ? ` ${cls}` : ''}` }
+      if (op !== n.op) { n.op = op; n.el.style.opacity = op }
       if (Math.abs(x - n.x) > 0.01 || Number.isNaN(n.x)) { n.x = x; placeAlong(n.el, f.orientation, x) }
     }
     const layout = savedLayoutAt(f)
@@ -84,7 +88,10 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
       // Off screen: no line (a zoom would rewrite it every frame for nothing).
       if (base + x < -LINE_MARGIN_PX || base + x > f.mainSize + LINE_MARGIN_PX) continue
       // A repeat collapsed into its series' rhythm: a short tapered line from the axis, not a full line.
-      place(id, x, `${layout.rhythm[id] ? 'is-rhythm' : lineClass[id] ?? ''}${seriesClass.get(id) ?? ''}`)
+      // A gathered group fades out before its zoom hides it.
+      const group = layout.rhythm[id]
+      const fade = group ? layout.groupFade[group] : undefined
+      place(id, x, `${group ? 'is-rhythm' : lineClass[id] ?? ''}${seriesClass.get(id) ?? ''}`, fade === undefined ? '' : String(Math.round(fade * 50) / 50))
     }
     if (ghostTs !== null) place(GHOST, (ghostTs - s.origin) * k, 'is-ghost')
     for (const [key, n] of s.nodes) {

@@ -7,6 +7,22 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.5.0 — 2026-10-17
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Groups by zoom** (#10): repeats, sunrise and sunset, and a new **Unnamed** group each choose
+  how they show as you zoom out: as chips, gathered (short lines and one summary chip, as
+  repeats already did when crowded), or hidden. The Agenda's **Repeats** tab is now **Groups**:
+  each row's adjust button opens a strip over the zoom levels (1h … 1mo) with a handle for
+  "chips up to" and one for "hidden past", and a mark where you are now.
+- From the timeline: hold (or right click) a gathered group's chip for **Show as chips**,
+  **Hide from here out**, or its settings.
+- **Unnamed instants** (no name, star or alarm to come), most of a busy history, gather into
+  "○ 8 unnamed" once more than a day is on screen. They are never hidden unless you choose to.
+- Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
+  Advanced setting).
+
 ## 0.4.0 — 2026-10-15
 
 **Android app: web only** (nothing to install; it updates itself).

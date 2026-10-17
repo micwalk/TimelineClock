@@ -21,9 +21,6 @@ import { useLayout } from '../../store/layout.ts'
 import { geometryStyleFor } from './geometry.ts'
 import { ContextHeader } from './ContextHeader.tsx'
 import { SkyLayer } from './SkyLayer.tsx'
-import { useFrameListener } from '../../engine/hooks.ts'
-import { getTunables } from '../../store/settings.ts'
-import { DAY, smoothstep } from '../../domain/time.ts'
 
 const INTERACTIVE = 'button, input, textarea, a, [role="button"], [role="menu"], [role="menuitem"], [role="dialog"], [data-no-pan]'
 
@@ -41,13 +38,6 @@ export function Timeline() {
   const nowFocused = useView(s => s.viewFocusMode === 'now')
   const popoverOpen = useUi(s => s.timeInput !== null)
   usePanZoom(ref)
-  // Computed sunrises and sunsets fade out as days narrow toward the sunHideDayPx tunable, where they go.
-  const sunFade = useRef(NaN)
-  useFrameListener(f => {
-    const hide = getTunables().sunHideDayPx
-    const fade = Math.round(smoothstep(hide, hide * 1.6, f.pxPerMs * DAY) * 20) / 20
-    if (fade !== sunFade.current && ref.current) { sunFade.current = fade; ref.current.style.setProperty('--sun-fade', String(fade)) }
-  })
 
   useLayoutEffect(() => {
     const el = ref.current

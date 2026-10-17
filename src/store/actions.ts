@@ -15,7 +15,8 @@ import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
-import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
+import { getTunables, sanitizeSettings, settings, useSettings } from './settings.ts'
+import { displayFor, gatherHere, hideHere, showChipsHere } from '../domain/displayGroups.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
@@ -82,6 +83,24 @@ export function focusInstant(id: string, animate = true) {
  * selected or focused, so it works like any instant, but not saved or listed until it is changed
  * (store/entities: any change makes it real). Let go once nothing selects or focuses it.
  */
+/**
+ * A group's zoom thresholds from where you are (#10, domain/displayGroups): its instants show as
+ * chips at this zoom, gathered at it, or hidden from it on.
+ */
+export function setGroupZoom(key: string, how: 'chips' | 'gather' | 'hide') {
+  const f = frame()
+  const visibleMs = f.end - f.start
+  const d = displayFor(key, useSettings.getState().groupDisplay)
+  settings.setGroupDisplay(key, how === 'chips' ? showChipsHere(d, visibleMs) : how === 'gather' ? gatherHere(d, visibleMs) : hideHere(d, visibleMs))
+}
+
+/** Opens a group's zoom strip in the Agenda's Groups tab (opening the drawer when the Agenda is one). */
+export function showGroupSettings(key: string) {
+  ui.setListTab('groups')
+  ui.setGroupOpen(key)
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
+}
+
 export function holdVirtual(inst: InstantRecord) {
   if (inst.virtual) entities.holdInstant(inst)
 }

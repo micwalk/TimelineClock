@@ -1,7 +1,7 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
 
-export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'repeats'
+export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'groups'
 
 /** Which time-entry popover is open, if any. */
 export type TimeInputTarget =
@@ -23,6 +23,8 @@ export interface PlusMorph { id: string; phase: 'in' }
 
 export interface UiState {
   listTab: ListTab
+  /** The group whose zoom strip is open in the Groups tab. */
+  groupOpen: string | null
   timeInput: TimeInputTarget | null
   tagMenu: TagMenu | null
   /** The live lane (by key) whose chip was tapped: its tools show until the next outside tap. */
@@ -56,6 +58,7 @@ export interface UiState {
 
 export const useUi = create<UiState>(() => ({
   listTab: 'instants',
+  groupOpen: null,
   timeInput: null,
   tagMenu: null,
   laneTools: null,
@@ -83,6 +86,7 @@ let dropTimer: ReturnType<typeof setTimeout> | null = null
 
 export const ui = {
   setListTab: (listTab: ListTab) => useUi.setState({ listTab }),
+  setGroupOpen: (groupOpen: string | null) => useUi.setState({ groupOpen }),
   openTimeInput: (timeInput: TimeInputTarget) => useUi.setState({ timeInput, tagMenu: null }),
   closeTimeInput: () => useUi.setState({ timeInput: null }),
   toggleTagMenu: (which: TagMenu) => useUi.setState(s => ({ tagMenu: s.tagMenu === which ? null : which, timeInput: null })),

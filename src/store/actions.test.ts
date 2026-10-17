@@ -13,6 +13,7 @@ import { parseBackup } from '../domain/backup.ts'
 import { useUi } from './ui.ts'
 import { useQuick } from './quick.ts'
 import { IDLE_STOPWATCH } from '../domain/quickCreate.ts'
+import { defaultDisplay, displayLevel, hideHere } from '../domain/displayGroups.ts'
 import { nextSunEvent } from '../domain/sun.ts'
 import { isAtSun, sunVirtualId, virtualSunEvents } from '../domain/sunEvents.ts'
 
@@ -1078,5 +1079,18 @@ describe('virtual instants (#11): held while selected, real once changed', () =>
     act.clearSelection()
     expect(instant(v.id)).toMatchObject({ hidden: true })
     expect(virtualSunEvents(SF, useEntities.getState().instants, v.tsEpochMs - HOUR, v.tsEpochMs + HOUR)).toEqual([])
+  })
+})
+
+describe('display groups (#10): setting a group from the zoom you are at', () => {
+  afterEach(() => useSettings.setState({ groupDisplay: {} }))
+  it('hides a group from here out, or shows it as chips here (at the zoom the engine is at)', () => {
+    const f = engine.sample()
+    const w = f.end - f.start
+    act.setGroupZoom('unnamed', 'hide')
+    expect(useSettings.getState().groupDisplay.unnamed).toEqual(hideHere(defaultDisplay('unnamed'), w))
+    expect(displayLevel(useSettings.getState().groupDisplay.unnamed, w * 1.01)).toBe('hidden')
+    act.setGroupZoom('unnamed', 'chips')
+    expect(displayLevel(useSettings.getState().groupDisplay.unnamed, w)).toBe('full')
   })
 })

@@ -3,11 +3,15 @@
 //              switch that pauses it.
 //   Upcoming:  one-off alarms, soonest first, each with a button that cancels them.
 //   Recent:    what rang in the last day and how it was answered.
-// A row goes to its instant on the timeline. The Repeats tab (RepeatsList) lists every series,
-// alarms or not, with the same rows, under sunrise and sunset (#11), whose switches show or hide
-// them on the timeline.
+// A row goes to its instant on the timeline. The Groups tab (RepeatsList) lists sunrise and sunset
+// (#11; their switches show or hide them on the timeline), the Unnamed group, then every series,
+// alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
+// chips, gathered or hidden by zoom).
 import { useMemo } from 'react'
-import { BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
+import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
+import { ZoomStrip } from './ZoomStrip.tsx'
+import { SUN_GROUP, UNNAMED_GROUP, describeDisplay, displayFor, displayGroupOf } from '../../domain/displayGroups.ts'
+import { useUi } from '../../store/ui.ts'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { alarmList, repeatList } from '../../domain/alarmList.ts'
@@ -99,8 +103,23 @@ export function AlarmsList() {
   )
 }
 
-/** A series: its time, name, how it repeats, its alarms, when next (`when`), edit, and a pause switch. */
-function SeriesRow({ series, next, when }: { series: SeriesRecord; next: InstantRecord | null; when: number | null }) {
+/** The Groups tab's adjust button: opens (or closes) the row's zoom strip, shown under the row. */
+function AdjustButton({ rowKey, name }: { rowKey: string; name: string }) {
+  const open = useUi(s => s.groupOpen === rowKey)
+  return (
+    <IconButton icon={AdjustmentsHorizontalIcon} label={`How ${name} shows by zoom`} color="var(--ink-dim)" bare pressed={open}
+      onClick={() => ui.setGroupOpen(open ? null : rowKey)} />
+  )
+}
+
+/** The row's zoom strip, when its adjust button opened it. */
+function StripIfOpen({ rowKey, groupKey }: { rowKey: string; groupKey: string }) {
+  const open = useUi(s => s.groupOpen === rowKey)
+  return open ? <ZoomStrip groupKey={groupKey} /> : null
+}
+
+/** A series: its time, name, how it repeats, its warnings, when next (`when`), edit, and a pause switch (and in the Groups tab, its zoom strip). */
+function SeriesRow({ series, next, when, groups = false }: { series: SeriesRecord; next: InstantRecord | null; when: number | null; groups?: boolean }) {
   const name = displayName(series.label, series.alarms.length > 0 ? 'Alarm' : 'Repeat')
   return (
     <div className={`alarm-row glow-box${series.paused ? ' is-paused' : ''}`} role="button" tabIndex={0}
@@ -113,8 +132,11 @@ function SeriesRow({ series, next, when }: { series: SeriesRecord; next: Instant
       <span className="alarm-row__when">
         {series.paused ? 'Paused' : when !== null ? <LiveText watch={bySecond} compute={f => formatRelativeShort(when - f.now)} /> : '—'}
       </span>
-      <IconButton icon={PencilIcon} label={`Edit ${name}`} color="var(--c-alarm)" bare
-        onClick={() => ui.openAlarmEditor(series.id)} />
+      <span className="alarm-row__tools" onClick={e => e.stopPropagation()}>
+        {groups && <AdjustButton rowKey={series.id} name={name} />}
+        <IconButton icon={PencilIcon} label={`Edit ${name}`} color="var(--c-alarm)" bare
+          onClick={() => ui.openAlarmEditor(series.id)} />
+      </span>
       <button type="button" role="switch" aria-checked={!series.paused} aria-label={series.paused ? `Turn ${name} on` : `Pause ${name}`}
         className={`alarm-switch${series.paused ? '' : ' is-on'}`}
         onClick={e => { e.stopPropagation(); act.setSeriesPaused(series.id, !series.paused) }}>
@@ -133,9 +155,37 @@ export function RepeatsList() {
   return (
     <div className="alarms-list">
       <SunRows minute={minute} />
+      <UnnamedRow instants={instants} />
       {rows.length === 0
-        ? <p className="alarms-empty">Nothing else repeats yet. Select any instant and use its <b>⟳</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
-        : rows.map(({ series, next }) => <SeriesRow key={series.id} series={series} next={next} when={next?.tsEpochMs ?? null} />)}
+        ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>⟳</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
+        : rows.map(({ series, next }) => (
+          <div key={series.id} className="group-row">
+            <SeriesRow series={series} next={next} when={next?.tsEpochMs ?? null} groups />
+            <StripIfOpen rowKey={series.id} groupKey={series.id} />
+          </div>
+        ))}
+    </div>
+  )
+}
+
+/** The Unnamed group (#10): instants with no name (most of a busy history), gathered when zoomed out. */
+function UnnamedRow({ instants }: { instants: readonly InstantRecord[] }) {
+  const count = useMemo(() => instants.filter(i => displayGroupOf(i) === UNNAMED_GROUP).length, [instants])
+  const groupDisplay = useSettings(s => s.groupDisplay)
+  const display = displayFor(UNNAMED_GROUP, groupDisplay)
+  return (
+    <div className="group-row">
+      <div className="alarm-row alarm-row--unnamed glow-box" onClick={() => ui.setGroupOpen(useUi.getState().groupOpen === UNNAMED_GROUP ? null : UNNAMED_GROUP)}>
+        <span className="alarm-row__time mono">{count}</span>
+        <span className="alarm-row__main">
+          <span className="alarm-row__name">○ Unnamed</span>
+          <span className="alarm-row__sub">{describeDisplay(display)}</span>
+        </span>
+        <span />
+        <span className="alarm-row__tools" onClick={e => e.stopPropagation()}><AdjustButton rowKey={UNNAMED_GROUP} name="unnamed instants" /></span>
+        <span />
+      </div>
+      <StripIfOpen rowKey={UNNAMED_GROUP} groupKey={UNNAMED_GROUP} />
     </div>
   )
 }
@@ -158,7 +208,13 @@ function SunRows({ minute }: { minute: number }) {
       </div>
     )
   }
-  return <>{SUN_EVENTS.map(e => <SunRow key={e} event={e} on={shown.includes(e)} next={nextSunEvent(minute * 60_000, loc, e)} place={loc.name} />)}</>
+  return <>{SUN_EVENTS.map(e => (
+    <div key={e} className="group-row">
+      <SunRow event={e} on={shown.includes(e)} next={nextSunEvent(minute * 60_000, loc, e)} place={loc.name.split(',')[0]} />
+      {/* Sunrise and sunset share one group (they gather together). */}
+      <StripIfOpen rowKey={`sun:${e}`} groupKey={SUN_GROUP} />
+    </div>
+  ))}</>
 }
 
 function SunRow({ event, on, next, place }: { event: SunEvent; on: boolean; next: number | null; place: string }) {
@@ -179,7 +235,7 @@ function SunRow({ event, on, next, place }: { event: SunEvent; on: boolean; next
       <span className="alarm-row__when">
         {!on ? 'Hidden' : next !== null ? <LiveText watch={bySecond} compute={f => formatRelativeShort(next - f.now)} /> : '—'}
       </span>
-      <span />
+      <span className="alarm-row__tools" onClick={ev => ev.stopPropagation()}><AdjustButton rowKey={`sun:${event}`} name="sunrise and sunset" /></span>
       <button type="button" role="switch" aria-checked={on} aria-label={on ? `Hide ${name.toLowerCase()} on the timeline` : `Show ${name.toLowerCase()} on the timeline`}
         className={`alarm-switch${on ? ' is-on' : ''}`}
         onClick={e => { e.stopPropagation(); settings.setSunEventShown(event, !on) }}>

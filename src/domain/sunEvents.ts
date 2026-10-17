@@ -31,12 +31,6 @@ export function isAtSun(inst: Pick<InstantRecord, 'tsEpochMs' | 'sun'>): boolean
   return t !== null && Math.abs(t - inst.tsEpochMs) < MINUTE
 }
 
-/**
- * The rhythm group computed sunrises and sunsets share (domain/rhythm): zoomed out, they collapse
- * like a repeat's occurrences into short sun-coloured lines and one summary chip.
- */
-export const SUN_RHYTHM = 'sun'
-
 /** A computed sun event's id: "sun:<event>@<epoch ms>". */
 export const sunVirtualId = (event: SunEvent, ts: number) => `sun:${event}@${ts}`
 

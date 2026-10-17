@@ -79,7 +79,7 @@ describe('createSavedLayoutCache', () => {
   })
   const inputs = (instants: InstantRecord[], extra: Partial<SavedLayoutInputs> = {}): SavedLayoutInputs => ({
     orientation: 'horizontal', dir: 1, instants, mode: 'cursor', focusedInstantId: null, selected: null, secondary: null,
-    editing: null, moving: null, ringing: [], selectedBell: null, draggingBell: null, widths: {}, tunables: {}, laneCount: 0, ...extra,
+    editing: null, moving: null, ringing: [], selectedBell: null, draggingBell: null, widths: {}, tunables: {}, groupDisplay: {}, laneCount: 0, ...extra,
   })
   const crowd = (n: number) => Array.from({ length: n }, (_, k) => inst(`c${k}`, 1000 + k))
 
@@ -95,6 +95,35 @@ describe('createSavedLayoutCache', () => {
     expect(Object.values(r.rhythm)).toEqual(Array(6).fill('sun'))
     expect(r.rhythm.kept).toBeUndefined()
     expect(r.seriesChips.map(c => c.seriesId)).toEqual(['sun'])
+  })
+
+  it('display groups by zoom: unnamed gather past a day even when they do not crowd; the sun is gone past a week; a selected one stays', () => {
+    const DAYMS = 24 * 3600_000
+    // Two days on an 800px screen: unnamed instants half a day apart don't crowd, but their zoom gathers them.
+    const wide = (days: number): FrameLike => {
+      const px = 800 / (days * DAYMS)
+      return { now: 0, pxPerMs: px, mainSize: 800, crossSize: 900, start: -days * DAYMS / 2, end: days * DAYMS / 2, pos: ts => ts * px + 400 }
+    }
+    const unnamed = [inst('u1', -DAYMS / 2, {}), inst('u2', 0), inst('u3', DAYMS / 2)].map(i => ({ ...i, label: '' }))
+    const named = inst('Rice', 1000)
+    let r = createSavedLayoutCache()(wide(2), inputs([...unnamed, named]))
+    expect(Object.keys(r.rhythm).sort()).toEqual(['u1', 'u2', 'u3'])
+    expect(r.seriesChips.map(c => c.seriesId)).toEqual(['unnamed'])
+    expect(r.visibleIds).toContain('Rice')
+    // Within a day they are chips.
+    r = createSavedLayoutCache()(wide(0.5), inputs([...unnamed, named]))
+    expect(r.rhythm).toEqual({})
+    // The sun past a week: gone, unless selected.
+    const sun = { event: 'sunset' as const, lat: 0, lon: 0 }
+    const suns = [0, 1, 2].map(k => ({ ...inst(`sun:sunset@${k}`, k * DAYMS), sun, virtual: true as const }))
+    r = createSavedLayoutCache()(wide(10), inputs(suns))
+    expect(r.visibleIds).toEqual([])
+    r = createSavedLayoutCache()(wide(10), inputs(suns, { selected: 'sun:sunset@1' }))
+    expect(r.visibleIds).toEqual(['sun:sunset@1'])
+    // Fading out as the week nears.
+    r = createSavedLayoutCache()(wide(6), inputs(suns))
+    expect(r.groupFade.sun).toBeGreaterThan(0)
+    expect(r.groupFade.sun).toBeLessThan(1)
   })
 
   it('leaves hidden instants out unless selected or ending the selected span', () => {

@@ -1,4 +1,4 @@
-// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, spans, alarms and repeats.
+// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, spans, alarms and groups (repeats, the sun, unnamed).
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
@@ -32,7 +32,7 @@ const TABS: { key: ListTab; label: string; short: string }[] = [
   { key: 'favorites', label: 'Favorites', short: 'Favs' },
   { key: 'spans', label: 'All Spans', short: 'Spans' },
   { key: 'alarms', label: 'Alarms', short: 'Alarms' },
-  { key: 'repeats', label: 'Repeats', short: 'Repeats' },
+  { key: 'groups', label: 'Groups', short: 'Groups' },
 ]
 
 /** Scrolls the row marked data-focused into view whenever `focusKey` changes. */
@@ -318,7 +318,7 @@ export function Agenda() {
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">
-        {tab === 'spans' ? <SpansList /> : tab === 'alarms' ? <AlarmsList /> : tab === 'repeats' ? <RepeatsList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
+        {tab === 'spans' ? <SpansList /> : tab === 'alarms' ? <AlarmsList /> : tab === 'groups' ? <RepeatsList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
       </div>
     </section>
   )
