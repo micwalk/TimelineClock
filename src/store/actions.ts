@@ -38,6 +38,7 @@ import { pickerOffsets } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
 import { sunEventName } from '../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
+import { addCalendarDays, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
@@ -241,7 +242,10 @@ function landOn(target: LandingTarget, animate: boolean) {
 const UNDER_CURSOR_PX = 20
 
 export function moveCursorByIncrement(direction: 1 | -1) {
-  moveCursorBy(direction * incrementOption(v().timeIncrement).milliseconds)
+  const ms = incrementOption(v().timeIncrement).milliseconds
+  // A day's step keeps the clock time across a clock change (that day is 23 or 25 hours).
+  if (ms % DAY === 0) { const c = frame().center; moveCursorBy(addCalendarDays(c, direction * (ms / DAY)) - c); return }
+  moveCursorBy(direction * ms)
 }
 
 function navItems(f: Frame): NavTarget[] {
@@ -682,11 +686,6 @@ export function deleteInstant(id: string) {
   }
 }
 
-export function createTestAlarm(delayMs = 3000) {
-  void primeNotifications()
-  entities.createInstant(Date.now() + delayMs, 'Test Alarm', { alarm: true })
-}
-
 // ---------------------------------------------------------------------------
 // Move mode: the instant follows the cursor until confirmed or cancelled.
 
@@ -700,8 +699,8 @@ function setInstantTime(id: string, ts: number) {
 
 export function enterMove(id: string) {
   const inst = entities.getInstant(id)
-  // A sunrise or sunset is where the sun puts it: it never moves.
-  if (!inst || isAtSun(inst)) return
+  // A sunrise, sunset or clock change is where the world puts it: it never moves.
+  if (!inst || isFixedTime(inst)) return
   const f = frame()
   view.setMoveMode({ instantId: id, originalCenter: f.center })
   view.setTimeCenter(inst.tsEpochMs)
@@ -796,8 +795,8 @@ export function setSpanLength(spanId: string, ms: number) {
   if (!sp || sp.endIsNow) return
   const start = entities.getInstant(sp.startInstantId)
   const end = entities.getInstant(sp.endInstantId)
-  // Typing a length moves its end: not a sunrise or sunset.
-  if (!start || !end || isAtSun(end)) return
+  // Typing a length moves its end: not a sunrise, sunset or clock change.
+  if (!start || !end || isFixedTime(end)) return
   const dir = end.tsEpochMs >= start.tsEpochMs ? 1 : -1
   setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
   if (v().viewFocusMode === 'span' && v().focusedSpanId === spanId) focusSpan(spanId)
@@ -951,6 +950,13 @@ export function materializeOccurrence(id: string): string | undefined {
   if (held) { if (held.virtual) entities.patchInstant(id, () => ({})); return id }
   const sun = parseSunVirtualId(id)
   if (sun) return materializeSunEvent(id, sun.event, sun.ts)
+  const shiftTs = parseDstVirtualId(id)
+  if (shiftTs !== null) {
+    const shift = dstShifts(shiftTs - MINUTE, shiftTs + MINUTE).find(s => s.ts === shiftTs)
+    if (!shift) return
+    entities.addInstants([{ id, tsEpochMs: shiftTs, label: describeShift(shift), favorite: false }])
+    return id
+  }
   const v = parseVirtualId(id)
   if (!v) return
   const series = entities.getGroup(v.seriesId)

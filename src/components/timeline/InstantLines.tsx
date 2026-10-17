@@ -36,7 +36,7 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
     const out = new Map<string, string>()
     for (const i of instants) {
       if (i.seriesId) out.set(i.id, i.alarms?.some(a => !a.answered) ? ' is-series is-alarmed' : ' is-series')
-      // Computed sunrises and sunsets: the same shape, in the sun's colour, fading out zoomed out (--sun-fade).
+      // Computed sunrises and sunsets: the same shape, in the sun's colour (they fade out with their group, below).
       else if (i.virtual && i.sun) out.set(i.id, ' is-series is-alarmed is-sun')
       // Unnamed instants may gather too (domain/displayGroups): the shape that animates into a stub.
       else if (displayGroupOf(i) === UNNAMED_GROUP) out.set(i.id, ' is-series')

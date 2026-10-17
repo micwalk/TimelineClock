@@ -9,6 +9,7 @@ import { engine } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { virtualOccurrences } from '../../domain/series.ts'
 import { virtualSunEvents } from '../../domain/sunEvents.ts'
+import { virtualDstShifts } from '../../domain/dst.ts'
 import { DAY } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
@@ -27,13 +28,16 @@ export function useTimelineInstants(): InstantRecord[] {
   // the sun group's zoom they are gone: the sky shows it.
   const groupDisplay = useSettings(s => s.groupDisplay)
   const wide = useFrameValue(f => displayLevel(displayFor(SUN_GROUP, groupDisplay), f.end - f.start) !== 'hidden')
+  const dst = useSettings(s => s.dstShifts)
   return useMemo(() => {
     const sun = loc && wide
-    if ((!groups || groups.length === 0) && !sun) return instants
+    if ((!groups || groups.length === 0) && !sun && !dst) return instants
     const [first, last] = range.split(':').map(Number)
     const occurrences = groups && groups.length > 0 ? virtualOccurrences(groups, instants, engine.sample().now, first * DAY, last * DAY) : []
     const withOccurrences = occurrences.length > 0 ? [...instants, ...occurrences] : instants
     const suns = sun ? virtualSunEvents(loc, withOccurrences, first * DAY, last * DAY, sunEvents) : []
-    return suns.length > 0 ? [...withOccurrences, ...suns] : withOccurrences
-  }, [instants, groups, range, loc, wide, sunEvents])
+    // Clock changes (daylight saving): a few a year, always shown while switched on.
+    const shifts = dst ? virtualDstShifts(withOccurrences, first * DAY, last * DAY) : []
+    return suns.length + shifts.length > 0 ? [...withOccurrences, ...suns, ...shifts] : withOccurrences
+  }, [instants, groups, range, loc, wide, sunEvents, dst])
 }

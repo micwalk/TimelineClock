@@ -23,6 +23,31 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
   Advanced setting).
 
+## 0.4.3 — 2026-10-17
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- Removed a mood prompt that slipped into 0.4.2 by mistake.
+
+## 0.4.2 — 2026-10-17
+
+**Android app: install the new version** (for Export; everything else updates itself).
+
+- **Export works in the Android app**: it opens Android's "Save to…" picker so you choose where
+  the backup goes. (The app ignored the page's download before, so Export did nothing.) An
+  older app says to update instead of doing nothing.
+- **Clock changes** (daylight saving): around a change the header names the zone, "Sun, Nov 1 ·
+  1 AM PDT" and then "· 1 AM PST", so the hour that happens twice reads as two. Each change is
+  an instant on the timeline, "DST ends (🕰️back)" or "DST begins (🕰️fwd)", computed like sunsets (Settings ›
+  Timeline can turn them off); it can't be moved or deleted, only hidden.
+- **Rainbow road** (Settings › Sky › Colors): the sky's bands through the rainbow, violet at
+  night through blue and green twilights, yellow at sunrise and sunset, orange by day and red
+  at noon, over stars, with the axis as a shimmering rainbow road.
+- A day's step (± with a 24h step) keeps the clock time across a clock change.
+- Settings no longer has the developer's test-alarm button.
+- TC Preview (the test app for pull requests) shows which PR it is in Settings, with a
+  **Change preview** button, so switching doesn't need the launcher shortcut.
+
 ## 0.4.1 — 2026-10-17
 
 **Android app: web only** (nothing to install; it updates itself).

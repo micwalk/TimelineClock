@@ -383,7 +383,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       })),
       {
         now: f.now,
-        // Sun times collapse sooner in vertical (6 chips' height), so they gather before they fade out (sunHideDayPx).
+        // Sun times collapse sooner in vertical (6 chips' height), so they gather before their group's zoom hides them.
         gapPx: sid => (vertical ? (sid === SUN_GROUP ? Math.max(t.rhythmGapPx, 6 * CHIP_HEIGHT) : t.rhythmGapPx) : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
         // Its summary chip sits on screen (clear of the edges) when it can.
         view: sid => {

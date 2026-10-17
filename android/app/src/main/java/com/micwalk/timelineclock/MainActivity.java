@@ -21,6 +21,8 @@ public class MainActivity extends BridgeActivity {
         Diag.log(this, "activity created" + (savedInstanceState != null ? " (restored)" : ""));
         registerPlugin(AlarmsPlugin.class);
         registerPlugin(LiveNotificationsPlugin.class);
+        registerPlugin(FilesPlugin.class);
+        registerPlugin(PreviewPlugin.class);
 
         String site = null;
         if (BuildConfig.PREVIEW) {
@@ -82,8 +84,8 @@ public class MainActivity extends BridgeActivity {
         if (BuildConfig.PREVIEW && intent != null && SiteChoice.ACTION_CHOOSE.equals(intent.getAction())) chooseSite();
     }
 
-    /** TC Preview: ask which preview to load; a new choice restarts the page on it. */
-    private void chooseSite() {
+    /** TC Preview: ask which preview to load; a new choice restarts the page on it (also PreviewPlugin.choose). */
+    void chooseSite() {
         if (choosing || isFinishing() || isDestroyed()) return;
         choosing = true;
         SiteChoice.showChooser(

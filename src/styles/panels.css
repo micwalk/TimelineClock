@@ -913,3 +913,6 @@
 @container (max-width: 560px) {
   .alarm-row--sun .alarm-row__when { display: none; }
 }
+
+/* TC Preview's Change preview button (Settings, preview app only) */
+.preview-switch__btn { width: auto; margin-top: 0; padding: 0 12px; grid-column: 2 / 4; }

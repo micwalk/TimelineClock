@@ -4,6 +4,7 @@
 // labels each boundary of the missing unit, and the current one sticks at the timeline's
 // earlier edge until the next pushes it off, like a calendar's month headers.
 import { DAY, HOUR, MINUTE } from './time.ts'
+import { nearDstShift } from './dst.ts'
 import { addCalendar, firstCalendarBoundaryAtOrBefore, firstDurationBoundaryAtOrBefore, pickTickTiers } from './ticks.ts'
 
 export type ContextUnit = 'hour' | 'day' | 'month'
@@ -35,17 +36,31 @@ export function contextBoundaries(start: number, end: number, unit: ContextUnit,
   return out
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-const hourFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric' })
-const monthFmt = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
-const yearFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric' })
+const fmts = new Map<string, Intl.DateTimeFormat>()
+/** One formatter per options and zone (they are slow to make). */
+const fmt = (key: string, o: Intl.DateTimeFormatOptions, timeZone?: string) => {
+  const k = `${key}|${timeZone ?? ''}`
+  let f = fmts.get(k)
+  if (!f) { f = new Intl.DateTimeFormat(undefined, { ...o, timeZone }); fmts.set(k, f) }
+  return f
+}
 
-/** "Thu, Oct 15 · 8 PM", "Thu, Oct 15" or "October 2026"; a day in another year than `now` says so. */
-export function formatContext(t: number, unit: ContextUnit, now: number): string {
-  if (unit === 'month') return monthFmt.format(t)
-  const year = new Date(t).getFullYear() !== new Date(now).getFullYear() ? `, ${yearFmt.format(t)}` : ''
-  const day = dayFmt.format(t) + year
-  return unit === 'day' ? day : `${day} · ${hourFmt.format(t)}`
+/** Hours this close to a clock change name their zone, so the hour that happens twice reads apart. */
+export const DST_LABEL_WITHIN_MS = 3 * HOUR
+
+/**
+ * "Thu, Oct 15 · 8 PM", "Thu, Oct 15" or "October 2026"; a day in another year than `now` says so.
+ * Near a clock change an hour names its zone: "Sun, Nov 1 · 1 AM PDT", then "· 1 AM PST".
+ * `timeZone`: an IANA zone (default the device's), for a world clock.
+ */
+export function formatContext(t: number, unit: ContextUnit, now: number, timeZone?: string): string {
+  if (unit === 'month') return fmt('month', { month: 'long', year: 'numeric' }, timeZone).format(t)
+  const yearOf = (x: number) => fmt('y', { year: 'numeric' }, timeZone).format(x)
+  const year = yearOf(t) !== yearOf(now) ? `, ${yearOf(t)}` : ''
+  const day = fmt('day', { weekday: 'short', month: 'short', day: 'numeric' }, timeZone).format(t) + year
+  if (unit === 'day') return day
+  const zoned = nearDstShift(t, DST_LABEL_WITHIN_MS, timeZone)
+  return `${day} · ${fmt(zoned ? 'hourZ' : 'hour', zoned ? { hour: 'numeric', timeZoneName: 'short' } : { hour: 'numeric' }, timeZone).format(t)}`
 }
 
 /**
