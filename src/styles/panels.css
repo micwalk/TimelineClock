@@ -885,3 +885,28 @@
 
 /* TC Preview's Change preview button (Settings, preview app only) */
 .preview-switch__btn { width: auto; margin-top: 0; padding: 0 12px; grid-column: 2 / 4; }
+
+/* "You bad lemon" (LemonToast): a moment at the top on every add; taps go through it */
+.lemon-toast {
+  --accent: #facc15;
+  --halo: #facc15;
+  position: fixed;
+  z-index: 250; /* over Settings (200), under a ringing alarm */
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 14px;
+  background: var(--surface-strong);
+  color: #fde68a;
+  font: 800 17px/1.2 var(--font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: lemon-toast 2200ms ease-out forwards;
+}
+@keyframes lemon-toast {
+  0% { opacity: 0; transform: translate(-50%, -8px); }
+  10%, 80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .lemon-toast { animation: none; } }

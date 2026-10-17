@@ -509,6 +509,20 @@ describe('stopNowSpan (the stop on a favorite’s live lane)', () => {
   })
 })
 
+describe('You bad lemon', () => {
+  it('shows on every add: an instant, a named drop, a timer', () => {
+    useUi.setState({ lemonAt: 0 })
+    act.dropInstant()
+    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
+    useUi.setState({ lemonAt: 0 })
+    act.dropAndName()
+    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
+    useUi.setState({ lemonAt: 0 })
+    act.startTimer(5 * MINUTE)
+    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
+  })
+})
+
 describe('dropInstant', () => {
   it('drops an unnamed instant at Now without touching focus, selection or editing', () => {
     const before = { ...view() }

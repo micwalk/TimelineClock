@@ -52,6 +52,8 @@ export interface UiState {
   draggingBell: string | null
   /** An occurrence of a repeating series just edited on its own: its chip offers "Apply to all future" for a while. */
   seriesHint: string | null
+  /** When the last "You bad lemon" toast started (0: none showing). Set on every add (act.callLemon). */
+  lemonAt: number
 }
 
 export const useUi = create<UiState>(() => ({
@@ -72,6 +74,7 @@ export const useUi = create<UiState>(() => ({
   selectedBell: null,
   draggingBell: null,
   seriesHint: null,
+  lemonAt: 0,
 }))
 
 /** How long an edited occurrence offers "Apply to all future". */
@@ -80,6 +83,10 @@ let seriesHintTimer: ReturnType<typeof setTimeout> | null = null
 
 export const DROP_HIGHLIGHT_MS = 900
 let dropTimer: ReturnType<typeof setTimeout> | null = null
+
+/** How long "You bad lemon" shows. */
+export const LEMON_MS = 2200
+let lemonTimer: ReturnType<typeof setTimeout> | null = null
 
 export const ui = {
   setListTab: (listTab: ListTab) => useUi.setState({ listTab }),
@@ -95,6 +102,13 @@ export const ui = {
     if (dropTimer) clearTimeout(dropTimer)
     useUi.setState({ droppedId: id })
     dropTimer = setTimeout(() => { dropTimer = null; useUi.setState(s => (s.droppedId === id ? { droppedId: null } : s)) }, DROP_HIGHLIGHT_MS)
+  },
+  /** "You bad lemon 🍋" for a moment; another add starts it over. */
+  callLemon() {
+    if (lemonTimer) clearTimeout(lemonTimer)
+    const lemonAt = Date.now()
+    useUi.setState({ lemonAt })
+    lemonTimer = setTimeout(() => { lemonTimer = null; useUi.setState(s => (s.lemonAt === lemonAt ? { lemonAt: 0 } : s)) }, LEMON_MS)
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
