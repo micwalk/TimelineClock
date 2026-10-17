@@ -85,6 +85,18 @@ describe('createSavedLayoutCache', () => {
 
   beforeEach(() => { useSettings.setState({ tunables: {} }) })
 
+  it('computed sunrises and sunsets collapse together into one sun summary; a tapped (stored) one keeps its chip', () => {
+    const compute = createSavedLayoutCache()
+    const sun = { event: 'sunset' as const, lat: 0, lon: 0 }
+    // Six sun times 50px apart (closer than a summary chip needs), plus a stored one.
+    const virtuals = Array.from({ length: 6 }, (_, k) => ({ ...inst(`sun:sunset@${k * 5000}`, k * 5000 - 15000), sun, virtual: true as const }))
+    const stored = { ...inst('kept', 2500), sun }
+    const r = compute(frame(0), inputs([...virtuals, stored]))
+    expect(Object.values(r.rhythm)).toEqual(Array(6).fill('sun'))
+    expect(r.rhythm.kept).toBeUndefined()
+    expect(r.seriesChips.map(c => c.seriesId)).toEqual(['sun'])
+  })
+
   it('leaves hidden instants out unless selected or ending the selected span', () => {
     const compute = createSavedLayoutCache()
     const all = [inst('a', 0), inst('h', 1000, { hidden: true })]

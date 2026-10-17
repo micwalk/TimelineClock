@@ -30,9 +30,13 @@ import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
   OCCURRENCE_HORIZON_MS, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
 } from '../domain/series.ts'
-import { newAlarmId, newInstantId } from '../domain/entities.ts'
+import { newAlarmId, newInstantId, storedInstants } from '../domain/entities.ts'
+import type { InstantRecord } from '../domain/entities.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
 import { pickerOffsets } from '../domain/alarmPicker.ts'
+import type { SunEvent } from '../domain/sun.ts'
+import { sunEventName } from '../domain/sun.ts'
+import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
@@ -72,6 +76,22 @@ export function focusInstant(id: string, animate = true) {
   view.setFocus('instant', { instantId: id })
   view.setTimeCenter(inst.tsEpochMs)
 }
+
+/**
+ * A virtual instant (a repeat's far occurrence, a sunrise or sunset) tapped: held in the list while
+ * selected or focused, so it works like any instant, but not saved or listed until it is changed
+ * (store/entities: any change makes it real). Let go once nothing selects or focuses it.
+ */
+export function holdVirtual(inst: InstantRecord) {
+  if (inst.virtual) entities.holdInstant(inst)
+}
+
+const releaseVirtuals = () => {
+  const s = v()
+  entities.releaseInstants(new Set([s.currentSelectedInstantId, s.secondarySelectedInstantId, s.focusedInstantId, s.editingInstantId, s.moveMode?.instantId]
+    .filter((id): id is string => !!id)))
+}
+useView.subscribe(releaseVirtuals)
 
 export const isInstantFocused = (id: string) => v().viewFocusMode === 'instant' && v().focusedInstantId === id
 
@@ -661,7 +681,8 @@ function setInstantTime(id: string, ts: number) {
 
 export function enterMove(id: string) {
   const inst = entities.getInstant(id)
-  if (!inst) return
+  // A sunrise or sunset is where the sun puts it: it never moves.
+  if (!inst || isAtSun(inst)) return
   const f = frame()
   view.setMoveMode({ instantId: id, originalCenter: f.center })
   view.setTimeCenter(inst.tsEpochMs)
@@ -756,7 +777,8 @@ export function setSpanLength(spanId: string, ms: number) {
   if (!sp || sp.endIsNow) return
   const start = entities.getInstant(sp.startInstantId)
   const end = entities.getInstant(sp.endInstantId)
-  if (!start || !end) return
+  // Typing a length moves its end: not a sunrise or sunset.
+  if (!start || !end || isAtSun(end)) return
   const dir = end.tsEpochMs >= start.tsEpochMs ? 1 : -1
   setInstantTime(end.id, start.tsEpochMs + dir * Math.max(0, ms))
   if (v().viewFocusMode === 'span' && v().focusedSpanId === spanId) focusSpan(spanId)
@@ -871,7 +893,7 @@ export function syncSeries() {
   const { groups } = useEntities.getState()
   if (!groups || groups.length === 0) return
   // Repairs data from a bug that made a second copy of occurrences (one per series and date).
-  const dupes = duplicateOccurrences(useEntities.getState().instants)
+  const dupes = duplicateOccurrences(storedInstants(useEntities.getState().instants))
   if (dupes.length > 0) { for (const id of dupes) { dismissInstant(id); view.forgetInstant(id) } entities.deleteInstants(dupes) }
   const { instants } = useEntities.getState()
   entities.addInstants(planOccurrences(groups, instants, now, now + OCCURRENCE_HORIZON_MS, { instant: newInstantId, alarm: newAlarmId }))
@@ -887,7 +909,9 @@ function refreshSeries(seriesId: string) {
   if (!series) return
   const now = Date.now()
   const gone: string[] = []
-  for (const inst of remakeable(series, useEntities.getState().instants, now)) {
+  // A held virtual occurrence of it is out of date: let it go (the timeline computes it afresh).
+  gone.push(...useEntities.getState().instants.filter(i => i.virtual && i.seriesId === seriesId).map(i => i.id))
+  for (const inst of remakeable(series, storedInstants(useEntities.getState().instants), now)) {
     const next = refreshOccurrence(series, inst, now, newAlarmId)
     // `alarms` explicitly: a rule with none clears them (the patch merges).
     if (next) entities.patchInstant(inst.id, () => ({ ...next, alarms: next.alarms }))
@@ -899,19 +923,37 @@ function refreshSeries(seriesId: string) {
 }
 
 /**
- * Stores a computed occurrence (past the horizon, shown only) when it is tapped: anything done
- * to it from then on is kept. Returns its instant's id (the id itself for a stored one).
+ * Makes a virtual instant real (stored), keeping its id, so a selection or focus on it carries
+ * over. Changes do this by themselves (store/entities); this is for the rest. Returns the id, or
+ * undefined when it names nothing.
  */
 export function materializeOccurrence(id: string): string | undefined {
+  const held = entities.getInstant(id)
+  if (held) { if (held.virtual) entities.patchInstant(id, () => ({})); return id }
+  const sun = parseSunVirtualId(id)
+  if (sun) return materializeSunEvent(id, sun.event, sun.ts)
   const v = parseVirtualId(id)
-  if (!v) return entities.getInstant(id) ? id : undefined
+  if (!v) return
   const series = entities.getGroup(v.seriesId)
   if (!series) return
-  const have = useEntities.getState().instants.find(i => i.seriesId === series.id && i.occurrence === v.date)
+  const have = storedInstants(useEntities.getState().instants).find(i => i.seriesId === series.id && i.occurrence === v.date)
   if (have) return have.id
-  const inst = newOccurrence(series, v.date, { instant: newInstantId, alarm: newAlarmId })
-  entities.addInstants([inst])
-  return inst.id
+  entities.addInstants([newOccurrence(series, v.date, { instant: () => id, alarm: newAlarmId })])
+  return id
+}
+
+/**
+ * A computed sunrise or sunset, stored: an instant named for it that remembers it is one (`sun`,
+ * at the location in Settings), so its alarms ring relative to it and repeating it follows each
+ * day's sun.
+ */
+function materializeSunEvent(id: string, event: SunEvent, ts: number): string | undefined {
+  const loc = useSettings.getState().skyLocation
+  if (!loc) return
+  const have = storedInstants(useEntities.getState().instants).find(i => i.sun?.event === event && i.tsEpochMs === ts && isAtSun(i))
+  if (have) return have.id
+  entities.addInstants([{ id, tsEpochMs: ts, label: sunEventName(event), favorite: false, sun: { event, lat: loc.lat, lon: loc.lon } }])
+  return id
 }
 
 /**
@@ -1017,18 +1059,22 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
  * time itself unless `onTime` is false), once (an instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
  * Returns the instant (the first occurrence of a series).
  */
-export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean }): string | undefined {
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
   void primeNotifications()
-  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}) })
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}) })
+  // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.
+  const loc = useSettings.getState().skyLocation
+  const sun = a.sun && loc ? { event: a.sun, lat: loc.lat, lon: loc.lon } : undefined
+  const label = a.label || (sun ? sunEventName(sun.event) : '')
   if (!a.repeat) {
-    const id = entities.createInstant(a.at, a.label)
-    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })) }))
+    const id = entities.createInstant(a.at, label)
+    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })), ...(sun ? { sun } : {}) }))
     revealInstant(id)
     return id
   }
-  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label: a.label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()) }
+  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}) }
   entities.putGroup(series)
   syncSeries()
   const first = useEntities.getState().instants
@@ -1043,7 +1089,7 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
  * occurrences ahead take the change in place (refreshSeries); ones changed on their own keep
  * theirs.
  */
-export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms'>>) {
+export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun'>>) {
   const series = entities.getGroup(seriesId)
   if (!series) return
   entities.putGroup({ ...series, ...patch })
@@ -1079,7 +1125,8 @@ export function exportBackup(date = new Date()): Backup {
   delete preferences.layoutVersion
   const { autoDismissMs, unattended } = useAlarms.getState()
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
-  const { instants, spans, groups } = useEntities.getState()
+  const { spans, groups } = useEntities.getState()
+  const instants = storedInstants(useEntities.getState().instants)
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,

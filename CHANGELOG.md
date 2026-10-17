@@ -7,6 +7,47 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.4.0 — 2026-10-15
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **The sky** (#11): the timeline's background follows the sun. Night is dark, the twilights
+  run strongly through indigo, violet and orange, and day is blue, shading only slightly
+  toward noon and midnight, so a.m. and p.m. never look alike. Sunrise, sunset and the civil,
+  nautical and astronomical twilights are worked out on the device, offline, including polar
+  day and night.
+- **Settings › Sky**: shading Sun / Fixed 6a–6p / Off, and a location from a zip or city
+  (looked up once at open-meteo.com, the app's only network call for your data), typed
+  coordinates, or Use my location. It's stored rounded to about a kilometre. Until one is set,
+  day is 6a–6p.
+- **Context header** (#22): the corner date becomes a header that says what the ticks don't.
+  Zoomed in to 15-minute ticks or closer it reads "Thu, Oct 15 · 8 PM"; at half hours and
+  hours, the day; at days, the month. The current label sticks at the start of the timeline until the next one pushes
+  it off. In vertical it runs down the left edge, reading the way time runs.
+- **Every hour labeled**: hour labels are short, so each hour keeps its label until they're
+  about 45px apart (22px in vertical) instead of dropping to 6AM / 12PM / 6PM much sooner.
+- Where ticks meet, the coarser one names it: an hour among half hours reads "8PM" (not
+  "08:00"), and midnight among hours reads "Oct 16".
+- **Sunrise and sunset** (#11): with a location set, the timeline shows ☀ Sunrise and ☀ Sunset
+  chips. Zoomed out, they collapse like repeats: short orange lines from the axis and one
+  summary chip ("☀ Sunrise 7:19a · in 8h", a tap zooms in); further out they fade away (the sky
+  still shows the days; Settings › Advanced sets where). Tap one to select it; it is kept as an
+  instant (in the Agenda) only once you change it (name, alarm, star, hide, a span to it). It
+  stays tied to the sun, so its alarms ring relative to it (−30m: half an hour before sunset),
+  and its ⟳ tool repeats that alarm at each day's sunset, which moves with the seasons (⟳ shows
+  on a sunset only once it has an alarm: the chips already show every sunset).
+- **Virtual instants stay virtual**: tapping or focusing a sunrise, sunset or a repeat's far-off
+  occurrence no longer saves it or lists it in the Agenda; changing it does.
+- Sunrises and sunsets can't be deleted (the sun sets there again) or moved; hide one with the eye.
+- **Sunrise and sunset in the Repeats tab**: two rows at the top (next time, "Daily · your place",
+  how long until it) whose switches show or hide each on the timeline; a tap goes to the next one.
+  (This replaces the Settings › Sky checkbox.)
+- **Alarms at sunrise or sunset**: the Alarm button's time box takes "sunset" or "sunrise" (or
+  tap the Sunrise / Sunset chips under it): once, or repeating at each day's sunset, with
+  warnings before it. Days the sun doesn't rise or set (polar) are skipped.
+- Settings no longer closes when a text box brings up the phone's keyboard; it fits to the
+  space left instead (it still closes on rotation).
+
 ## 0.3.2 — 2026-10-14
 
 **Android app: web only** (nothing to install; it updates itself).

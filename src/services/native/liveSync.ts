@@ -2,6 +2,7 @@
 // screen and in the shade, and a status-bar chip. Android draws the time, so they stay right
 // while the page is frozen; at zero the native alarm replaces a timer's countdown with its
 // ringing notification. Decisions: domain/nativeNotifications.
+import { storedInstants } from '../../domain/entities.ts'
 import { desiredLiveNotifications } from '../../domain/nativeNotifications.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useQuick } from '../../store/quick.ts'
@@ -16,7 +17,8 @@ let again = false
 let forceNext = false
 
 async function syncOnce(force: boolean) {
-  const { instants, spans } = useEntities.getState()
+  const { spans } = useEntities.getState()
+  const instants = storedInstants(useEntities.getState().instants)
   const { items, nextChangeAt } = desiredLiveNotifications(instants, spans, useQuick.getState().stopwatch, Date.now())
 
   // A timer whose start is still ahead starts counting down then.

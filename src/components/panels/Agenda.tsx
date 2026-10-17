@@ -8,7 +8,7 @@ import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateTime, formatDurationCoarse, formatRelativeCoarse } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
-import { displayName } from '../../domain/entities.ts'
+import { displayName, storedInstants } from '../../domain/entities.ts'
 import { hasArmedAlarm, openAlarms } from '../../domain/alarms.ts'
 import type { ResolvedSpan } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
@@ -127,7 +127,7 @@ function lowerBound(sorted: InstantRecord[], ts: number) {
 }
 
 function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
-  const instants = useEntities(s => s.instants)
+  const instants = storedInstants(useEntities(s => s.instants))
   const v = useView(useShallow(s => ({ mode: s.viewFocusMode, focusedId: s.focusedInstantId, selectedId: s.currentSelectedInstantId })))
   const sorted = useMemo(
     () => instants.filter(i => !favoritesOnly || i.favorite).sort((a, b) => a.tsEpochMs - b.tsEpochMs),
@@ -233,7 +233,7 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
 }
 
 function SpansList() {
-  const instants = useEntities(s => s.instants)
+  const instants = storedInstants(useEntities(s => s.instants))
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,

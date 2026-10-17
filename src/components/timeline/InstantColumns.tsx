@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
@@ -35,6 +35,8 @@ import { InstantLines } from './InstantLines.tsx'
 import { useTimelineInstants } from './timelineInstants.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { describeRepeat, describeRepeatShort, occurrenceTs } from '../../domain/series.ts'
+import { sunEventName } from '../../domain/sun.ts'
+import { SUN_RHYTHM, isAtSun, parseSunVirtualId } from '../../domain/sunEvents.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { seriesItemId } from '../../domain/rhythm.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
@@ -123,6 +125,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   // Zoomed out past hours (ticks an hour or coarser), "· in 3d 8h" is noise: only a selected chip keeps it.
   const coarse = useFrameValue(f => pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms >= HOUR)
   const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
+  // At a sunrise or sunset (and still on it): a sun before its name.
+  const atSun = useMemo(() => isAtSun({ tsEpochMs: ts, sun: inst.sun }), [ts, inst.sun])
   const withSeconds = fineSeconds || selected || focused
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
@@ -130,8 +134,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   // Whether the chip was focused when a double-tap began (its first tap may focus it).
   const firstTap = useRef<{ wasFocused: boolean } | null>(null)
   const onTap = (e: React.MouseEvent) => {
-    // A computed occurrence (past the horizon) is stored as it is tapped, then selected.
-    if (inst.virtual) { const id = act.materializeOccurrence(inst.id); if (id) act.selectInstant(id); return }
+    // A virtual instant (a repeat's far occurrence, a sunrise or sunset) is held while selected; only a change stores it.
+    act.holdVirtual(inst)
     if (e.detail <= 1) firstTap.current = { wasFocused: act.isInstantFocused(inst.id) }
     if (bellSelected) ui.selectBell(null)
     if (moving) setTyping(true)
@@ -151,16 +155,19 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
-      {focused && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      {/* A sunrise or sunset never moves. */}
+      {focused && !isAtSun(inst) && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
+      {/* A sunrise or sunset already shows every day: repeating one only means something with an alarm on it. */}
+      {(inst.seriesId || !isAtSun(inst) || openAlarms(inst).length > 0) && <RepeatTool inst={inst} />}
       {/* An alarm still to ring is never hidden. */}
-      <RepeatTool inst={inst} />
       {(inst.hidden || !armed) && (
         <IconButton icon={inst.hidden ? EyeIcon : EyeSlashIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline (spans stay)'}
           color="var(--ink-dim)" bare onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
       )}
+      {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
       {inst.seriesId
         ? <DeleteOccurrenceTool inst={inst} />
-        : <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
+        : !isAtSun(inst) && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
     </>
   ) : moving ? (
     <>
@@ -218,6 +225,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onClick={onTap}
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
+            {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
@@ -286,13 +294,15 @@ function RepeatTool({ inst }: { inst: InstantRecord }) {
   usePopoverDismiss(ref, () => setOpen(false), open)
   useKeepOnScreen(menuRef, open)
   const series = useEntities(s => (inst.seriesId ? s.groups?.find(g => g.id === inst.seriesId) : undefined))
+  // At a sunset it repeats at each day's sunset.
+  const at = series?.sun ? sunEventName(series.sun.event).toLowerCase() : !series && isAtSun(inst) ? `each ${sunEventName(inst.sun!.event).toLowerCase()}` : formatClockCompact(inst.tsEpochMs, false)
   return (
     <div ref={ref} className="skip-tool">
       <IconButton icon={ArrowPathIcon} label={series ? `Repeats ${describeRepeat(series.repeat)}: change` : 'Repeat'} color="var(--c-alarm)" bare pressed={open || !!series}
         onClick={() => setOpen(o => !o)} />
       {open && (
         <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Repeat">
-          <div className="repeat-menu__title">{series ? `Repeats ${describeRepeat(series.repeat).toLowerCase()} at ${formatClockCompact(inst.tsEpochMs, false)}` : `Repeat at ${formatClockCompact(inst.tsEpochMs, false)}`}</div>
+          <div className="repeat-menu__title">{series ? `Repeats ${describeRepeat(series.repeat).toLowerCase()} at ${at}` : isAtSun(inst) ? `Repeat this alarm at ${at}` : `Repeat at ${at}`}</div>
           {/* Once: stop repeating (after this one). */}
           <RepeatPicker value={series?.repeat ?? null} allowOnce={!!series} onChange={r => (r ? act.repeatInstant(inst.id, r) : act.stopRepeating(inst.id))} />
           {series && (
@@ -466,7 +476,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
 /**
  * A repeating series zoomed out into a rhythm (domain/rhythm): one chip for its occurrences on
  * screen, at the next one: "⟳ Wake up · Weekdays 9:00a · in 3d 8h". A tap zooms in until they
- * stand apart.
+ * stand apart. Computed sunrises and sunsets collapse the same way (SUN_RHYTHM): "☀ Sunset 6:32p · in 2h".
  */
 const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummary }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -488,13 +498,28 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
   })
   const series = useEntities(s => s.groups?.find(g => g.id === summary.seriesId))
   const vertical = useLayout(s => s.orientation === 'vertical')
+  const sun = summary.seriesId === SUN_RHYTHM ? parseSunVirtualId(summary.anchorId) : null
+  const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
+  if (sun) {
+    const what = `${sunEventName(sun.event)} ${formatClockCompact(sun.ts, false)}`
+    return (
+      <div ref={ref} className="tl-col tl-col--label tl-series tl-series--sun" role="group" aria-label={`${what}, and ${summary.count - 1} more sunrises and sunsets`}>
+        <div ref={groupRef} className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
+          <button type="button" className="chip chip--series glow-box" onClick={zoomIn} title={`${what}: ${summary.count} sunrises and sunsets on screen. Tap to zoom in`}>
+            <SunIcon className="chip__sun" aria-hidden />
+            <span className="chip__name">{what}</span>
+            <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(sun.ts - f.now)}`} />
+          </button>
+        </div>
+      </div>
+    )
+  }
   if (!series) return null
-  const clock = formatClockCompact(occurrenceTs(series, series.from), false)
+  const clock = series.sun ? sunEventName(series.sun.event).toLowerCase() : formatClockCompact(occurrenceTs(series, series.from), false)
   const rule = `${describeRepeat(series.repeat)} ${clock}`
   // Vertical chips have little room across: the short form ("MWF 6:15p").
   const shown = vertical ? `${describeRepeatShort(series.repeat)} ${clock}` : rule
   const name = displayName(series.label, 'Repeat')
-  const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
   return (
     <div ref={ref} className={`tl-col tl-col--label tl-series${series.alarms.length > 0 ? ' has-alarm' : ''}`} role="group" aria-label={`${name}, repeats ${rule}`}>
       <div ref={groupRef} className="tl-col__chip" style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>

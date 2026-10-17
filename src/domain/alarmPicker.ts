@@ -8,6 +8,7 @@ import type { Repeat } from './series.ts'
 import { CLOCK_RE, sanitizeRepeat } from './series.ts'
 import { formatTimerLength, parseTimerInput } from './quickCreate.ts'
 import { DAY, MINUTE } from './time.ts'
+import type { SunEvent } from './sun.ts'
 
 export interface AlarmTime {
   h: number
@@ -36,6 +37,17 @@ export function parseAlarmTime(text: string): AlarmTime | null {
   }
   if (m > 59 || h > 23 || (meridiem && (h < 1 || h > 12))) return null
   return { h, m, meridiem }
+}
+
+/**
+ * "sunrise" or "sunset" typed for the time (from four letters, "sunr" / "suns"; or "rise" /
+ * "set"): the alarm follows the sun (#11). Null when it isn't one.
+ */
+export function parseSunWord(text: string): SunEvent | null {
+  const t = text.trim().toLowerCase()
+  if (t === 'rise' || (t.length >= 4 && 'sunrise'.startsWith(t))) return 'sunrise'
+  if (t === 'set' || (t.length >= 4 && 'sunset'.startsWith(t))) return 'sunset'
+  return null
 }
 
 /** A time that could be AM or PM: 1–12 with no AM/PM typed. */
@@ -124,12 +136,14 @@ export interface RecentAlarm {
   label: string
   /** False: only the warnings ring, not the time itself. */
   onTime?: false
+  /** At sunrise or sunset (then `time` is only roughly when). */
+  sun?: SunEvent
 }
 
 export const MAX_RECENT_ALARMS = 3
 
 const sameRecent = (a: RecentAlarm, b: RecentAlarm) =>
-  a.time === b.time && a.label === b.label && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
+  a.time === b.time && a.label === b.label && a.sun === b.sun && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
 
 export function pushRecentAlarm(list: readonly RecentAlarm[], a: RecentAlarm): RecentAlarm[] {
   return [a, ...list.filter(x => !sameRecent(x, a))].slice(0, MAX_RECENT_ALARMS)
@@ -145,6 +159,7 @@ export function sanitizeRecentAlarms(raw: unknown): RecentAlarm[] {
     if (repeat === null && r.repeat !== null) return []
     const warnings = Array.isArray(r.warnings) ? r.warnings.filter((w): w is number => typeof w === 'number' && w > 0 && w < DAY) : []
     const onTime = r.onTime === false && warnings.length > 0 ? { onTime: false as const } : {}
-    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime }]
+    const sun = r.sun === 'sunrise' || r.sun === 'sunset' ? { sun: r.sun as SunEvent } : {}
+    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime, ...sun }]
   }).slice(0, MAX_RECENT_ALARMS)
 }

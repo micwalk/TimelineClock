@@ -13,6 +13,7 @@ import { AppVersion } from './AppVersion.tsx'
 import { ShellStatus } from './ShellStatus.tsx'
 import { ShellDiagnostics } from './ShellDiagnostics.tsx'
 import { DataSettings } from './DataSettings.tsx'
+import { SkySettings } from './SkySettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
 
@@ -39,7 +40,17 @@ export function SettingsPanel() {
     const inside = (t: EventTarget | null) => t instanceof Node && (!!gearRef.current?.contains(t) || !!panelRef.current?.contains(t))
     const onDown = (e: PointerEvent) => { if (!inside(e.target)) setPos(null) }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPos(null) }
-    const onResize = () => setPos(null)
+    // A phone's keyboard coming up (typing a zip or a warning) only changes the height: fit the
+    // panel to what is left and keep the field in view. A new width (rotation, a real resize) closes it.
+    let width = window.innerWidth
+    const onResize = () => {
+      if (window.innerWidth !== width || !gearRef.current) { width = window.innerWidth; setPos(null); return }
+      setPos(panelPosition(gearRef.current.getBoundingClientRect(), window.innerWidth, window.innerHeight))
+      requestAnimationFrame(() => {
+        const el = document.activeElement
+        if (el instanceof HTMLElement && panelRef.current?.contains(el)) el.scrollIntoView({ block: 'nearest' })
+      })
+    }
     document.addEventListener('pointerdown', onDown, true)
     document.addEventListener('keydown', onKey)
     window.addEventListener('resize', onResize)
@@ -123,6 +134,11 @@ export function SettingsPanel() {
               <span>Stopwatch laps keep the start favorited</span>
               <input type="checkbox" checked={stopwatchKeepStart} onChange={e => settings.setStopwatchKeepStart(e.target.checked)} />
             </label>
+          </section>
+
+          <section className="settings__group">
+            <h3>Sky</h3>
+            <SkySettings />
           </section>
 
           <section className="settings__group">

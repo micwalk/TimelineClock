@@ -26,7 +26,7 @@ time-dependent text, without re-rendering React.
 | Coarse facts derived from the viewport (which items are on screen, whether an instant is past) | `useFrameValue(selector)` | re-renders only when the value changes |
 | Saved chips' layout (row, slide) and the lines of every instant on screen | `savedLayoutAt(frame)` read in frame listeners | chips write their transform per frame; React sees only the structure (`useSavedLayoutStructure`) |
 
-**Layers: lines never draw over text or boxes.** Everything that is a line (marker lines, span-lane bars and chevrons, the axis, tick marks) lives in a low layer; everything that is text or a box (saved, cluster and fold chips, Now/Cursor tags, menus and popovers, span-lane chips and tools, tick labels, the date label, buttons) sits above it on an opaque background. So a `Marker` renders two sibling elements (`.tl-col--line` and `.tl-col--label`, both moved by `usePositionMain`), `SpanLane` renders `.tl-lane--lines` and `.tl-lane--labels`, and `TickLayer` keeps tick marks and tick labels in two containers. The order is the `--z-lines < --z-ticks-labels < --z-chips < --z-lane-chips < --z-controls < --z-tags < --z-popovers` token ladder in `theme.css`; never put a line in the same element as its label, and never give a box a translucent background (use `--box-bg*`).
+**Layers: lines never draw over text or boxes.** Everything that is a line (marker lines, span-lane bars and chevrons, the axis, tick marks) lives in a low layer; everything that is text or a box (saved, cluster and fold chips, Now/Cursor tags, menus and popovers, span-lane chips and tools, tick labels, the context header, buttons) sits above it on an opaque background. So a `Marker` renders two sibling elements (`.tl-col--line` and `.tl-col--label`, both moved by `usePositionMain`), `SpanLane` renders `.tl-lane--lines` and `.tl-lane--labels`, and `TickLayer` keeps tick marks and tick labels in two containers. The order is the sky (z 0, behind everything) then the `--z-lines < --z-ticks-labels < --z-chips < --z-lane-chips < --z-controls < --z-tags < --z-popovers` token ladder in `theme.css`; never put a line in the same element as its label, and never give a box a translucent background (use `--box-bg*`).
 
 Rules of thumb:
 
@@ -239,7 +239,7 @@ recent instant undo itself.
   0.5s), so a precise typed time is never pulled to a nearby instant. Tapping the
   instant under the cursor focuses it.
 
-**Tick tiers** (`domain/ticks.ts`): `pickTickTiers(pxPerMs, minLabelSpacingPx)` picks the first unit (250ms ... 30m, 1h, 6h, day ...) spaced at least that far apart as the labeled tier, with the unit below as the minor tier. `labelSpacingPx(orientation)` gives 100 (horizontal, labels side by side) or 48 (vertical, labels stacked). Drawing (`TickLayer`), tick snapping (`settleCursor`) and the seconds rule (`InstantColumns`) all pass the same value, so they agree.
+**Tick tiers** (`domain/ticks.ts`): `pickTickTiers(pxPerMs, minLabelSpacingPx)` picks the first unit (250ms ... 30m, 1h, 6h, day ...) spaced at least that far apart (hours: 0.45× that, `labelSpacingFactor`) as the labeled tier, with the unit below as the minor tier. `labelSpacingPx(orientation)` gives 100 (horizontal, labels side by side) or 48 (vertical, labels stacked). Drawing (`TickLayer`), tick snapping (`settleCursor`) and the seconds rule (`InstantColumns`) all pass the same value, so they agree.
 
 Gesture tests (`hooks/usePanZoom.test.tsx`) dispatch `MouseEvent`s tagged with
 `pointerType`/`pointerId`, because jsdom has no `PointerEvent`.

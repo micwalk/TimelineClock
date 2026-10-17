@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_RING_DEFAULTS, parseWarningList, sanitizeRingDefaults, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm, warnText } from './alarmPicker.ts'
+import { DEFAULT_RING_DEFAULTS, parseSunWord, parseWarningList, sanitizeRingDefaults, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm, warnText } from './alarmPicker.ts'
 import { HOUR, MINUTE } from './time.ts'
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime()
@@ -84,5 +84,25 @@ describe('ring defaults (Settings)', () => {
     expect(sanitizeRingDefaults(null)).toEqual(DEFAULT_RING_DEFAULTS)
     expect(sanitizeRingDefaults({ choices: [], onTime: false, warnings: [] }).onTime).toBe(true)
     expect(sanitizeRingDefaults({ choices: [HOUR], onTime: false, warnings: [HOUR] })).toEqual({ choices: [HOUR], onTime: false, warnings: [HOUR] })
+  })
+})
+
+describe('parseSunWord', () => {
+  it('reads sunrise and sunset from four letters, or rise / set', () => {
+    expect(parseSunWord('Sunset')).toBe('sunset')
+    expect(parseSunWord('suns')).toBe('sunset')
+    expect(parseSunWord(' sunr ')).toBe('sunrise')
+    expect(parseSunWord('rise')).toBe('sunrise')
+    expect(parseSunWord('set')).toBe('sunset')
+  })
+  it('leaves times and stubs alone', () => {
+    expect(parseSunWord('sun')).toBeNull()
+    expect(parseSunWord('7p')).toBeNull()
+    expect(parseAlarmTime('sunset')).toBeNull()
+  })
+  it('remembers a recent sunset alarm', () => {
+    const r = { time: '18:30', repeat: null, warnings: [30 * 60_000], label: '', sun: 'sunset' as const }
+    expect(sanitizeRecentAlarms([r])).toEqual([r])
+    expect(pushRecentAlarm([r], { ...r, sun: undefined })).toHaveLength(2)
   })
 })
