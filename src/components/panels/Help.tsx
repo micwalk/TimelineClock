@@ -152,6 +152,7 @@ function HelpContent() {
             this site’s data deletes it. To keep a copy or move it, use Settings › Data to export a backup.
             The Android app keeps its own copy, separate from the browser’s: move data between them the same way.
             The one exception is a zip code or city typed in Settings › Sky, which is looked up once at open-meteo.com.
+            Your answers to “Are you a sour lemon?” are kept here too (Settings › Lemon log), and go into backups.
           </p>
         </section>
 

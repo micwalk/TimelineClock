@@ -40,6 +40,9 @@ import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
 import { addCalendarDays, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
+import { lemons, useLemons } from './lemons.ts'
+import type { LemonKind } from '../domain/lemons.ts'
+import { mergeLemons } from '../domain/lemons.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
 } from '../domain/quickCreate.ts'
@@ -447,6 +450,7 @@ export function startTimer(ms: number) {
   ui.markDropped(end)
   void primeNotifications() // the first timer asks for notification permission
   showAroundNow([now, now + ms])
+  askLemon(label, 'timer')
   return end
 }
 
@@ -643,10 +647,21 @@ export function setInstantHidden(id: string, hidden: boolean) {
   })
 }
 
+/**
+ * The lemon log (domain/lemons): after you put words on the timeline, "Are you a sour lemon?"
+ * (Settings can turn it off). Never blocks what you did; one question at a time.
+ */
+function askLemon(text: string, kind: LemonKind) {
+  if (!text.trim() || !useSettings.getState().askLemon) return
+  lemons.ask({ text: text.trim(), kind })
+}
+
 export function renameInstant(id: string, label: string) {
-  if (entities.getInstant(id)?.label !== label) touchOccurrence(id)
+  const before = entities.getInstant(id)?.label
+  if (before !== label) touchOccurrence(id)
   entities.setInstantLabel(id, label)
   view.editInstant(null)
+  if (before !== label) askLemon(label, 'name')
 }
 
 export function deleteInstant(id: string) {
@@ -749,8 +764,10 @@ export function saveSpanRefs(a: TimeRef, b: TimeRef) {
 }
 
 export function renameSpan(id: string, label: string) {
+  const before = entities.getSpan(id)?.label
   entities.setSpanLabel(id, label)
   view.editSpan(null)
+  if (before !== label) askLemon(label, 'span')
 }
 
 export function deleteSpan(id: string) {
@@ -1074,6 +1091,7 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
   const loc = useSettings.getState().skyLocation
   const sun = a.sun && loc ? { event: a.sun, lat: loc.lat, lon: loc.lon } : undefined
   const label = a.label || (sun ? sunEventName(sun.event) : '')
+  askLemon(a.label, 'alarm')
   if (!a.repeat) {
     const id = entities.createInstant(a.at, label)
     entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })), ...(sun ? { sun } : {}) }))
@@ -1133,6 +1151,7 @@ export function exportBackup(date = new Date()): Backup {
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
   const { spans, groups } = useEntities.getState()
   const instants = storedInstants(useEntities.getState().instants)
+  const lemonLog = useLemons.getState().log
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -1142,7 +1161,7 @@ export function exportBackup(date = new Date()): Backup {
       alarms: { autoDismissMs, unattended },
       view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
     },
-    data: { instants, spans, groups: groups ?? [] },
+    data: { instants, spans, groups: groups ?? [], lemons: lemonLog },
   }
 }
 
@@ -1178,5 +1197,6 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
     for (const i of before.instants) if (!instantIds.has(i.id)) view.forgetInstant(i.id)
     if (lostFocus) focusCursorAt(v().timeCenter, false)
     useEntities.setState(next)
+    if (backup.data.lemons) lemons.setLog(choice.mode === 'replace' ? backup.data.lemons : mergeLemons(useLemons.getState().log, backup.data.lemons))
   }
 }
