@@ -230,24 +230,56 @@ export const SUN_EVENTS: readonly SunEvent[] = ['sunrise', 'sunset']
 /** "Sunrise", "Sunset". */
 export const sunEventName = (e: SunEvent) => (e === 'sunrise' ? 'Sunrise' : 'Sunset')
 
+// Sun events belong to solar days (noon to noon at the place), not to the device's calendar
+// dates: where the two differ (another timezone, or a sunset after midnight UTC), a date-based
+// lookup finds the wrong day. Everything here steps from solar noon to solar noon.
+
+/** The sunrise or sunset of the solar day around `noon` (a solar noon at `p`), to the minute; null when the sun doesn't cross. */
+function eventOfSolarDay(noon: number, p: GeoPoint, event: SunEvent): number | null {
+  const side = event === 'sunrise' ? -1 : 1
+  const h = halfArcMs(noon, p, SUNRISE_ALT, side)
+  return typeof h === 'number' ? Math.round((noon + side * h) / MINUTE) * MINUTE : null
+}
+
 /**
- * The sunrise or sunset at `p` on the local day `dayTs` falls in (the one around that day's solar
- * noon, taken from local noon), to the minute. Null when the sun doesn't rise or set that day.
+ * The sunrise or sunset that belongs to the local date `dayTs` falls on: the one of the solar day
+ * whose noon is nearest that date's local noon (for a place in the device's own timezone, simply
+ * that day's). Null when the sun doesn't rise or set that day.
  */
 export function sunEventOnDay(dayTs: number, p: GeoPoint, event: SunEvent): number | null {
   const d = new Date(dayTs)
-  const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime()
-  const day = sunDay(noon, p)
-  const t = event === 'sunrise' ? day.sunrise : day.sunset
-  return t === undefined ? null : Math.round(t / MINUTE) * MINUTE
+  return eventOfSolarDay(solarNoonNear(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime(), p), p, event)
+}
+
+/** Sunrises (or sunsets) at `p` between `from` and `to`, in order. */
+export function sunEventsBetween(from: number, to: number, p: GeoPoint, event: SunEvent): number[] {
+  const out: number[] = []
+  let noon = solarNoonNear(from - DAY, p)
+  for (let guard = 0; noon <= to + DAY && guard < 4000; guard++) {
+    const t = eventOfSolarDay(noon, p, event)
+    if (t !== null && t >= from && t <= to) out.push(t)
+    noon = solarNoonNear(noon + DAY, p)
+  }
+  return out
 }
 
 /** The next sunrise or sunset at `p` after `now` (looking up to a year ahead, for polar nights), or null. */
 export function nextSunEvent(now: number, p: GeoPoint, event: SunEvent): number | null {
-  const d = new Date(now)
-  for (let k = 0; k < 370; k++) {
-    const t = sunEventOnDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() + k, 12).getTime(), p, event)
+  let noon = solarNoonNear(now - DAY, p)
+  for (let k = 0; k < 372; k++) {
+    const t = eventOfSolarDay(noon, p, event)
     if (t !== null && t > now) return t
+    noon = solarNoonNear(noon + DAY, p)
   }
   return null
+}
+
+/** The sunrise or sunset at `p` nearest `ts` (of the solar days around it), or null when none is near. */
+export function sunEventNear(ts: number, p: GeoPoint, event: SunEvent): number | null {
+  let best: number | null = null
+  for (const noon of [solarNoonNear(ts - DAY, p), solarNoonNear(ts, p), solarNoonNear(ts + DAY, p)]) {
+    const t = eventOfSolarDay(noon, p, event)
+    if (t !== null && (best === null || Math.abs(t - ts) < Math.abs(best - ts))) best = t
+  }
+  return best
 }
