@@ -403,6 +403,7 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   const id = entities.createInstant(ts, '')
   if (opts.favorite) setFavorite(id, true)
   ui.markDropped(id)
+  ui.callLemon()
   return id
 }
 
@@ -417,6 +418,7 @@ export function dropAndName(ts = cursorTime()): string {
   const id = entities.createInstant(ts, '')
   view.selectInstant(id)
   view.editInstant(id)
+  ui.callLemon()
   return id
 }
 
@@ -445,6 +447,7 @@ export function startTimer(ms: number) {
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
+  ui.callLemon()
   void primeNotifications() // the first timer asks for notification permission
   showAroundNow([now, now + ms])
   return end
@@ -1068,6 +1071,7 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
 export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
+  ui.callLemon()
   void primeNotifications()
   quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}) })
   // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.

@@ -7,6 +7,13 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.4.4 — 2026-10-17
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **You bad lemon 🍋**: adding something to the timeline (an instant, a timer, an alarm) says
+  so at the top for a moment. Nothing to answer; taps go through it and it goes by itself.
+
 ## 0.4.3 — 2026-10-17
 
 **Android app: web only** (nothing to install; it updates itself).

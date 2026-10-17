@@ -4,6 +4,7 @@ import { AgendaShell } from './components/panels/AgendaShell.tsx'
 import { useLayout } from './store/layout.ts'
 import { RingingAlarms } from './components/panels/RingingAlarms.tsx'
 import { HelpDialog } from './components/panels/Help.tsx'
+import { LemonToast } from './components/panels/LemonToast.tsx'
 import { useHotkeys } from './hooks/useHotkeys.ts'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
       {agenda !== 'side' && <AgendaShell />}
       <RingingAlarms />
       <HelpDialog />
+      <LemonToast />
     </div>
   )
 }
