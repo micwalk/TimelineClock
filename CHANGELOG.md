@@ -14,14 +14,18 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **Groups by zoom** (#10): repeats, sunrise and sunset, and a new **Unnamed** group each choose
   how they show as you zoom out: as chips, gathered (short lines and one summary chip, as
   repeats already did when crowded), or hidden. The Agenda's **Repeats** tab is now **Groups**:
-  each row's adjust button opens a strip over the zoom levels (1h … 1mo) with a handle for
-  "chips up to" and one for "hidden past", and a mark where you are now.
+  each row's adjust button opens a strip over the zoom levels (1h … 1y) with a handle for
+  "chips up to" and one for "hidden past" (drag them, or tap the strip to move the nearer one
+  there), and a mark where you are now.
 - From the timeline: hold (or right click) a gathered group's chip for **Show as chips**,
   **Hide from here out**, or its settings.
 - **Unnamed instants** (no name, star or alarm to come), most of a busy history, gather into
   "○ 8 unnamed" once more than a day is on screen. They are never hidden unless you choose to.
 - Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
   Advanced setting).
+- **Zoom out to a year**: the widest zoom now shows a little over a year (it was 30 days). Set
+  the sun's group to show up to 3 months or a year to see a season of sunrises and sunsets. The
+  sky's colours fade out once days are only a few pixels wide.
 - In horizontal, the NOW button sits right under the timeline's center, so while following Now
   the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
   below.

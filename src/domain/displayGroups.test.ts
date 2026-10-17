@@ -50,6 +50,10 @@ describe('setting thresholds from where you are', () => {
     expect(zoomPosition(2 * DAY)).toBeGreaterThan(2)
     expect(zoomPosition(2 * DAY)).toBeLessThan(3)
     expect(zoomPosition(30 * DAY)).toBe(5)
+    expect(zoomPosition(91 * DAY)).toBe(6)
+    expect(zoomPosition(365 * DAY)).toBe(7)
+    expect(displayLevel({ full: 'week', mini: 'year' }, 200 * DAY)).toBe('mini')
+    expect(displayLevel({ full: 'week', mini: 'quarter' }, 200 * DAY)).toBe('hidden')
   })
   it('chips here: full reaches this zoom, and mini with it', () => {
     expect(showChipsHere({ full: 'hour', mini: 'day' }, 2 * DAY)).toEqual({ full: '3d', mini: '3d' })

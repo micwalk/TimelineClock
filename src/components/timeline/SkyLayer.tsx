@@ -9,11 +9,20 @@ import { useSettings } from '../../store/settings.ts'
 import type { SkyLocation, SkyMode } from '../../store/settings.ts'
 import { fixedSkyStops, skyStops } from '../../domain/sun.ts'
 import type { SkyStop } from '../../domain/sun.ts'
-import { DAY } from '../../domain/time.ts'
+import { DAY, smoothstep } from '../../domain/time.ts'
 import { translateMain } from './axisPlace.ts'
 
 /** Stops far off the layer are clamped (the colour there barely changes across the screen). */
 const STOP_LIMIT_PX = 1e6
+/**
+ * Zoomed far out (months, a year) days are a few px wide: the sky fades out between these widths
+ * of a day (px), and below the first it isn't drawn at all (thousands of stops for stripes).
+ */
+const FADE_FROM_DAY_PX = 10
+const FADE_TO_DAY_PX = 30
+/** Narrower than this a day keeps only its main stops (night, horizon, noon): a third of the stops. */
+const SIMPLE_DAY_PX = 60
+const SIMPLE_KEYS = new Set(['midnight', 'dark', 'horizon', 'noon'])
 
 /** The stops for the sky setting over [start, end], or null when the sky is off. */
 function stopsFor(mode: SkyMode, loc: SkyLocation | null, start: number, end: number): SkyStop[] | null {
@@ -40,6 +49,11 @@ export function SkyLayer() {
     const zoomed = s.pxPerMs !== 0 && Math.abs(f.pxPerMs - s.pxPerMs) > s.pxPerMs * 1e-6
     const stale = sourceChanged || s.pxPerMs === 0 || zoomed || f.mainSize !== s.mainSize || f.dir !== s.dir ||
       f.orientation !== s.orientation || f.start < s.start || f.end > s.end
+    const dayPx = f.pxPerMs * DAY
+    const fade = smoothstep(FADE_FROM_DAY_PX, FADE_TO_DAY_PX, dayPx)
+    if (fade <= 0) { band.style.display = 'none'; s.pxPerMs = 0; return }
+    const o = fade >= 1 ? '' : String(Math.round(fade * 20) / 20)
+    if (band.style.opacity !== o) band.style.opacity = o
     if (stale) {
       const range = f.end - f.start
       const margin = zoomed ? 0.1 : 0.75
@@ -57,7 +71,8 @@ export function SkyLayer() {
         s.cache.to = s.end + extra
         s.cache.stops = stopsFor(mode, loc, s.cache.from, s.cache.to)
       }
-      const stops = s.cache.stops
+      const all = s.cache.stops
+      const stops = all && dayPx < SIMPLE_DAY_PX ? all.filter(st => SIMPLE_KEYS.has(st.key)) : all
       if (!stops || stops.length < 2) { band.style.display = 'none'; return }
       band.style.display = ''
       const x = (t: number) => s.mainSize / 2 + s.dir * (t - s.center) * s.pxPerMs

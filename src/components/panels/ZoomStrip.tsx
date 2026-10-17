@@ -1,7 +1,8 @@
 // A group's zoom strip (#10, domain/displayGroups), in the Agenda's Groups tab: the zoom ladder
-// (time on screen: 1h … 1mo, ∞) in three zones, chips | gathered | hidden, with two handles to drag
+// (time on screen: 1h … 1y, ∞) in three zones, chips | gathered | hidden, with two handles to drag
 // (the chips handle above the track, the hide handle below it, so both can be grabbed when they
-// meet) and a mark at the zoom you are at. Arrow keys move a focused handle a stop.
+// meet) and a mark at the zoom you are at. A tap on the track or a label moves the nearer handle
+// there; arrow keys move a focused handle a stop.
 import { useRef } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { useFrameValue } from '../../engine/hooks.ts'
@@ -24,6 +25,12 @@ export function ZoomStrip({ groupKey }: { groupKey: string }) {
     const r = trackRef.current?.getBoundingClientRect()
     return r && r.width > 0 ? Math.round(((clientX - r.left) / r.width) * LAST) : 0
   }
+  /** A tap on the strip: the handle nearer the tapped stop goes there (outside both, the one on that side). */
+  const tapAt = (clientX: number) => {
+    const i = Math.max(0, Math.min(LAST, stopAt(clientX)))
+    const which = i < fi ? 'full' : i > mi ? 'mini' : i - fi <= mi - i ? 'full' : 'mini'
+    set(which, i)
+  }
   const handle = (which: 'full' | 'mini', i: number, label: string) => ({
     role: 'slider' as const,
     tabIndex: 0,
@@ -35,6 +42,8 @@ export function ZoomStrip({ groupKey }: { groupKey: string }) {
     'aria-valuenow': i,
     'aria-valuetext': ZOOM_STOPS[i].words,
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId) },
+    // A tap on a handle is a drag that didn't move: not a tap on the track under it.
+    onClick: (e: { stopPropagation: () => void }) => e.stopPropagation(),
     onPointerMove: (e: PointerEvent<HTMLDivElement>) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) set(which, stopAt(e.clientX)) },
     onKeyDown: (e: KeyboardEvent) => {
       const step = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : 0
@@ -43,7 +52,7 @@ export function ZoomStrip({ groupKey }: { groupKey: string }) {
   })
   return (
     <div className="zoom-strip" data-no-pan>
-      <div ref={trackRef} className="zoom-strip__track">
+      <div ref={trackRef} className="zoom-strip__track" onClick={e => tapAt(e.clientX)}>
         <div className="zoom-strip__seg is-full" style={{ left: 0, width: pct(fi) }} />
         <div className="zoom-strip__seg is-mini" style={{ left: pct(fi), width: pct(mi - fi) }} />
         <div className="zoom-strip__seg is-hidden" style={{ left: pct(mi), right: 0 }} />
@@ -51,7 +60,7 @@ export function ZoomStrip({ groupKey }: { groupKey: string }) {
         <div {...handle('full', fi, 'Chips up to')} title="Drag: chips up to here" />
         <div {...handle('mini', mi, 'Hidden past')} title="Drag: hidden past here" />
       </div>
-      <div className="zoom-strip__labels" aria-hidden>
+      <div className="zoom-strip__labels" aria-hidden onClick={e => tapAt(e.clientX)}>
         {ZOOM_STOPS.map((z, i) => <span key={z.stop} style={{ left: pct(i) }}>{z.label}</span>)}
       </div>
       <p className="zoom-strip__says">{describeDisplay(d)}</p>
