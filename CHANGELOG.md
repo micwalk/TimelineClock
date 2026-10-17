@@ -23,7 +23,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
   Advanced setting).
 - In horizontal, the NOW button sits right under the timeline's center, so while following Now
-  the red Now line runs straight down into it.
+  the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
+  below.
 
 ## 0.4.3 — 2026-10-17
 

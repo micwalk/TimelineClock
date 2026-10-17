@@ -118,7 +118,8 @@ export function ControlBar() {
   }
 
   // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
-  // while following Now), with the other buttons gathered to either side of it.
+  // while following Now), with the navigation gathered to either side of it; Stopwatch, Timer
+  // and Alarm are a centered row of their own below.
   return (
     <nav className="controls controls--horizontal" aria-label="Timeline controls">
       <div className="controls__side is-before">
@@ -132,7 +133,8 @@ export function ControlBar() {
         <IncrementButton direction={1} />
         <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
         <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
-        <span className="controls__sep" aria-hidden />
+      </div>
+      <div className="controls__quick">
         <StopwatchButton />
         <TimerButton />
         <AlarmButton />

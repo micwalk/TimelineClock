@@ -93,11 +93,13 @@
 
 /* Stopwatch and Timer: always labelled (they are the way in for new users). */
 /* Horizontal: NOW centered under the timeline (its center is the Now line's while following Now),
-   the rest gathered to either side; each side wraps on its own when narrow. */
+   the navigation gathered to either side (each side wraps on its own when narrow), and Stopwatch,
+   Timer and Alarm a centered row below. */
 .controls--horizontal { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
 .controls__side { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
+.controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .controls__now { display: flex; justify-content: center; }
 /* The Now line runs on down into the button: a red line from the button's top up past the bar's
    edge (any overlap lands on the Now line itself), brightening as it meets the button. */
