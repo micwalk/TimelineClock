@@ -23,6 +23,15 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
   Advanced setting).
 
+## 0.4.1 — 2026-10-17
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- Sunrise and sunset are found by the sun's own day, not the device's calendar date. Where the
+  two differ (a location in another timezone, or a sunset after midnight UTC), a kept sunset
+  stopped counting as one, the next sunset could be skipped, and sunset alarms could skip a day.
+  (It also failed the 0.4.0 build, whose tests run in UTC.)
+
 ## 0.4.0 — 2026-10-15
 
 **Android app: web only** (nothing to install; it updates itself).

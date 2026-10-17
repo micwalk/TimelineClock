@@ -6,8 +6,8 @@
 // its sunset is simply an instant again (isAtSun).
 import type { InstantRecord } from './entities.ts'
 import type { GeoPoint, SunEvent } from './sun.ts'
-import { SUN_EVENTS, sunEventName, sunEventOnDay } from './sun.ts'
-import { DAY, MINUTE } from './time.ts'
+import { SUN_EVENTS, sunEventName, sunEventNear, sunEventsBetween } from './sun.ts'
+import { MINUTE } from './time.ts'
 
 /** Where a time follows the sun: that day's sunrise or sunset at a place. */
 export interface SunAnchor extends GeoPoint {
@@ -27,7 +27,7 @@ export function sanitizeSunAnchor(raw: unknown): SunAnchor | undefined {
 /** Whether `inst` still sits on its sunrise or sunset (moving it makes it a plain instant). */
 export function isAtSun(inst: Pick<InstantRecord, 'tsEpochMs' | 'sun'>): boolean {
   if (!inst.sun) return false
-  const t = sunEventOnDay(inst.tsEpochMs, inst.sun, inst.sun.event)
+  const t = sunEventNear(inst.tsEpochMs, inst.sun, inst.sun.event)
   return t !== null && Math.abs(t - inst.tsEpochMs) < MINUTE
 }
 
@@ -49,15 +49,11 @@ export function virtualSunEvents(p: GeoPoint, instants: readonly InstantRecord[]
   // A stored one keeps the id it had as a virtual one, even moved off its sunset.
   const have = new Set([...taken, ...instants.map(i => i.id)])
   const out: InstantRecord[] = []
-  const d = new Date(from - DAY)
-  for (let k = 0; k < 400; k++) {
-    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() + k, 12).getTime()
-    if (day > to + DAY) break
-    for (const event of events) {
-      const ts = sunEventOnDay(day, p, event)
-      if (ts === null || ts < from || ts > to || have.has(`${event}@${ts}`) || have.has(sunVirtualId(event, ts))) continue
+  for (const event of events) {
+    for (const ts of sunEventsBetween(from, to, p, event)) {
+      if (have.has(`${event}@${ts}`) || have.has(sunVirtualId(event, ts))) continue
       out.push({ id: sunVirtualId(event, ts), tsEpochMs: ts, label: sunEventName(event), sun: { event, lat: p.lat, lon: p.lon }, virtual: true })
     }
   }
-  return out
+  return out.sort((a, b) => a.tsEpochMs - b.tsEpochMs)
 }
