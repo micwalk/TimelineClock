@@ -2,6 +2,7 @@
 // called on either side ("PDT", "PST"), and the computed "Clocks back 1h" instants the timeline
 // shows at them. Every function takes an optional IANA zone ("America/Los_Angeles"); without one
 // it uses the device's own, so a world clock (#9) can ask about any zone with the same code.
+import { LABELS } from '../config/labels.ts'
 import type { InstantRecord } from './entities.ts'
 import { isAtSun } from './sunEvents.ts'
 import { HOUR, MINUTE } from './time.ts'
@@ -80,9 +81,9 @@ export function isDstShiftAt(ts: number, timeZone?: string): boolean {
   return utcOffsetMin(ts - MINUTE, timeZone) !== utcOffsetMin(ts, timeZone)
 }
 
-/** "DST ends (🕰️back)" when the clocks go back, "DST begins (🕰️fwd)" when they go forward (the header names the zones). */
+/** What a clock change is called (config/labels): DST ends when the clocks go back, begins when they go forward (the header names the zones). */
 export function describeShift(s: DstShift): string {
-  return s.after < s.before ? 'DST ends (🕰️back)' : 'DST begins (🕰️fwd)'
+  return s.after < s.before ? LABELS.dstEnds : LABELS.dstBegins
 }
 
 /** A computed clock change's id: "dst:<epoch ms>". */

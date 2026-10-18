@@ -1,4 +1,5 @@
 // Pure formatting/parsing helpers for times and durations.
+import { MARKS } from '../config/labels.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 import { displayName } from './entities.ts'
 import { parseSnoozeLabel } from './alarms.ts'
@@ -145,8 +146,8 @@ export function atClockTimeOnDay(dayOf: number, hours24: number, minutes: number
   return d.getTime()
 }
 
-/** Marks a snooze in short names: "Test Alarm ⟲2". */
-export const SNOOZE_MARK = '⟲'
+/** Marks a snooze in short names: "Test Alarm ⟲2" (config/labels). */
+export const SNOOZE_MARK = MARKS.snooze
 
 /** An instant's name as shown on its timeline chip; snoozes become "Base ⟲N". */
 export function chipName(label: string): string {

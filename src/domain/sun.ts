@@ -1,6 +1,7 @@
 // The sun, offline (TLC-6, #11): its altitude through the day from a latitude and longitude
 // (NOAA's solar equations: about a minute's accuracy, which is plenty for shading and
 // sunrise/sunset), and the sky stops the timeline's background is drawn from.
+import { LABELS } from '../config/labels.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
 
 export interface GeoPoint {
@@ -227,8 +228,8 @@ export function fixedSkyStops(start: number, end: number): SkyStop[] {
 export type SunEvent = 'sunrise' | 'sunset'
 export const SUN_EVENTS: readonly SunEvent[] = ['sunrise', 'sunset']
 
-/** "Sunrise", "Sunset". */
-export const sunEventName = (e: SunEvent) => (e === 'sunrise' ? 'Sunrise' : 'Sunset')
+/** "Sunrise", "Sunset" (config/labels). */
+export const sunEventName = (e: SunEvent) => (e === 'sunrise' ? LABELS.sunrise : LABELS.sunset)
 
 // Sun events belong to solar days (noon to noon at the place), not to the device's calendar
 // dates: where the two differ (another timezone, or a sunset after midnight UTC), a date-based

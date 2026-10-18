@@ -1,5 +1,6 @@
 // Controls under the timeline: navigation, the big NOW / ＋ button (with the time under it),
 // and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
+import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -90,7 +91,7 @@ export function ControlBar() {
   // The vertical bar's NOW column is narrow: the time without seconds fits.
   const clock = <LiveText compute={f => formatClockCompact(f.now, !vertical)} />
   const nowButton = (style?: CSSProperties) => (nowFocused
-    ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" style={style} sub={clock} onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>＋</span></CtlButton>
+    ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" style={style} sub={clock} onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span></CtlButton>
     : <CtlButton variant="now" label="Focus Now (R)" style={style} sub={clock} onClick={() => act.focusNow()}>NOW</CtlButton>)
 
   if (vertical) {

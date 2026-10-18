@@ -1,5 +1,6 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
+import { LABELS, MARKS } from '../../config/labels.ts'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -130,7 +131,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
   // At a sunrise or sunset (and still on it): a sun before its name.
   const atSun = useMemo(() => isAtSun({ tsEpochMs: ts, sun: inst.sun }), [ts, inst.sun])
-  // At a clock change (daylight saving): never moved or deleted (its name carries the 🕰️).
+  // At a clock change (daylight saving): never moved or deleted (its name says what it is: config/labels).
   const atShift = useMemo(() => isAtDstShift({ id: inst.id, tsEpochMs: ts }), [inst.id, ts])
   const fixed = atSun || atShift
   const withSeconds = fineSeconds || selected || focused
@@ -286,8 +287,8 @@ function CancelTool({ inst }: { inst: InstantRecord }) {
 /** How long a series' summary chip glides to the occurrence it moves on to, ms. */
 const SERIES_GLIDE_MS = 260
 
-/** The mark on an occurrence of a repeating series. */
-const REPEAT_MARK = '⟳'
+/** The mark on an occurrence of a repeating series (config/labels). */
+const REPEAT_MARK = MARKS.repeat
 
 /**
  * Repeat: makes an instant repeat (it becomes the first occurrence of a series), or, on an
@@ -537,12 +538,12 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
       <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(sun.ts - f.now)}`} />
     </>
   } else if (summary.seriesId === UNNAMED_GROUP) {
-    const what = `${summary.count} unnamed`
+    const what = LABELS.unnamedCount(summary.count)
     kind = ' tl-series--unnamed'
     label = `${what} instants, gathered`
     title = `${what} on screen, gathered`
     body = <>
-      <span className="chip-series__mark" aria-hidden>○</span>
+      <span className="chip-series__mark" aria-hidden>{MARKS.unnamed}</span>
       <span className="chip__name">{what}</span>
       <span className="chip-series__rule">{formatClockCompact(summary.anchorTs, false)}</span>
       <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(summary.anchorTs - f.now)}`} />

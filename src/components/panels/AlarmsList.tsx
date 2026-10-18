@@ -7,6 +7,7 @@
 // (#11; their switches show or hide them on the timeline), the Unnamed group, then every series,
 // alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
 // chips, gathered or hidden by zoom).
+import { MARKS } from '../../config/labels.ts'
 import { useMemo } from 'react'
 import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
 import { ZoomStrip } from './ZoomStrip.tsx'
@@ -157,7 +158,7 @@ export function RepeatsList() {
       <SunRows minute={minute} />
       <UnnamedRow instants={instants} />
       {rows.length === 0
-        ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>⟳</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
+        ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>{MARKS.repeat}</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
         : rows.map(({ series, next }) => (
           <div key={series.id} className="group-row">
             <SeriesRow series={series} next={next} when={next?.tsEpochMs ?? null} groups />
@@ -178,7 +179,7 @@ function UnnamedRow({ instants }: { instants: readonly InstantRecord[] }) {
       <div className="alarm-row alarm-row--unnamed glow-box" onClick={() => ui.setGroupOpen(useUi.getState().groupOpen === UNNAMED_GROUP ? null : UNNAMED_GROUP)}>
         <span className="alarm-row__time mono">{count}</span>
         <span className="alarm-row__main">
-          <span className="alarm-row__name">○ Unnamed</span>
+          <span className="alarm-row__name">{MARKS.unnamed} Unnamed</span>
           <span className="alarm-row__sub">{describeDisplay(display)}</span>
         </span>
         <span />

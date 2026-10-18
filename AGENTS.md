@@ -119,6 +119,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - To try a pull request on the phone before merging: TC Preview (docs/android.md#testing-a-pull-request-tc-preview), a separate app published as the "preview" pre-release for PRs that change native code; it loads the PR's Netlify deploy preview, chosen by PR number in the app.
 
 ## File Organization
+- `/src/config/` - Names and marks the app writes itself (labels.ts: computed instants' names, chip glyphs); edit them there, never as literals in code
 - `/src/domain/` - Pure logic: time math, ticks, spans, navigation, alarms (with tests)
 - `/src/store/` - Zustand stores and actions.ts
 - `/src/engine/` - Viewport engine and hooks
