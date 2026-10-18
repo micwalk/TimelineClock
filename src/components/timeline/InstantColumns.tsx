@@ -20,7 +20,7 @@ import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import { ui, useUi } from '../../store/ui.ts'
-import { getTunables, useSettings } from '../../store/settings.ts'
+import { getTunables } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -37,7 +37,7 @@ import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { describeRepeat, describeRepeatShort, occurrenceTs } from '../../domain/series.ts'
 import { sunEventName } from '../../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../../domain/sunEvents.ts'
-import { SUN_GROUP, UNNAMED_GROUP, displayFor, displayLevel } from '../../domain/displayGroups.ts'
+import { SUN_GROUP, UNNAMED_GROUP } from '../../domain/displayGroups.ts'
 import { useLongPress } from '../../hooks/useLongPress.ts'
 import { isAtDstShift } from '../../domain/dst.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
@@ -518,7 +518,6 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
   const { consumeClick, ...press } = useLongPress(() => setMenu(true))
   const series = useEntities(s => s.groups?.find(g => g.id === summary.seriesId))
   const vertical = useLayout(s => s.orientation === 'vertical')
-  const forced = useFrameValue(f => displayLevel(displayFor(summary.seriesId, useSettings.getState().groupDisplay), f.end - f.start) === 'mini')
   const zoomIn = () => act.zoomToTimes(summary.nextTs !== null ? [summary.anchorTs, summary.nextTs] : [summary.anchorTs])
   const onClick = () => { if (!consumeClick()) zoomIn() }
 
@@ -577,9 +576,7 @@ const SeriesChip = memo(function SeriesChip({ summary }: { summary: SeriesSummar
         {menu && (
           <div ref={menuRef} className="popover popover--chip group-menu glow-box" role="menu" aria-label="How this group shows at this zoom">
             <div className="repeat-menu__title">At this zoom</div>
-            {forced
-              ? <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => zoom('chips')}>Show as chips</button>
-              : <span className="group-menu__note">Gathered because they crowd here</span>}
+            <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => zoom('chips')}>Show as chips</button>
             <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => zoom('hide')}>Hide from here out</button>
             <button type="button" role="menuitem" className="alarm-link glow-box" onClick={() => { setMenu(false); act.showGroupSettings(summary.seriesId) }}>Group settings…</button>
           </div>

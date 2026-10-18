@@ -85,13 +85,15 @@ describe('createSavedLayoutCache', () => {
 
   beforeEach(() => { useSettings.setState({ tunables: {} }) })
 
-  it('computed sunrises and sunsets collapse together into one sun summary; a tapped (stored) one keeps its chip', () => {
+  it('computed sunrises and sunsets gather together into one sun summary in their gathered zoom; a tapped (stored) one keeps its chip', () => {
     const compute = createSavedLayoutCache()
     const sun = { event: 'sunset' as const, lat: 0, lon: 0 }
-    // Six sun times 50px apart (closer than a summary chip needs), plus a stored one.
     const virtuals = Array.from({ length: 6 }, (_, k) => ({ ...inst(`sun:sunset@${k * 5000}`, k * 5000 - 15000), sun, virtual: true as const }))
     const stored = { ...inst('kept', 2500), sun }
-    const r = compute(frame(0), inputs([...virtuals, stored]))
+    // Two hours on screen, past the sun's "chips up to an hour".
+    const px = 800 / (2 * 3600_000)
+    const twoHours: FrameLike = { now: 0, pxPerMs: px, mainSize: 800, crossSize: 900, start: -3600_000, end: 3600_000, pos: ts => ts * px + 400 }
+    const r = compute(twoHours, inputs([...virtuals, stored], { groupDisplay: { sun: { full: 'hour', mini: 'always' } } }))
     expect(Object.values(r.rhythm)).toEqual(Array(6).fill('sun'))
     expect(r.rhythm.kept).toBeUndefined()
     expect(r.seriesChips.map(c => c.seriesId)).toEqual(['sun'])

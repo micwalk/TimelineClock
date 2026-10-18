@@ -2,8 +2,8 @@
 //
 // A group is a repeating series, the computed sunrises and sunsets, or the built-in Unnamed
 // group (tags will be groups too, #8). Each has two thresholds on the zoom ladder below, read as
-// how much time is on screen: up to `full` its instants are chips (crowding may still gather
-// them, as repeats always have: domain/rhythm), up to `mini` they are gathered into a rhythm
+// how much time is on screen: up to `full` its instants are chips (crowded ones slide aside or
+// fold into "+N", like any chips), up to `mini` they are gathered into a rhythm
 // (short lines from the axis and one summary chip), and past it they are hidden. What you are
 // working with (selected, focused, ringing...) always keeps its chip.
 import type { InstantRecord } from './entities.ts'
@@ -41,11 +41,15 @@ export const SUN_GROUP = 'sun'
 /** Instants with no name (and no repeat, star or alarm to come): most of a busy history. */
 export const UNNAMED_GROUP = 'unnamed'
 
-/** What each kind of group starts with: repeats as they always were; the sun gone past a week; unnamed gathered past a day, never hidden (history is core). */
+/**
+ * What each kind of group starts with: repeats chips up to a week, gathered beyond, never hidden;
+ * sunrises and sunsets chips up to 3 days, gathered to a week, gone beyond (the sky shows it);
+ * unnamed instants chips up to a day, gathered beyond, never hidden (history is core).
+ */
 export function defaultDisplay(key: string): GroupDisplay {
-  if (key === SUN_GROUP) return { full: 'week', mini: 'week' }
+  if (key === SUN_GROUP) return { full: '3d', mini: 'week' }
   if (key === UNNAMED_GROUP) return { full: 'day', mini: 'always' }
-  return { full: 'always', mini: 'always' }
+  return { full: 'week', mini: 'always' }
 }
 
 export const displayFor = (key: string, prefs: Readonly<Record<string, GroupDisplay>>): GroupDisplay => prefs[key] ?? defaultDisplay(key)
@@ -119,7 +123,7 @@ export const stopIndex = index
 export function describeDisplay(d: GroupDisplay): string {
   const f = ZOOM_STOPS[index(d.full)]
   const m = ZOOM_STOPS[index(d.mini)]
-  if (d.full === 'always') return 'Chips at any zoom (gathered when crowded)'
+  if (d.full === 'always') return 'Chips at any zoom'
   if (d.full === d.mini) return `Chips up to ${f.words}, hidden beyond`
   return `Chips up to ${f.words}, gathered ${d.mini === 'always' ? 'beyond, never hidden' : `up to ${m.words}, hidden beyond`}`
 }

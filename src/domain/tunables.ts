@@ -20,7 +20,6 @@ const SPECS = {
   chipGapPx: { label: 'Gap between chips (px)', default: 6, min: 0, max: 40, step: 1, group: 'Layout' },
   chipShiftMaxPx: { label: 'Chips may slide along time before clustering (px)', default: 80, min: 0, max: 300, step: 2, group: 'Layout' },
   snoozeJoinSec: { label: 'A snoozed warning joins its instant when it would ring this close before it (s)', default: 60, min: 0, max: 600, step: 5, group: 'Layout' },
-  rhythmGapPx: { label: 'Repeats collapse into a rhythm when closer than (px)', default: 56, min: 0, max: 400, step: 2, group: 'Layout' },
   bellCollapsePx: { label: 'Alarm bells fold into their chip when closer than (px)', default: 36, min: 0, max: 200, step: 2, group: 'Layout' },
   autoHysteresis: { label: 'Auto orientation margin', default: 0.1, min: 0, max: 0.5, step: 0.01, group: 'Layout' },
   sideDockMinWidthPx: { label: 'Side-docked Agenda needs width (px)', default: 900, min: 300, max: 3000, step: 10, group: 'Layout' },

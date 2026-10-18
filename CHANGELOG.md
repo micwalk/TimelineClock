@@ -21,8 +21,10 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   **Hide from here out**, or its settings.
 - **Unnamed instants** (no name, star or alarm to come), most of a busy history, gather into
   "○ 8 unnamed" once more than a day is on screen. They are never hidden unless you choose to.
-- Sunrise and sunset leave the timeline past a week on screen (set in Groups; this replaces the
-  Advanced setting).
+- A group gathers only where its strip says, never just because its chips crowd (crowded chips
+  slide aside or fold into "+N", like any chips). Repeats start as chips up to a week on screen;
+  sunrise and sunset as chips up to 3 days, gathered up to a week, gone beyond. This replaces the
+  Advanced settings for when repeats and sun times collapse.
 - **Zoom out to a year**: the widest zoom now shows a little over a year (it was 30 days). Set
   the sun's group to show up to 3 months or a year to see a season of sunrises and sunsets. The
   sky's colours fade out once days are only a few pixels wide.

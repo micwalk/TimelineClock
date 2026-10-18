@@ -25,9 +25,9 @@ describe('displayLevel', () => {
 })
 
 describe('defaults', () => {
-  it('repeats as before, the sun gone past a week, unnamed gathered past a day and never hidden', () => {
-    expect(defaultDisplay('g_abc')).toEqual({ full: 'always', mini: 'always' })
-    expect(defaultDisplay(SUN_GROUP)).toEqual({ full: 'week', mini: 'week' })
+  it('repeats chips to a week then gathered; the sun chips to 3 days, gone past a week; unnamed gathered past a day; your own never hidden', () => {
+    expect(defaultDisplay('g_abc')).toEqual({ full: 'week', mini: 'always' })
+    expect(defaultDisplay(SUN_GROUP)).toEqual({ full: '3d', mini: 'week' })
     expect(defaultDisplay(UNNAMED_GROUP)).toEqual({ full: 'day', mini: 'always' })
   })
 })

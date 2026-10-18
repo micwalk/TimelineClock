@@ -23,7 +23,7 @@ import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import type { SeriesSummary } from '../../domain/rhythm.ts'
 import { planRhythm, seriesItemId } from '../../domain/rhythm.ts'
 import type { DisplayLevel, GroupDisplay } from '../../domain/displayGroups.ts'
-import { SUN_GROUP, UNNAMED_GROUP, displayFade, displayFor, displayGroupOf, displayLevel } from '../../domain/displayGroups.ts'
+import { UNNAMED_GROUP, displayFade, displayFor, displayGroupOf, displayLevel } from '../../domain/displayGroups.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
 import { useTimelineInstants } from './timelineInstants.ts'
@@ -375,16 +375,17 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     // Repeats zoomed out collapse into a rhythm (domain/rhythm): ticks and one summary chip.
     const ringingIds = new Set(c.ringing.map(k => parseRingKey(k).instantId))
     const worked = new Set([c.selected, c.secondary, c.mode === 'instant' ? c.focusedInstantId : null, c.editing, c.moving].filter(Boolean))
-    // Every display group gathers the same way: series, computed sunrises and sunsets, Unnamed.
+    // A group gathers only in the zoom its strip says (domain/displayGroups: series, computed
+    // sunrises and sunsets, Unnamed). In its chips zone it stays chips, however crowded: the
+    // overlap layout slides them or folds them into "+N", like any chips.
     const rhythm = planRhythm(
-      visible.filter(i => groupOf(i)).map(i => ({
+      visible.filter(i => { const g = groupOf(i); return !!g && levelOf(g) === 'mini' }).map(i => ({
         id: i.id, seriesId: groupOf(i)!, pos: f.pos(i.tsEpochMs), ts: i.tsEpochMs,
         keep: !!i.seriesEdited || worked.has(i.id) || ringingIds.has(i.id),
       })),
       {
         now: f.now,
-        // Sun times collapse sooner in vertical (6 chips' height), so they gather before their group's zoom hides them.
-        gapPx: sid => (vertical ? (sid === SUN_GROUP ? Math.max(t.rhythmGapPx, 6 * CHIP_HEIGHT) : t.rhythmGapPx) : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
+        gapPx: () => Infinity,
         // Its summary chip sits on screen (clear of the edges) when it can.
         view: sid => {
           // Clear of the ends by a chip's height (vertical) or half its own width (horizontal).
@@ -393,8 +394,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
         },
         // Vertical summaries are wide: two side by side would run off screen, so they stack along time.
         spacing: vertical ? CHIP_HEIGHT + t.chipGapPx : 0,
-        // A group in its `mini` zoom gathers even when it doesn't crowd.
-        force: g => levelOf(g) === 'mini',
+        // Every member here is in its `mini` zoom: it gathers, crowded or not.
+        force: () => true,
       },
     )
     const groupFade: Record<string, number> = {}
