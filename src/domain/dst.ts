@@ -42,8 +42,8 @@ export interface DstShift {
   after: number
 }
 
-/** Offsets change at most every few months: checking every 6 hours finds every change. */
-const SCAN_MS = 6 * HOUR
+/** Offsets change at most every few months: checking once a day finds every change. */
+const SCAN_MS = 24 * HOUR
 
 /** The clock changes in [from, to], in order. */
 export function dstShifts(from: number, to: number, timeZone?: string): DstShift[] {

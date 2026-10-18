@@ -3,7 +3,7 @@
 import { DAY, HOUR, MINUTE, SECOND, lerp, smoothstep } from './time.ts'
 import type { Orientation } from './layoutMode.ts'
 
-export type CalendarUnit = 'day' | 'week' | 'month' | 'year'
+export type CalendarUnit = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'year5' | 'decade'
 
 export interface TickUnit {
   ms: number
@@ -40,7 +40,10 @@ export const TICK_UNITS: TickUnit[] = [
   { ms: DAY, calendar: 'day' },
   { ms: 7 * DAY, calendar: 'week' },
   { ms: 30 * DAY, calendar: 'month' },
+  { ms: 91 * DAY, calendar: 'quarter' },
   { ms: 365 * DAY, calendar: 'year' },
+  { ms: 5 * 365 * DAY, calendar: 'year5' },
+  { ms: 10 * 365 * DAY, calendar: 'decade' },
 ]
 
 const HORIZONTAL_LABEL_SPACING_PX = 100
@@ -106,7 +109,12 @@ export function firstCalendarBoundaryAtOrBefore(ts: number, unit: CalendarUnit):
   d.setHours(0, 0, 0, 0)
   if (unit === 'week') d.setDate(d.getDate() - d.getDay()) // Sunday
   else if (unit === 'month') d.setDate(1)
+  else if (unit === 'quarter') d.setMonth(Math.floor(d.getMonth() / 3) * 3, 1)
   else if (unit === 'year') d.setMonth(0, 1)
+  else if (unit === 'year5' || unit === 'decade') {
+    const span = unit === 'year5' ? 5 : 10
+    d.setFullYear(Math.floor(d.getFullYear() / span) * span, 0, 1)
+  }
   return d.getTime()
 }
 
@@ -115,7 +123,8 @@ export function addCalendar(ts: number, unit: CalendarUnit, amount: number): num
   if (unit === 'day') d.setDate(d.getDate() + amount)
   else if (unit === 'week') d.setDate(d.getDate() + 7 * amount)
   else if (unit === 'month') d.setMonth(d.getMonth() + amount, 1)
-  else d.setFullYear(d.getFullYear() + amount, 0, 1)
+  else if (unit === 'quarter') d.setMonth(d.getMonth() + 3 * amount, 1)
+  else d.setFullYear(d.getFullYear() + amount * (unit === 'year5' ? 5 : unit === 'decade' ? 10 : 1), 0, 1)
   return d.getTime()
 }
 
@@ -170,6 +179,7 @@ export function formatTickLabel(t: number, unit: TickUnit): string {
   }
   if (unit.calendar === 'day' || unit.calendar === 'week') return `${monthFmt.format(d)} ${d.getDate()}`
   if (unit.calendar === 'month') return `${monthFmt.format(d)} ${d.getFullYear()}`
+  if (unit.calendar === 'quarter') return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
   return `${d.getFullYear()}`
 }
 

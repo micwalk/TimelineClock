@@ -9,9 +9,9 @@
 import type { InstantRecord } from './entities.ts'
 import { DAY, HOUR, smoothstep } from './time.ts'
 
-export type ZoomStop = 'hour' | '6h' | 'day' | '3d' | 'week' | 'month' | 'quarter' | 'year' | 'always'
+export type ZoomStop = 'hour' | '6h' | 'day' | '3d' | 'week' | 'month' | 'quarter' | 'year' | 'decade' | 'always'
 
-/** The zoom ladder, closest first: how much time is on screen. The widest zoom shows a little over a year. */
+/** The zoom ladder, closest first: how much time is on screen. The widest zoom shows 50 years. */
 export const ZOOM_STOPS: readonly { stop: ZoomStop; ms: number; label: string; words: string }[] = [
   { stop: 'hour', ms: HOUR, label: '1h', words: 'an hour' },
   { stop: '6h', ms: 6 * HOUR, label: '6h', words: '6 hours' },
@@ -21,6 +21,7 @@ export const ZOOM_STOPS: readonly { stop: ZoomStop; ms: number; label: string; w
   { stop: 'month', ms: 30 * DAY, label: '1mo', words: 'a month' },
   { stop: 'quarter', ms: 91 * DAY, label: '3mo', words: '3 months' },
   { stop: 'year', ms: 365 * DAY, label: '1y', words: 'a year' },
+  { stop: 'decade', ms: 10 * 365 * DAY, label: '10y', words: '10 years' },
   { stop: 'always', ms: Infinity, label: '∞', words: 'any zoom' },
 ]
 
@@ -77,7 +78,7 @@ export function displayGroupOf(i: InstantRecord): string | null {
 
 // --- Setting the thresholds from where you are --------------------------------------------
 
-/** The ladder position of `visibleMs` (0 = an hour, 5 = a month, 7 = a year; fractional between stops, log scale). */
+/** The ladder position of `visibleMs` (0 = an hour, 5 = a month, 7 = a year, 8 = 10 years; fractional between stops, log scale). */
 export function zoomPosition(visibleMs: number): number {
   const last = ZOOM_STOPS.length - 2 // the last finite stop
   if (visibleMs <= ZOOM_STOPS[0].ms) return 0

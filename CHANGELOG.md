@@ -25,9 +25,10 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   slide aside or fold into "+N", like any chips). Repeats start as chips up to a week on screen;
   sunrise and sunset as chips up to 3 days, gathered up to a week, gone beyond. This replaces the
   Advanced settings for when repeats and sun times collapse.
-- **Zoom out to a year**: the widest zoom now shows a little over a year (it was 30 days). Set
-  the sun's group to show up to 3 months or a year to see a season of sunrises and sunsets. The
-  sky's colours fade out once days are only a few pixels wide.
+- **Zoom out to 50 years** (it was 30 days): ticks go months, quarters ("Q4 2026"), years, then
+  5 and 10 years. Group strips reach 3mo, 1y and 10y; set the sun's to 3 months or a year to see
+  a season of sunrises and sunsets. The sky's colours fade out once days are only a few pixels
+  wide, and sunrises, sunsets and clock changes aren't computed past 2 years on screen.
 - In horizontal, the NOW button sits right under the timeline's center, so while following Now
   the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
   below.

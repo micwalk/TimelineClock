@@ -6,8 +6,8 @@ export const HOUR = 60 * MINUTE
 export const DAY = 24 * HOUR
 
 export const MIN_TIME_WIDTH_MS = SECOND
-/** Zoomed right out: a little over a year on screen. */
-export const MAX_TIME_WIDTH_MS = 400 * DAY
+/** Zoomed right out: 50 years on screen (a retirement countdown, #10). */
+export const MAX_TIME_WIDTH_MS = 50 * 365 * DAY
 export const DEFAULT_TIME_WIDTH_MS = 6 * HOUR
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
