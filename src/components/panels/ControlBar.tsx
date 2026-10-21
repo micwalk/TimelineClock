@@ -20,7 +20,7 @@ import * as act from '../../store/actions.ts'
 
 const LONG_PRESS_MS = 500
 
-/** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes". */
+/** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes" (horizontal picks by room: panels.css). */
 function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell?: CSSProperties; compact?: boolean }) {
   const increment = useView(s => s.timeIncrement)
   const [open, setOpen] = useState(false)
@@ -50,7 +50,8 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
           act.moveCursorByIncrement(direction)
         }}
       >
-        <span className="mono">{direction > 0 ? '+' : '−'}</span>{compact ? option.value : label}
+        <span className="mono">{direction > 0 ? '+' : '−'}</span>
+        {compact ? option.value : <><span className="ctl-step__long">{label}</span><span className="ctl-step__short">{option.value}</span></>}
       </CtlButton>
       <button type="button" className="ctl-split__caret glow-box" aria-label="Choose step" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <ChevronDownIcon aria-hidden />

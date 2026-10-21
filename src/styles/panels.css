@@ -93,10 +93,19 @@
 
 /* Stopwatch and Timer: always labelled (they are the way in for new users). */
 /* Horizontal: NOW centered under the timeline (its center is the Now line's while following Now),
-   the navigation gathered to either side (each side wraps on its own when narrow), and Stopwatch,
-   Timer and Alarm a centered row below. */
+   the navigation gathered to either side, and Stopwatch, Timer and Alarm a centered row below.
+   A side never wraps: once its labels don't fit, its buttons go to icons (the step keeps its text). */
 .controls--horizontal { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
-.controls__side { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.controls__side { container: ctl-side / inline-size; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
+@container ctl-side (max-width: 410px) {
+  .ctl-btn__text { display: none; }
+  .ctl-split .ctl-btn__text { display: inline; }
+}
+.ctl-step__short { display: none; }
+@container ctl-side (max-width: 280px) {
+  .ctl-step__long { display: none; }
+  .ctl-step__short { display: inline; }
+}
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }

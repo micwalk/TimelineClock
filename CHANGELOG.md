@@ -42,6 +42,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - In horizontal, the NOW button sits right under the timeline's center, so while following Now
   the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
   below.
+- The control bar never wraps a side onto two lines: once its labels don't fit, Zoom and
+  Previous/Next go to icons, then the step reads "−30m".
+- The cursor no longer lands on (or glides onto) an instant that isn't drawn at this zoom.
 - Removed the toast that slipped into 0.4.4 by mistake (#26).
 
 ## 0.4.3 — 2026-10-17

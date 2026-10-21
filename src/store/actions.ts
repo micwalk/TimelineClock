@@ -197,12 +197,18 @@ export function moveCursorBy(deltaMs: number) {
 const EXACT_LANDING_PX = 2
 const EXACT_LANDING_MAX_MS = 500
 
-/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing. */
+let drawnAt: (f: Frame) => ReadonlySet<string> | null = () => null
+/** The timeline's layout says which instants are drawn this frame (components/timeline/savedLayout drawnIdsAt). */
+export function setDrawnSource(source: (f: Frame) => ReadonlySet<string> | null) { drawnAt = source }
+
+/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing, and so is an instant that isn't drawn. */
 function exactHit(ts: number, withNow: boolean): LandingTarget | null {
   if (useUi.getState().cursorHidden) return null
   const f = frame()
+  // The layout only knows what is on screen; a typed time or a step off screen goes by `hidden`.
+  const drawn = ts >= f.start && ts <= f.end ? drawnAt(f) : null
   const id = findCapture({
-    instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })),
+    instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: drawn ? !drawn.has(i.id) : i.hidden })),
     now: withNow ? f.now : undefined, center: ts, pxPerMs: f.pxPerMs,
     radiusPx: Math.min(EXACT_LANDING_PX, EXACT_LANDING_MAX_MS * f.pxPerMs),
   })

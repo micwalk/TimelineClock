@@ -26,6 +26,7 @@ import { instantVisibility, longestSpans } from '../../domain/reach.ts'
 import type { SpanRecord } from '../../domain/entities.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
+import { setDrawnSource } from '../../store/actions.ts'
 import { useTimelineInstants } from './timelineInstants.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
@@ -540,6 +541,17 @@ export function savedLayoutAt(f: FrameLike): SavedLayout {
   source.last = { f, inputs, result }
   return result
 }
+
+const drawnIndex = new WeakMap<readonly string[], ReadonlySet<string>>()
+/** The instants whose lines are drawn this frame (a Label or a Mark), or null with no timeline mounted. */
+export function drawnIdsAt(f: FrameLike): ReadonlySet<string> | null {
+  if (!source.inputs) return null
+  const ids = savedLayoutAt(f).visibleIds
+  let set = drawnIndex.get(ids)
+  if (!set) drawnIndex.set(ids, set = new Set(ids))
+  return set
+}
+setDrawnSource(drawnIdsAt)
 
 // ---------------------------------------------------------------------------
 // The Cursor ＋ is an obstacle: it never moves, so chips in its row (column) are pushed along
