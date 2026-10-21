@@ -21,7 +21,8 @@ import { pushClear } from '../../domain/pushClear.ts'
 import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import type { Stage, Visibility } from '../../domain/displayGroups.ts'
-import { UNNAMED_GROUP, displayGroupOf, groupVisibility, markFade, stageAt } from '../../domain/displayGroups.ts'
+import { groupVisibility, markFade, recurringGroupOf, stageAt } from '../../domain/displayGroups.ts'
+import { HOUR } from '../../domain/time.ts'
 import { instantVisibility, longestSpans } from '../../domain/reach.ts'
 import type { SpanRecord } from '../../domain/entities.ts'
 import { useUi } from '../../store/ui.ts'
@@ -332,15 +333,15 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const revealed = (i: InstantRecord) => !!c.revealIds?.includes(i.id)
     // Every instant's stage at this zoom (domain/displayGroups): Label (its chip), Mark (a line from
     // the axis, no chip) or Hidden, by its own visibility, else its group's, else its reach
-    // (domain/reach). Ringing ones keep their labels. An unnamed instant with an alarm to come
-    // isn't in Unnamed.
+    // (domain/reach). Ringing ones keep their labels.
     const visibleMs = f.end - f.start
     const ringingInstants = new Set(c.ringing.map(k => parseRingKey(k).instantId))
     const longest = longestSpansOf(c)
+    const unnamedReachMs = getTunables().unnamedReachHours * HOUR
     const visibilityOf = (i: InstantRecord): Visibility => {
-      const g = displayGroupOf(i)
-      const group = g && !(g === UNNAMED_GROUP && hasArmedAlarm(i, f.now)) ? groupVisibility(g, c.groupVisibility) : null
-      return instantVisibility(i, { now: f.now, countdown: !!i.favorite || hasArmedAlarm(i, f.now), longestSpanMs: longest.get(i.id) ?? 0, group })
+      const g = recurringGroupOf(i)
+      const group = g ? groupVisibility(g, c.groupVisibility) : null
+      return instantVisibility(i, { now: f.now, countdown: !!i.favorite || hasArmedAlarm(i, f.now), longestSpanMs: longest.get(i.id) ?? 0, unnamedReachMs, group })
     }
     const stageOf = (i: InstantRecord): Stage => (ringingInstants.has(i.id) ? 'label' : stageAt(visibilityOf(i), visibleMs))
     const zoomHidden = (i: InstantRecord) => stageOf(i) === 'hidden'

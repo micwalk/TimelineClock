@@ -27,30 +27,33 @@ describe('Repeats tab: sunrise and sunset', () => {
 })
 
 describe('Groups tab: zoom strips', () => {
-  it('Unnamed is a row; its adjust button opens a strip whose handles move by stops', () => {
-    useEntities.setState({ instants: [{ id: 'a', tsEpochMs: 0, label: '' }, { id: 'b', tsEpochMs: 1, label: 'Rice' }], spans: [], groups: [] })
+  const withSun = () => {
+    useEntities.setState({ instants: [{ id: 'a', tsEpochMs: 0, label: '' }], spans: [], groups: [] })
+    settings.setSkyLocation({ lat: 37.77, lon: -122.42, name: 'San Francisco' })
     render(<RepeatsList />)
-    expect(screen.getByText('○ Unnamed')).toBeTruthy()
-    expect(screen.getByText('Label up to a day, Mark up to 10 years, Hidden beyond')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Visibility of unnamed instants' }))
-    const chips = screen.getByRole('slider', { name: 'Label up to' })
-    expect(chips).toHaveAttribute('aria-valuetext', 'a day')
-    fireEvent.keyDown(chips, { key: 'ArrowRight' })
-    expect(useSettings.getState().groupVisibility.unnamed).toEqual({ label: '3d', mark: 'decade' })
-    fireEvent.keyDown(screen.getByRole('slider', { name: 'Mark up to' }), { key: 'ArrowLeft' })
-    expect(useSettings.getState().groupVisibility.unnamed).toEqual({ label: '3d', mark: 'year' })
+  }
+
+  it('no Unnamed row (unnamed instants go by their reach); a row\'s adjust button opens a strip whose handles move by stops', () => {
+    withSun()
+    expect(screen.queryByText(/Unnamed/)).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Visibility of sunrise and sunset' })[0])
+    const label = screen.getByRole('slider', { name: 'Label up to' })
+    expect(label).toHaveAttribute('aria-valuetext', '3 days')
+    fireEvent.keyDown(label, { key: 'ArrowLeft' })
+    expect(useSettings.getState().groupVisibility.sun).toEqual({ label: 'day', mark: 'week' })
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Mark up to' }), { key: 'ArrowRight' })
+    expect(useSettings.getState().groupVisibility.sun).toEqual({ label: 'day', mark: 'month' })
   })
 
   it('a tap on the track moves the nearer handle there', () => {
-    useEntities.setState({ instants: [{ id: 'a', tsEpochMs: 0, label: '' }], spans: [], groups: [] })
-    render(<RepeatsList />)
-    fireEvent.click(screen.getByRole('button', { name: 'Visibility of unnamed instants' }))
+    withSun()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Visibility of sunrise and sunset' })[0])
     const track = document.querySelector('.zoom-strip__track') as HTMLElement
     // jsdom has no layout: an 800px track from x=0, so the 11 stops sit 80px apart.
     track.getBoundingClientRect = () => ({ left: 0, width: 800, top: 0, right: 800, bottom: 10, height: 10, x: 0, y: 0, toJSON: () => ({}) })
-    fireEvent.click(track, { clientX: 100 }) // 6h: closer in than "chips up to a day", so that handle moves
-    expect(useSettings.getState().groupVisibility.unnamed).toEqual({ label: '6h', mark: 'decade' })
-    fireEvent.click(track, { clientX: 720 }) // 100y: nearer the hide handle (at ∞)
-    expect(useSettings.getState().groupVisibility.unnamed).toEqual({ label: '6h', mark: 'century' })
+    fireEvent.click(track, { clientX: 100 }) // 6h: nearer "Label up to 3 days", so that handle moves
+    expect(useSettings.getState().groupVisibility.sun).toEqual({ label: '6h', mark: 'week' })
+    fireEvent.click(track, { clientX: 720 }) // 100y: nearer the Mark handle (at a week)
+    expect(useSettings.getState().groupVisibility.sun).toEqual({ label: '6h', mark: 'century' })
   })
 })

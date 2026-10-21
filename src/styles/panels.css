@@ -919,8 +919,6 @@
 /* Groups tab (#10): a row and, under it, its zoom strip */
 .group-row { display: flex; flex-direction: column; gap: 6px; }
 .alarm-row__tools { display: flex; align-items: center; gap: 2px; }
-.alarm-row--unnamed { --accent: color-mix(in srgb, var(--c-instant-glow) 50%, transparent); --halo: var(--c-instant-glow); }
-.alarm-row--unnamed .alarm-row__time { font-size: 18px; color: var(--ink-dim); min-width: 2ch; text-align: center; }
 .zoom-strip { padding: 22px 22px 8px; border-radius: 10px; background: var(--box-bg-raised); touch-action: none; }
 .zoom-strip__track { position: relative; height: 10px; margin: 8px 0 4px; }
 .zoom-strip__seg { position: absolute; top: 0; bottom: 0; border-radius: 5px; }

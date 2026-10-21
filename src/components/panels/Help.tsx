@@ -105,7 +105,7 @@ function HelpContent() {
             <dt>Agenda</dt>
             <dd>The list of every instant, your favorites, your saved spans, your alarms, and your groups. Tap a row to go there.</dd>
             <dt>Label, Mark, Hidden</dt>
-            <dd>As you zoom out, an instant goes from its <b>Label</b> (its chip) to a <b>Mark</b> (a short line on the axis), then <b>Hidden</b>; zooming back in brings it back. How far out depends on it: something set days ahead, a favorite counting down or the end of a long span stays longer. Tap a Mark to select it (its Label comes back). Its eye opens <b>Visibility</b> to set it yourself (drag “Label up to” and “Mark up to”; Auto goes back), or Hide everywhere; on a repeat or a sunrise it sets the whole series. Repeats, sunrise and sunset, and unnamed instants each have one setting for the whole group in the <b>Groups</b> tab (the sliders button on a row).</dd>
+            <dd>As you zoom out, an instant goes from its <b>Label</b> (its chip) to a <b>Mark</b> (a short line on the axis), then <b>Hidden</b>; zooming back in brings it back. How far out depends on it: something set days ahead, a favorite counting down or the end of a long span stays longer. Tap a Mark to select it (its Label comes back). Its eye opens <b>Visibility</b> to set it yourself (drag “Label up to” and “Mark up to”; Auto goes back), or Hide everywhere; on a repeat or a sunrise it sets the whole series. Each repeat, and sunrise and sunset, has one setting for all of its days in the <b>Groups</b> tab (the sliders button on a row). Unnamed instants keep their Label out to a day (Settings › Advanced).</dd>
           </dl>
         </section>
 

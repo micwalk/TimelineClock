@@ -2,6 +2,7 @@
 // screen) at which it keeps its Label; a Mark out to MARK_FACTOR times that (at least 10 years); Hidden beyond. Used
 // for instants with no visibility of their own and no group. Pure. The reach is the largest of:
 //   - how far ahead you made it: 4x that, at least 3 days (tomorrow 4 days, in 3 days 12 days);
+//     an unnamed one (a capture) at least a day instead (the unnamedReachHours tunable);
 //   - a countdown (a favorite, or an alarm still to ring): 8x its distance from Now, so Christmas stays in view while it comes;
 //   - its spans: 8x the longest span it starts or ends (a lifetime span keeps its ends in view for decades).
 import type { InstantRecord } from './entities.ts'
@@ -22,9 +23,15 @@ export const COUNTDOWN_FACTOR = 8
 /** Reach per ms of the longest span it ends. */
 export const SPAN_FACTOR = 8
 
-/** An instant's reach (ms of time on screen), from the rules above. `countdown`: a favorite or an alarm still to ring. */
-export function autoReach(i: Pick<InstantRecord, 'tsEpochMs' | 'createdAt'>, o: { now: number; countdown: boolean; longestSpanMs: number }): number {
-  let reach = MIN_REACH_MS
+/** The least reach of an unnamed instant (a capture), unless the caller passes the tunable's. */
+export const UNNAMED_REACH_MS = DAY
+
+/** `countdown`: a favorite or an alarm still to ring; `unnamedReachMs`: an unnamed instant's least reach. */
+export interface ReachOptions { now: number; countdown: boolean; longestSpanMs: number; unnamedReachMs?: number }
+
+/** An instant's reach (ms of time on screen), from the rules above. */
+export function autoReach(i: Pick<InstantRecord, 'tsEpochMs' | 'createdAt' | 'label'>, o: ReachOptions): number {
+  let reach = i.label.trim() ? MIN_REACH_MS : (o.unnamedReachMs ?? UNNAMED_REACH_MS)
   if (i.createdAt !== undefined) reach = Math.max(reach, LEAD_FACTOR * Math.abs(i.tsEpochMs - i.createdAt))
   if (o.countdown) reach = Math.max(reach, COUNTDOWN_FACTOR * Math.abs(i.tsEpochMs - o.now))
   if (o.longestSpanMs > 0) reach = Math.max(reach, SPAN_FACTOR * o.longestSpanMs)
@@ -52,7 +59,7 @@ export function longestSpans(spans: readonly { startInstantId: string; endInstan
  * How an instant shows by zoom: its own visibility, else its group's, else its reach's.
  * `group`: its display group and that group's visibility, if it has one.
  */
-export function instantVisibility(i: InstantRecord, o: { now: number; countdown: boolean; longestSpanMs: number; group: Visibility | null }): Visibility {
+export function instantVisibility(i: InstantRecord, o: ReachOptions & { group: Visibility | null }): Visibility {
   // A recurring thing (a series, the sun) is always its group's: an occurrence has no visibility of its own.
   if (o.group && recurringGroupOf(i)) return o.group
   return i.visibility ?? o.group ?? reachVisibility(autoReach(i, o))

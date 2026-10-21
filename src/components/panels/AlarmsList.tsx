@@ -4,14 +4,14 @@
 //   Upcoming:  one-off alarms, soonest first, each with a button that cancels them.
 //   Recent:    what rang in the last day and how it was answered.
 // A row goes to its instant on the timeline. The Groups tab (RepeatsList) lists sunrise and sunset
-// (#11; their switches show or hide them on the timeline), the Unnamed group, then every series,
+// (#11; their switches show or hide them on the timeline), then every series,
 // alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
 // Label, Mark or Hidden by zoom).
 import { MARKS } from '../../config/labels.ts'
 import { useMemo } from 'react'
 import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
 import { GroupZoomStrip } from './ZoomStrip.tsx'
-import { SUN_GROUP, UNNAMED_GROUP, describeVisibility, displayGroupOf, groupVisibility } from '../../domain/displayGroups.ts'
+import { SUN_GROUP } from '../../domain/displayGroups.ts'
 import { useUi } from '../../store/ui.ts'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -156,7 +156,6 @@ export function RepeatsList() {
   return (
     <div className="alarms-list">
       <SunRows minute={minute} />
-      <UnnamedRow instants={instants} />
       {rows.length === 0
         ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>{MARKS.repeat}</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
         : rows.map(({ series, next }) => (
@@ -165,28 +164,6 @@ export function RepeatsList() {
             <StripIfOpen rowKey={series.id} groupKey={series.id} />
           </div>
         ))}
-    </div>
-  )
-}
-
-/** The Unnamed group (#10): instants with no name (most of a busy history); one visibility for all of them. */
-function UnnamedRow({ instants }: { instants: readonly InstantRecord[] }) {
-  const count = useMemo(() => instants.filter(i => displayGroupOf(i) === UNNAMED_GROUP).length, [instants])
-  const prefs = useSettings(s => s.groupVisibility)
-  const visibility = groupVisibility(UNNAMED_GROUP, prefs)
-  return (
-    <div className="group-row">
-      <div className="alarm-row alarm-row--unnamed glow-box" onClick={() => ui.setGroupOpen(useUi.getState().groupOpen === UNNAMED_GROUP ? null : UNNAMED_GROUP)}>
-        <span className="alarm-row__time mono">{count}</span>
-        <span className="alarm-row__main">
-          <span className="alarm-row__name">{MARKS.unnamed} Unnamed</span>
-          <span className="alarm-row__sub">{describeVisibility(visibility)}</span>
-        </span>
-        <span />
-        <span className="alarm-row__tools" onClick={e => e.stopPropagation()}><AdjustButton rowKey={UNNAMED_GROUP} name="unnamed instants" /></span>
-        <span />
-      </div>
-      <StripIfOpen rowKey={UNNAMED_GROUP} groupKey={UNNAMED_GROUP} />
     </div>
   )
 }

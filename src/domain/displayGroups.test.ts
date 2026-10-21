@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  SUN_GROUP, UNNAMED_GROUP, defaultVisibility, describeVisibility, displayGroupOf, markFade, recurringGroupOf, sanitizeGroupVisibility,
+  SUN_GROUP, defaultVisibility, describeVisibility, markFade, recurringGroupOf, sanitizeGroupVisibility,
   sanitizeVisibility, setThreshold, stageAt, valueAtPosition, valuePosition, zoomPosition,
 } from './displayGroups.ts'
 import { DAY, HOUR } from './time.ts'
@@ -26,28 +26,20 @@ describe('stageAt', () => {
   })
 })
 
-it('defaults: repeats and the sun Label to 3 days, unnamed to a day; Marks to 10 years (the sun to a week)', () => {
+it('defaults: repeats and the sun Label to 3 days; Marks to 10 years (the sun to a week)', () => {
   expect(defaultVisibility('g_abc')).toEqual({ label: '3d', mark: 'decade' })
   expect(defaultVisibility(SUN_GROUP)).toEqual({ label: '3d', mark: 'week' })
-  expect(defaultVisibility(UNNAMED_GROUP)).toEqual({ label: 'day', mark: 'decade' })
 })
 
-it('recurringGroupOf: a series or the computed sun, never Unnamed or a one-off', () => {
+it('an old Unnamed group setting is dropped', () => {
+  expect(sanitizeGroupVisibility({ unnamed: { label: 'day', mark: 'decade' }, sun: { label: 'week', mark: 'year' } })).toEqual({ sun: { label: 'week', mark: 'year' } })
+})
+
+it('recurringGroupOf: a series or the computed sun, never a one-off (named or not)', () => {
   expect(recurringGroupOf({ id: 'a', tsEpochMs: 0, label: '', seriesId: 'g1' })).toBe('g1')
   expect(recurringGroupOf({ id: 'a', tsEpochMs: 0, label: 'Sunset', virtual: true, sun: { event: 'sunset', lat: 0, lon: 0 } })).toBe(SUN_GROUP)
   expect(recurringGroupOf({ id: 'a', tsEpochMs: 0, label: '' })).toBeNull()
   expect(recurringGroupOf({ id: 'a', tsEpochMs: 0, label: 'Tea' })).toBeNull()
-})
-
-describe('displayGroupOf', () => {
-  const base = { id: 'a', tsEpochMs: 0, label: '' }
-  it('a series first, then computed sun times, then unnamed (not starred or at the sun)', () => {
-    expect(displayGroupOf({ ...base, seriesId: 'g1' })).toBe('g1')
-    expect(displayGroupOf({ ...base, label: 'Sunset', virtual: true, sun: { event: 'sunset', lat: 0, lon: 0 } })).toBe(SUN_GROUP)
-    expect(displayGroupOf(base)).toBe(UNNAMED_GROUP)
-    expect(displayGroupOf({ ...base, favorite: true })).toBeNull()
-    expect(displayGroupOf({ ...base, label: 'Rice' })).toBeNull()
-  })
 })
 
 describe('the strip', () => {

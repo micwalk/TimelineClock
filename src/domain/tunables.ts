@@ -37,6 +37,7 @@ const SPECS = {
   glideStopSpeed: { label: 'Speed where a glide stops (px/ms)', default: 0.02, min: 0.001, max: 1, step: 0.001, group: 'Glide' },
   glideMaxSpeed: { label: 'Maximum glide speed (px/ms)', default: 8, min: 1, max: 30, step: 0.5, group: 'Glide' },
   glideTauMs: { label: 'Glide friction time constant (ms)', default: 325, min: 50, max: 2000, step: 5, group: 'Glide' },
+  unnamedReachHours: { label: 'Unnamed instants keep their Label out to (hours on screen)', default: 24, min: 1, max: 8760, step: 1, group: 'Labels' },
   secondsBelowTickMs: { label: 'Show seconds when ticks are finer than (ms)', default: 60000, min: 1000, max: 3600000, step: 1000, group: 'Labels' },
 } as const satisfies Record<string, TunableSpec>
 

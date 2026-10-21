@@ -7,8 +7,6 @@ export const MARKS = {
   repeat: '⟳',
   /** A snooze in short names ("Test Alarm ⟲2") and on folded snooze badges and bells. */
   snooze: '⟲',
-  /** The Unnamed group's row in the Groups tab ("○ Unnamed"). */
-  unnamed: '○',
   /** Drop an instant (the NOW button while following Now). */
   drop: '＋',
 } as const

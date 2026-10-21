@@ -2,8 +2,7 @@
 // is a Label (its chip) out to one zoom, a Mark (a short line from the axis, no chip) out to a
 // wider one, then Hidden; zooming back in brings it back. "Zoom" is how much time is on screen.
 // An instant's own visibility (its eye) wins; else its group's (a repeat's occurrences, the
-// computed sun times, unnamed instants: set in the Groups tab); else what it gets by itself
-// (domain/reach). What you are working with (selected, focused, ringing...) keeps its label.
+// computed sun times: set in the Groups tab); else what it gets by itself (domain/reach). What you are working with (selected, focused, ringing...) keeps its label.
 // A threshold is one of the ladder's stops or, with snapping off, any time on screen (ms).
 import type { InstantRecord } from './entities.ts'
 import { formatDurationShort } from './format.ts'
@@ -47,17 +46,13 @@ export type Stage = 'label' | 'mark' | 'hidden'
 
 /** The computed sunrises and sunsets. */
 export const SUN_GROUP = 'sun'
-/** Instants with no name (and no repeat, star or alarm to come): most of a busy history. */
-export const UNNAMED_GROUP = 'unnamed'
 
 /**
  * What each kind of group starts with: a repeat's occurrences Label up to 3 days, Mark up to 10
- * years; sunrises and sunsets Label up to 3 days, Mark up to a week (the sky shows them beyond);
- * unnamed instants Label up to a day, Mark up to 10 years.
+ * years; sunrises and sunsets Label up to 3 days, Mark up to a week (the sky shows them beyond).
  */
 export function defaultVisibility(key: string): Visibility {
   if (key === SUN_GROUP) return { label: '3d', mark: 'week' }
-  if (key === UNNAMED_GROUP) return { label: 'day', mark: 'decade' }
   return { label: '3d', mark: 'decade' }
 }
 
@@ -81,15 +76,8 @@ export function markFade(v: Visibility, visibleMs: number): number {
  * its visibility is always the group's, never its own.
  */
 export function recurringGroupOf(i: InstantRecord): string | null {
-  const g = displayGroupOf(i)
-  return g && g !== UNNAMED_GROUP ? g : null
-}
-
-/** The group an instant follows: its series, the sun (computed ones), or Unnamed; null for none. */
-export function displayGroupOf(i: InstantRecord): string | null {
   if (i.seriesId) return i.seriesId
   if (i.virtual && i.sun) return SUN_GROUP
-  if (!i.label.trim() && !i.sun && !i.favorite) return UNNAMED_GROUP
   return null
 }
 
@@ -161,6 +149,7 @@ export function sanitizeGroupVisibility(raw: unknown): Record<string, Visibility
   if (!raw || typeof raw !== 'object') return {}
   const out: Record<string, Visibility> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k === 'unnamed') continue // Unnamed was a group before 0.5.0 shipped; its reach is a tunable now
     const d = sanitizeVisibility(v)
     if (d) out[k] = d
   }

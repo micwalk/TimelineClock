@@ -5,25 +5,25 @@
 // never shows differently from the rest.
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { Visibility } from '../../domain/displayGroups.ts'
-import { SUN_GROUP, UNNAMED_GROUP, defaultVisibility, describeVisibility, displayGroupOf, groupVisibility, recurringGroupOf } from '../../domain/displayGroups.ts'
+import { SUN_GROUP, defaultVisibility, describeVisibility, groupVisibility, recurringGroupOf } from '../../domain/displayGroups.ts'
+import { HOUR } from '../../domain/time.ts'
 import { displayName } from '../../domain/entities.ts'
 import { instantVisibility, longestSpans } from '../../domain/reach.ts'
 import { hasArmedAlarm } from '../../domain/alarms.ts'
 import { useEntities } from '../../store/entities.ts'
-import { settings, useSettings } from '../../store/settings.ts'
+import { getTunables, settings, useSettings } from '../../store/settings.ts'
 import * as act from '../../store/actions.ts'
 import { ZoomStrip } from './ZoomStrip.tsx'
 
-/** What a one-off instant gets by itself, and whether that is its group's (Unnamed). */
-function autoVisibility(inst: InstantRecord, groups: Readonly<Record<string, Visibility>>): { value: Visibility; group: boolean } {
+/** What a one-off instant gets by itself: its reach (domain/reach). */
+function autoVisibility(inst: InstantRecord): Visibility {
   const { spans, instants } = useEntities.getState()
   const ts = new Map(instants.map(i => [i.id, i.tsEpochMs]))
   const now = act.nowTime()
-  const armed = hasArmedAlarm(inst, now)
-  const g = displayGroupOf(inst)
-  const group = g && !(g === UNNAMED_GROUP && armed) ? groupVisibility(g, groups) : null
-  const value = instantVisibility({ ...inst, visibility: undefined }, { now, countdown: !!inst.favorite || armed, longestSpanMs: longestSpans(spans, id => ts.get(id)).get(inst.id) ?? 0, group })
-  return { value, group: !!group }
+  return instantVisibility({ ...inst, visibility: undefined }, {
+    now, countdown: !!inst.favorite || hasArmedAlarm(inst, now), longestSpanMs: longestSpans(spans, id => ts.get(id)).get(inst.id) ?? 0,
+    unnamedReachMs: getTunables().unnamedReachHours * HOUR, group: null,
+  })
 }
 
 export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone?: () => void }) {
@@ -55,11 +55,11 @@ export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone
       </div>
     )
   }
-  const auto = inst.visibility ? null : autoVisibility(inst, groups)
+  const auto = inst.visibility ? null : autoVisibility(inst)
   return (
     <div className="visibility-editor">
-      <ZoomStrip value={inst.visibility ?? auto!.value} onChange={v => act.setInstantVisibility(inst.id, v)}
-        note={auto ? `Auto: ${describeVisibility(auto.value)}${auto.group ? ' (its group’s)' : ''}` : undefined} />
+      <ZoomStrip value={inst.visibility ?? auto!} onChange={v => act.setInstantVisibility(inst.id, v)}
+        note={auto ? `Auto: ${describeVisibility(auto)}` : undefined} />
       <div className="visibility-editor__actions">
         {inst.visibility && <button type="button" className="alarm-link glow-box" onClick={() => act.setInstantVisibility(inst.id, null)}>Auto</button>}
         {hide}

@@ -92,7 +92,7 @@ describe('createSavedLayoutCache', () => {
       return { now: 0, pxPerMs: px, mainSize: 800, crossSize: 900, start: -days * DAYMS / 2, end: days * DAYMS / 2, pos: ts => ts * px + 400 }
     }
     const keys = (m: Record<string, true>) => Object.keys(m).sort()
-    // Unnamed (a group): Label up to a day, Mark up to 10 years, however far apart they are.
+    // Unnamed: a reach of a day (the tunable), so Label up to a day, Mark up to 10 years.
     const unnamed = [inst('u1', -DAYMS / 2), inst('u2', 0), inst('u3', DAYMS / 2)].map(i => ({ ...i, label: '' }))
     expect(createSavedLayoutCache()(at(0.5), inputs(unnamed)).marks).toEqual({})
     let r = createSavedLayoutCache()(at(2), inputs(unnamed))
@@ -129,14 +129,14 @@ describe('createSavedLayoutCache', () => {
     r = createSavedLayoutCache()(at(100 * 365), inputs([born, end], { spans: [life] }))
     expect(r.visibleIds).toEqual(['Born', 'Expected'])
     expect(r.marks).toEqual({})
-    // Its own visibility wins, over Unnamed's too; a repeat's occurrence is always its series'.
+    // Its own visibility wins; a repeat's occurrence is always its series'.
     const day3 = { ...inst('Wake', 0), seriesId: 'g1', occurrence: '2026-10-20' }
     r = createSavedLayoutCache()(at(40), inputs([{ ...meeting, visibility: { label: 'always', mark: 'always' } }, { ...unnamed[0], visibility: { label: 'week', mark: 'always' } }, { ...day3, visibility: { label: 'always', mark: 'always' } }]))
     expect(r.visibleIds.sort()).toEqual(['Meeting', 'Wake', 'u1'])
     expect(r.marks).toEqual({ u1: true, Wake: true })
-    // A group's own setting: unnamed as labels to a month.
-    r = createSavedLayoutCache()(at(2), inputs(unnamed, { groupVisibility: { unnamed: { label: 'month', mark: 'always' } } }))
-    expect(r.marks).toEqual({})
+    // The tunable: unnamed ones keep their Labels out to 3 days.
+    useSettings.setState({ tunables: { unnamedReachHours: 72 } })
+    expect(createSavedLayoutCache()(at(2), inputs(unnamed)).marks).toEqual({})
   })
 
   it('leaves hidden instants out unless selected or ending the selected span', () => {

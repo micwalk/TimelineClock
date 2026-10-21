@@ -7,16 +7,23 @@ const now = 1_000_000_000_000
 
 describe('autoReach', () => {
   it('4x how far ahead it was made, at least 3 days', () => {
-    const r = (lead: number) => autoReach({ tsEpochMs: now + lead, createdAt: now }, { now, countdown: false, longestSpanMs: 0 })
+    const r = (lead: number) => autoReach({ tsEpochMs: now + lead, createdAt: now, label: 'Rice' }, { now, countdown: false, longestSpanMs: 0 })
     expect(r(30 * MINUTE)).toBe(3 * DAY)
     expect(r(DAY)).toBe(4 * DAY)
     expect(r(3 * DAY)).toBe(12 * DAY)
     // Made before creation times were kept.
-    expect(autoReach({ tsEpochMs: now }, { now, countdown: false, longestSpanMs: 0 })).toBe(3 * DAY)
+    expect(autoReach({ tsEpochMs: now, label: 'Rice' }, { now, countdown: false, longestSpanMs: 0 })).toBe(3 * DAY)
+  })
+  it('an unnamed one (a capture) at least a day, or the tunable\'s; the other rules still reach further', () => {
+    const o = { now, countdown: false, longestSpanMs: 0 }
+    expect(autoReach({ tsEpochMs: now, createdAt: now, label: '' }, o)).toBe(DAY)
+    expect(autoReach({ tsEpochMs: now, createdAt: now, label: ' ' }, { ...o, unnamedReachMs: 6 * HOUR })).toBe(6 * HOUR)
+    expect(autoReach({ tsEpochMs: now + 3 * DAY, createdAt: now, label: '' }, o)).toBe(12 * DAY)
+    expect(autoReach({ tsEpochMs: now + 2 * DAY, label: '' }, { ...o, countdown: true })).toBe(16 * DAY)
   })
   it('a countdown reaches 8x its distance from Now; a span 8x its length', () => {
-    expect(autoReach({ tsEpochMs: now + 70 * DAY }, { now, countdown: true, longestSpanMs: 0 })).toBe(560 * DAY)
-    expect(autoReach({ tsEpochMs: now }, { now, countdown: false, longestSpanMs: 4 * 365 * DAY })).toBe(32 * 365 * DAY)
+    expect(autoReach({ tsEpochMs: now + 70 * DAY, label: 'Trip' }, { now, countdown: true, longestSpanMs: 0 })).toBe(560 * DAY)
+    expect(autoReach({ tsEpochMs: now, label: 'Born' }, { now, countdown: false, longestSpanMs: 4 * 365 * DAY })).toBe(32 * 365 * DAY)
   })
 })
 
