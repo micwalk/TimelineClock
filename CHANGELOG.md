@@ -19,8 +19,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   or an alarm counting down and for the ends of a long span. Selected, focused and ringing ones
   keep their Labels.
 - **Visibility**: the eye on a chip or an Agenda row sets it for that instant (drag "Label up to"
-  and "Mark up to"; Auto goes back; Hide everywhere is the old hide). Repeats, sunrise and sunset,
-  each have one setting in the Agenda's **Groups** tab (was Repeats). Unnamed instants go by the
+  and "Mark up to"; Auto goes back; Hide everywhere is the old hide). Each repeat, and sunrise and
+  sunset, has one setting in the Agenda's **Groups** tab (was Repeats). Unnamed instants go by the
   same rule as the rest, with a Label out to a day (Settings › Advanced). The strips
   span 1h to 100y; untick **Snap** to slide freely between the stops.
 - A repeat zoomed out is its Marks now, with no summary chip ("⟳ Wake up · Daily…"). A
