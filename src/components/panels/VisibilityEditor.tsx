@@ -1,0 +1,69 @@
+// An instant's Visibility (#10): its strip (Label | Mark | Hidden by zoom), Auto to go back to
+// what it gets by itself (its group's, or its reach: domain/reach), and Hide everywhere. The same
+// box opens from the eye on its chip and on its Agenda row. A recurring thing (a repeat's
+// occurrence, a computed sunrise or sunset) always sets its whole series: one day of a repeat
+// never shows differently from the rest.
+import type { InstantRecord } from '../../domain/entities.ts'
+import type { Visibility } from '../../domain/displayGroups.ts'
+import { SUN_GROUP, UNNAMED_GROUP, defaultVisibility, describeVisibility, displayGroupOf, groupVisibility, recurringGroupOf } from '../../domain/displayGroups.ts'
+import { displayName } from '../../domain/entities.ts'
+import { instantVisibility, longestSpans } from '../../domain/reach.ts'
+import { hasArmedAlarm } from '../../domain/alarms.ts'
+import { useEntities } from '../../store/entities.ts'
+import { settings, useSettings } from '../../store/settings.ts'
+import * as act from '../../store/actions.ts'
+import { ZoomStrip } from './ZoomStrip.tsx'
+
+/** What a one-off instant gets by itself, and whether that is its group's (Unnamed). */
+function autoVisibility(inst: InstantRecord, groups: Readonly<Record<string, Visibility>>): { value: Visibility; group: boolean } {
+  const { spans, instants } = useEntities.getState()
+  const ts = new Map(instants.map(i => [i.id, i.tsEpochMs]))
+  const now = act.nowTime()
+  const armed = hasArmedAlarm(inst, now)
+  const g = displayGroupOf(inst)
+  const group = g && !(g === UNNAMED_GROUP && armed) ? groupVisibility(g, groups) : null
+  const value = instantVisibility({ ...inst, visibility: undefined }, { now, countdown: !!inst.favorite || armed, longestSpanMs: longestSpans(spans, id => ts.get(id)).get(inst.id) ?? 0, group })
+  return { value, group: !!group }
+}
+
+export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone?: () => void }) {
+  const groups = useSettings(s => s.groupVisibility)
+  const recurring = recurringGroupOf(inst)
+  const seriesName = useEntities(s => (inst.seriesId ? displayName(s.groups?.find(g => g.id === inst.seriesId)?.label ?? '', 'this repeat') : ''))
+  const armed = hasArmedAlarm(inst, act.nowTime())
+  const hide = (
+    <button type="button" className="alarm-link glow-box" disabled={!inst.hidden && armed}
+      title={!inst.hidden && armed ? 'An alarm still to ring is never hidden' : undefined}
+      onClick={() => { act.setInstantHidden(inst.id, !inst.hidden); onDone?.() }}>
+      {inst.hidden ? 'Show' : 'Hide everywhere'}
+    </button>
+  )
+  if (recurring) {
+    // The series' (or the sun's) visibility, for every one of them.
+    const custom = !!groups[recurring]
+    const value = groupVisibility(recurring, groups)
+    const whose = recurring === SUN_GROUP ? 'every sunrise and sunset' : `every ${seriesName}`
+    return (
+      <div className="visibility-editor">
+        <p className="visibility-editor__scope">For {whose}</p>
+        <ZoomStrip value={value} onChange={v => settings.setGroupVisibility(recurring, v)}
+          note={custom ? undefined : `Auto: ${describeVisibility(defaultVisibility(recurring))}`} />
+        <div className="visibility-editor__actions">
+          {custom && <button type="button" className="alarm-link glow-box" onClick={() => settings.resetGroupVisibility(recurring)}>Auto</button>}
+          {!inst.virtual && hide}
+        </div>
+      </div>
+    )
+  }
+  const auto = inst.visibility ? null : autoVisibility(inst, groups)
+  return (
+    <div className="visibility-editor">
+      <ZoomStrip value={inst.visibility ?? auto!.value} onChange={v => act.setInstantVisibility(inst.id, v)}
+        note={auto ? `Auto: ${describeVisibility(auto.value)}${auto.group ? ' (its group’s)' : ''}` : undefined} />
+      <div className="visibility-editor__actions">
+        {inst.visibility && <button type="button" className="alarm-link glow-box" onClick={() => act.setInstantVisibility(inst.id, null)}>Auto</button>}
+        {hide}
+      </div>
+    </div>
+  )
+}

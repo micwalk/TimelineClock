@@ -915,26 +915,26 @@
 .zoom-strip { padding: 22px 22px 8px; border-radius: 10px; background: var(--box-bg-raised); touch-action: none; }
 .zoom-strip__track { position: relative; height: 10px; margin: 8px 0 4px; }
 .zoom-strip__seg { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
-.zoom-strip__seg.is-full { background: var(--c-instant-glow); box-shadow: 0 0 calc(6px * var(--glow)) var(--c-instant-glow); }
-.zoom-strip__seg.is-mini { background: repeating-linear-gradient(90deg, var(--c-instant-glow) 0 5px, transparent 5px 9px); opacity: 0.8; }
+.zoom-strip__seg.is-label { background: var(--c-instant-glow); box-shadow: 0 0 calc(6px * var(--glow)) var(--c-instant-glow); }
+.zoom-strip__seg.is-mark { background: repeating-linear-gradient(90deg, var(--c-instant-glow) 0 5px, transparent 5px 9px); opacity: 0.8; }
 .zoom-strip__seg.is-hidden { background: repeating-linear-gradient(90deg, var(--ink-faint) 0 1px, transparent 1px 6px); opacity: 0.6; }
 .zoom-strip__here { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--c-cursor); box-shadow: 0 0 calc(6px * var(--glow)) var(--c-cursor); pointer-events: none; }
 .zoom-strip__track { cursor: pointer; }
 /* Handles: a big hit area (easy on a phone) around a small arrow. */
 .zoom-strip__handle { position: absolute; z-index: 1; width: 32px; height: 26px; margin-left: -16px; cursor: ew-resize; touch-action: none; }
 .zoom-strip__handle::after { content: ''; position: absolute; left: 9px; border-left: 7px solid transparent; border-right: 7px solid transparent; }
-.zoom-strip__handle.is-full { bottom: 100%; margin-bottom: -6px; }
-.zoom-strip__handle.is-full::after { bottom: 8px; border-top: 11px solid var(--ink); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-instant-glow)); }
-.zoom-strip__handle.is-mini { top: 100%; margin-top: -6px; }
-.zoom-strip__handle.is-mini::after { top: 8px; border-bottom: 11px solid var(--c-danger); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-danger)); }
+.zoom-strip__handle.is-label { bottom: 100%; margin-bottom: -6px; }
+.zoom-strip__handle.is-label::after { bottom: 8px; border-top: 11px solid var(--ink); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-instant-glow)); }
+.zoom-strip__handle.is-mark { top: 100%; margin-top: -6px; }
+.zoom-strip__handle.is-mark::after { top: 8px; border-bottom: 11px solid var(--c-danger); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-danger)); }
 .zoom-strip__labels { cursor: pointer; }
 .zoom-strip__handle:focus-visible { outline: 2px solid var(--c-cursor); outline-offset: 2px; border-radius: 3px; }
 .zoom-strip__labels { position: relative; height: 14px; margin-top: 18px; font: 600 11px/1 var(--font-mono); color: var(--ink-dim); }
 .zoom-strip__labels span { position: absolute; transform: translateX(-50%); }
-.zoom-strip__says { margin: 8px 0 0; font: 600 12px/1.3 var(--font-ui); color: var(--ink); }
-/* A gathered group's long-press menu on the timeline */
-.group-menu { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
-.group-menu__note { font: 600 12px/1.3 var(--font-ui); color: var(--ink-dim); }
+.zoom-strip__foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; margin-top: 8px; }
+.zoom-strip__snap { display: inline-flex; align-items: center; gap: 4px; font: 600 11px/1 var(--font-ui); color: var(--ink-dim); white-space: nowrap; cursor: pointer; }
+.zoom-strip__snap input { width: 13px; height: 13px; accent-color: var(--c-cursor); }
+.zoom-strip__says { margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ink); }
 .alarm-row__name .alarm-row__sun { display: inline-block; }
 /* Narrow: a sun row's "in 9h" gives its room to the name (the time says when). */
 @container (max-width: 560px) {
@@ -943,3 +943,12 @@
 
 /* TC Preview's Change preview button (Settings, preview app only) */
 .preview-switch__btn { width: auto; margin-top: 0; padding: 0 12px; grid-column: 2 / 4; }
+
+/* The strip's zone names over the track */
+.zoom-strip__zones { display: flex; justify-content: space-between; margin: -10px 0 6px; font: 700 10px/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.visibility-editor { display: flex; flex-direction: column; gap: 8px; }
+.visibility-editor__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* An Agenda row's Visibility (its eye), under the row */
+.list-row__visibility { margin: -2px 0 6px; padding: 10px 12px; border-radius: 10px; background: var(--box-bg); }
+.visibility-editor__scope { margin: 0; font: 700 12px/1.3 var(--font-ui); color: var(--c-alarm); }

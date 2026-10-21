@@ -6,12 +6,12 @@
 // A row goes to its instant on the timeline. The Groups tab (RepeatsList) lists sunrise and sunset
 // (#11; their switches show or hide them on the timeline), the Unnamed group, then every series,
 // alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
-// chips, gathered or hidden by zoom).
+// Label, Mark or Hidden by zoom).
 import { MARKS } from '../../config/labels.ts'
 import { useMemo } from 'react'
 import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
-import { ZoomStrip } from './ZoomStrip.tsx'
-import { SUN_GROUP, UNNAMED_GROUP, describeDisplay, displayFor, displayGroupOf } from '../../domain/displayGroups.ts'
+import { GroupZoomStrip } from './ZoomStrip.tsx'
+import { SUN_GROUP, UNNAMED_GROUP, describeVisibility, displayGroupOf, groupVisibility } from '../../domain/displayGroups.ts'
 import { useUi } from '../../store/ui.ts'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -108,7 +108,7 @@ export function AlarmsList() {
 function AdjustButton({ rowKey, name }: { rowKey: string; name: string }) {
   const open = useUi(s => s.groupOpen === rowKey)
   return (
-    <IconButton icon={AdjustmentsHorizontalIcon} label={`How ${name} shows by zoom`} color="var(--ink-dim)" bare pressed={open}
+    <IconButton icon={AdjustmentsHorizontalIcon} label={`Visibility of ${name}`} color="var(--ink-dim)" bare pressed={open}
       onClick={() => ui.setGroupOpen(open ? null : rowKey)} />
   )
 }
@@ -116,7 +116,7 @@ function AdjustButton({ rowKey, name }: { rowKey: string; name: string }) {
 /** The row's zoom strip, when its adjust button opened it. */
 function StripIfOpen({ rowKey, groupKey }: { rowKey: string; groupKey: string }) {
   const open = useUi(s => s.groupOpen === rowKey)
-  return open ? <ZoomStrip groupKey={groupKey} /> : null
+  return open ? <GroupZoomStrip groupKey={groupKey} /> : null
 }
 
 /** A series: its time, name, how it repeats, its warnings, when next (`when`), edit, and a pause switch (and in the Groups tab, its zoom strip). */
@@ -169,18 +169,18 @@ export function RepeatsList() {
   )
 }
 
-/** The Unnamed group (#10): instants with no name (most of a busy history), gathered when zoomed out. */
+/** The Unnamed group (#10): instants with no name (most of a busy history); one visibility for all of them. */
 function UnnamedRow({ instants }: { instants: readonly InstantRecord[] }) {
   const count = useMemo(() => instants.filter(i => displayGroupOf(i) === UNNAMED_GROUP).length, [instants])
-  const groupDisplay = useSettings(s => s.groupDisplay)
-  const display = displayFor(UNNAMED_GROUP, groupDisplay)
+  const prefs = useSettings(s => s.groupVisibility)
+  const visibility = groupVisibility(UNNAMED_GROUP, prefs)
   return (
     <div className="group-row">
       <div className="alarm-row alarm-row--unnamed glow-box" onClick={() => ui.setGroupOpen(useUi.getState().groupOpen === UNNAMED_GROUP ? null : UNNAMED_GROUP)}>
         <span className="alarm-row__time mono">{count}</span>
         <span className="alarm-row__main">
           <span className="alarm-row__name">{MARKS.unnamed} Unnamed</span>
-          <span className="alarm-row__sub">{describeDisplay(display)}</span>
+          <span className="alarm-row__sub">{describeVisibility(visibility)}</span>
         </span>
         <span />
         <span className="alarm-row__tools" onClick={e => e.stopPropagation()}><AdjustButton rowKey={UNNAMED_GROUP} name="unnamed instants" /></span>

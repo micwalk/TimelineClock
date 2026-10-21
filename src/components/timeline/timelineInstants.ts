@@ -13,7 +13,7 @@ import { virtualDstShifts } from '../../domain/dst.ts'
 import { DAY } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
-import { SUN_GROUP, displayFor, displayLevel } from '../../domain/displayGroups.ts'
+import { SUN_GROUP, groupVisibility, stageAt } from '../../domain/displayGroups.ts'
 
 /**
  * Sunrises, sunsets and clock changes are computed only while this much time is on screen at most
@@ -32,8 +32,8 @@ export function useTimelineInstants(): InstantRecord[] {
   const sunEvents = useSettings(s => s.sunEvents)
   // Zoomed out, sun chips gather into a rhythm and fade (savedLayout, domain/displayGroups); past
   // the sun group's zoom they are gone: the sky shows it.
-  const groupDisplay = useSettings(s => s.groupDisplay)
-  const wide = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS && displayLevel(displayFor(SUN_GROUP, groupDisplay), f.end - f.start) !== 'hidden')
+  const visibilities = useSettings(s => s.groupVisibility)
+  const wide = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS && stageAt(groupVisibility(SUN_GROUP, visibilities), f.end - f.start) !== 'hidden')
   // Clock changes: a few a year, shown while no more than 2 years are on screen.
   const dstNear = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS)
   const dst = useSettings(s => s.dstShifts)

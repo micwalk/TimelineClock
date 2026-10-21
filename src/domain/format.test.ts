@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  atClockTimeOnDay, chipName, formatClock12h, formatClockCompact, formatDateRange, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, truncateText,
-  durationStep, formatDuration, formatLiveSpan, formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h,
-} from './format.ts'
+import { atClockTimeOnDay, chipName, durationStep, formatChipTime, formatClock12h, formatClockCompact, formatDateRange, formatDayLabel, formatDuration, formatDurationCoarse, formatDurationForInput, formatDurationHMS, formatDurationShort, formatLiveSpan, formatMonthDay, formatRelativeCoarse, formatRelativeShort, formatSignedDuration, parseDurationInput, showsSeconds, to24h, truncateText } from './format.ts'
 import { DAY, HOUR, MINUTE, SECOND } from './time.ts'
 
 const at = (h: number, m: number, s: number) => new Date(2026, 9, 2, h, m, s).getTime()
@@ -200,5 +197,30 @@ describe('formatDuration', () => {
     expect(formatDuration(4321)).toBe('0:04.321')
     expect(formatDuration(12 * MINUTE + 3 * SECOND + 400)).toBe('12:03')
     expect(formatDuration(2 * HOUR + 3 * MINUTE)).toBe('2h 3m')
+  })
+})
+
+describe('long times (zoomed out to months and years)', () => {
+  it('lengths read in months and years from 60 days', () => {
+    expect(formatDurationShort(45 * DAY + 3 * HOUR)).toBe('45d 3h')
+    expect(formatDurationShort(200 * DAY)).toBe('6mo 17d')
+    expect(formatDurationShort(400 * DAY)).toBe('1y 1mo')
+    expect(formatDurationShort(3 * 365.25 * DAY)).toBe('3y')
+    expect(formatDurationShort(80 * 365.25 * DAY)).toBe('80y')
+    expect(formatRelativeShort(200 * DAY)).toBe('in 6mo 17d')
+    expect(formatSignedDuration(5 * HOUR)).toBe('+05:00:00')
+    expect(formatSignedDuration(-200 * DAY)).toBe('-6mo 17d')
+  })
+  it('chips say the date as the zoom widens, and the year far out or in another year', () => {
+    const now = new Date(2026, 9, 19, 12).getTime()
+    const t = new Date(2026, 9, 24, 7, 20).getTime()
+    expect(formatChipTime(t, now, 6 * HOUR, false)).toBe('7:20a')
+    expect(formatChipTime(t, now, 5 * DAY, false)).toBe(`${formatMonthDay(t, now)} 7:20a`)
+    expect(formatChipTime(t, now, 90 * DAY, false)).toBe(formatMonthDay(t, now))
+    expect(formatChipTime(t, now, 365 * DAY, false)).toBe(formatMonthDay(t, now, true))
+    expect(formatMonthDay(t, now, true)).toMatch(/2026/)
+    expect(formatMonthDay(new Date(2027, 3, 3).getTime(), now)).toMatch(/2027/)
+    expect(formatDayLabel(t, now)).not.toMatch(/2026/)
+    expect(formatDayLabel(t, now, true)).toMatch(/2026/)
   })
 })

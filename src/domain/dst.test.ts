@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LABELS } from '../config/labels.ts'
-import { addCalendarDays, describeShift, dstShifts, dstVirtualId, isAtDstShift, isDstShiftAt, nearDstShift, parseDstVirtualId, utcOffsetMin, virtualDstShifts, zoneAbbrev } from './dst.ts'
+import { addCalendarDays, addCalendarMonths, describeShift, dstShifts, dstVirtualId, isAtDstShift, isDstShiftAt, nearDstShift, parseDstVirtualId, utcOffsetMin, virtualDstShifts, zoneAbbrev } from './dst.ts'
 import { formatContext } from './tickContext.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
 
@@ -69,4 +69,12 @@ it('addCalendarDays keeps the clock time (a day across a change is 23 or 25 hour
   expect([next.getDate(), next.getHours(), next.getMinutes()]).toEqual([1, 9, 30])
   const back = new Date(addCalendarDays(t, -7))
   expect([back.getDate(), back.getHours()]).toEqual([24, 9])
+})
+
+it('addCalendarMonths keeps the day of the month, or the month\'s last', () => {
+  const d = (ts: number) => { const x = new Date(ts); return [x.getFullYear(), x.getMonth() + 1, x.getDate(), x.getHours()] }
+  expect(d(addCalendarMonths(new Date(2026, 9, 19, 9).getTime(), 1))).toEqual([2026, 11, 19, 9])
+  expect(d(addCalendarMonths(new Date(2026, 0, 31, 9).getTime(), 1))).toEqual([2026, 2, 28, 9])
+  expect(d(addCalendarMonths(new Date(2026, 9, 19, 9).getTime(), 12))).toEqual([2027, 10, 19, 9])
+  expect(d(addCalendarMonths(new Date(2026, 9, 19, 9).getTime(), -12))).toEqual([2025, 10, 19, 9])
 })

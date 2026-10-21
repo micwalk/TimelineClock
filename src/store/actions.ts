@@ -15,8 +15,8 @@ import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
-import { getTunables, sanitizeSettings, settings, useSettings } from './settings.ts'
-import { displayFor, gatherHere, hideHere, showChipsHere } from '../domain/displayGroups.ts'
+import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
+import type { Visibility } from '../domain/displayGroups.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
@@ -38,7 +38,7 @@ import { pickerOffsets } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
 import { sunEventName } from '../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
-import { addCalendarDays, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
+import { addCalendarDays, addCalendarMonths, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
@@ -84,22 +84,10 @@ export function focusInstant(id: string, animate = true) {
  * selected or focused, so it works like any instant, but not saved or listed until it is changed
  * (store/entities: any change makes it real). Let go once nothing selects or focuses it.
  */
-/**
- * A group's zoom thresholds from where you are (#10, domain/displayGroups): its instants show as
- * chips at this zoom, gathered at it, or hidden from it on.
- */
-export function setGroupZoom(key: string, how: 'chips' | 'gather' | 'hide') {
-  const f = frame()
-  const visibleMs = f.end - f.start
-  const d = displayFor(key, useSettings.getState().groupDisplay)
-  settings.setGroupDisplay(key, how === 'chips' ? showChipsHere(d, visibleMs) : how === 'gather' ? gatherHere(d, visibleMs) : hideHere(d, visibleMs))
-}
-
-/** Opens a group's zoom strip in the Agenda's Groups tab (opening the drawer when the Agenda is one). */
-export function showGroupSettings(key: string) {
-  ui.setListTab('groups')
-  ui.setGroupOpen(key)
-  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
+/** A tap on an instant's chip or mark: select it (a virtual one is held while selected). */
+export function tapInstant(inst: InstantRecord) {
+  holdVirtual(inst)
+  selectInstant(inst.id)
 }
 
 export function holdVirtual(inst: InstantRecord) {
@@ -242,7 +230,14 @@ function landOn(target: LandingTarget, animate: boolean) {
 const UNDER_CURSOR_PX = 20
 
 export function moveCursorByIncrement(direction: 1 | -1) {
-  const ms = incrementOption(v().timeIncrement).milliseconds
+  const step = v().timeIncrement
+  // A month or a year steps by the calendar: the same day of the month and clock time.
+  if (step === '1mo' || step === '1y') {
+    const c = frame().center
+    moveCursorBy(addCalendarMonths(c, direction * (step === '1y' ? 12 : 1)) - c)
+    return
+  }
+  const ms = incrementOption(step).milliseconds
   // A day's step keeps the clock time across a clock change (that day is 23 or 25 hours).
   if (ms % DAY === 0) { const c = frame().center; moveCursorBy(addCalendarDays(c, direction * (ms / DAY)) - c); return }
   moveCursorBy(direction * ms)
@@ -646,6 +641,11 @@ export function selectBell(alarmId: string | null) {
  * Hides an instant from the timeline (or shows it again). Its spans stay; it stays in the
  * Agenda. Hiding the selected or focused instant lets go of it so it actually disappears.
  */
+/** An instant's own visibility by zoom (its eye: Label / Mark / Hidden), or back to Auto (null). */
+export function setInstantVisibility(id: string, d: Visibility | null) {
+  entities.patchInstant(id, () => ({ visibility: d ?? undefined }))
+}
+
 export function setInstantHidden(id: string, hidden: boolean) {
   const inst = entities.getInstant(id)
   if (!inst) return
@@ -728,8 +728,9 @@ export function moveInstantTo(ts: number) {
 }
 
 /** Move mode, typed as a clock time: same day as where the instant is being moved to. */
-export function moveInstantToClock(hours24: number, minutes: number, seconds: number) {
-  moveInstantTo(atClockTimeOnDay(frame().center, hours24, minutes, seconds))
+/** Move mode, typed as a clock time on a day (`dayTs`: any time that day; default the cursor's). */
+export function moveInstantToClock(hours24: number, minutes: number, seconds: number, dayTs = frame().center) {
+  moveInstantTo(atClockTimeOnDay(dayTs, hours24, minutes, seconds))
 }
 
 /** Move mode, typed as an offset from Now. */
@@ -825,9 +826,17 @@ export function applyDurationInput(text: string, reference: 'now' | 'selected'):
   return true
 }
 
-/** Moves the cursor to a wall-clock time on the cursor's current day. */
-export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean) {
-  landCursorAt(atClockTimeOnDay(frame().center, to24h(hour12, pm), minutes, seconds))
+/** Moves the cursor to a wall-clock time on a day (`dayTs`: any time that day; default the cursor's). */
+export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean, dayTs = frame().center) {
+  landCursorAt(atClockTimeOnDay(dayTs, to24h(hour12, pm), minutes, seconds))
+}
+
+/** Moves the cursor `offsetMs` from Now or the selected instant (a typed offset of any length). */
+export function applyOffset(offsetMs: number, reference: 'now' | 'selected'): boolean {
+  const base = reference === 'now' ? frame().now : entities.getInstant(v().currentSelectedInstantId)?.tsEpochMs
+  if (typeof base !== 'number') return false
+  landCursorAt(base + offsetMs)
+  return true
 }
 
 /** Sends the cursor to a typed time, landing on an instant only if one is exactly there. */

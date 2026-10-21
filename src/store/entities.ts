@@ -80,6 +80,7 @@ export const entities = {
       tsEpochMs,
       label,
       favorite: false,
+      createdAt: Date.now(),
       ...(opts.alarm ? { alarms: [{ id: newAlarmId(), offsetMs: 0 }] } : {}),
     }
     set(s => ({ instants: [...s.instants, rec] }))

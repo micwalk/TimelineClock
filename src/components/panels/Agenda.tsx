@@ -4,12 +4,12 @@ import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
 import { EyeIcon, EyeSlashIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
-import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
+import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatDateTime, formatDurationCoarse, formatRelativeCoarse } from '../../domain/format.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { displayName, storedInstants } from '../../domain/entities.ts'
-import { hasArmedAlarm, openAlarms } from '../../domain/alarms.ts'
+import { openAlarms } from '../../domain/alarms.ts'
 import type { ResolvedSpan } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
@@ -25,6 +25,7 @@ import { useFlip } from '../../hooks/useFlip.ts'
 import { HelpButton } from './Help.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { AlarmsList, RepeatsList } from './AlarmsList.tsx'
+import { VisibilityEditor } from './VisibilityEditor.tsx'
 
 /** Each tab's name, and a short one for a narrow Agenda (side dock, drawer: panels.css container query). */
 const TABS: { key: ListTab; label: string; short: string }[] = [
@@ -69,9 +70,10 @@ function pick(focus: () => void) {
 }
 
 const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { inst: InstantRecord; focused: boolean; selected: boolean; isPast: boolean }) {
-  // An alarm still to ring is never hidden, so its instant offers no eye.
-  const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
+  // The eye opens its Visibility under the row (the same box as the eye on its chip).
+  const visOpen = useUi(s => s.visibilityOpen === inst.id)
   return (
+    <>
     <div
       data-key={inst.id}
       data-focused={focused}
@@ -86,15 +88,19 @@ const SavedRow = memo(function SavedRow({ inst, focused, selected, isPast }: { i
           color="var(--c-favorite)" bare pressed={!!inst.favorite} onClick={() => act.toggleFavorite(inst.id)} />
         <span className={inst.label ? '' : 'is-empty'}>{endpointName(inst)}</span>
         {openAlarms(inst).length > 0 && <BellAlertIcon className="list-row__bell" aria-label="Alarm set" />}
-        {(inst.hidden || !armed) && (
-          <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Show on the timeline' : 'Hide from the timeline'}
-            className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={!!inst.hidden}
-            onClick={() => act.setInstantHidden(inst.id, !inst.hidden)} />
-        )}
+        <IconButton icon={inst.hidden ? EyeSlashIcon : EyeIcon} label={inst.hidden ? 'Visibility (hidden)' : 'Visibility'}
+          className={`list-row__eye${inst.hidden ? ' is-hidden' : ''}`} color={inst.hidden ? 'var(--ink-dim)' : 'var(--ink-faint)'} bare pressed={visOpen || !!inst.hidden}
+          onClick={() => ui.setVisibilityOpen(visOpen ? null : inst.id)} />
       </div>
       <div className="list-row__dt mono">{formatDateTime(inst.tsEpochMs)}</div>
       <Relative ts={inst.tsEpochMs} />
     </div>
+    {visOpen && (
+      <div className="list-row__visibility" onClick={e => e.stopPropagation()}>
+        <VisibilityEditor inst={inst} />
+      </div>
+    )}
+    </>
   )
 })
 

@@ -162,6 +162,12 @@ describe('nearestFinestTick', () => {
   })
 })
 
+it('day ticks say the day of the week', () => {
+  const day = TICK_UNITS.find(u => u.calendar === 'day')!
+  const label = formatTickLabel(new Date(2026, 9, 15).getTime(), day)
+  expect(label).toMatch(/^Thu Oct 15$/)
+})
+
 describe('zoomed out to years', () => {
   it('quarters, then years, then 5 and 10 years', () => {
     const quarter = TICK_UNITS.find(u => u.calendar === 'quarter')!
@@ -173,5 +179,8 @@ describe('zoomed out to years', () => {
     expect(new Date(addCalendar(firstCalendarBoundaryAtOrBefore(t, 'year5'), 'year5', 1)).getFullYear()).toBe(2030)
     // Ten years on a 1400px screen: years are labeled, quarters are the minor ticks.
     expect(pickTickTiers(1400 / (10 * 365 * DAY)).map(u => u.calendar)).toEqual(['quarter', 'year', 'year5'])
+    // A lifetime (150 years): 50-year labels, decades between.
+    expect(pickTickTiers(1400 / (150 * 365 * DAY)).map(u => u.calendar)).toEqual(['decade', 'year50', 'century'])
+    expect(new Date(firstCalendarBoundaryAtOrBefore(t, 'century')).getFullYear()).toBe(2000)
   })
 })

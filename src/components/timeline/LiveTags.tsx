@@ -8,8 +8,8 @@ import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, PlusSmallIcon } from '@heroicons/react/20/solid'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
-import { SECOND } from '../../domain/time.ts'
-import { formatClockCompact, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
+import { DAY, SECOND } from '../../domain/time.ts'
+import { YEAR_ZOOM_MS, formatClockCompact, formatDayLabel, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
 import { endpointName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
@@ -37,6 +37,14 @@ const OMEGA_FLIP = omegaFor(FLIP_SETTLE_MS)
 const NAME_MAX = 10
 const shortName = (name: string) => (name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1)}…` : name)
 
+/** The Now and Cursor tags add a date line once this much is on screen (the time alone stops saying which day). */
+const TAG_DATE_FROM_MS = 2 * DAY
+/** Which date the tags show at this zoom: none, the day, or the day with its year (half a year or more on screen). */
+const tagDateMode = (f: Frame): 0 | 1 | 2 => {
+  const w = f.end - f.start
+  return w < TAG_DATE_FROM_MS ? 0 : w < YEAR_ZOOM_MS ? 1 : 2
+}
+
 /** "Rice +00:10": whole seconds, so it only changes once a second. */
 const offsetText = (name: string, ms: number) => `${name} ${formatSignedDuration(ms)}`
 
@@ -45,7 +53,7 @@ function clockPopover(anchor: 'now' | 'cursor') {
     <ClockPopover
       initialTs={anchor === 'now' ? act.nowTime() : act.cursorTime()}
       onCancel={ui.closeTimeInput}
-      onSubmit={(h, m, s, pm) => { act.applyClockInput(h, m, s, pm); ui.closeTimeInput() }}
+      onSubmit={(h, m, s, pm, day) => { act.applyClockInput(h, m, s, pm, day); ui.closeTimeInput() }}
     />
   )
 }
@@ -54,6 +62,7 @@ export function NowTag() {
   const focused = useView(s => s.viewFocusMode === 'now')
   const menuOpen = useUi(s => s.tagMenu === 'now')
   const clockOpen = useUi(s => s.timeInput?.kind === 'clock' && s.timeInput.anchor === 'now')
+  const dateMode = useFrameValue(tagDateMode)
   const items: TagMenuItem[] = [
     { label: 'Save as favorite', icon: StarOutline, onSelect: () => act.dropInstant({ favorite: true }) },
     { label: 'Set cursor to a time…', icon: ClockIcon, onSelect: () => ui.openTimeInput({ kind: 'clock', anchor: 'now' }) },
@@ -73,7 +82,9 @@ export function NowTag() {
       >
         {/* The spaces keep words apart in the accessible name; flex layout ignores them. */}
         <span className="tl-tag__caption">NOW</span>{' '}
+        {/* Always the time; zoomed out to days, the date too. */}
         <LiveText compute={f => formatClockCompact(f.now, true)} />
+        {dateMode > 0 && <>{' '}<LiveText className="tl-tag__date" compute={f => formatDayLabel(f.now, f.now, dateMode === 2)} /></>}
       </ArrowTag>
     </Marker>
   )
@@ -98,6 +109,7 @@ export function CursorTag() {
   // The selected-offset line only shows once the selected instant is a second or more from the cursor (never "+00:00.000" under it).
   const selectedTs = selected?.tsEpochMs
   const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(shownTime(f) - selectedTs) >= SECOND)
+  const dateMode = useFrameValue(tagDateMode)
   // The ＋ never moves. While the cursor is on an instant it is inside that instant's chip
   // (plusMorph.ts): still here, measurable, but not drawn.
   const plusRef = useRef<HTMLButtonElement>(null)
@@ -181,7 +193,7 @@ export function CursorTag() {
         from={reference === 'now' ? 'Now' : name}
         initialMs={act.cursorTime() - (reference === 'now' ? act.nowTime() : selected!.tsEpochMs)}
         onCancel={ui.closeTimeInput}
-        onSubmit={text => { if (act.applyDurationInput(text, reference)) ui.closeTimeInput() }}
+        onSubmit={ms => { if (act.applyOffset(ms, reference)) ui.closeTimeInput() }}
       />
     )
   }
@@ -220,6 +232,12 @@ export function CursorTag() {
         menu={<TagMenu label="Cursor tools" items={items} onClose={ui.closeTagMenu} />}
         popover={popover ?? undefined}
       >
+        {/* Zoomed out to days, which day (and year) it is, over the time. */}
+        {dateMode > 0 && (
+          <>
+            <LiveText className="tl-tag__date" compute={f => formatDayLabel(onInstant ? onInstant.tsEpochMs : shownTime(f), f.now, dateMode === 2)} />{' '}
+          </>
+        )}
         {onInstant ? (
           <>
             {formatClockCompact(onInstant.tsEpochMs, true)}{' '}

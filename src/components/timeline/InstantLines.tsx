@@ -7,7 +7,7 @@ import { useMemo, useRef } from 'react'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { useFrameListener } from '../../engine/hooks.ts'
 import { savedLayoutAt } from './savedLayout.ts'
-import { UNNAMED_GROUP, displayGroupOf } from '../../domain/displayGroups.ts'
+import * as act from '../../store/actions.ts'
 import { placeAlong, translateMain as translate } from './axisPlace.ts'
 
 /** Re-base the camera when the container would sit this far off screen (keeps offsets small). */
@@ -30,16 +30,14 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const byId = useMemo(() => new Map(instants.map(i => [i.id, i])), [instants])
-  // Occurrences of a series carry the rhythm's shape (and, with an alarm to come, its amber), so
-  // collapsing into a rhythm animates from the line they already are (timeline.css).
-  const seriesClass = useMemo(() => {
+  // Every line carries the shape that morphs into a mark (timeline.css is-morph), so any instant
+  // becoming a mark animates the same way: the line shrinks to a stub from the axis and, with an
+  // alarm to come, amber grows in it (the sun's colour for computed sun times).
+  const morphClass = useMemo(() => {
     const out = new Map<string, string>()
     for (const i of instants) {
-      if (i.seriesId) out.set(i.id, i.alarms?.some(a => !a.answered) ? ' is-series is-alarmed' : ' is-series')
-      // Computed sunrises and sunsets: the same shape, in the sun's colour (they fade out with their group, below).
-      else if (i.virtual && i.sun) out.set(i.id, ' is-series is-alarmed is-sun')
-      // Unnamed instants may gather too (domain/displayGroups): the shape that animates into a stub.
-      else if (displayGroupOf(i) === UNNAMED_GROUP) out.set(i.id, ' is-series')
+      const sun = i.virtual && i.sun
+      out.set(i.id, sun ? ' is-morph is-alarmed is-sun' : i.alarms?.some(a => !a.answered) ? ' is-morph is-alarmed' : ' is-morph')
     }
     return out
   }, [instants])
@@ -72,6 +70,12 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
       if (!n) {
         const el = document.createElement('div')
         el.appendChild(document.createElement('div')).className = 'tl-col__line'
+        // A mark's hit area (timeline.css: only a mark's takes taps): a tap selects it, so it is a Label again.
+        const hit = el.appendChild(document.createElement('div'))
+        hit.className = 'tl-col__hit'
+        hit.dataset.id = key
+        hit.setAttribute('role', 'button')
+        hit.setAttribute('aria-label', 'Show this instant')
         world.appendChild(el)
         n = { el, x: NaN, cls: '\u0000', op: '' }
         s.nodes.set(key, n)
@@ -87,11 +91,10 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
       const x = id === movingId ? f.mainSize / 2 - base : (inst.tsEpochMs - s.origin) * k
       // Off screen: no line (a zoom would rewrite it every frame for nothing).
       if (base + x < -LINE_MARGIN_PX || base + x > f.mainSize + LINE_MARGIN_PX) continue
-      // A repeat collapsed into its series' rhythm: a short tapered line from the axis, not a full line.
-      // A gathered group fades out before its zoom hides it.
-      const group = layout.rhythm[id]
-      const fade = group ? layout.groupFade[group] : undefined
-      place(id, x, `${group ? 'is-rhythm' : lineClass[id] ?? ''}${seriesClass.get(id) ?? ''}`, fade === undefined ? '' : String(Math.round(fade * 50) / 50))
+      // A mark (past its Label zoom: domain/displayGroups): a short tapered line from the axis, fading before it is Hidden.
+      const mark = !!layout.marks[id]
+      const fade = mark ? layout.markFade[id] : undefined
+      place(id, x, `${mark ? 'is-mark' : lineClass[id] ?? ''}${morphClass.get(id) ?? ' is-morph'}`, fade === undefined ? '' : String(fade))
     }
     if (ghostTs !== null) place(GHOST, (ghostTs - s.origin) * k, 'is-ghost')
     for (const [key, n] of s.nodes) {
@@ -99,5 +102,14 @@ export function InstantLines({ instants, lineClass, movingId, ghostTs }: {
     }
   })
 
-  return <div ref={ref} className="tl-world tl-world--lines" aria-hidden />
+  // Taps on a mark (its hit area): select it (a Label again while selected); a double tap focuses it.
+  const instantOf = (e: React.MouseEvent) => {
+    const id = e.target instanceof HTMLElement ? e.target.closest<HTMLElement>('.tl-col__hit')?.dataset.id : undefined
+    return id ? byId.get(id) : undefined
+  }
+  return (
+    <div ref={ref} className="tl-world tl-world--lines"
+      onClick={e => { const inst = instantOf(e); if (inst) act.tapInstant(inst) }}
+      onDoubleClick={e => { const inst = instantOf(e); if (inst) act.activateInstant(inst.id) }} />
+  )
 }

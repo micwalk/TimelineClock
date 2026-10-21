@@ -7,31 +7,42 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
-## 0.5.0 — 2026-10-17
+## 0.5.0 — 2026-10-21
 
 **Android app: web only** (nothing to install; it updates itself).
 
-- **Groups by zoom** (#10): repeats, sunrise and sunset, and a new **Unnamed** group each choose
-  how they show as you zoom out: as chips, gathered (short lines and one summary chip, as
-  repeats already did when crowded), or hidden. The Agenda's **Repeats** tab is now **Groups**:
-  each row's adjust button opens a strip over the zoom levels (1h … 1y) with a handle for
-  "chips up to" and one for "hidden past" (drag them, or tap the strip to move the nearer one
-  there), and a mark where you are now.
-- From the timeline: hold (or right click) a gathered group's chip for **Show as chips**,
-  **Hide from here out**, or its settings.
-- **Unnamed instants** (no name, star or alarm to come), most of a busy history, gather into
-  "○ 8 unnamed" once more than a day is on screen. They are never hidden unless you choose to.
-- A group gathers only where its strip says, never just because its chips crowd (crowded chips
-  slide aside or fold into "+N", like any chips). Repeats start as chips up to a week on screen;
-  sunrise and sunset as chips up to 3 days, gathered up to a week, gone beyond. This replaces the
-  Advanced settings for when repeats and sun times collapse.
-- **Zoom out to 50 years** (it was 30 days): ticks go months, quarters ("Q4 2026"), years, then
-  5 and 10 years. Group strips reach 3mo, 1y and 10y; set the sun's to 3 months or a year to see
+- **Label, Mark, Hidden** (#10): as you zoom out, every instant goes from its Label (its chip)
+  to a Mark (a short line on the axis) to Hidden, and comes back as you zoom in. One rule and one
+  animation for all of them: named ones, unnamed ones, a repeat's days, sunrises and sunsets (the
+  chip shrinks away, the line shrinks to a stub, and a Mark fades before it's Hidden). How far out
+  an instant stays by itself: 4x how far ahead you made it, at least 3 days; longer for a favorite
+  or an alarm counting down and for the ends of a long span. Selected, focused and ringing ones
+  keep their Labels.
+- **Visibility**: the eye on a chip or an Agenda row sets it for that instant (drag "Label up to"
+  and "Mark up to"; Auto goes back; Hide everywhere is the old hide). Repeats, sunrise and sunset,
+  and **Unnamed** each have one setting in the Agenda's **Groups** tab (was Repeats). The strips
+  span 1h to 100y; untick **Snap** to slide freely between the stops.
+- A repeat zoomed out is its Marks now, with no summary chip ("⟳ Wake up · Daily…"). A
+  repeat's (or a sunrise's) Visibility always sets the whole series.
+- Marks are tappable: a tap selects the instant, so it's a Label again; a double tap focuses it.
+- Marks last out to 10 years on screen by default (sunrise and sunset to a week).
+- Day ticks say the day of the week ("Thu Oct 15").
+- **Zoom out to 150 years** (it was 30 days), enough for a lifetime as one span: ticks go
+  months, quarters ("Q4 2026"), years, then 5, 10, 50 and 100 years. Group strips reach 3mo, 1y,
+  10y and 100y; set the sun's to 3 months or a year to see
   a season of sunrises and sunsets. The sky's colours fade out once days are only a few pixels
   wide, and sunrises, sunsets and clock changes aren't computed past 2 years on screen.
+- **Long zooms read right**: from 2 days on screen the Now tag (always with its time) and the
+  Cursor tag show the date, with the year from half a year out; chips show their date ("Oct 24
+  7:20a", then just "Oct 24, 2027"). Lengths and "in …" read in months and years ("in 6mo
+  17d", "1y 2mo", the Cursor tag's "Now +4mo 18d") instead of hundreds of days.
+- **Typing a time takes a date** (the phone's own date picker), and offsets and lengths take
+  days, so the cursor or a moved instant can go months or years away (offsets were capped at
+  99 hours). The ± steps go to a week, a month and a year (months and years by the calendar).
 - In horizontal, the NOW button sits right under the timeline's center, so while following Now
   the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
   below.
+- Removed the toast that slipped into 0.4.4 by mistake (#26).
 
 ## 0.4.3 — 2026-10-17
 

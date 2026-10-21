@@ -25,6 +25,8 @@ export interface UiState {
   listTab: ListTab
   /** The group whose zoom strip is open in the Groups tab. */
   groupOpen: string | null
+  /** The instant whose Visibility is open under its Agenda row. */
+  visibilityOpen: string | null
   timeInput: TimeInputTarget | null
   tagMenu: TagMenu | null
   /** The live lane (by key) whose chip was tapped: its tools show until the next outside tap. */
@@ -59,6 +61,7 @@ export interface UiState {
 export const useUi = create<UiState>(() => ({
   listTab: 'instants',
   groupOpen: null,
+  visibilityOpen: null,
   timeInput: null,
   tagMenu: null,
   laneTools: null,
@@ -87,6 +90,7 @@ let dropTimer: ReturnType<typeof setTimeout> | null = null
 export const ui = {
   setListTab: (listTab: ListTab) => useUi.setState({ listTab }),
   setGroupOpen: (groupOpen: string | null) => useUi.setState({ groupOpen }),
+  setVisibilityOpen: (visibilityOpen: string | null) => useUi.setState({ visibilityOpen }),
   openTimeInput: (timeInput: TimeInputTarget) => useUi.setState({ timeInput, tagMenu: null }),
   closeTimeInput: () => useUi.setState({ timeInput: null }),
   toggleTagMenu: (which: TagMenu) => useUi.setState(s => ({ tagMenu: s.tagMenu === which ? null : which, timeInput: null })),

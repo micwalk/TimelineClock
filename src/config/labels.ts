@@ -7,7 +7,7 @@ export const MARKS = {
   repeat: '⟳',
   /** A snooze in short names ("Test Alarm ⟲2") and on folded snooze badges and bells. */
   snooze: '⟲',
-  /** The Unnamed group's summary chip ("○ 8 unnamed"). */
+  /** The Unnamed group's row in the Groups tab ("○ Unnamed"). */
   unnamed: '○',
   /** Drop an instant (the NOW button while following Now). */
   drop: '＋',
@@ -18,9 +18,7 @@ export const LABELS = {
   sunrise: 'Sunrise',
   sunset: 'Sunset',
   /** A clock change where the clocks go back (daylight saving ends). */
-  dstEnds: 'DST ends (🕰️back)',
+  dstEnds: 'DST ends 🕰️⬅',
   /** A clock change where the clocks go forward (daylight saving begins). */
-  dstBegins: 'DST begins (🕰️fwd)',
-  /** The Unnamed group gathered: "8 unnamed". */
-  unnamedCount: (n: number) => `${n} unnamed`,
+  dstBegins: 'DST begins 🕰️➡',
 } as const

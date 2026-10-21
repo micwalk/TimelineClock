@@ -1,17 +1,19 @@
-// Display groups (#10): how a group's instants show at each zoom. Pure.
-//
-// A group is a repeating series, the computed sunrises and sunsets, or the built-in Unnamed
-// group (tags will be groups too, #8). Each has two thresholds on the zoom ladder below, read as
-// how much time is on screen: up to `full` its instants are chips (crowded ones slide aside or
-// fold into "+N", like any chips), up to `mini` they are gathered into a rhythm
-// (short lines from the axis and one summary chip), and past it they are hidden. What you are
-// working with (selected, focused, ringing...) always keeps its chip.
+// Visibility by zoom (#10). Pure. One rule for every instant on the timeline: as you zoom out it
+// is a Label (its chip) out to one zoom, a Mark (a short line from the axis, no chip) out to a
+// wider one, then Hidden; zooming back in brings it back. "Zoom" is how much time is on screen.
+// An instant's own visibility (its eye) wins; else its group's (a repeat's occurrences, the
+// computed sun times, unnamed instants: set in the Groups tab); else what it gets by itself
+// (domain/reach). What you are working with (selected, focused, ringing...) keeps its label.
+// A threshold is one of the ladder's stops or, with snapping off, any time on screen (ms).
 import type { InstantRecord } from './entities.ts'
+import { formatDurationShort } from './format.ts'
 import { DAY, HOUR, smoothstep } from './time.ts'
 
-export type ZoomStop = 'hour' | '6h' | 'day' | '3d' | 'week' | 'month' | 'quarter' | 'year' | 'decade' | 'always'
+export type ZoomStop = 'hour' | '6h' | 'day' | '3d' | 'week' | 'month' | 'quarter' | 'year' | 'decade' | 'century' | 'always'
+/** A threshold: a stop on the ladder, or any time on screen in ms (snapping off). */
+export type ZoomValue = ZoomStop | number
 
-/** The zoom ladder, closest first: how much time is on screen. The widest zoom shows 50 years. */
+/** The zoom ladder, closest first: how much time is on screen. The widest zoom shows 150 years. */
 export const ZOOM_STOPS: readonly { stop: ZoomStop; ms: number; label: string; words: string }[] = [
   { stop: 'hour', ms: HOUR, label: '1h', words: 'an hour' },
   { stop: '6h', ms: 6 * HOUR, label: '6h', words: '6 hours' },
@@ -22,20 +24,26 @@ export const ZOOM_STOPS: readonly { stop: ZoomStop; ms: number; label: string; w
   { stop: 'quarter', ms: 91 * DAY, label: '3mo', words: '3 months' },
   { stop: 'year', ms: 365 * DAY, label: '1y', words: 'a year' },
   { stop: 'decade', ms: 10 * 365 * DAY, label: '10y', words: '10 years' },
+  { stop: 'century', ms: 100 * 365 * DAY, label: '100y', words: '100 years' },
   { stop: 'always', ms: Infinity, label: '∞', words: 'any zoom' },
 ]
 
 const index = (s: ZoomStop) => ZOOM_STOPS.findIndex(z => z.stop === s)
 const at = (i: number) => ZOOM_STOPS[Math.max(0, Math.min(ZOOM_STOPS.length - 1, i))].stop
+/** The last finite stop's index (the one before ∞). */
+const LAST_FINITE = ZOOM_STOPS.length - 2
 
-export interface GroupDisplay {
-  /** Chips while the screen shows up to this much ('always': whenever they fit). */
-  full: ZoomStop
-  /** Gathered into a rhythm up to this much; hidden past it ('always': never hidden). */
-  mini: ZoomStop
+/** A threshold's time on screen, ms (∞ for 'always'). */
+export const msOf = (v: ZoomValue): number => (typeof v === 'number' ? v : ZOOM_STOPS[index(v)].ms)
+
+/** How something shows by zoom: a Label up to `label` on screen, a Mark up to `mark`, Hidden beyond. */
+export interface Visibility {
+  label: ZoomValue
+  mark: ZoomValue
 }
 
-export type DisplayLevel = 'full' | 'mini' | 'hidden'
+/** Label (the chip), Mark (a line from the axis), or Hidden. */
+export type Stage = 'label' | 'mark' | 'hidden'
 
 /** The computed sunrises and sunsets. */
 export const SUN_GROUP = 'sun'
@@ -43,32 +51,41 @@ export const SUN_GROUP = 'sun'
 export const UNNAMED_GROUP = 'unnamed'
 
 /**
- * What each kind of group starts with: repeats chips up to a week, gathered beyond, never hidden;
- * sunrises and sunsets chips up to 3 days, gathered to a week, gone beyond (the sky shows it);
- * unnamed instants chips up to a day, gathered beyond, never hidden (history is core).
+ * What each kind of group starts with: a repeat's occurrences Label up to 3 days, Mark up to 10
+ * years; sunrises and sunsets Label up to 3 days, Mark up to a week (the sky shows them beyond);
+ * unnamed instants Label up to a day, Mark up to 10 years.
  */
-export function defaultDisplay(key: string): GroupDisplay {
-  if (key === SUN_GROUP) return { full: '3d', mini: 'week' }
-  if (key === UNNAMED_GROUP) return { full: 'day', mini: 'always' }
-  return { full: 'week', mini: 'always' }
+export function defaultVisibility(key: string): Visibility {
+  if (key === SUN_GROUP) return { label: '3d', mark: 'week' }
+  if (key === UNNAMED_GROUP) return { label: 'day', mark: 'decade' }
+  return { label: '3d', mark: 'decade' }
 }
 
-export const displayFor = (key: string, prefs: Readonly<Record<string, GroupDisplay>>): GroupDisplay => prefs[key] ?? defaultDisplay(key)
+export const groupVisibility = (key: string, prefs: Readonly<Record<string, Visibility>>): Visibility => prefs[key] ?? defaultVisibility(key)
 
-/** The level at `visibleMs` of time on screen. */
-export function displayLevel(d: GroupDisplay, visibleMs: number): DisplayLevel {
-  if (visibleMs <= ZOOM_STOPS[index(d.full)].ms) return 'full'
-  if (visibleMs <= ZOOM_STOPS[index(d.mini)].ms) return 'mini'
+/** The stage at `visibleMs` of time on screen. */
+export function stageAt(v: Visibility, visibleMs: number): Stage {
+  if (visibleMs <= msOf(v.label)) return 'label'
+  if (visibleMs <= msOf(v.mark)) return 'mark'
   return 'hidden'
 }
 
-/** How opaque a gathered group is: it fades out over the last stretch before it is hidden (1 when never hidden). */
-export function displayFade(d: GroupDisplay, visibleMs: number): number {
-  const hide = ZOOM_STOPS[index(d.mini)].ms
+/** A mark fades out over the last stretch before it is hidden: its opacity (1 when never hidden). */
+export function markFade(v: Visibility, visibleMs: number): number {
+  const hide = msOf(v.mark)
   return Number.isFinite(hide) ? 1 - smoothstep(hide / 1.6, hide, visibleMs) : 1
 }
 
-/** The group an instant's chip follows: its series, the sun (computed ones), or Unnamed; null for none. */
+/**
+ * The recurring group an instant belongs to (its series, or the computed sun times), or null:
+ * its visibility is always the group's, never its own.
+ */
+export function recurringGroupOf(i: InstantRecord): string | null {
+  const g = displayGroupOf(i)
+  return g && g !== UNNAMED_GROUP ? g : null
+}
+
+/** The group an instant follows: its series, the sun (computed ones), or Unnamed; null for none. */
 export function displayGroupOf(i: InstantRecord): string | null {
   if (i.seriesId) return i.seriesId
   if (i.virtual && i.sun) return SUN_GROUP
@@ -76,70 +93,76 @@ export function displayGroupOf(i: InstantRecord): string | null {
   return null
 }
 
-// --- Setting the thresholds from where you are --------------------------------------------
+// --- The ladder as a scale (the strips) -----------------------------------------------------
 
-/** The ladder position of `visibleMs` (0 = an hour, 5 = a month, 7 = a year, 8 = 10 years; fractional between stops, log scale). */
+/** The ladder position of `visibleMs` (0 = an hour, 5 = a month, 7 = a year; fractional between stops, log scale). */
 export function zoomPosition(visibleMs: number): number {
-  const last = ZOOM_STOPS.length - 2 // the last finite stop
   if (visibleMs <= ZOOM_STOPS[0].ms) return 0
-  for (let k = 0; k < last; k++) {
+  for (let k = 0; k < LAST_FINITE; k++) {
     const a = ZOOM_STOPS[k].ms
     const b = ZOOM_STOPS[k + 1].ms
     if (visibleMs <= b) return k + Math.log(visibleMs / a) / Math.log(b / a)
   }
-  return last
+  return Number.isFinite(visibleMs) ? LAST_FINITE : LAST_FINITE + 1
 }
 
-/** Chips at this zoom: `full` reaches at least here (and `mini` with it). */
-export function showChipsHere(d: GroupDisplay, visibleMs: number): GroupDisplay {
-  const full = at(Math.ceil(zoomPosition(visibleMs) - 1e-9))
-  return { full, mini: index(d.mini) < index(full) ? full : d.mini }
+/** A threshold's position on the ladder (∞ at the end). */
+export const valuePosition = (v: ZoomValue) => (v === 'always' ? LAST_FINITE + 1 : zoomPosition(msOf(v)))
+
+/**
+ * The threshold at a ladder position: the nearest stop when snapping, else the time on screen
+ * there (between stops, on the log scale); past half the last gap, ∞.
+ */
+export function valueAtPosition(p: number, snap: boolean): ZoomValue {
+  const q = Math.max(0, Math.min(LAST_FINITE + 1, p))
+  if (snap || q > LAST_FINITE + 0.5) return at(Math.round(q))
+  if (q >= LAST_FINITE) return ZOOM_STOPS[LAST_FINITE].ms
+  const k = Math.floor(q)
+  const a = ZOOM_STOPS[k].ms
+  const b = ZOOM_STOPS[k + 1].ms
+  return Math.round(a * Math.pow(b / a, q - k))
 }
 
-/** Gathered at this zoom: chips only closer in, hidden only further out. */
-export function gatherHere(d: GroupDisplay, visibleMs: number): GroupDisplay {
-  const p = zoomPosition(visibleMs)
-  const below = Math.ceil(p - 1e-9) - 1 // the last stop closer than here
-  const full = below < 0 ? 'hour' : index(d.full) > below ? at(below) : d.full
-  const mini = index(d.mini) < Math.ceil(p - 1e-9) ? at(Math.ceil(p - 1e-9)) : d.mini
-  return { full, mini }
+/** Moves one threshold, keeping label ≤ mark (the other one gives way). */
+export function setThreshold(v: Visibility, which: 'label' | 'mark', to: ZoomValue): Visibility {
+  if (which === 'label') return { label: to, mark: msOf(v.mark) < msOf(to) ? to : v.mark }
+  return { label: msOf(v.label) > msOf(to) ? to : v.label, mark: to }
 }
 
-/** Hidden at this zoom and further out. */
-export function hideHere(d: GroupDisplay, visibleMs: number): GroupDisplay {
-  const below = Math.max(0, Math.ceil(zoomPosition(visibleMs) - 1e-9) - 1)
-  const mini = index(d.mini) > below ? at(below) : d.mini
-  return { full: index(d.full) > index(mini) ? mini : d.full, mini }
+/** "a day", "3 days", or a free value's length ("5d 3h"); a free value right on a stop reads as the stop. */
+export function valueWords(v: ZoomValue): string {
+  if (typeof v !== 'number') return ZOOM_STOPS[index(v)].words
+  return ZOOM_STOPS.find(z => z.ms === v)?.words ?? formatDurationShort(v)
 }
 
-/** Moves one threshold to a stop, keeping full ≤ mini (the other one gives way). */
-export function setThreshold(d: GroupDisplay, which: 'full' | 'mini', stop: ZoomStop): GroupDisplay {
-  if (which === 'full') return { full: stop, mini: index(d.mini) < index(stop) ? stop : d.mini }
-  return { full: index(d.full) > index(stop) ? stop : d.full, mini: stop }
-}
-
-export const stopIndex = index
-
-/** "Chips up to a day, gathered beyond, never hidden." */
-export function describeDisplay(d: GroupDisplay): string {
-  const f = ZOOM_STOPS[index(d.full)]
-  const m = ZOOM_STOPS[index(d.mini)]
-  if (d.full === 'always') return 'Chips at any zoom'
-  if (d.full === d.mini) return `Chips up to ${f.words}, hidden beyond`
-  return `Chips up to ${f.words}, gathered ${d.mini === 'always' ? 'beyond, never hidden' : `up to ${m.words}, hidden beyond`}`
+/** "Label up to a day, Mark up to a week, Hidden beyond" (the same words for instants and groups). */
+export function describeVisibility(v: Visibility): string {
+  if (v.label === 'always') return 'Label at any zoom'
+  if (msOf(v.label) >= msOf(v.mark)) return `Label up to ${valueWords(v.label)}, Hidden beyond`
+  return `Label up to ${valueWords(v.label)}, ${v.mark === 'always' ? 'Mark beyond, never Hidden' : `Mark up to ${valueWords(v.mark)}, Hidden beyond`}`
 }
 
 const STOPS: readonly string[] = ZOOM_STOPS.map(z => z.stop)
+const isValue = (v: unknown): v is ZoomValue =>
+  (typeof v === 'string' && STOPS.includes(v)) || (typeof v === 'number' && Number.isFinite(v) && v > 0)
 
-/** The display settings in untrusted JSON, junk dropped. */
-export function sanitizeGroupDisplay(raw: unknown): Record<string, GroupDisplay> {
+/** One visibility from untrusted JSON (label past mark is pulled back to it), or null. Reads the old { full, mini } too. */
+export function sanitizeVisibility(raw: unknown): Visibility | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const label = r.label ?? r.full
+  const mark = r.mark ?? r.mini
+  if (!isValue(label) || !isValue(mark)) return null
+  return msOf(label) <= msOf(mark) ? { label, mark } : { label: mark, mark }
+}
+
+/** The groups' visibility settings in untrusted JSON, junk dropped. */
+export function sanitizeGroupVisibility(raw: unknown): Record<string, Visibility> {
   if (!raw || typeof raw !== 'object') return {}
-  const out: Record<string, GroupDisplay> = {}
+  const out: Record<string, Visibility> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (!v || typeof v !== 'object') continue
-    const { full, mini } = v as Record<string, unknown>
-    if (typeof full !== 'string' || typeof mini !== 'string' || !STOPS.includes(full) || !STOPS.includes(mini)) continue
-    out[k] = index(full as ZoomStop) <= index(mini as ZoomStop) ? { full: full as ZoomStop, mini: mini as ZoomStop } : { full: mini as ZoomStop, mini: mini as ZoomStop }
+    const d = sanitizeVisibility(v)
+    if (d) out[k] = d
   }
   return out
 }

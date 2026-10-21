@@ -34,9 +34,27 @@ export function formatRelativeShort(deltaMs: number): string {
   return deltaMs < 0 ? `${text} ago` : `in ${text}`
 }
 
-/** A length in its two largest units, floored: "45s", "26m", "1h 5m", "2d 3h". For tight spots like live-lane chips. */
+/** Average month and year, for lengths (a length has no calendar: "6mo" is about 182 days). */
+const MONTH_MS = 30.4375 * DAY
+const YEAR_MS = 365.25 * DAY
+
+/**
+ * A length in its two largest units, floored: "45s", "26m", "1h 5m", "2d 3h"; from 60 days months
+ * ("6mo 12d") and from a year years ("1y 2mo", "12y"). For tight spots like live-lane chips.
+ */
 export function formatDurationShort(ms: number): string {
   const abs = Math.abs(ms)
+  if (abs >= 10 * YEAR_MS) return `${Math.floor(abs / YEAR_MS)}y`
+  if (abs >= YEAR_MS) {
+    const y = Math.floor(abs / YEAR_MS)
+    const mo = Math.floor((abs - y * YEAR_MS) / MONTH_MS)
+    return mo ? `${y}y ${mo}mo` : `${y}y`
+  }
+  if (abs >= 60 * DAY) {
+    const mo = Math.floor(abs / MONTH_MS)
+    const d = Math.floor((abs - mo * MONTH_MS) / DAY)
+    return d ? `${mo}mo ${d}d` : `${mo}mo`
+  }
   if (abs < MINUTE) return `${Math.floor(abs / SECOND)}s`
   if (abs < HOUR) return `${Math.floor(abs / MINUTE)}m`
   if (abs < DAY) {
@@ -69,13 +87,16 @@ export function formatDurationHMS(ms: number): string {
   return `00:${pad2(seconds)}`
 }
 
+/** "+01:05:30", "-2 days, 03:00:00"; from 2 days the short form ("+45d 3h", "-6mo 12d"): seconds stop mattering. */
 export function formatSignedDuration(ms: number): string {
-  return `${ms >= 0 ? '+' : '-'}${formatDurationHMS(Math.abs(ms))}`
+  const abs = Math.abs(ms)
+  return `${ms >= 0 ? '+' : '-'}${abs >= 2 * DAY ? formatDurationShort(abs) : formatDurationHMS(abs)}`
 }
 
-/** Coarser duration used in lists: never shows milliseconds. */
+/** Coarser duration used in lists: never shows milliseconds; from 60 days months and years ("6mo 12d"). */
 export function formatDurationCoarse(ms: number): string {
   const abs = Math.abs(ms)
+  if (abs >= 60 * DAY) return formatDurationShort(abs)
   const days = Math.floor(abs / DAY)
   const rest = abs - days * DAY
   const hours = Math.floor(rest / HOUR)
@@ -99,6 +120,33 @@ const shortDateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', mont
 export const formatShortDate = (ts: number) => shortDateFmt.format(ts)
 
 const yearFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric' })
+const monthDayFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+
+/** Half a year or more on screen: dates say their year even this year. */
+export const YEAR_ZOOM_MS = 180 * DAY
+
+/** "Sat, Oct 24", with the year when it isn't `now`'s or `withYear` ("Sat, Apr 3, 2027"). */
+export function formatDayLabel(ts: number, now: number, withYear = false): string {
+  const other = new Date(ts).getFullYear() !== new Date(now).getFullYear()
+  return formatShortDate(ts) + (other || withYear ? `, ${yearFmt.format(ts)}` : '')
+}
+
+/** "Oct 24", with the year when it isn't `now`'s or `withYear` ("Oct 24, 2027"). */
+export function formatMonthDay(ts: number, now: number, withYear = false): string {
+  const other = new Date(ts).getFullYear() !== new Date(now).getFullYear()
+  return monthDayFmt.format(ts) + (other || withYear ? `, ${yearFmt.format(ts)}` : '')
+}
+
+/**
+ * How a chip states its time at a zoom (`visibleMs` on screen): the time ("7:20a"); with the date
+ * from 2 days on screen ("Oct 24 7:20a"); only the date from 2 months ("Oct 24"); the year when it
+ * isn't this year's or from half a year on screen ("Oct 24, 2027").
+ */
+export function formatChipTime(ts: number, now: number, visibleMs: number, withSeconds: boolean): string {
+  if (visibleMs < 2 * DAY) return formatClockCompact(ts, withSeconds)
+  const date = formatMonthDay(ts, now, visibleMs >= YEAR_ZOOM_MS)
+  return visibleMs >= 60 * DAY ? date : `${date} ${formatClockCompact(ts, withSeconds)}`
+}
 
 /** Calendar days covered by [start, end], e.g. "Thu, Oct 2" or "Thu, Oct 2 – Sat, Oct 4". */
 export function formatDateRange(start: number, end: number, now: number): string {

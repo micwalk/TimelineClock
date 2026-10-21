@@ -6,8 +6,8 @@ export const HOUR = 60 * MINUTE
 export const DAY = 24 * HOUR
 
 export const MIN_TIME_WIDTH_MS = SECOND
-/** Zoomed right out: 50 years on screen (a retirement countdown, #10). */
-export const MAX_TIME_WIDTH_MS = 50 * 365 * DAY
+/** Zoomed right out: 150 years on screen (a lifetime, birth to life expectancy, as a span). */
+export const MAX_TIME_WIDTH_MS = 150 * 365 * DAY
 export const DEFAULT_TIME_WIDTH_MS = 6 * HOUR
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -24,6 +24,7 @@ export type TimeIncrement =
   | '1s' | '5s' | '30s'
   | '1m' | '5m' | '15m' | '30m'
   | '1h' | '2h' | '6h' | '24h'
+  | '1w' | '1mo' | '1y'
 
 export interface TimeIncrementOption {
   value: TimeIncrement
@@ -43,6 +44,10 @@ export const TIME_INCREMENT_OPTIONS: TimeIncrementOption[] = [
   { value: '2h', label: '2 hours', milliseconds: 2 * HOUR },
   { value: '6h', label: '6 hours', milliseconds: 6 * HOUR },
   { value: '24h', label: '24 hours', milliseconds: DAY },
+  { value: '1w', label: '1 week', milliseconds: 7 * DAY },
+  // Months and years step by the calendar (store/actions moveCursorByIncrement); this is about how long.
+  { value: '1mo', label: '1 month', milliseconds: 30 * DAY },
+  { value: '1y', label: '1 year', milliseconds: 365 * DAY },
 ]
 
 export function incrementOption(value: TimeIncrement): TimeIncrementOption {

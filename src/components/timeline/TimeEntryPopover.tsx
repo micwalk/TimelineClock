@@ -1,13 +1,14 @@
 // Time entry popovers: one hh:mm:ss box you type digits into (filling from the right; a clock
 // time starts with the hour; see domain/timeDigits), as a clock time, an offset, or either
-// with a switch between them.
+// with a switch between them. A clock time has a date too (the phone's own date picker), and an
+// offset or a length a days box, so either reaches months or years away.
 // Rendered inside the tag or chip it edits, so it moves with the timeline.
 import { useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import type { DigitMode, TimeParts } from '../../domain/timeDigits.ts'
 import { cleanDigits, clockFromParts, digitDisplay, digitsToParts, msToParts, partsDisplay, partsToMs } from '../../domain/timeDigits.ts'
-import { formatDurationForInput } from '../../domain/format.ts'
+import { DAY } from '../../domain/time.ts'
 
 const UNITS = ['h', 'm', 's'] as const
 
@@ -85,10 +86,21 @@ function clockParts(ts: number): { parts: TimeParts; pm: boolean } {
 
 type Mode = 'clock' | 'offset'
 
+/** "YYYY-MM-DD" (local) for a date input. */
+const dateValue = (ts: number) => {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+/** Local noon of a date input's day (null when empty or malformed). */
+const dayOf = (value: string): number | null => {
+  const m = /^(\d{4,})-(\d{2})-(\d{2})$/.exec(value)
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12).getTime() : null
+}
+
 export interface TimeEntryProps {
   title: string
-  /** A wall-clock time; `onSubmit` gets 24-hour parts. */
-  clock?: { initialTs: number; onSubmit: (t: TimeParts) => void }
+  /** A wall-clock time on a day; `onSubmit` gets 24-hour parts and any time on the chosen day. */
+  clock?: { initialTs: number; onSubmit: (t: TimeParts, dayTs: number) => void }
   /** A signed offset from `from` ("Now", an instant's name); `unsigned`: a length, with no before/after switch. */
   offset?: { initialMs: number; from: string; unsigned?: boolean; onSubmit: (ms: number) => void }
   initialMode?: Mode
@@ -105,18 +117,25 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
   const startClock = clock ? clockParts(clock.initialTs) : null
   const [pm, setPm] = useState(startClock?.pm ?? false)
   const [negative, setNegative] = useState((offset?.initialMs ?? 0) < 0)
+  const [date, setDate] = useState(() => dateValue(clock?.initialTs ?? Date.now()))
+  // An offset's whole days, in their own box; the hh:mm:ss box takes the rest.
+  const startAbs = Math.abs(offset?.initialMs ?? 0)
+  const [days, setDays] = useState(String(Math.floor(startAbs / DAY)))
   usePopoverDismiss(ref, onCancel)
 
-  const initial = mode === 'clock' && startClock ? startClock.parts : msToParts(offset?.initialMs ?? 0)
+  const initial = mode === 'clock' && startClock ? startClock.parts : msToParts(startAbs % DAY)
   const switchTo = (m: Mode) => { setMode(m); setDigits(''); setInvalid(false) }
   const submit = () => {
     const parts = digits ? digitsToParts(digits, mode === 'clock' ? 'clock' : 'duration') : initial
     if (mode === 'clock' && clock) {
       const t = clockFromParts(parts, pm)
-      if (!t) { setInvalid(true); return }
-      clock.onSubmit(t)
+      const day = dayOf(date)
+      if (!t || day === null) { setInvalid(true); return }
+      clock.onSubmit(t, day)
     } else if (offset) {
-      offset.onSubmit((negative ? -1 : 1) * partsToMs(parts))
+      const d = days.trim() === '' ? 0 : Number(days)
+      if (!Number.isInteger(d) || d < 0) { setInvalid(true); return }
+      offset.onSubmit((negative ? -1 : 1) * (d * DAY + partsToMs(parts)))
     }
   }
 
@@ -135,6 +154,14 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
             {negative ? '−' : '+'}
           </button>
         )}
+        {mode === 'offset' && (
+          <label className="time-entry__days glow-box">
+            <input inputMode="numeric" autoComplete="off" aria-label="Days" value={days}
+              onChange={e => { setDays(e.target.value.replace(/\D/g, '').slice(0, 6)); setInvalid(false) }}
+              onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); submit() } else if (e.key === 'Escape') { e.preventDefault(); onCancel() } }} />
+            <span className="time-digits__unit">d</span>
+          </label>
+        )}
         <DigitField
           key={mode}
           digits={digits}
@@ -152,6 +179,13 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
           </button>
         )}
       </div>
+      {mode === 'clock' && clock && (
+        <label className="time-entry__date">
+          <span>Date</span>
+          <input type="date" value={date} onChange={e => { setDate(e.target.value); setInvalid(false) }}
+            onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); submit() } else if (e.key === 'Escape') { e.preventDefault(); onCancel() } }} />
+        </label>
+      )}
       <p className="time-entry__hint">
         {mode === 'clock' ? '9 → 9:00 · 930 → 9:30 · 1730 → 5:30 PM · 6 digits add seconds' : '13 → 13 min · 130 → 1h 30m · 6 digits add seconds'}
       </p>
@@ -163,30 +197,27 @@ export function TimeEntry({ title, clock, offset, initialMode, onCancel, classNa
   )
 }
 
-/** The longest offset the hh:mm:ss text form takes ("90" minutes typed as hours carries past 99h otherwise). */
-const MAX_OFFSET_MS = partsToMs({ h: 99, m: 59, s: 59 })
-
-/** Signed duration editor. `initialMs` seeds the field; onSubmit gets "[-]hh:mm:ss". */
+/** Signed offset editor (days and hh:mm:ss). `initialMs` seeds the fields; onSubmit gets ms. */
 export function DurationPopover({ initialMs, onSubmit, onCancel, title, from = 'Now' }: {
   initialMs: number
-  onSubmit: (text: string) => void
+  onSubmit: (ms: number) => void
   onCancel: () => void
   title: string
   from?: string
 }) {
-  return <TimeEntry title={title} offset={{ initialMs, from, onSubmit: ms => onSubmit(formatDurationForInput(Math.sign(ms) * Math.min(Math.abs(ms), MAX_OFFSET_MS))) }} onCancel={onCancel} />
+  return <TimeEntry title={title} offset={{ initialMs, from, onSubmit }} onCancel={onCancel} />
 }
 
-/** Wall-clock editor; onSubmit gets 12-hour parts. */
+/** Wall-clock editor with a date; onSubmit gets 12-hour parts and any time on the chosen day. */
 export function ClockPopover({ initialTs, onSubmit, onCancel }: {
   initialTs: number
-  onSubmit: (hour12: number, minutes: number, seconds: number, pm: boolean) => void
+  onSubmit: (hour12: number, minutes: number, seconds: number, pm: boolean, dayTs: number) => void
   onCancel: () => void
 }) {
   return (
     <TimeEntry
       title="Set cursor time"
-      clock={{ initialTs, onSubmit: t => onSubmit(t.h % 12 === 0 ? 12 : t.h % 12, t.m, t.s, t.h >= 12) }}
+      clock={{ initialTs, onSubmit: (t, day) => onSubmit(t.h % 12 === 0 ? 12 : t.h % 12, t.m, t.s, t.h >= 12, day) }}
       onCancel={onCancel}
     />
   )

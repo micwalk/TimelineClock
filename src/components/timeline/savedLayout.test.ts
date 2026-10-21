@@ -79,53 +79,64 @@ describe('createSavedLayoutCache', () => {
   })
   const inputs = (instants: InstantRecord[], extra: Partial<SavedLayoutInputs> = {}): SavedLayoutInputs => ({
     orientation: 'horizontal', dir: 1, instants, mode: 'cursor', focusedInstantId: null, selected: null, secondary: null,
-    editing: null, moving: null, ringing: [], selectedBell: null, draggingBell: null, widths: {}, tunables: {}, groupDisplay: {}, laneCount: 0, ...extra,
+    editing: null, moving: null, ringing: [], selectedBell: null, draggingBell: null, widths: {}, tunables: {}, groupVisibility: {}, laneCount: 0, ...extra,
   })
   const crowd = (n: number) => Array.from({ length: n }, (_, k) => inst(`c${k}`, 1000 + k))
 
   beforeEach(() => { useSettings.setState({ tunables: {} }) })
 
-  it('computed sunrises and sunsets gather together into one sun summary in their gathered zoom; a tapped (stored) one keeps its chip', () => {
-    const compute = createSavedLayoutCache()
-    const sun = { event: 'sunset' as const, lat: 0, lon: 0 }
-    const virtuals = Array.from({ length: 6 }, (_, k) => ({ ...inst(`sun:sunset@${k * 5000}`, k * 5000 - 15000), sun, virtual: true as const }))
-    const stored = { ...inst('kept', 2500), sun }
-    // Two hours on screen, past the sun's "chips up to an hour".
-    const px = 800 / (2 * 3600_000)
-    const twoHours: FrameLike = { now: 0, pxPerMs: px, mainSize: 800, crossSize: 900, start: -3600_000, end: 3600_000, pos: ts => ts * px + 400 }
-    const r = compute(twoHours, inputs([...virtuals, stored], { groupDisplay: { sun: { full: 'hour', mini: 'always' } } }))
-    expect(Object.values(r.rhythm)).toEqual(Array(6).fill('sun'))
-    expect(r.rhythm.kept).toBeUndefined()
-    expect(r.seriesChips.map(c => c.seriesId)).toEqual(['sun'])
-  })
-
-  it('display groups by zoom: unnamed gather past a day even when they do not crowd; the sun is gone past a week; a selected one stays', () => {
+  it('one rule for every instant: Label, Mark, Hidden by zoom (groups, reach, or its own visibility)', () => {
     const DAYMS = 24 * 3600_000
-    // Two days on an 800px screen: unnamed instants half a day apart don't crowd, but their zoom gathers them.
-    const wide = (days: number): FrameLike => {
+    const at = (days: number): FrameLike => {
       const px = 800 / (days * DAYMS)
       return { now: 0, pxPerMs: px, mainSize: 800, crossSize: 900, start: -days * DAYMS / 2, end: days * DAYMS / 2, pos: ts => ts * px + 400 }
     }
-    const unnamed = [inst('u1', -DAYMS / 2, {}), inst('u2', 0), inst('u3', DAYMS / 2)].map(i => ({ ...i, label: '' }))
-    const named = inst('Rice', 1000)
-    let r = createSavedLayoutCache()(wide(2), inputs([...unnamed, named]))
-    expect(Object.keys(r.rhythm).sort()).toEqual(['u1', 'u2', 'u3'])
-    expect(r.seriesChips.map(c => c.seriesId)).toEqual(['unnamed'])
-    expect(r.visibleIds).toContain('Rice')
-    // Within a day they are chips.
-    r = createSavedLayoutCache()(wide(0.5), inputs([...unnamed, named]))
-    expect(r.rhythm).toEqual({})
-    // The sun past a week: gone, unless selected.
+    const keys = (m: Record<string, true>) => Object.keys(m).sort()
+    // Unnamed (a group): Label up to a day, Mark up to 10 years, however far apart they are.
+    const unnamed = [inst('u1', -DAYMS / 2), inst('u2', 0), inst('u3', DAYMS / 2)].map(i => ({ ...i, label: '' }))
+    expect(createSavedLayoutCache()(at(0.5), inputs(unnamed)).marks).toEqual({})
+    let r = createSavedLayoutCache()(at(2), inputs(unnamed))
+    expect(keys(r.marks)).toEqual(['u1', 'u2', 'u3'])
+    expect(r.markFade).toEqual({}) // far from Hidden: no fade
+    // Computed sun times (a group): Mark past 3 days, fading toward a week, Hidden past it, unless selected.
     const sun = { event: 'sunset' as const, lat: 0, lon: 0 }
     const suns = [0, 1, 2].map(k => ({ ...inst(`sun:sunset@${k}`, k * DAYMS), sun, virtual: true as const }))
-    r = createSavedLayoutCache()(wide(10), inputs(suns))
-    expect(r.visibleIds).toEqual([])
-    r = createSavedLayoutCache()(wide(10), inputs(suns, { selected: 'sun:sunset@1' }))
+    r = createSavedLayoutCache()(at(6), inputs(suns))
+    expect(keys(r.marks)).toEqual(['sun:sunset@0', 'sun:sunset@1', 'sun:sunset@2'])
+    expect(r.markFade['sun:sunset@0']).toBeGreaterThan(0)
+    expect(r.markFade['sun:sunset@0']).toBeLessThan(1)
+    expect(createSavedLayoutCache()(at(10), inputs(suns)).visibleIds).toEqual([])
+    r = createSavedLayoutCache()(at(10), inputs(suns, { selected: 'sun:sunset@1' }))
     expect(r.visibleIds).toEqual(['sun:sunset@1'])
-    // Fading out as the week nears.
-    r = createSavedLayoutCache()(wide(6), inputs(suns))
-    expect(r.groupFade.sun).toBeGreaterThan(0)
-    expect(r.groupFade.sun).toBeLessThan(1)
+    expect(r.marks).toEqual({}) // selected: its label
+    // By reach: made at its time, 3 days; made 3 days ahead, 12 days; a Mark out to at least 10 years.
+    const meeting = { ...inst('Meeting', 0), createdAt: 0 }
+    const trip = { ...inst('Trip', 0), createdAt: -3 * DAYMS }
+    expect(createSavedLayoutCache()(at(2), inputs([meeting, trip])).marks).toEqual({})
+    expect(createSavedLayoutCache()(at(6), inputs([meeting, trip])).marks).toEqual({ Meeting: true })
+    r = createSavedLayoutCache()(at(40), inputs([meeting, trip]))
+    expect(r.marks).toEqual({ Meeting: true, Trip: true })
+    expect(createSavedLayoutCache()(at(11 * 365), inputs([meeting, trip])).visibleIds).toEqual([]) // past 10 years: Hidden
+    // A countdown: 70 days away, a favorite reaches 560 days.
+    const xmas = { ...inst('Xmas', 70 * DAYMS), favorite: true }
+    r = createSavedLayoutCache()(at(400), inputs([xmas]))
+    expect(r.visibleIds).toEqual(['Xmas'])
+    expect(r.marks).toEqual({})
+    // A long span: its ends reach 8x its length.
+    const born = inst('Born', -40 * 365 * DAYMS)
+    const end = inst('Expected', 40 * 365 * DAYMS)
+    const life = { id: 's1', startInstantId: 'Born', endInstantId: 'Expected', label: '', visible: true }
+    r = createSavedLayoutCache()(at(100 * 365), inputs([born, end], { spans: [life] }))
+    expect(r.visibleIds).toEqual(['Born', 'Expected'])
+    expect(r.marks).toEqual({})
+    // Its own visibility wins, over Unnamed's too; a repeat's occurrence is always its series'.
+    const day3 = { ...inst('Wake', 0), seriesId: 'g1', occurrence: '2026-10-20' }
+    r = createSavedLayoutCache()(at(40), inputs([{ ...meeting, visibility: { label: 'always', mark: 'always' } }, { ...unnamed[0], visibility: { label: 'week', mark: 'always' } }, { ...day3, visibility: { label: 'always', mark: 'always' } }]))
+    expect(r.visibleIds.sort()).toEqual(['Meeting', 'Wake', 'u1'])
+    expect(r.marks).toEqual({ u1: true, Wake: true })
+    // A group's own setting: unnamed as labels to a month.
+    r = createSavedLayoutCache()(at(2), inputs(unnamed, { groupVisibility: { unnamed: { label: 'month', mark: 'always' } } }))
+    expect(r.marks).toEqual({})
   })
 
   it('leaves hidden instants out unless selected or ending the selected span', () => {

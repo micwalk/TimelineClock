@@ -116,6 +116,17 @@ export const isAtDstShift = (inst: Pick<InstantRecord, 'id' | 'tsEpochMs'>, time
 /** A time the world sets, not you: a sunrise or sunset, or a clock change. Never moved or deleted (hidden instead). */
 export const isFixedTime = (inst: InstantRecord) => isAtSun(inst) || isAtDstShift(inst)
 
+/** The same wall-clock time and day of the month `months` calendar months from `ts` (Jan 31 + 1 month is the last day of February). */
+export function addCalendarMonths(ts: number, months: number): number {
+  const d = new Date(ts)
+  const day = d.getDate()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + months)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  d.setDate(Math.min(day, last))
+  return d.getTime()
+}
+
 /** The same wall-clock time `days` calendar days from `ts` (a day across a clock change is 23 or 25 hours). */
 export function addCalendarDays(ts: number, days: number): number {
   const d = new Date(ts)
