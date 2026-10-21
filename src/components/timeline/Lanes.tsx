@@ -85,8 +85,9 @@ function PinButton({ a, b }: { a: TimeRef; b: TimeRef }) {
 }
 
 /**
- * A saved span's tools. A favorite's span to Now has the star instead of the eye, as on its
- * instant's chip: unfavoriting stops tracking it (the lane goes, nothing is saved).
+ * A saved span's tools. A favorite's span to Now has the star instead of the eye and the trash, as
+ * on its instant's chip: unfavoriting stops tracking it (the lane goes, nothing is saved); the
+ * chip's ■ stop ends it and keeps it.
  */
 function SavedSpanTools({ spanId, visible, onTypeLength, favoriteOf }: {
   spanId: string
@@ -103,7 +104,7 @@ function SavedSpanTools({ spanId, visible, onTypeLength, favoriteOf }: {
             onClick={() => act.setFavorite(favoriteOf.id, false)} />
         : <IconButton icon={visible ? EyeIcon : EyeSlashIcon} label={visible ? 'Hide span' : 'Show span'} color="var(--ink)" bare
             pressed={visible} onClick={() => act.toggleSpanVisible(spanId)} />}
-      <IconButton icon={TrashIcon} label="Delete span" color="var(--c-danger)" bare onClick={() => act.deleteSpan(spanId)} />
+      {!favoriteOf && <IconButton icon={TrashIcon} label="Delete span" color="var(--c-danger)" bare onClick={() => act.deleteSpan(spanId)} />}
     </>
   )
 }

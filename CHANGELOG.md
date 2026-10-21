@@ -45,6 +45,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - The control bar never wraps a side onto two lines: once its labels don't fit, Zoom and
   Previous/Next go to icons, then the step reads "−30m".
 - The cursor no longer lands on (or glides onto) an instant that isn't drawn at this zoom.
+- A favorite's lane has no trash any more: the star stops tracking it, the ■ stop ends it and
+  keeps it. Deleting a span to Now (from the Agenda) unfavorites its instant, where it used to
+  leave the star on with no lane until the next reload brought the lane back.
 - Removed the toast that slipped into 0.4.4 by mistake (#26).
 
 ## 0.4.3 — 2026-10-17

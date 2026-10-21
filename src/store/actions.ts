@@ -779,7 +779,10 @@ export function renameSpan(id: string, label: string) {
   view.editSpan(null)
 }
 
+/** Deletes a span. A span to Now is its instant's favorite, so deleting one unfavorites the instant. */
 export function deleteSpan(id: string) {
+  const sp = entities.getSpan(id)
+  if (sp?.endIsNow) return setFavorite(sp.startInstantId, false)
   view.forgetSpan(id)
   entities.deleteSpan(id)
 }

@@ -330,6 +330,17 @@ describe('favorites and alarms', () => {
     expect(entities.nowSpanOf(id)).toBeUndefined()
   })
 
+  it('deleting a span to Now unfavorites its instant (no favorite is left without its span)', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Start')
+    act.setFavorite(id, true)
+    const span = entities.nowSpanOf(id)!
+    useView.setState({ selectedSpanId: span.id })
+    act.deleteSpan(span.id)
+    expect(instant(id).favorite).toBe(false)
+    expect(entities.nowSpanOf(id)).toBeUndefined()
+    expect(view().selectedSpanId).toBeNull()
+  })
+
   it('setting an alarm does not favorite the instant', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Wake')
     act.addAlarm(id)
