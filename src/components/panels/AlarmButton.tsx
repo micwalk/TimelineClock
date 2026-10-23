@@ -5,6 +5,7 @@
 //   [Wake Up 7:00a · Weekdays] [6:15a · Once]              ← recent: one tap fills the form in from it
 //   [  7:00         ]  ( AM | PM )                         ← AM/PM only when ambiguous
 //   (Sunrise)(Sunset)                                      ← with a location (Settings › Sky); or type "sunset"
+//   DATE  [ next ▾ ]                                       ← once only: empty = today or tomorrow
 //   Tue 7:00a · in 7h 34m                                  ← where it lands, plainly (TLC-7)
 //   REPEAT   (Once)(Daily)(Weekdays)(Weekends) / M T W T F S S / Every − 2 + days
 //   RINGS    [On time][−5m][−15m][−30m][−1h][other]        ← at the time and/or before it; "20" in
@@ -23,11 +24,11 @@ import { createPortal } from 'react-dom'
 import { BellIcon } from '@heroicons/react/24/solid'
 import { XMarkIcon } from '@heroicons/react/20/solid'
 import type { RecentAlarm } from '../../domain/alarmPicker.ts'
-import { clockText, hour24, isAmbiguous, nextAt, parseAlarmTime, parseSunWord, parseWarning, pickerOffsets, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
+import { clockText, hour24, isAmbiguous, nextAt, onceAt, parseAlarmTime, parseSunWord, parseWarning, pickerOffsets, soonerIsPm, warnText } from '../../domain/alarmPicker.ts'
 import type { Repeat } from '../../domain/series.ts'
 import { clockKey, dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
 import type { GeoPoint, SunEvent } from '../../domain/sun.ts'
-import { SUN_EVENTS, nextSunEvent, sunEventName } from '../../domain/sun.ts'
+import { SUN_EVENTS, nextSunEvent, sunEventName, sunEventOnDay } from '../../domain/sun.ts'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
@@ -40,17 +41,28 @@ import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { CtlButton } from './CtlButton.tsx'
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
+/** Further than a week out, the weekday alone is ambiguous: the date too ("Tue, Mar 9"). */
+const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+const yearFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+const dayText = (ts: number, now: number) =>
+  (ts - now < 6 * 86_400_000 ? dayFmt : new Date(ts).getFullYear() !== new Date(now).getFullYear() ? yearFmt : dateFmt).format(ts)
 
 /**
- * When an alarm at `time` ("HH:MM"), or at sunrise/sunset at `sun.loc`, first rings: the next
- * time today or tomorrow (the next sunset), or the series' next occurrence.
+ * When an alarm at `time` ("HH:MM"), or at sunrise/sunset at `sun.loc`, first rings: once, on
+ * `date` if picked, else the next time today or tomorrow (the next sunset); null if that has
+ * passed. Repeating, the series' next occurrence.
  */
-function firstRing(time: string, repeat: Repeat | null, now: number, sun: { event: SunEvent; loc: GeoPoint } | null = null): number | null {
+function firstRing(time: string, repeat: Repeat | null, now: number, sun: { event: SunEvent; loc: GeoPoint } | null = null, date: string | null = null): number | null {
   const anchor = sun ? { event: sun.event, lat: sun.loc.lat, lon: sun.loc.lon } : undefined
   if (!repeat) {
-    if (anchor) return nextSunEvent(now, anchor, anchor.event)
+    if (anchor) {
+      if (!date) return nextSunEvent(now, anchor, anchor.event)
+      const [y, mo, d] = date.split('-').map(Number)
+      const t = sunEventOnDay(new Date(y, mo - 1, d, 12).getTime(), anchor, anchor.event)
+      return t !== null && t > now ? t : null
+    }
     const [h, m] = time.split(':').map(Number)
-    return nextAt(h, m, now)
+    return onceAt(h, m, now, date)
   }
   return nextOccurrence({ id: '', kind: 'series', label: '', time, repeat, alarms: [], from: dateKey(now), ...(anchor ? { sun: anchor } : {}) }, now)?.ts ?? null
 }
@@ -112,9 +124,11 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const [extras, setExtras] = useState<number[]>([])
   const [other, setOther] = useState('')
   const [label, setLabel] = useState('')
+  /** A one-off alarm's day ("YYYY-MM-DD"); empty = today or tomorrow, whichever comes first. */
+  const [date, setDate] = useState('')
   const seeded = useRef<string | null>(null)
   const close = () => {
-    ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel('')
+    ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel(''); setDate('')
     seeded.current = null
   }
   /** Fills the form in: a series being edited, or a recent alarm. */
@@ -127,6 +141,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     setExtras(a.warnings)
     setOnTime(a.onTime)
     setLabel(a.label)
+    setDate('')
   }
   // Start from what is being edited, else from the defaults (Settings > Alarms), once per opening.
   const seedKey = editing?.id ?? 'new'
@@ -166,11 +181,12 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const sun = sunWord && sunLoc ? { event: sunWord, loc: sunLoc } : null
   const typed = sunWord ? null : parseAlarmTime(text)
   const ambiguous = !!typed && isAmbiguous(typed)
-  const usePm = pm ?? (typed ? soonerIsPm(typed, now) : false)
-  const sunRing = sun ? firstRing('00:00', repeat, now, sun) : null
+  const onDate = !repeat && !editing && date ? date : null
+  const usePm = pm ?? (typed ? soonerIsPm(typed, now, onDate) : false)
+  const sunRing = sun ? firstRing('00:00', repeat, now, sun, onDate) : null
   const time = typed ? clockText(hour24(typed, usePm), typed.m) : sunRing !== null ? clockKey(sunRing) : null
-  const ring = sun ? sunRing : time ? firstRing(time, repeat, now) : null
-  const when = ring !== null ? `${dayFmt.format(ring)} ${formatClockCompact(ring, false)}` : ''
+  const ring = sun ? sunRing : time ? firstRing(time, repeat, now, null, onDate) : null
+  const when = ring !== null ? `${dayText(ring, now)} ${formatClockCompact(ring, false)}` : ''
   const otherMs = parseWarning(other)
   // A length still in "other" counts as picked (Set may be tapped without leaving the box).
   const allWarnings = otherMs !== null && !warnings.includes(otherMs) ? [...warnings, otherMs] : warnings
@@ -245,10 +261,18 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
           ))}
         </div>
       )}
+      {!repeat && !editing && (
+        <label className="alarm-pick__date">
+          <span className="alarm-pick__label">Date</span>
+          <input type="date" aria-label="Date (empty: today or tomorrow)" min={dateKey(now)} value={date} onChange={e => setDate(e.target.value)} />
+          {date && <button type="button" className="alarm-link glow-box" onClick={() => setDate('')}>Next</button>}
+        </label>
+      )}
       <div className={`alarm-pick__lands${ring === null ? ' is-hint' : ''}`} aria-live="polite">
         {ring !== null
           ? `${repeat ? `${describeRepeat(repeat)} · first ` : ''}${when} · ${formatRelativeShort(ring - now)}`
           : sunWord && !sunLoc ? 'Set your location in Settings › Sky for sunrise and sunset'
+          : onDate && (typed || sunWord) ? 'That has passed: pick a later date or time'
           : typed || sunWord ? 'Never, on these days' : 'Type a time: 7, 730, 7:30, 1730 or 7p'}
       </div>
       {/* Editing a series it always repeats (no Once); otherwise Once is null. */}

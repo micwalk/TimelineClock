@@ -20,6 +20,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **Share a group**: Settings › Data › Export lets you tick groups (and untick Settings), and an
   import puts each of the file's groups into a new group, one of yours, or leaves it out. Import
   someone's export again into the same group and their instants update in place.
+- **One-off alarms on any day**: the Alarm picker has a **Date** for Once (empty is today or
+  tomorrow, as before), so an alarm can be months away; where it lands shows the date beyond a
+  week.
 
 ## 0.5.0 — 2026-10-21
 

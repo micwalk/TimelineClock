@@ -69,9 +69,24 @@ export function nextAt(h24: number, m: number, now: number): number {
   return t
 }
 
-/** For an ambiguous time, whether PM comes sooner than AM. */
-export function soonerIsPm(t: AlarmTime, now: number): boolean {
-  return nextAt(hour24(t, true), t.m, now) < nextAt(hour24(t, false), t.m, now)
+/** h:m on a local date ("YYYY-MM-DD"). */
+export function atOnDate(h24: number, m: number, date: string): number {
+  const [y, mo, d] = date.split('-').map(Number)
+  return new Date(y, mo - 1, d, h24, m).getTime()
+}
+
+/** When a one-off alarm rings: h:m on `date` if one is picked, else the next time today or tomorrow; null once that date's time has passed. */
+export function onceAt(h24: number, m: number, now: number, date?: string | null): number | null {
+  if (!date) return nextAt(h24, m, now)
+  const t = atOnDate(h24, m, date)
+  return Number.isFinite(t) && t > now ? t : null
+}
+
+/** For an ambiguous time, whether PM comes sooner than AM (on `date`, if picked: whichever is still ahead, AM first). */
+export function soonerIsPm(t: AlarmTime, now: number, date?: string | null): boolean {
+  const am = onceAt(hour24(t, false), t.m, now, date)
+  const pm = onceAt(hour24(t, true), t.m, now, date)
+  return pm !== null && (am === null || pm < am)
 }
 
 /** "HH:MM" for a 24-hour hour and minute. */

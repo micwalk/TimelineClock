@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_RING_DEFAULTS, parseSunWord, parseWarningList, sanitizeRingDefaults, hour24, isAmbiguous, nextAt, parseAlarmTime, parseWarning, pickerOffsets, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm, warnText } from './alarmPicker.ts'
+import { DEFAULT_RING_DEFAULTS, parseSunWord, parseWarningList, sanitizeRingDefaults, hour24, isAmbiguous, nextAt, onceAt, parseAlarmTime, parseWarning, pickerOffsets, pushRecentAlarm, sanitizeRecentAlarms, soonerIsPm, warnText } from './alarmPicker.ts'
 import { HOUR, MINUTE } from './time.ts'
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime()
@@ -26,6 +26,11 @@ describe('AM or PM', () => {
     // At 10pm, 7 means 7 AM tomorrow; at 9am, 7 PM today.
     expect(soonerIsPm(parseAlarmTime('7')!, at(12, 22))).toBe(false)
     expect(soonerIsPm(parseAlarmTime('7')!, at(12, 9))).toBe(true)
+  })
+  it('on a picked date, whichever of AM and PM is still ahead, AM first', () => {
+    expect(soonerIsPm(parseAlarmTime('7')!, at(12, 9), '2027-03-09')).toBe(false)
+    // Today's date at 9am: 7 AM has passed, 7 PM hasn't.
+    expect(soonerIsPm(parseAlarmTime('7')!, at(12, 9), '2026-10-12')).toBe(true)
   })
   it('turns into a 24-hour hour', () => {
     expect(hour24(parseAlarmTime('7')!, true)).toBe(19)
@@ -104,5 +109,14 @@ describe('parseSunWord', () => {
     const r = { time: '18:30', repeat: null, warnings: [30 * 60_000], label: '', sun: 'sunset' as const }
     expect(sanitizeRecentAlarms([r])).toEqual([r])
     expect(pushRecentAlarm([r], { ...r, sun: undefined })).toHaveLength(2)
+  })
+})
+
+describe('onceAt', () => {
+  it('no date: the next time today or tomorrow; a date: that day, or nothing once it has passed', () => {
+    expect(onceAt(7, 0, at(12, 9))).toBe(at(13, 7))
+    expect(onceAt(7, 30, at(12, 9), '2027-03-09')).toBe(new Date(2027, 2, 9, 7, 30).getTime())
+    expect(onceAt(19, 0, at(12, 9), '2026-10-12')).toBe(at(12, 19))
+    expect(onceAt(7, 0, at(12, 9), '2026-10-12')).toBeNull()
   })
 })

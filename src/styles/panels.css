@@ -175,6 +175,17 @@
   white-space: nowrap;
 }
 .alarm-pick__time { display: flex; align-items: stretch; gap: 10px; }
+/* A one-off alarm's day: empty is today or tomorrow; "Next" goes back to that. */
+.alarm-pick__date { display: flex; align-items: center; gap: 10px; }
+.alarm-pick__date input {
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: 600 13px/1.2 var(--font-ui);
+  color-scheme: dark;
+}
 .alarm-pick__input {
   flex: 1;
   min-width: 0;
