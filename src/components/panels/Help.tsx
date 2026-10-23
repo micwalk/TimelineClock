@@ -106,6 +106,8 @@ function HelpContent() {
             <dd>The list of every instant, your favorites, your saved spans, your alarms, and your groups. Tap a row to go there.</dd>
             <dt>Label, Mark, Hidden</dt>
             <dd>As you zoom out, an instant goes from its <b>Label</b> (its chip) to a <b>Mark</b> (a short line on the axis), then <b>Hidden</b>; zooming back in brings it back. How far out depends on it: something set days ahead, a favorite counting down or the end of a long span stays longer. Tap a Mark to select it (its Label comes back). Its eye opens <b>Visibility</b> to set it yourself (drag “Label up to” and “Mark up to”; Auto goes back), or Hide everywhere; on a repeat or a sunrise it sets the whole series. Each repeat, and sunrise and sunset, has one setting for all of its days in the <b>Groups</b> tab (the sliders button on a row). Unnamed instants keep their Label out to a day (Settings › Advanced).</dd>
+            <dt>Groups</dt>
+            <dd>Every instant is in one group: <b>Default</b> until you pick another from the Group box at the top of its Visibility (or make a <b>New group…</b> there). A repeat's group is its whole series'. In the <b>Groups</b> tab, a group's switch hides or shows everything in it (an alarm still to ring always shows); rename it with the pencil, or delete it, moving what's in it to Default or deleting that too (a second tap confirms). Settings › Data exports only the groups you tick (untick Settings to share them), and an import puts each of the file's groups into a new group, one of yours, or leaves it out.</dd>
           </dl>
         </section>
 

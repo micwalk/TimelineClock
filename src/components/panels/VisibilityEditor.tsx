@@ -2,7 +2,8 @@
 // what it gets by itself (its group's, or its reach: domain/reach), and Hide everywhere. The same
 // box opens from the eye on its chip and on its Agenda row. A recurring thing (a repeat's
 // occurrence, a computed sunrise or sunset) always sets its whole series: one day of a repeat
-// never shows differently from the rest.
+// never shows differently from the rest. At the top, the group it is in (domain/collections; a
+// repeat's sets its series'); a computed one (the sun) is in none.
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { Visibility } from '../../domain/displayGroups.ts'
 import { SUN_GROUP, defaultVisibility, describeVisibility, groupVisibility, recurringGroupOf } from '../../domain/displayGroups.ts'
@@ -14,6 +15,8 @@ import { useEntities } from '../../store/entities.ts'
 import { getTunables, settings, useSettings } from '../../store/settings.ts'
 import * as act from '../../store/actions.ts'
 import { ZoomStrip } from './ZoomStrip.tsx'
+import { GroupSelect } from './GroupSelect.tsx'
+import { collectionOf, seriesGroupLookup } from '../../domain/collections.ts'
 
 /** What a one-off instant gets by itself: its reach (domain/reach). */
 function autoVisibility(inst: InstantRecord): Visibility {
@@ -31,6 +34,11 @@ export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone
   const recurring = recurringGroupOf(inst)
   const seriesName = useEntities(s => (inst.seriesId ? displayName(s.groups?.find(g => g.id === inst.seriesId)?.label ?? '', 'this repeat') : ''))
   const armed = hasArmedAlarm(inst, act.nowTime())
+  const series = useEntities(s => s.groups)
+  const group = collectionOf(inst, seriesGroupLookup(series ?? []))
+  const groupPick = group !== null && (
+    <GroupSelect value={group} label={inst.seriesId ? `Group (every ${seriesName})` : 'Group'} onChange={id => act.setInstantCollection(inst.id, id)} />
+  )
   const hide = (
     <button type="button" className="alarm-link glow-box" disabled={!inst.hidden && armed}
       title={!inst.hidden && armed ? 'An alarm still to ring is never hidden' : undefined}
@@ -45,6 +53,7 @@ export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone
     const whose = recurring === SUN_GROUP ? 'every sunrise and sunset' : `every ${seriesName}`
     return (
       <div className="visibility-editor">
+        {groupPick}
         <p className="visibility-editor__scope">For {whose}</p>
         <ZoomStrip value={value} onChange={v => settings.setGroupVisibility(recurring, v)}
           note={custom ? undefined : `Auto: ${describeVisibility(defaultVisibility(recurring))}`} />
@@ -58,6 +67,7 @@ export function VisibilityEditor({ inst, onDone }: { inst: InstantRecord; onDone
   const auto = inst.visibility ? null : autoVisibility(inst)
   return (
     <div className="visibility-editor">
+      {groupPick}
       <ZoomStrip value={inst.visibility ?? auto!} onChange={v => act.setInstantVisibility(inst.id, v)}
         note={auto ? `Auto: ${describeVisibility(auto)}` : undefined} />
       <div className="visibility-editor__actions">

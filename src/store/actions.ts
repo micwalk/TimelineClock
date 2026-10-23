@@ -10,7 +10,7 @@ import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
 import { DAY, MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
-import { entities, useEntities } from './entities.ts'
+import { entities, shownInstants, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
@@ -22,6 +22,8 @@ import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
+import type { ImportGroupRow } from '../domain/collections.ts'
+import { DEFAULT_COLLECTION, collectionOf, dataForCollections, mapImport, newCollectionId, sanitizeCollections, seriesGroupLookup } from '../domain/collections.ts'
 import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
@@ -208,7 +210,7 @@ function exactHit(ts: number, withNow: boolean): LandingTarget | null {
   // The layout only knows what is on screen; a typed time or a step off screen goes by `hidden`.
   const drawn = ts >= f.start && ts <= f.end ? drawnAt(f) : null
   const id = findCapture({
-    instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: drawn ? !drawn.has(i.id) : i.hidden })),
+    instants: shownInstants().map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: drawn ? !drawn.has(i.id) : i.hidden })),
     now: withNow ? f.now : undefined, center: ts, pxPerMs: f.pxPerMs,
     radiusPx: Math.min(EXACT_LANDING_PX, EXACT_LANDING_MAX_MS * f.pxPerMs),
   })
@@ -252,7 +254,7 @@ export function moveCursorByIncrement(direction: 1 | -1) {
 function navItems(f: Frame): NavTarget[] {
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
-  for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
+  for (const i of shownInstants()) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
@@ -693,6 +695,61 @@ export function deleteInstant(id: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Your groups (domain/collections): each instant is in one, Default unless moved; switched off,
+// a group's instants leave the timeline and the lists.
+
+/** A new group; returns its id. */
+export function createCollection(label: string): string {
+  const id = newCollectionId()
+  entities.putCollection({ id, label: label.trim() || 'New group' })
+  return id
+}
+
+export function renameCollection(id: string, label: string) {
+  const c = useEntities.getState().collections.find(x => x.id === id)
+  if (c && label.trim()) entities.putCollection({ ...c, label: label.trim() })
+}
+
+/** Switches a group on or off (shows or hides its instants). */
+export function setCollectionShown(id: string, shown: boolean) {
+  const c = useEntities.getState().collections.find(x => x.id === id)
+  if (!c) return
+  const { hidden: _h, ...rest } = c
+  void _h
+  entities.putCollection(shown ? rest : { ...rest, hidden: true })
+}
+
+/**
+ * Deletes a group (never Default). What was in it moves to Default, or, with `withInstants`, is
+ * deleted too: its instants (their spans with them) and its repeating series.
+ */
+export function deleteCollection(id: string, opts: { withInstants?: boolean } = {}) {
+  if (id === DEFAULT_COLLECTION) return
+  if (opts.withInstants) {
+    const { groups } = useEntities.getState()
+    const seriesGroup = seriesGroupLookup(groups ?? [])
+    const doomed = storedInstants(useEntities.getState().instants).filter(i => collectionOf(i, seriesGroup) === id).map(i => i.id)
+    for (const s of groups ?? []) if (s.collectionId === id) entities.removeGroup(s.id)
+    for (const iid of doomed) deleteInstant(iid)
+  }
+  entities.removeCollection(id)
+}
+
+/** Moves an instant to a group; a repeat's occurrence moves its whole series. */
+export function setInstantCollection(id: string, collectionId: string) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  const series = entities.getGroup(inst.seriesId)
+  if (series) {
+    const { collectionId: _c, ...rest } = series
+    void _c
+    entities.putGroup(collectionId === DEFAULT_COLLECTION ? rest : { ...rest, collectionId })
+    return
+  }
+  entities.setInstantCollection(id, collectionId)
+}
+
+// ---------------------------------------------------------------------------
 // Move mode: the instant follows the cursor until confirmed or cancelled.
 
 /** Moves an instant; alarms it already answered whose time is ahead again ring again (domain/alarms rearmAfterMove). */
@@ -1034,7 +1091,7 @@ export function stopRepeating(id: string) {
     if (i.seriesId === series.id && i.occurrence && i.occurrence > date) deleteInstant(i.id)
   }
   if (useEntities.getState().instants.some(i => i.seriesId === series.id && i.id !== id)) return
-  entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined }))
+  entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined, collectionId: series.collectionId }))
   entities.removeGroup(series.id)
   ui.showSeriesHint(null)
 }
@@ -1162,24 +1219,32 @@ export function ringingChoicesFor(key: string): RingingChoices | null {
 // Backup: export and import
 
 /** Everything worth keeping as one backup: the settings and the saved instants and spans. */
-export function exportBackup(date = new Date()): Backup {
+/**
+ * Settings and data in one file. `collections`: only those groups' data (domain/collections
+ * dataForCollections); `settings: false` leaves the settings out (sharing a group).
+ */
+export function exportBackup(date = new Date(), opts: { collections?: ReadonlySet<string>; settings?: boolean } = {}): Backup {
+  const { collections } = opts
   // The migration marker is per device, not a preference.
   const preferences: Partial<SettingsState> = { ...useSettings.getState() }
   delete preferences.layoutVersion
   const { autoDismissMs, unattended } = useAlarms.getState()
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
-  const { spans, groups } = useEntities.getState()
+  const { spans, groups, collections: mine } = useEntities.getState()
   const instants = storedInstants(useEntities.getState().instants)
+  const all = { instants, spans, groups: groups ?? [], collections: mine }
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: date.toISOString(),
-    settings: {
-      preferences,
-      alarms: { autoDismissMs, unattended },
-      view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
-    },
-    data: { instants, spans, groups: groups ?? [] },
+    ...(opts.settings === false ? {} : {
+      settings: {
+        preferences,
+        alarms: { autoDismissMs, unattended },
+        view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
+      },
+    }),
+    data: collections ? dataForCollections(all, collections) : all,
   }
 }
 
@@ -1188,6 +1253,8 @@ export interface ImportChoice {
   data: boolean
   /** Data only: replace everything, or combine with what is here. */
   mode: ImportMode
+  /** Combining: where each of the file's groups goes (domain/collections); absent = as in the file. */
+  groups?: readonly ImportGroupRow[]
 }
 
 /** Applies the chosen parts of a (parsed) backup. */
@@ -1204,9 +1271,14 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
   }
   if (choice.data && backup.data) {
     const before = useEntities.getState()
-    const merged = importedData(before, backup.data, choice.mode)
+    // Combining maps the file's groups as chosen (new, into yours, or left out); replacing takes the file's.
+    const mapped = choice.mode === 'combine' && choice.groups ? mapImport(backup.data, choice.groups) : null
+    const merged = importedData(before, mapped ? mapped.data : backup.data, choice.mode)
     const synced = syncFavorites(merged.instants, merged.spans)
-    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [] }
+    const collections = choice.mode === 'replace'
+      ? sanitizeCollections(backup.data.collections ?? [])
+      : [...before.collections, ...(mapped?.added ?? [])]
+    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [], collections }
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

@@ -19,4 +19,8 @@ export const LABELS = {
   dstEnds: 'DST ends 🕰️⬅',
   /** A clock change where the clocks go forward (daylight saving begins). */
   dstBegins: 'DST begins 🕰️➡',
+  /** The group every instant is in until you move it (domain/collections). */
+  defaultGroup: 'Default',
+  /** An imported file's Default group, or everything in a file from before groups. */
+  importedGroup: 'Imported',
 } as const

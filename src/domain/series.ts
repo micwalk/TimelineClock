@@ -45,6 +45,8 @@ export interface SeriesRecord {
   skips?: string[]
   /** Paused: no new occurrences are made, and those ahead are removed. */
   paused?: boolean
+  /** The group its occurrences are in (domain/collections); absent = Default. */
+  collectionId?: string
 }
 
 export type GroupRecord = SeriesRecord
@@ -325,7 +327,7 @@ export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<Se
 /** A new series that `inst` starts (it becomes the first occurrence; at a sunset, it repeats at each sunset). */
 export function seriesFromInstant(inst: InstantRecord, repeat: Repeat, id = newGroupId()): SeriesRecord {
   const { sun, ...rule } = ruleFromOccurrence(inst)
-  return { id, kind: 'series', ...rule, ...(sun ? { sun } : {}), repeat, from: dateKey(inst.tsEpochMs) }
+  return { id, kind: 'series', ...rule, ...(sun ? { sun } : {}), repeat, from: dateKey(inst.tsEpochMs), ...(inst.collectionId ? { collectionId: inst.collectionId } : {}) }
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +403,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
       ...(skips.length > 0 ? { skips } : {}),
       ...(r.paused === true ? { paused: true } : {}),
       ...(sun ? { sun } : {}),
+      ...(typeof r.collectionId === 'string' && r.collectionId && r.collectionId !== 'default' ? { collectionId: r.collectionId } : {}),
     }]
   })
 }

@@ -1,4 +1,5 @@
-// The instants the timeline draws: the stored ones, plus repeating series' occurrences past the
+// The instants the timeline draws: the stored ones (less those in a group you switched off:
+// domain/collections), plus repeating series' occurrences past the
 // horizon and (once a location is set, until the sun group's zoom hides them) sunrises and sunsets, computed for the
 // days on screen (domain/series virtualOccurrences, domain/sunEvents; shown only, never stored
 // unless tapped). The chips' layout and the chips themselves read the same list. It
@@ -14,6 +15,7 @@ import { DAY } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { SUN_GROUP, groupVisibility, stageAt } from '../../domain/displayGroups.ts'
+import { groupHiddenTest } from '../../domain/collections.ts'
 
 /**
  * Sunrises, sunsets and clock changes are computed only while this much time is on screen at most
@@ -27,6 +29,7 @@ const dayRange = (f: { start: number; end: number }) => `${Math.floor(f.start / 
 export function useTimelineInstants(): InstantRecord[] {
   const instants = useEntities(s => s.instants)
   const groups = useEntities(s => s.groups)
+  const collections = useEntities(s => s.collections)
   const range = useFrameValue(dayRange)
   const loc = useSettings(s => (s.sunEvents.length > 0 ? s.skyLocation : null))
   const sunEvents = useSettings(s => s.sunEvents)
@@ -38,14 +41,16 @@ export function useTimelineInstants(): InstantRecord[] {
   const dstNear = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS)
   const dst = useSettings(s => s.dstShifts)
   return useMemo(() => {
+    const hidden = groupHiddenTest(collections ?? [], groups ?? [], engine.sample().now)
+    const shown = (list: InstantRecord[]) => (hidden ? list.filter(i => !hidden(i)) : list)
     const sun = loc && wide
-    if ((!groups || groups.length === 0) && !sun && !(dst && dstNear)) return instants
+    if ((!groups || groups.length === 0) && !sun && !(dst && dstNear)) return shown(instants)
     const [first, last] = range.split(':').map(Number)
     const occurrences = groups && groups.length > 0 ? virtualOccurrences(groups, instants, engine.sample().now, first * DAY, last * DAY) : []
-    const withOccurrences = occurrences.length > 0 ? [...instants, ...occurrences] : instants
+    const withOccurrences = shown(occurrences.length > 0 ? [...instants, ...occurrences] : instants)
     const suns = sun ? virtualSunEvents(loc, withOccurrences, first * DAY, last * DAY, sunEvents) : []
     // Clock changes (daylight saving): a few a year, always shown while switched on.
     const shifts = dst && dstNear ? virtualDstShifts(withOccurrences, first * DAY, last * DAY) : []
     return suns.length + shifts.length > 0 ? [...withOccurrences, ...suns, ...shifts] : withOccurrences
-  }, [instants, groups, range, loc, wide, sunEvents, dst, dstNear])
+  }, [instants, groups, collections, range, loc, wide, sunEvents, dst, dstNear])
 }

@@ -22,7 +22,7 @@ describe('Repeats tab: sunrise and sunset', () => {
     useEntities.setState({ instants: [], spans: [], groups: [] })
     render(<RepeatsList />)
     expect(screen.getByText(/Set your location in Settings › Sky/)).toBeTruthy()
-    expect(screen.queryByRole('switch')).toBeNull()
+    expect(screen.queryByRole('switch', { name: /sunrise|sunset/i })).toBeNull()
   })
 })
 
