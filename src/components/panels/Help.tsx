@@ -13,6 +13,8 @@ const ANDROID_URL = `${REPO_URL}/blob/main/docs/android.md`
 const KEYS: [string[], string][] = [
   [['+', '='], 'Drop an instant (at Now, or at the cursor)'],
   [['R'], 'Jump back to Now'],
+  [['F'], 'Zoom out until Now shows'],
+  [['G'], 'Go to a time (type it, or an offset from Now)'],
   [['A', 'D', '←', '→', '↑', '↓'], 'Previous / next instant'],
   [['Z', 'X'], 'Step the cursor back / forward'],
   [['I', 'W'], 'Zoom in'],
@@ -120,7 +122,7 @@ function HelpContent() {
             <li>Tap the <b>Now</b> or <b>Cursor</b> tag for more tools: type a time, offset (+13m), save a span. Double-tap the Now tag to go to Now, and again to add an instant there and name it.</li>
             <li>The round <b>＋</b> across the axis from the Cursor tag (or from the Now tag, while following Now) drops an instant there, selected with its tools and its name open: type one, or just tap elsewhere, move on or use a tool to leave it unnamed. Double-tap the Cursor tag (or press <b>+</b>) to drop one without naming it.</li>
             <li>Drag slowly over an instant (or Now) and the cursor catches it: it glides onto its line and shows its time, so you can see where it will land when you let go, and the ＋ tucks into the instant’s chip (over Now, the Cursor tag merges into the Now tag). Other chips step out of the ＋’s way.</li>
-            <li>The big red button drops an instant at Now (＋), or brings you back to <b>NOW</b>.</li>
+            <li><b>NOW</b> brings you back to Now; once you are there, tap it to go to a time (type one, with a date, or an offset From Now). Long-press it to zoom out until Now shows. Under it, <b>＋</b> drops an instant at Now (red) or at the cursor (blue); with the cursor on an instant it shows that instant's name: tap to rename it, long-press to find it in the Agenda.</li>
             <li>The other buttons zoom, step the cursor (the arrow beside a step picks its size, up to a week, a month or a year), and jump to the previous or next instant.</li>
             <li>Zoomed out to days and beyond, the Now and Cursor tags show the date (and the year far out), and chips their dates. <b>Type a time…</b> has a date as well, and offsets take days, so the cursor can go months or years away.</li>
             <li><b>Stopwatch</b> drops an instant and counts up from it; then <b>Lap</b>, <b>Stop</b> and <b>Reset</b>. <b>Timer</b> picks a length and sets an alarm at the end. <b>Alarm</b> (or L) sets one at a time you type (7, 730, 1730, 7p: it shows which day and AM or PM it took), once (on today or tomorrow, or on a <b>Date</b> you pick, months away if you like) or repeating, on time and/or with warnings before it (pick 5m to 1h, or type any length in <i>other</i>); tap a recent one to fill the picker in from it. Settings &gt; Alarms sets which warnings it offers and what a new alarm starts with. They just make instants, spans and series, kept as history.</li>

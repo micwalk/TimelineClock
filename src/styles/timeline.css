@@ -868,7 +868,8 @@
   from { opacity: 0; translate: 0 -4px; }
   to { opacity: 1; translate: 0 0; }
 }
-.time-entry { display: flex; align-items: center; gap: 6px; }
+/* One row of equal-height boxes: the sign, the days, hh:mm:ss (or hh:mm:ss and AM/PM). */
+.time-entry { display: flex; align-items: stretch; justify-content: center; gap: 6px; }
 /* One box for hh:mm:ss: digits fill from the right, untyped places stay dim, units under each pair. */
 .time-digits {
   position: relative;
@@ -908,16 +909,19 @@
 @keyframes caret-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .time-digits__caret { animation: none; } }
 .time-entry__toggle {
+  align-self: center;
   height: 32px;
-  min-width: 38px;
+  min-width: 34px;
   padding: 0 8px;
   border-radius: 7px;
   font: 700 14px/1 var(--font-mono);
   background: var(--surface-raised);
 }
 .time-entry__toggle.is-on { --accent: var(--c-now); color: var(--accent); }
-.time-entry-pop { width: 252px; }
-.time-entry__hint { margin: 6px 0 0; font: 600 11px/1.3 var(--font-ui); color: var(--ink-faint); white-space: normal; }
+/* As wide as its row needs (From … adds the sign and days), never wider than the screen. */
+.time-entry-pop { width: max-content; min-width: 272px; max-width: calc(100vw - 16px); }
+/* The hint wraps to the box's width rather than setting it. */
+.time-entry__hint { width: 0; min-width: 100%; margin: 6px 0 0; font: 600 11px/1.3 var(--font-ui); color: var(--ink-faint); white-space: normal; }
 .time-entry__modes { display: flex; gap: 4px; margin-bottom: 8px; padding: 3px; border-radius: 9px; background: var(--surface); }
 .time-entry__mode { flex: 1; padding: 5px 10px; border-radius: 7px; font: 650 13px/1 var(--font-ui); color: var(--ink-dim); white-space: nowrap; }
 .time-entry__mode.is-on { color: #fff; background: color-mix(in srgb, var(--c-cursor) 40%, transparent); }
@@ -1331,8 +1335,9 @@
 /* Time entry: a clock time's date (the phone's own picker) and an offset's days */
 .time-entry__date { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font: 700 12px/1 var(--font-ui); color: var(--ink-dim); }
 .time-entry__date input { padding: 5px 8px; border-radius: 7px; border: 1px solid rgba(148, 163, 184, 0.35); background: var(--surface-raised); color: var(--ink); font: 600 14px/1 var(--font-mono); color-scheme: dark; }
-.time-entry__days { --accent: var(--c-cursor); display: inline-flex; align-items: baseline; gap: 2px; padding: 4px 8px; border-radius: 8px; background: var(--box-bg); }
-.time-entry__days input { width: 3.5ch; border: none; background: none; color: var(--ink); font: 700 22px/1 var(--font-mono); text-align: right; outline: none; }
+/* The days, boxed like a pair of hh:mm:ss: the number over its unit. */
+.time-entry__days { --accent: var(--c-cursor); display: inline-flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px 6px 3px; border-radius: 9px; background: var(--surface); cursor: text; }
+.time-entry__days input { width: 2.6ch; padding: 0; border: none; background: none; color: var(--ink); font: 700 22px/1 var(--font-mono); text-align: center; outline: none; }
 
 /* An instant's Visibility (its eye): a zoom strip, Auto, Hide everywhere */
 .visibility-menu { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; }

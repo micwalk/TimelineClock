@@ -109,11 +109,24 @@
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.controls__now { display: flex; justify-content: center; }
+.controls__now { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 132px; }
+.controls__now .ctl-btn { width: 100%; height: 44px; justify-content: center; }
+/* NOW sits level with the buttons beside it; ＋ hangs under it. */
+.controls--horizontal > .controls__side { align-self: start; }
+.ctl-clock-wrap { position: relative; display: flex; }
+/* ＋ drops at Now (red, ctl-btn--now) or at the free cursor (blue). */
+.ctl-drop.is-cursor { --accent: var(--c-cursor); --halo: var(--c-cursor); color: var(--c-cursor); }
+/* On an instant: its name, a bell while it has an alarm to ring, and a pencil (rename). */
+.ctl-instant { --accent: var(--c-cursor-on); --halo: var(--c-cursor-on-glow); gap: 5px; padding: 0 8px; color: #fff; }
+.ctl-instant .ctl-btn__text { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
+.ctl-instant__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 700 14px/1.1 var(--font-ui); }
+.ctl-instant__icon { width: 14px; height: 14px; flex: none; color: var(--c-cursor-on); }
+/* Its time box opens above it (the bar is at the bottom of the screen). */
+.ctl-clock-wrap > .popover--below { top: auto; bottom: calc(100% + 8px); z-index: 70; }
 /* The Now line runs on down into the button: a red line from the button's top up past the bar's
    edge (any overlap lands on the Now line itself), brightening as it meets the button. */
-.controls__now.is-following .ctl-btn { position: relative; }
-.controls__now.is-following .ctl-btn::before {
+.controls__now.is-following .ctl-now { position: relative; }
+.controls__now.is-following .ctl-now::before {
   content: '';
   position: absolute;
   left: 50%;
@@ -827,7 +840,7 @@
 }
 
 /* Vertical timeline: the bar stays at the bottom as a two-row grid that follows the screen.
-   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. NOW / ＋ spans both rows in column 4.
+   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. Column 4: NOW over ＋.
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
@@ -842,6 +855,17 @@
 .controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
 .controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
 .controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
+/* Column 4: NOW over ＋, the same size. */
+.controls__now-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.controls__now-col > .ctl-btn, .controls__now-col > .ctl-clock-wrap { flex: 1 1 0; min-height: 0; min-width: 0; }
+.controls__now-col .ctl-btn { width: 100%; height: auto; justify-content: center; padding: 0 4px; }
+.controls__now-col .ctl-btn .ctl-btn__text { display: inline; }
+.controls__now-col .ctl-instant .ctl-btn__text { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 1px 3px; }
+.controls__now-col .ctl-btn--stack { gap: 1px; }
+.controls__now-col .ctl-btn__plus { font-size: 24px; }
+.controls__now-col .ctl-instant { padding: 2px 3px; }
+.controls__now-col .ctl-instant__name { font-size: 11px; flex: 1 0 100%; text-align: center; }
+.controls__now-col .ctl-instant__icon { width: 12px; height: 12px; }
 /* Stopwatch over Timer in column 5: labels without icons; Lap / Stop share the cell, icons over their times. */
 .controls--vertical .ctl-btn--quick .ctl-btn__text { display: inline; font-size: 13px; }
 .controls--vertical .ctl-btn--quick:not(.ctl-btn--stack) .ctl-btn__icon { display: none; }

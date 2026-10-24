@@ -7,6 +7,19 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.6.2 — 2026-10-24
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **NOW over ＋** (#15): two buttons of the same size. **NOW** (with the clock) goes to Now;
+  once you are there, a tap goes to a time instead: type one, with a date, or an offset From Now
+  (or press G). **＋** drops an instant at Now (red) or at the cursor (blue); with the cursor on
+  an instant it shows that instant's name (and a bell if an alarm is to ring): tap to rename it,
+  long-press to find it in the Agenda.
+- **Zoom to Now** (#23): long-press **NOW** (or press F) to zoom out until Now shows, the cursor
+  staying where it is. With the cursor hidden and an instant selected, it fits Now and that
+  instant instead.
+
 ## 0.6.1 — 2026-10-24
 
 **Android app: web only** (nothing to install; it updates itself).
