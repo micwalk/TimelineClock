@@ -1,11 +1,11 @@
-// Controls under the timeline: navigation, the big NOW / ＋ button (long-press NOW: zoom to fit
-// Now, #23) with the clock under it (a button of its own: tap to go to a typed time, #15), and
-// the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
+// Controls under the timeline: navigation; NOW with the clock (long-press: zoom out until Now
+// shows, #23; following Now, a tap types a time to go to, #15) over ＋ (drop at Now or the cursor;
+// on an instant, its name to rename it); and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
 import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
-  ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
+  BellIcon, ChevronDownIcon, ChevronLeftIcon, PencilIcon, ChevronRightIcon, ChevronUpIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
 } from '@heroicons/react/20/solid'
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
@@ -18,6 +18,9 @@ import { formatClockCompact } from '../../domain/format.ts'
 import { useView, view } from '../../store/view.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
+import { useEntities } from '../../store/entities.ts'
+import { endpointName } from '../../domain/spans.ts'
+import { openAlarms } from '../../domain/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
 
@@ -84,50 +87,48 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
   )
 }
 
-/** NOW: a tap goes to Now, a long-press zooms so Now and the selection (or the cursor) fit. */
-function NowButton() {
+/** A tap, or a long-press (also a right-click) that swallows the click after it. */
+function useLongPress(onLong: () => void, onTap: () => void) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressed = useRef(false)
   const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null }
-  return (
-    <CtlButton variant="now" label="Focus Now (R); long-press to zoom to Now (F)"
-      onPointerDown={() => {
-        longPressed.current = false
-        clear()
-        timer.current = setTimeout(() => { longPressed.current = true; act.zoomToNow() }, LONG_PRESS_MS)
-      }}
-      onPointerUp={clear}
-      onPointerLeave={clear}
-      onContextMenu={e => { e.preventDefault(); clear(); act.zoomToNow() }}
-      onClick={() => {
-        if (longPressed.current) { longPressed.current = false; return }
-        act.focusNow()
-      }}>NOW</CtlButton>
-  )
+  return {
+    onPointerDown: () => {
+      longPressed.current = false
+      clear()
+      timer.current = setTimeout(() => { longPressed.current = true; onLong() }, LONG_PRESS_MS)
+    },
+    onPointerUp: clear,
+    onPointerLeave: clear,
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); clear(); onLong() },
+    onClick: () => {
+      if (longPressed.current) { longPressed.current = false; return }
+      onTap()
+    },
+  }
 }
 
-const PlusButton = () => (
-  <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" onClick={() => act.dropInstant()}>
-    <span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span>
-  </CtlButton>
-)
-
 /**
- * The clock under NOW / ＋, a button of its own and the same size: its time box goes to a typed
- * time, or one from Now (G). While following Now (the big button is ＋) it says NOW over the time.
+ * The top button: NOW with the clock under it. A tap goes to Now; already there, it opens the
+ * time box (go to a typed time, or one from Now; also G). A long-press zooms out until Now shows (F).
  */
-function ClockButton({ seconds, following }: { seconds: boolean; following: boolean }) {
+function NowButton({ seconds }: { seconds: boolean }) {
+  const following = useView(s => s.viewFocusMode === 'now')
   const open = useUi(s => s.jumpOpen)
-  // The box closes on the press outside it, before the clock's own click would open it again.
+  // The box closes on the press outside it, before this button's own click would open it again.
   const closedAt = useRef(0)
   const close = () => { closedAt.current = performance.now(); ui.setJump(false) }
+  const press = useLongPress(act.zoomToNow, () => {
+    if (!following) act.focusNow()
+    else if (performance.now() - closedAt.current > 300) ui.setJump(!open)
+  })
   return (
     <div className="ctl-clock-wrap">
-      <button type="button" className="ctl-clock glow-box mono" aria-label="Go to a time (G)" title="Go to a time (G)" aria-expanded={open}
-        onClick={() => { if (performance.now() - closedAt.current > 300) ui.setJump(!open) }}>
-        {following && <span className="ctl-clock__label">NOW</span>}
-        <LiveText compute={f => formatClockCompact(f.now, seconds)} />
-      </button>
+      <CtlButton variant="now" className="ctl-now"
+        label={following ? 'Go to a time (G); long-press to zoom to Now (F)' : 'Focus Now (R); long-press to zoom to Now (F)'}
+        aria-expanded={following ? open : undefined}
+        sub={<LiveText compute={f => formatClockCompact(f.now, seconds)} />}
+        {...press}>NOW</CtlButton>
       {open && (
         <TimeEntry title="Go to a time" className="ctl-jump"
           clock={{ initialTs: act.nowTime(), onSubmit: (t, day) => { act.applyClockInput(t.h % 12 === 0 ? 12 : t.h % 12, t.m, t.s, t.h >= 12, day); close() } }}
@@ -135,6 +136,35 @@ function ClockButton({ seconds, following }: { seconds: boolean; following: bool
           onCancel={close} />
       )}
     </div>
+  )
+}
+
+/**
+ * The bottom button: ＋ drops an instant, at Now (red) or at the free cursor (blue). With the
+ * cursor on an instant it is that instant instead: its name and a pencil (a tap renames it; a
+ * long-press shows it in the Agenda), and a bell while it has an alarm to ring.
+ */
+function ActionButton() {
+  const mode = useView(s => s.viewFocusMode)
+  const focusedId = useView(s => (s.viewFocusMode === 'instant' ? s.focusedInstantId : null))
+  const inst = useEntities(s => (focusedId ? s.instants.find(i => i.id === focusedId) : undefined))
+  const press = useLongPress(() => { if (inst) act.showInAgenda(inst.id) }, () => { if (inst) view.editInstant(inst.id) })
+  if (inst) {
+    const name = endpointName(inst)
+    return (
+      <CtlButton className="ctl-instant" label={`Rename ${name} (long-press: show in the Agenda)`} {...press}>
+        <span className="ctl-instant__name">{name}</span>
+        {openAlarms(inst).length > 0 && <BellIcon className="ctl-instant__icon" aria-hidden />}
+        <PencilIcon className="ctl-instant__icon" aria-hidden />
+      </CtlButton>
+    )
+  }
+  const atCursor = mode === 'cursor'
+  return (
+    <CtlButton variant={atCursor ? undefined : 'now'} className={atCursor ? 'ctl-drop is-cursor' : 'ctl-drop'}
+      label={atCursor ? 'Drop an instant at the cursor' : 'Drop an instant at Now'} title="Drop an instant (+)" onClick={() => act.dropInstant()}>
+      <span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span>
+    </CtlButton>
   )
 }
 
@@ -149,7 +179,7 @@ export function ControlBar() {
 
   if (vertical) {
     // A two-row grid that follows the screen: row 1 is "− ▲ step-up", row 2 is "+ ▼ step-down", column 4 is
-    // NOW / ＋ with the clock under it, then Stopwatch over Timer, and Alarm spanning both rows.
+    // NOW over ＋, then Stopwatch over Timer, and Alarm spanning both rows.
     // "Up the screen" is earlier when the future runs down (dir 1) and later when it runs up (dir -1).
     const up: 1 | -1 = dir === 1 ? -1 : 1
     const down: 1 | -1 = up === 1 ? -1 : 1
@@ -160,7 +190,7 @@ export function ControlBar() {
           onClick={() => act.goToAdjacentInstant(up)}>{up < 0 ? 'Previous' : 'Next'}</CtlButton>
         <IncrementButton direction={up} cell={cell(1, 3)} compact />
         {/* The column is narrow: the time without seconds fits. */}
-        <div className="controls__now-col" style={cell(1, 4, 2)}>{nowFocused ? <PlusButton /> : <NowButton />}<ClockButton seconds={false} following={nowFocused} /></div>
+        <div className="controls__now-col" style={cell(1, 4, 2)}><NowButton seconds={false} /><ActionButton /></div>
         <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" style={cell(2, 1)} onClick={act.zoomIn}>Zoom in</CtlButton>
         <CtlButton icon={ChevronDownIcon} label={down < 0 ? 'Previous instant (A)' : 'Next instant (D)'} data-nav="down" style={cell(2, 2)}
           onClick={() => act.goToAdjacentInstant(down)}>{down < 0 ? 'Previous' : 'Next'}</CtlButton>
@@ -182,10 +212,10 @@ export function ControlBar() {
         <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
         <IncrementButton direction={-1} />
       </div>
-      {/* While following Now, the Now line runs on down into the button. NOW turns to ＋ there, so a double tap goes to Now and drops. */}
+      {/* While following Now, the Now line runs on down into the button. */}
       <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>
-        {nowFocused ? <PlusButton /> : <NowButton />}
-        <ClockButton seconds following={nowFocused} />
+        <NowButton seconds />
+        <ActionButton />
       </div>
       <div className="controls__side is-after">
         <IncrementButton direction={1} />

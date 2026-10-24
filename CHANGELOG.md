@@ -11,11 +11,14 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 **Android app: web only** (nothing to install; it updates itself).
 
-- **Go to a time** (#15): the clock under NOW / ＋ is a button of its own, the same size
-  (it says NOW over the time while you follow Now). Tap it (or press G) to
-  type a time, with a date, or an offset From Now, and the cursor goes there.
-- **Zoom to Now** (#23): long-press **NOW** (or press F) to zoom out just enough to see Now and
-  what you selected, or the cursor.
+- **NOW over ＋** (#15): two buttons of the same size. **NOW** (with the clock) goes to Now;
+  once you are there, a tap goes to a time instead: type one, with a date, or an offset From Now
+  (or press G). **＋** drops an instant at Now (red) or at the cursor (blue); with the cursor on
+  an instant it shows that instant's name (and a bell if an alarm is to ring): tap to rename it,
+  long-press to find it in the Agenda.
+- **Zoom to Now** (#23): long-press **NOW** (or press F) to zoom out until Now shows, the cursor
+  staying where it is. With the cursor hidden and an instant selected, it fits Now and that
+  instant instead.
 
 ## 0.6.1 — 2026-10-24
 

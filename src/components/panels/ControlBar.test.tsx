@@ -55,18 +55,17 @@ describe('the vertical bar', () => {
     useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().now - 60 * MINUTE })
   })
 
-  it('is a two-row grid: zoom out, up, step up over zoom in, down, step down; NOW and the clock beside them', () => {
+  it('is a two-row grid: zoom out, up, step up over zoom in, down, step down; NOW over ＋ beside them', () => {
     render(<ControlBar />)
     expect(screen.getByRole('navigation').className).toContain('controls--vertical')
     expect(cellOf(byName(/^Zoom out/))).toBe('1/1')
     expect(cellOf(byName(/^Previous instant/))).toBe('1/2')
     expect(cellOf(byName(/^Back 30 minutes/))).toBe('1/3')
-    // Column 4, both rows: NOW (＋ while following Now), the clock under it.
-    const col = byName(/^Focus Now/).parentElement!
+    // Column 4, both rows: NOW over ＋ (at the free cursor here).
+    const col = byName(/^Focus Now/).closest('.controls__now-col') as HTMLElement
     expect(col.style.gridRow).toBe('1 / span 2')
     expect(col.style.gridColumn).toBe('4')
-    expect(screen.queryByRole('button', { name: /^Drop an instant at Now/ })).toBeNull()
-    expect(col.contains(byName(/^Go to a time/))).toBe(true)
+    expect(col.contains(byName(/^Drop an instant at the cursor/))).toBe(true)
     expect(cellOf(byName(/^Start a stopwatch/))).toBe('1/5')
     expect(cellOf(byName(/^Start a timer/))).toBe('2/5')
     expect(cellOf(byName(/^Zoom in/))).toBe('2/1')
@@ -182,10 +181,10 @@ describe('Stopwatch and Timer buttons', () => {
     expect(screen.getAllByRole('menuitem')[0].textContent).toBe('13m')
   })
 
-  it('the clock under NOW / ＋ is a button of its own: it goes to a typed offset from Now', () => {
+  it('NOW, while following Now, goes to a typed time: here an offset from Now', () => {
     useUi.setState({ jumpOpen: false })
     render(<ControlBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Go to a time (G)' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Go to a time \(G\)/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'From Now' }))
     const before = engine.sample().now
     fireEvent.change(screen.getByRole('textbox', { name: /^Offset from Now/ }), { target: { value: '200' } })
@@ -196,13 +195,35 @@ describe('Stopwatch and Timer buttons', () => {
     expect(useUi.getState().jumpOpen).toBe(false)
   })
 
-  it('a long-press on NOW zooms so Now and the cursor fit', () => {
-    useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().center - 6 * 3_600_000, timeWidth: 3_600_000 })
+  it('a long-press on NOW zooms out until Now shows, the cursor staying put', () => {
+    const center = engine.getFrame().now - 6 * 3_600_000
+    useView.setState({ viewFocusMode: 'cursor', timeCenter: center, timeWidth: 3_600_000 })
     render(<ControlBar />)
     fireEvent.contextMenu(screen.getByText('NOW'))
     const s = useView.getState()
     expect(s.viewFocusMode).toBe('cursor')
-    expect(s.timeWidth).toBeGreaterThanOrEqual(6 * 3_600_000)
+    expect(s.timeCenter).toBe(center)
+    expect(s.timeWidth).toBeGreaterThanOrEqual(12 * 3_600_000)
+  })
+
+  it('with the cursor hidden and an instant selected, it fits Now and that instant', () => {
+    const now = engine.getFrame().now
+    const id = entities.createInstant(now - 10 * 3_600_000, 'Rice')
+    useView.setState({ viewFocusMode: 'cursor', timeCenter: now - 20 * 3_600_000, timeWidth: 3_600_000, currentSelectedInstantId: id })
+    useUi.setState({ cursorHidden: true })
+    render(<ControlBar />)
+    fireEvent.contextMenu(screen.getByText('NOW'))
+    useUi.setState({ cursorHidden: false })
+    expect(Math.abs(useView.getState().timeCenter - (now - 5 * 3_600_000))).toBeLessThan(60_000)
+  })
+
+  it('on an instant, ＋ is its name: a tap renames it', () => {
+    const id = entities.createInstant(engine.getFrame().now - 3_600_000, 'Rice')
+    useView.setState({ viewFocusMode: 'instant', focusedInstantId: id })
+    render(<ControlBar />)
+    expect(screen.queryByRole('button', { name: /^Drop an instant/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Rename Rice/ }))
+    expect(useView.getState().editingInstantId).toBe(id)
   })
 })
 

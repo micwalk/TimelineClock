@@ -170,24 +170,30 @@ export function zoomToTimes(times: readonly number[]) {
   view.setTimeWidth(Math.max((hi - lo) / 0.6, 2 * MINUTE))
 }
 
+/** How far out Now sits when zoom-to-Now brings it on screen: this much of the way to the edge. */
+const NOW_FIT = 0.85
+
 /**
- * Zoom so Now and what you are looking at both fit (#23; long-press NOW, or F): the selected
- * span's ends, else the selected instant, else the cursor. A view change only: the cursor stays
- * free and nothing is focused. Following Now with nothing selected, there is nothing to fit.
+ * Zoom out until Now shows (#23; long-press NOW, or F), the cursor staying where it is. Only with
+ * the cursor hidden and an instant selected does it move: then Now and that instant are fitted.
+ * Following Now, or with Now already on screen, it does nothing.
  */
 export function zoomToNow() {
   const f = frame()
   const s = v()
-  const sp = s.selectedSpanId ? entities.getSpan(s.selectedSpanId) : null
+  if (s.viewFocusMode === 'now') return
   const sel = s.currentSelectedInstantId ? entities.getInstant(s.currentSelectedInstantId)?.tsEpochMs : undefined
-  const ends = sp ? [entities.getInstant(sp.startInstantId)?.tsEpochMs, sp.endIsNow ? f.now : entities.getInstant(sp.endInstantId)?.tsEpochMs] : []
-  const times = ends.filter((t): t is number => typeof t === 'number')
-  if (times.length === 0 && typeof sel === 'number') times.push(sel)
-  if (times.length === 0) {
-    if (s.viewFocusMode === 'now') return
-    times.push(f.center)
-  }
-  zoomToTimes([f.now, ...times])
+  if (useUi.getState().cursorHidden && typeof sel === 'number') { zoomToTimes([f.now, sel]); return }
+  const width = (2 * Math.abs(f.now - f.center)) / NOW_FIT
+  if (width <= f.end - f.start) return
+  engine.beginTransition()
+  view.setTimeWidth(width)
+}
+
+/** Shows an instant in the Agenda: its row (focused, so highlighted and scrolled to), opening the drawer if that is where the Agenda is. */
+export function showInAgenda(id: string) {
+  revealInstant(id)
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
 }
 
 export function focusSpan(spanId: string, zoomToFit = true) {
