@@ -285,6 +285,51 @@ describe('a kept sunset', () => {
     render(<Columns />)
     expect(screen.queryByRole('button', { name: 'Delete instant' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Move instant' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Hide from the timeline (spans stay)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility' }))
+    expect(screen.getByRole('button', { name: 'Hide everywhere' })).toBeTruthy()
+  })
+})
+
+describe('the eye: Visibility', () => {
+  it('sets how far out the instant stays as a chip, and Auto goes back; Hide everywhere still hides', () => {
+    const id = entities.createInstant(twentyMinutesAgo(), 'Tea')
+    useView.setState({ currentSelectedInstantId: id })
+    render(<Columns />)
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility' }))
+    expect(screen.getByText(/^Auto: Label up to 3 days, Mark up to/)).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Label up to' }), { key: 'ArrowRight' })
+    expect(entities.getInstant(id)?.visibility).toEqual({ label: 'week', mark: 10 * 365 * 24 * 3600_000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Auto' }))
+    expect(entities.getInstant(id)?.visibility).toBeUndefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide everywhere' }))
+    expect(entities.getInstant(id)?.hidden).toBe(true)
+  })
+})
+
+describe('marks', () => {
+  it('a tap on a mark selects it (a Label again); a repeat\'s Visibility sets its whole series', () => {
+    const DAYMS = 24 * 3600_000
+    const id = entities.createInstant(engine.getFrame().now - 20 * MINUTE, 'Tea')
+    entities.patchInstant(id, () => ({ visibility: { label: 'hour', mark: 'always' } }))
+    useView.setState({ viewFocusMode: 'cursor', timeWidth: 2 * DAYMS, timeCenter: engine.getFrame().now })
+    act(() => { engine.cancelTransition() })
+    const { container } = render(<Columns />)
+    act(() => { engine.requestFrame() })
+    const hit = container.querySelector('.tl-col--line.is-mark .tl-col__hit') as HTMLElement | null
+    if (hit) {
+      fireEvent.click(hit)
+      expect(useView.getState().currentSelectedInstantId).toBe(id)
+    }
+    // A repeat's occurrence: its eye edits the series'.
+    useSettings.setState({ groupVisibility: {} })
+    const occ = entities.createInstant(engine.getFrame().now + DAYMS, 'Wake')
+    entities.patchInstant(occ, () => ({ seriesId: 'g1', occurrence: '2026-10-21' }))
+    useEntities.setState(s => ({ groups: [{ id: 'g1', kind: 'series', label: 'Wake', time: '07:00', repeat: { kind: 'interval', every: 1 }, alarms: [], from: '2026-10-01' }] , instants: s.instants }))
+    act(() => useView.setState({ currentSelectedInstantId: occ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility' }))
+    expect(screen.getByText('For every Wake')).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Label up to' }), { key: 'ArrowRight' })
+    expect(useSettings.getState().groupVisibility.g1).toEqual({ label: 'week', mark: 'decade' })
+    expect(entities.getInstant(occ)?.visibility).toBeUndefined()
   })
 })

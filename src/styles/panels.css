@@ -92,6 +92,39 @@
 .ctl-btn--stack .ctl-btn__plus { font-size: 24px; }
 
 /* Stopwatch and Timer: always labelled (they are the way in for new users). */
+/* Horizontal: NOW centered under the timeline (its center is the Now line's while following Now),
+   the navigation gathered to either side, and Stopwatch, Timer and Alarm a centered row below.
+   A side never wraps: once its labels don't fit, its buttons go to icons (the step keeps its text). */
+.controls--horizontal { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.controls__side { container: ctl-side / inline-size; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
+@container ctl-side (max-width: 410px) {
+  .ctl-btn__text { display: none; }
+  .ctl-split .ctl-btn__text { display: inline; }
+}
+.ctl-step__short { display: none; }
+@container ctl-side (max-width: 280px) {
+  .ctl-step__long { display: none; }
+  .ctl-step__short { display: inline; }
+}
+.controls__side.is-before { justify-content: flex-end; }
+.controls__side.is-after { justify-content: flex-start; }
+.controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.controls__now { display: flex; justify-content: center; }
+/* The Now line runs on down into the button: a red line from the button's top up past the bar's
+   edge (any overlap lands on the Now line itself), brightening as it meets the button. */
+.controls__now.is-following .ctl-btn { position: relative; }
+.controls__now.is-following .ctl-btn::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2px;
+  height: 48px;
+  margin-left: -1px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--c-now) 70%, transparent), var(--c-now));
+  box-shadow: 0 0 calc(6px * var(--glow)) var(--c-now);
+  pointer-events: none;
+}
 .controls__sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--ink-faint); opacity: 0.4; }
 .ctl-anchor { position: relative; display: inline-flex; }
 .ctl-pair { display: inline-flex; gap: 6px; }
@@ -142,6 +175,17 @@
   white-space: nowrap;
 }
 .alarm-pick__time { display: flex; align-items: stretch; gap: 10px; }
+/* A one-off alarm's day: empty is today or tomorrow; "Next" goes back to that. */
+.alarm-pick__date { display: flex; align-items: center; gap: 10px; }
+.alarm-pick__date input {
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: 600 13px/1.2 var(--font-ui);
+  color-scheme: dark;
+}
 .alarm-pick__input {
   flex: 1;
   min-width: 0;
@@ -577,6 +621,15 @@
 .alarm-other:hover { border-color: var(--c-alarm); }
 .alarm-link__at { color: color-mix(in srgb, var(--accent) 70%, #fff); font-weight: 600; opacity: 0.85; }
 .alarm-link--all { --accent: var(--c-danger); margin-left: auto; }
+.alarm-link--danger { --accent: var(--c-danger); }
+.alarm-link--danger.is-armed { background: color-mix(in srgb, var(--c-danger) 45%, transparent); color: #fff; }
+/* Your groups (CollectionRows): instant-coloured rows above the sun and the repeats. */
+.collection-rows { display: flex; flex-direction: column; gap: 8px; }
+.alarm-row--collection { --accent: color-mix(in srgb, var(--c-instant-glow) 50%, transparent); --halo: var(--c-instant-glow); cursor: default; }
+.alarm-row--collection .alarm-row__time { font-size: 18px; color: var(--ink-dim); min-width: 2ch; text-align: center; }
+.collection-rows__add { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+.collection-rows__add > svg { width: 14px; height: 14px; }
+.collection-delete { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 4px 2px; }
 .alarm-link--go { flex: none; background: color-mix(in srgb, var(--accent) 45%, transparent); color: #fff; }
 .alarm-link--go:disabled { opacity: 0.4; cursor: default; }
 .alarm-custom__input {
@@ -695,6 +748,8 @@
 .data-settings__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .data-settings__import { margin-top: 10px; padding: 8px 10px 10px; border-radius: 9px; background: var(--surface-raised); }
 .data-settings__summary { font: 600 13px/1.3 var(--font-ui); color: var(--ink); margin-bottom: 4px; }
+.data-settings__count { color: var(--ink-dim); font-weight: 500; }
+.data-settings__groups { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
 .data-settings__mode { border: none; padding: 0 0 0 22px; margin: 0; }
 .data-settings__mode input[type='radio'] { width: 14px; height: 14px; accent-color: var(--c-cursor); }
 .data-settings__message { margin-top: 8px; font: 600 12px/1.3 var(--font-ui); color: var(--ink-dim); }
@@ -882,31 +937,71 @@
 .alarm-row--sun { --accent: color-mix(in srgb, var(--c-sun) 60%, transparent); --halo: var(--c-sun); }
 .alarm-row__sun { width: 14px; height: 14px; color: var(--c-sun); vertical-align: -2px; }
 .alarm-row__time.alarm-row__sun { width: 20px; height: 20px; justify-self: center; }
+/* Clock changes (Groups tab, System): the time column holds the date. */
+.alarm-row--dst { --accent: color-mix(in srgb, var(--c-instant-glow) 50%, transparent); --halo: var(--c-instant-glow); }
+.alarm-row--dst .alarm-row__time { font-size: 15px; }
+.alarm-row__dst { width: 14px; height: 14px; color: var(--ink-dim); vertical-align: -2px; display: inline-block; }
+
+/* Groups tab (#10): a row and, under it, its zoom strip */
+.group-row { display: flex; flex-direction: column; gap: 6px; }
+.alarm-row__tools { display: flex; align-items: center; gap: 2px; }
+.zoom-strip { padding: 22px 22px 8px; border-radius: 10px; background: var(--box-bg-raised); touch-action: none; }
+.zoom-strip__track { position: relative; height: 10px; margin: 8px 0 4px; }
+.zoom-strip__seg { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+.zoom-strip__seg.is-label { background: var(--c-instant-glow); box-shadow: 0 0 calc(6px * var(--glow)) var(--c-instant-glow); }
+.zoom-strip__seg.is-mark { background: repeating-linear-gradient(90deg, var(--c-instant-glow) 0 5px, transparent 5px 9px); opacity: 0.8; }
+.zoom-strip__seg.is-hidden { background: repeating-linear-gradient(90deg, var(--ink-faint) 0 1px, transparent 1px 6px); opacity: 0.6; }
+.zoom-strip__here { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--c-cursor); box-shadow: 0 0 calc(6px * var(--glow)) var(--c-cursor); pointer-events: none; }
+.zoom-strip__track { cursor: pointer; }
+/* Handles: a big hit area (easy on a phone) around a small arrow. */
+.zoom-strip__handle { position: absolute; z-index: 1; width: 32px; height: 26px; margin-left: -16px; cursor: ew-resize; touch-action: none; }
+.zoom-strip__handle::after { content: ''; position: absolute; left: 9px; border-left: 7px solid transparent; border-right: 7px solid transparent; }
+.zoom-strip__handle.is-label { bottom: 100%; margin-bottom: -6px; }
+.zoom-strip__handle.is-label::after { bottom: 8px; border-top: 11px solid var(--ink); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-instant-glow)); }
+.zoom-strip__handle.is-mark { top: 100%; margin-top: -6px; }
+.zoom-strip__handle.is-mark::after { top: 8px; border-bottom: 11px solid var(--c-danger); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-danger)); }
+.zoom-strip__labels { cursor: pointer; }
+.zoom-strip__handle:focus-visible { outline: 2px solid var(--c-cursor); outline-offset: 2px; border-radius: 3px; }
+.zoom-strip__labels { position: relative; height: 14px; margin-top: 18px; font: 600 11px/1 var(--font-mono); color: var(--ink-dim); }
+.zoom-strip__labels span { position: absolute; transform: translateX(-50%); }
+.zoom-strip__foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; margin-top: 8px; }
+.zoom-strip__snap { display: inline-flex; align-items: center; gap: 4px; font: 600 11px/1 var(--font-ui); color: var(--ink-dim); white-space: nowrap; cursor: pointer; }
+.zoom-strip__snap input { width: 13px; height: 13px; accent-color: var(--c-cursor); }
+.zoom-strip__says { margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ink); }
+.alarm-row__name .alarm-row__sun { display: inline-block; }
+/* Narrow: a sun row's "in 9h" gives its room to the name (the time says when). */
+@container (max-width: 560px) {
+  .alarm-row--sun .alarm-row__when { display: none; }
+  /* A series' "in 17h" goes under its name and repeat, so the name keeps its room. */
+  .alarm-row--series { grid-template-columns: auto minmax(0, 1fr) auto auto; row-gap: 4px; }
+  .alarm-row--series > .alarm-row__time { grid-row: 1 / 3; }
+  .alarm-row--series > .alarm-row__main { grid-column: 2; grid-row: 1; }
+  .alarm-row--series > .alarm-row__when { grid-column: 2; grid-row: 2; }
+  .alarm-row--series > .alarm-row__tools { grid-column: 3; grid-row: 1 / 3; }
+  .alarm-row--series > .alarm-switch { grid-column: 4; grid-row: 1 / 3; }
+}
 
 /* TC Preview's Change preview button (Settings, preview app only) */
 .preview-switch__btn { width: auto; margin-top: 0; padding: 0 12px; grid-column: 2 / 4; }
 
-/* "You bad lemon" (LemonToast): a moment at the top on every add; taps go through it */
-.lemon-toast {
-  --accent: #facc15;
-  --halo: #facc15;
-  position: fixed;
-  z-index: 250; /* over Settings (200), under a ringing alarm */
-  top: calc(12px + env(safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 18px;
-  border-radius: 14px;
-  background: var(--surface-strong);
-  color: #fde68a;
-  font: 800 17px/1.2 var(--font-ui);
-  white-space: nowrap;
-  pointer-events: none;
-  animation: lemon-toast 2200ms ease-out forwards;
+/* The strip's zone names over the track */
+.zoom-strip__zones { display: flex; justify-content: space-between; margin: -10px 0 6px; font: 700 10px/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.visibility-editor { display: flex; flex-direction: column; gap: 8px; }
+/* A group dropdown (GroupSelect): the Visibility box's first row, and the import's mapping. */
+.group-select { display: flex; align-items: center; gap: 8px; font: 600 12px/1.2 var(--font-ui); color: var(--ink-dim); }
+.group-select__label { flex: none; }
+.group-select select, .group-select__new {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: 600 13px/1.2 var(--font-ui);
 }
-@keyframes lemon-toast {
-  0% { opacity: 0; transform: translate(-50%, -8px); }
-  10%, 80% { opacity: 1; transform: translate(-50%, 0); }
-  100% { opacity: 0; transform: translate(-50%, 0); }
-}
-@media (prefers-reduced-motion: reduce) { .lemon-toast { animation: none; } }
+.visibility-editor__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* An Agenda row's Visibility (its eye), under the row */
+.list-row__visibility { margin: -2px 0 6px; padding: 10px 12px; border-radius: 10px; background: var(--box-bg); }
+.visibility-editor__scope { margin: 0; font: 700 12px/1.3 var(--font-ui); color: var(--c-alarm); }

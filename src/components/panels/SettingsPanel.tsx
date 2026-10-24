@@ -29,6 +29,7 @@ export function SettingsPanel() {
   const verticalDir = useSettings(s => s.verticalDir)
   const tickSnap = useSettings(s => s.tickSnap)
   const dstShifts = useSettings(s => s.dstShifts)
+  const seasons = useSettings(s => s.seasons)
   const stopwatchKeepStart = useSettings(s => s.stopwatchKeepStart)
   const agendaPlacement = useSettings(s => s.agendaPlacement)
   const ringMs = useAlarms(s => s.autoDismissMs)
@@ -128,8 +129,12 @@ export function SettingsPanel() {
               </select>
             </label>
             <label className="settings__row" title="The moments the clocks go forward or back (daylight saving), as instants on the timeline">
-              <span>Clock changes on the timeline</span>
+              <span>Daylight Savings Time changes on the timeline</span>
               <input type="checkbox" checked={dstShifts} onChange={e => settings.setDstShifts(e.target.checked)} />
+            </label>
+            <label className="settings__row" title="The moments the seasons turn, as instants on the timeline">
+              <span>Solstices and equinoxes on the timeline</span>
+              <input type="checkbox" checked={seasons} onChange={e => settings.setSeasons(e.target.checked)} />
             </label>
             <label className="settings__row">
               <span>Snap cursor to ticks</span>

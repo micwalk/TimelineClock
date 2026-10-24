@@ -7,12 +7,81 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
-## 0.4.4 — 2026-10-17
+## 0.6.1 — 2026-10-24
 
 **Android app: web only** (nothing to install; it updates itself).
 
-- **You bad lemon 🍋**: adding something to the timeline (an instant, a timer, an alarm) says
-  so at the top for a moment. Nothing to answer; taps go through it and it goes by itself.
+- The **Groups** tab has three sections: **System**, **Your groups**, then **Repeating**. System
+  has Sunrise and Sunset, which follow the part of the day (by day: since sunrise, until sunset;
+  by night: since sunset, until sunrise), **Daylight Savings Time** (the next change) and
+  **Solstices and equinoxes** (the next one), each with a switch that shows or hides them on the
+  timeline.
+- **Solstices and equinoxes** are on the timeline as instants ("Summer Solstice", "Vernal
+  Equinox"; named for your hemisphere from Settings › Sky, the north without a location), like
+  clock changes: tap one to keep it, set an alarm on it; they never move. Settings › Timeline has
+  the switch too.
+- Narrow Agenda: a repeat's row puts "in 17h" under its name, which no longer squeezes to a
+  letter.
+
+## 0.6.0 — 2026-10-21
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Groups** (TLC-9): every instant is in one group, **Default** until you pick another from the
+  new Group box at the top of its Visibility (or make a **New group…** right there). A repeat's
+  group is its whole series'. The Agenda's **Groups** tab lists your groups first: a switch hides
+  or shows everything in one (an alarm still to ring always shows), the pencil renames it, and
+  the trash deletes it, moving what's in it to Default or deleting that too (a second tap
+  confirms).
+- **Share a group**: Settings › Data › Export lets you tick groups (and untick Settings), and an
+  import puts each of the file's groups into a new group, one of yours, or leaves it out. Import
+  someone's export again into the same group and their instants update in place.
+- **One-off alarms on any day**: the Alarm picker has a **Date** for Once (empty is today or
+  tomorrow, as before), so an alarm can be months away; where it lands shows the date beyond a
+  week.
+## 0.5.0 — 2026-10-21
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Label, Mark, Hidden** (#10): as you zoom out, every instant goes from its Label (its chip)
+  to a Mark (a short line on the axis) to Hidden, and comes back as you zoom in. One rule and one
+  animation for all of them: named ones, unnamed ones, a repeat's days, sunrises and sunsets (the
+  chip shrinks away, the line shrinks to a stub, and a Mark fades before it's Hidden). How far out
+  an instant stays by itself: 4x how far ahead you made it, at least 3 days; longer for a favorite
+  or an alarm counting down and for the ends of a long span. Selected, focused and ringing ones
+  keep their Labels.
+- **Visibility**: the eye on a chip or an Agenda row sets it for that instant (drag "Label up to"
+  and "Mark up to"; Auto goes back; Hide everywhere is the old hide). Each repeat, and sunrise and
+  sunset, has one setting in the Agenda's **Groups** tab (was Repeats). Unnamed instants go by the
+  same rule as the rest, with a Label out to a day (Settings › Advanced). The strips
+  span 1h to 100y; untick **Snap** to slide freely between the stops.
+- A repeat zoomed out is its Marks now, with no summary chip ("⟳ Wake up · Daily…"). A
+  repeat's (or a sunrise's) Visibility always sets the whole series.
+- Marks are tappable: a tap selects the instant, so it's a Label again; a double tap focuses it.
+- Marks last out to 10 years on screen by default (sunrise and sunset to a week).
+- Day ticks say the day of the week ("Thu Oct 15").
+- **Zoom out to 150 years** (it was 30 days), enough for a lifetime as one span: ticks go
+  months, quarters ("Q4 2026"), years, then 5, 10, 50 and 100 years. Group strips reach 3mo, 1y,
+  10y and 100y; set the sun's to 3 months or a year to see
+  a season of sunrises and sunsets. The sky's colours fade out once days are only a few pixels
+  wide, and sunrises, sunsets and clock changes aren't computed past 2 years on screen.
+- **Long zooms read right**: from 2 days on screen the Now tag (always with its time) and the
+  Cursor tag show the date, with the year from half a year out; chips show their date ("Oct 24
+  7:20a", then just "Oct 24, 2027"). Lengths and "in …" read in months and years ("in 6mo
+  17d", "1y 2mo", the Cursor tag's "Now +4mo 18d") instead of hundreds of days.
+- **Typing a time takes a date** (the phone's own date picker), and offsets and lengths take
+  days, so the cursor or a moved instant can go months or years away (offsets were capped at
+  99 hours). The ± steps go to a week, a month and a year (months and years by the calendar).
+- In horizontal, the NOW button sits right under the timeline's center, so while following Now
+  the red Now line runs straight down into it; Stopwatch, Timer and Alarm are a centered row
+  below.
+- The control bar never wraps a side onto two lines: once its labels don't fit, Zoom and
+  Previous/Next go to icons, then the step reads "−30m".
+- The cursor no longer lands on (or glides onto) an instant that isn't drawn at this zoom.
+- A favorite's lane has no trash any more: the star stops tracking it, the ■ stop ends it and
+  keeps it. Deleting a span to Now (from the Agenda) unfavorites its instant, where it used to
+  leave the star on with no lane until the next reload brought the lane back.
+- Removed the toast that slipped into 0.4.4 by mistake (#26).
 
 ## 0.4.3 — 2026-10-17
 

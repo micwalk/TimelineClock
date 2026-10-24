@@ -4,6 +4,8 @@ import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants, sanitizeSpans } from './entities.ts'
 import type { GroupRecord } from './series.ts'
 import { sanitizeGroups } from './series.ts'
+import type { CollectionRecord } from './collections.ts'
+import { sanitizeCollections } from './collections.ts'
 
 export const BACKUP_FORMAT = 'timeline-clock-backup'
 export const BACKUP_VERSION = 1
@@ -13,6 +15,8 @@ export interface BackupData {
   spans: SpanRecord[]
   /** Repeating series (missing from backups made before them). */
   groups?: GroupRecord[]
+  /** Your groups (domain/collections; missing from backups made before them: everything is in Default). */
+  collections?: CollectionRecord[]
 }
 
 /** Settings sections, kept as raw records here; the stores sanitize them on import. */
@@ -51,7 +55,10 @@ export function cleanData(data: BackupData): BackupData {
   const nowSpanByStart = new Map<string, string>()
   for (const s of spans) if (s.endIsNow) nowSpanByStart.set(s.startInstantId, s.id)
   const groups = [...new Map((data.groups ?? []).map(g => [g.id, g])).values()]
-  return { instants, spans: spans.filter(s => !s.endIsNow || nowSpanByStart.get(s.startInstantId) === s.id), ...(groups.length > 0 ? { groups } : {}) }
+  return {
+    instants, spans: spans.filter(s => !s.endIsNow || nowSpanByStart.get(s.startInstantId) === s.id), ...(groups.length > 0 ? { groups } : {}),
+    ...(data.collections ? { collections: sanitizeCollections([...new Map(data.collections.map(c => [c.id, c])).values()]) } : {}),
+  }
 }
 
 /** Reads a backup file's text. Accepts files with settings, data or both. */
@@ -78,7 +85,8 @@ export function parseBackup(text: string): ParseResult {
   }
   if (r.data && typeof r.data === 'object') {
     const d = asRecord(r.data)
-    backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups) })
+    backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups),
+      ...(Array.isArray(d.collections) ? { collections: sanitizeCollections(d.collections) } : {}) })
   }
   if (!backup.settings && !backup.data) return { ok: false, error: 'The backup has no settings or data.' }
   return { ok: true, backup }
@@ -95,6 +103,8 @@ export function combineData(current: BackupData, incoming: BackupData): BackupDa
     instants: [...current.instants, ...incoming.instants],
     spans: [...current.spans.filter(s => !(s.endIsNow && incomingNowStarts.has(s.startInstantId))), ...incoming.spans],
     groups: [...(current.groups ?? []), ...(incoming.groups ?? [])],
+    // Your groups stay; the import adds its new ones (domain/collections mapImport).
+    ...(current.collections || incoming.collections ? { collections: [...(current.collections ?? []), ...(incoming.collections ?? [])] } : {}),
   })
 }
 

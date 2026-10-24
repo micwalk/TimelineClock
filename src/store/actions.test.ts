@@ -330,6 +330,17 @@ describe('favorites and alarms', () => {
     expect(entities.nowSpanOf(id)).toBeUndefined()
   })
 
+  it('deleting a span to Now unfavorites its instant (no favorite is left without its span)', () => {
+    const id = entities.createInstant(Date.now() - HOUR, 'Start')
+    act.setFavorite(id, true)
+    const span = entities.nowSpanOf(id)!
+    useView.setState({ selectedSpanId: span.id })
+    act.deleteSpan(span.id)
+    expect(instant(id).favorite).toBe(false)
+    expect(entities.nowSpanOf(id)).toBeUndefined()
+    expect(view().selectedSpanId).toBeNull()
+  })
+
   it('setting an alarm does not favorite the instant', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Wake')
     act.addAlarm(id)
@@ -506,20 +517,6 @@ describe('stopNowSpan (the stop on a favorite’s live lane)', () => {
     act.stopNowSpan(plain)
     expect(useEntities.getState().instants).toHaveLength(2)
     expect(entities.nowSpanOf(ahead)).toBeDefined()
-  })
-})
-
-describe('You bad lemon', () => {
-  it('shows on every add: an instant, a named drop, a timer', () => {
-    useUi.setState({ lemonAt: 0 })
-    act.dropInstant()
-    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
-    useUi.setState({ lemonAt: 0 })
-    act.dropAndName()
-    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
-    useUi.setState({ lemonAt: 0 })
-    act.startTimer(5 * MINUTE)
-    expect(useUi.getState().lemonAt).toBeGreaterThan(0)
   })
 })
 

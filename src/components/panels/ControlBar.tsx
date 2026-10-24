@@ -1,5 +1,6 @@
 // Controls under the timeline: navigation, the big NOW / ＋ button (with the time under it),
 // and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
+import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -19,7 +20,7 @@ import * as act from '../../store/actions.ts'
 
 const LONG_PRESS_MS = 500
 
-/** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes". */
+/** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes" (horizontal picks by room: panels.css). */
 function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell?: CSSProperties; compact?: boolean }) {
   const increment = useView(s => s.timeIncrement)
   const [open, setOpen] = useState(false)
@@ -49,7 +50,8 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
           act.moveCursorByIncrement(direction)
         }}
       >
-        <span className="mono">{direction > 0 ? '+' : '−'}</span>{compact ? option.value : label}
+        <span className="mono">{direction > 0 ? '+' : '−'}</span>
+        {compact ? option.value : <><span className="ctl-step__long">{label}</span><span className="ctl-step__short">{option.value}</span></>}
       </CtlButton>
       <button type="button" className="ctl-split__caret glow-box" aria-label="Choose step" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <ChevronDownIcon aria-hidden />
@@ -90,7 +92,7 @@ export function ControlBar() {
   // The vertical bar's NOW column is narrow: the time without seconds fits.
   const clock = <LiveText compute={f => formatClockCompact(f.now, !vertical)} />
   const nowButton = (style?: CSSProperties) => (nowFocused
-    ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" style={style} sub={clock} onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>＋</span></CtlButton>
+    ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" style={style} sub={clock} onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span></CtlButton>
     : <CtlButton variant="now" label="Focus Now (R)" style={style} sub={clock} onClick={() => act.focusNow()}>NOW</CtlButton>)
 
   if (vertical) {
@@ -117,19 +119,28 @@ export function ControlBar() {
     )
   }
 
+  // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
+  // while following Now), with the navigation gathered to either side of it; Stopwatch, Timer
+  // and Alarm are a centered row of their own below.
   return (
-    <nav className="controls" aria-label="Timeline controls">
-      <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
-      <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
-      <IncrementButton direction={-1} />
-      {nowButton()}
-      <IncrementButton direction={1} />
-      <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
-      <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
-      <span className="controls__sep" aria-hidden />
-      <StopwatchButton />
-      <TimerButton />
-      <AlarmButton />
+    <nav className="controls controls--horizontal" aria-label="Timeline controls">
+      <div className="controls__side is-before">
+        <CtlButton icon={MagnifyingGlassMinusIcon} label="Zoom out (O)" onClick={act.zoomOut}>Zoom out</CtlButton>
+        <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
+        <IncrementButton direction={-1} />
+      </div>
+      {/* While following Now, the Now line runs on down into the button. */}
+      <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>{nowButton()}</div>
+      <div className="controls__side is-after">
+        <IncrementButton direction={1} />
+        <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
+        <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
+      </div>
+      <div className="controls__quick">
+        <StopwatchButton />
+        <TimerButton />
+        <AlarmButton />
+      </div>
     </nav>
   )
 }

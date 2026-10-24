@@ -1,31 +1,39 @@
-// Saved instants, spans and groups (repeating series). Instants and spans persist to the same
-// localStorage keys and record shapes the original app used, so existing data loads unchanged.
+// Saved instants, spans, groups (repeating series) and collections (the groups you make; "Groups"
+// in the app). Instants and spans persist to the same localStorage keys and record shapes the
+// original app used, so existing data loads unchanged.
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import type { AlarmAnswer, AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
 import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, storedInstants, syncFavorites } from '../domain/entities.ts'
 import { syncAlarmVisibility } from '../domain/alarms.ts'
 import type { GroupRecord } from '../domain/series.ts'
 import { sanitizeGroups } from '../domain/series.ts'
+import type { CollectionRecord } from '../domain/collections.ts'
+import { DEFAULT_COLLECTION, groupHiddenTest, sanitizeCollections } from '../domain/collections.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
 const SPANS_KEY = 'timeline.spans.v1'
 const GROUPS_KEY = 'timeline.groups.v1'
+const COLLECTIONS_KEY = 'timeline.collections.v1'
 
 export interface EntitiesState {
   instants: InstantRecord[]
   spans: SpanRecord[]
   /** Repeating series (domain/series); their occurrences are instants. */
   groups: GroupRecord[]
+  /** Your groups (domain/collections), Default first. */
+  collections: CollectionRecord[]
 }
 
 const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
 const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
 const loadGroups = () => sanitizeGroups(loadJson<unknown>(GROUPS_KEY, []))
+const loadCollections = () => sanitizeCollections(loadJson<unknown>(COLLECTIONS_KEY, []))
 
 export const useEntities = create<EntitiesState>(() => {
   const { instants, spans } = syncFavorites(loadInstants(), loadSpans())
-  return { instants: syncAlarmVisibility(instants, Date.now()), spans, groups: loadGroups() }
+  return { instants: syncAlarmVisibility(instants, Date.now()), spans, groups: loadGroups(), collections: loadCollections() }
 })
 
 useEntities.subscribe((s, prev) => {
@@ -33,7 +41,31 @@ useEntities.subscribe((s, prev) => {
   if (s.instants !== prev.instants) saveJson(INSTANTS_KEY, storedInstants(s.instants))
   if (s.spans !== prev.spans) saveJson(SPANS_KEY, s.spans)
   if (s.groups !== prev.groups && s.groups) saveJson(GROUPS_KEY, s.groups)
+  if (s.collections !== prev.collections && s.collections) saveJson(COLLECTIONS_KEY, s.collections)
 })
+
+/**
+ * The instants not hidden by their group being switched off (domain/collections): the list
+ * itself when no group is off. Memoized per state, so readers can compare by identity.
+ */
+const shownCache = new WeakMap<InstantRecord[], { key: unknown[]; list: InstantRecord[] }>()
+export function shownInstants(s: EntitiesState = get(), now = Date.now()): InstantRecord[] {
+  const test = groupHiddenTest(s.collections ?? [], s.groups ?? [], now)
+  if (!test) return s.instants
+  const hit = shownCache.get(s.instants)
+  if (hit && hit.key[0] === s.collections && hit.key[1] === s.groups) return hit.list
+  const list = s.instants.filter(i => !test(i))
+  shownCache.set(s.instants, { key: [s.collections, s.groups], list })
+  return list
+}
+
+/** shownInstants as a hook. */
+export function useShownInstants(): InstantRecord[] {
+  const instants = useEntities(s => s.instants)
+  const groups = useEntities(s => s.groups)
+  const collections = useEntities(s => s.collections)
+  return useMemo(() => shownInstants({ instants, spans: [], groups, collections }), [instants, groups, collections])
+}
 
 const set = useEntities.setState
 const get = useEntities.getState
@@ -65,6 +97,12 @@ const patchAlarms = (id: string, change: (list: AlarmRecord[]) => AlarmRecord[])
     }),
   }))
 
+const withoutCollection = <T extends { collectionId?: string }>(rec: T): T => {
+  const { collectionId: _c, ...rest } = rec
+  void _c
+  return rest as T
+}
+
 const patchSpan = (id: string, patch: Partial<SpanRecord>) =>
   set(s => ({ spans: s.spans.map(sp => (sp.id === id ? { ...sp, ...patch } : sp)) }))
 
@@ -80,6 +118,7 @@ export const entities = {
       tsEpochMs,
       label,
       favorite: false,
+      createdAt: Date.now(),
       ...(opts.alarm ? { alarms: [{ id: newAlarmId(), offsetMs: 0 }] } : {}),
     }
     set(s => ({ instants: [...s.instants, rec] }))
@@ -90,6 +129,21 @@ export const entities = {
   /** Adds or replaces a group. */
   putGroup: (g: GroupRecord) => set(s => ({ groups: [...(s.groups ?? []).filter(x => x.id !== g.id), g] })),
   removeGroup: (id: string) => set(s => ({ groups: (s.groups ?? []).filter(g => g.id !== id) })),
+
+  /** Adds or replaces one of your groups (domain/collections). */
+  putCollection: (c: CollectionRecord) => set(s => ({ collections: s.collections.some(x => x.id === c.id) ? s.collections.map(x => (x.id === c.id ? c : x)) : [...s.collections, c] })),
+  /** Removes a group (never Default); what was in it moves to Default. */
+  removeCollection(id: string) {
+    if (id === DEFAULT_COLLECTION) return
+    set(s => ({
+      collections: s.collections.filter(c => c.id !== id),
+      instants: s.instants.map(i => (i.collectionId === id ? withoutCollection(i) : i)),
+      groups: (s.groups ?? []).map(g => (g.collectionId === id ? withoutCollection(g) : g)),
+    }))
+  },
+  /** Puts an instant in a group (Default: none named). */
+  setInstantCollection: (id: string, collectionId: string) =>
+    patchInstant(id, i => (collectionId === DEFAULT_COLLECTION ? { ...withoutCollection(i), collectionId: undefined } : { collectionId })),
   /** Adds ready-made instants (a series' occurrences). */
   addInstants: (list: readonly InstantRecord[]) => { if (list.length > 0) set(s => ({ instants: [...s.instants, ...list] })) },
   /** Deletes instants (and spans that reference them). */

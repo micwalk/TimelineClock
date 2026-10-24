@@ -10,17 +10,20 @@ import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
 import { DAY, MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
 import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
-import { entities, useEntities } from './entities.ts'
+import { entities, shownInstants, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
 import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
+import type { Visibility } from '../domain/displayGroups.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui, useUi } from './ui.ts'
 import { sanitizeAlarmPrefs, useAlarms } from './alarms.ts'
 import type { Backup, ImportMode } from '../domain/backup.ts'
 import { BACKUP_FORMAT, BACKUP_VERSION, importedData } from '../domain/backup.ts'
+import type { ImportGroupRow } from '../domain/collections.ts'
+import { DEFAULT_COLLECTION, collectionOf, dataForCollections, mapImport, newCollectionId, sanitizeCollections, seriesGroupLookup } from '../domain/collections.ts'
 import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
@@ -37,7 +40,8 @@ import { pickerOffsets } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
 import { sunEventName } from '../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
-import { addCalendarDays, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
+import { parseSeasonVirtualId, seasonName } from '../domain/seasons.ts'
+import { addCalendarDays, addCalendarMonths, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
@@ -83,6 +87,12 @@ export function focusInstant(id: string, animate = true) {
  * selected or focused, so it works like any instant, but not saved or listed until it is changed
  * (store/entities: any change makes it real). Let go once nothing selects or focuses it.
  */
+/** A tap on an instant's chip or mark: select it (a virtual one is held while selected). */
+export function tapInstant(inst: InstantRecord) {
+  holdVirtual(inst)
+  selectInstant(inst.id)
+}
+
 export function holdVirtual(inst: InstantRecord) {
   if (inst.virtual) entities.holdInstant(inst)
 }
@@ -190,12 +200,18 @@ export function moveCursorBy(deltaMs: number) {
 const EXACT_LANDING_PX = 2
 const EXACT_LANDING_MAX_MS = 500
 
-/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing. */
+let drawnAt: (f: Frame) => ReadonlySet<string> | null = () => null
+/** The timeline's layout says which instants are drawn this frame (components/timeline/savedLayout drawnIdsAt). */
+export function setDrawnSource(source: (f: Frame) => ReadonlySet<string> | null) { drawnAt = source }
+
+/** What sits exactly at `ts` (Now too, with `withNow`), by the capture rule at rest. A hidden cursor is on nothing, and so is an instant that isn't drawn. */
 function exactHit(ts: number, withNow: boolean): LandingTarget | null {
   if (useUi.getState().cursorHidden) return null
   const f = frame()
+  // The layout only knows what is on screen; a typed time or a step off screen goes by `hidden`.
+  const drawn = ts >= f.start && ts <= f.end ? drawnAt(f) : null
   const id = findCapture({
-    instants: useEntities.getState().instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })),
+    instants: shownInstants().map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: drawn ? !drawn.has(i.id) : i.hidden })),
     now: withNow ? f.now : undefined, center: ts, pxPerMs: f.pxPerMs,
     radiusPx: Math.min(EXACT_LANDING_PX, EXACT_LANDING_MAX_MS * f.pxPerMs),
   })
@@ -223,7 +239,14 @@ function landOn(target: LandingTarget, animate: boolean) {
 const UNDER_CURSOR_PX = 20
 
 export function moveCursorByIncrement(direction: 1 | -1) {
-  const ms = incrementOption(v().timeIncrement).milliseconds
+  const step = v().timeIncrement
+  // A month or a year steps by the calendar: the same day of the month and clock time.
+  if (step === '1mo' || step === '1y') {
+    const c = frame().center
+    moveCursorBy(addCalendarMonths(c, direction * (step === '1y' ? 12 : 1)) - c)
+    return
+  }
+  const ms = incrementOption(step).milliseconds
   // A day's step keeps the clock time across a clock change (that day is 23 or 25 hours).
   if (ms % DAY === 0) { const c = frame().center; moveCursorBy(addCalendarDays(c, direction * (ms / DAY)) - c); return }
   moveCursorBy(direction * ms)
@@ -232,7 +255,7 @@ export function moveCursorByIncrement(direction: 1 | -1) {
 function navItems(f: Frame): NavTarget[] {
   const items: NavTarget[] = [{ kind: 'now', ts: f.now }]
   if (v().viewFocusMode === 'cursor') items.push({ kind: 'cursor', ts: f.center })
-  for (const i of useEntities.getState().instants) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
+  for (const i of shownInstants()) if (!i.hidden) items.push({ kind: 'saved', id: i.id, ts: i.tsEpochMs })
   return items
 }
 
@@ -403,7 +426,6 @@ export function dropInstant(opts: { favorite?: boolean } = {}) {
   const id = entities.createInstant(ts, '')
   if (opts.favorite) setFavorite(id, true)
   ui.markDropped(id)
-  ui.callLemon()
   return id
 }
 
@@ -418,7 +440,6 @@ export function dropAndName(ts = cursorTime()): string {
   const id = entities.createInstant(ts, '')
   view.selectInstant(id)
   view.editInstant(id)
-  ui.callLemon()
   return id
 }
 
@@ -447,7 +468,6 @@ export function startTimer(ms: number) {
   entities.createSpan(start, end, label, { visible: true })
   quick.rememberTimer(ms)
   ui.markDropped(end)
-  ui.callLemon()
   void primeNotifications() // the first timer asks for notification permission
   showAroundNow([now, now + ms])
   return end
@@ -630,6 +650,11 @@ export function selectBell(alarmId: string | null) {
  * Hides an instant from the timeline (or shows it again). Its spans stay; it stays in the
  * Agenda. Hiding the selected or focused instant lets go of it so it actually disappears.
  */
+/** An instant's own visibility by zoom (its eye: Label / Mark / Hidden), or back to Auto (null). */
+export function setInstantVisibility(id: string, d: Visibility | null) {
+  entities.patchInstant(id, () => ({ visibility: d ?? undefined }))
+}
+
 export function setInstantHidden(id: string, hidden: boolean) {
   const inst = entities.getInstant(id)
   if (!inst) return
@@ -668,6 +693,61 @@ export function deleteInstant(id: string) {
     if (inst) focusCursorAt(inst.tsEpochMs)
     else focusNow()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Your groups (domain/collections): each instant is in one, Default unless moved; switched off,
+// a group's instants leave the timeline and the lists.
+
+/** A new group; returns its id. */
+export function createCollection(label: string): string {
+  const id = newCollectionId()
+  entities.putCollection({ id, label: label.trim() || 'New group' })
+  return id
+}
+
+export function renameCollection(id: string, label: string) {
+  const c = useEntities.getState().collections.find(x => x.id === id)
+  if (c && label.trim()) entities.putCollection({ ...c, label: label.trim() })
+}
+
+/** Switches a group on or off (shows or hides its instants). */
+export function setCollectionShown(id: string, shown: boolean) {
+  const c = useEntities.getState().collections.find(x => x.id === id)
+  if (!c) return
+  const { hidden: _h, ...rest } = c
+  void _h
+  entities.putCollection(shown ? rest : { ...rest, hidden: true })
+}
+
+/**
+ * Deletes a group (never Default). What was in it moves to Default, or, with `withInstants`, is
+ * deleted too: its instants (their spans with them) and its repeating series.
+ */
+export function deleteCollection(id: string, opts: { withInstants?: boolean } = {}) {
+  if (id === DEFAULT_COLLECTION) return
+  if (opts.withInstants) {
+    const { groups } = useEntities.getState()
+    const seriesGroup = seriesGroupLookup(groups ?? [])
+    const doomed = storedInstants(useEntities.getState().instants).filter(i => collectionOf(i, seriesGroup) === id).map(i => i.id)
+    for (const s of groups ?? []) if (s.collectionId === id) entities.removeGroup(s.id)
+    for (const iid of doomed) deleteInstant(iid)
+  }
+  entities.removeCollection(id)
+}
+
+/** Moves an instant to a group; a repeat's occurrence moves its whole series. */
+export function setInstantCollection(id: string, collectionId: string) {
+  const inst = entities.getInstant(id)
+  if (!inst) return
+  const series = entities.getGroup(inst.seriesId)
+  if (series) {
+    const { collectionId: _c, ...rest } = series
+    void _c
+    entities.putGroup(collectionId === DEFAULT_COLLECTION ? rest : { ...rest, collectionId })
+    return
+  }
+  entities.setInstantCollection(id, collectionId)
 }
 
 // ---------------------------------------------------------------------------
@@ -712,8 +792,9 @@ export function moveInstantTo(ts: number) {
 }
 
 /** Move mode, typed as a clock time: same day as where the instant is being moved to. */
-export function moveInstantToClock(hours24: number, minutes: number, seconds: number) {
-  moveInstantTo(atClockTimeOnDay(frame().center, hours24, minutes, seconds))
+/** Move mode, typed as a clock time on a day (`dayTs`: any time that day; default the cursor's). */
+export function moveInstantToClock(hours24: number, minutes: number, seconds: number, dayTs = frame().center) {
+  moveInstantTo(atClockTimeOnDay(dayTs, hours24, minutes, seconds))
 }
 
 /** Move mode, typed as an offset from Now. */
@@ -756,7 +837,10 @@ export function renameSpan(id: string, label: string) {
   view.editSpan(null)
 }
 
+/** Deletes a span. A span to Now is its instant's favorite, so deleting one unfavorites the instant. */
 export function deleteSpan(id: string) {
+  const sp = entities.getSpan(id)
+  if (sp?.endIsNow) return setFavorite(sp.startInstantId, false)
   view.forgetSpan(id)
   entities.deleteSpan(id)
 }
@@ -809,9 +893,17 @@ export function applyDurationInput(text: string, reference: 'now' | 'selected'):
   return true
 }
 
-/** Moves the cursor to a wall-clock time on the cursor's current day. */
-export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean) {
-  landCursorAt(atClockTimeOnDay(frame().center, to24h(hour12, pm), minutes, seconds))
+/** Moves the cursor to a wall-clock time on a day (`dayTs`: any time that day; default the cursor's). */
+export function applyClockInput(hour12: number, minutes: number, seconds: number, pm: boolean, dayTs = frame().center) {
+  landCursorAt(atClockTimeOnDay(dayTs, to24h(hour12, pm), minutes, seconds))
+}
+
+/** Moves the cursor `offsetMs` from Now or the selected instant (a typed offset of any length). */
+export function applyOffset(offsetMs: number, reference: 'now' | 'selected'): boolean {
+  const base = reference === 'now' ? frame().now : entities.getInstant(v().currentSelectedInstantId)?.tsEpochMs
+  if (typeof base !== 'number') return false
+  landCursorAt(base + offsetMs)
+  return true
 }
 
 /** Sends the cursor to a typed time, landing on an instant only if one is exactly there. */
@@ -941,6 +1033,11 @@ export function materializeOccurrence(id: string): string | undefined {
     entities.addInstants([{ id, tsEpochMs: shiftTs, label: describeShift(shift), favorite: false }])
     return id
   }
+  const season = parseSeasonVirtualId(id)
+  if (season) {
+    entities.addInstants([{ id, tsEpochMs: season.ts, label: seasonName(season.kind, useSettings.getState().skyLocation?.lat), favorite: false }])
+    return id
+  }
   const v = parseVirtualId(id)
   if (!v) return
   const series = entities.getGroup(v.seriesId)
@@ -1000,7 +1097,7 @@ export function stopRepeating(id: string) {
     if (i.seriesId === series.id && i.occurrence && i.occurrence > date) deleteInstant(i.id)
   }
   if (useEntities.getState().instants.some(i => i.seriesId === series.id && i.id !== id)) return
-  entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined }))
+  entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined, collectionId: series.collectionId }))
   entities.removeGroup(series.id)
   ui.showSeriesHint(null)
 }
@@ -1071,7 +1168,6 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
 export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
-  ui.callLemon()
   void primeNotifications()
   quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}) })
   // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.
@@ -1129,24 +1225,32 @@ export function ringingChoicesFor(key: string): RingingChoices | null {
 // Backup: export and import
 
 /** Everything worth keeping as one backup: the settings and the saved instants and spans. */
-export function exportBackup(date = new Date()): Backup {
+/**
+ * Settings and data in one file. `collections`: only those groups' data (domain/collections
+ * dataForCollections); `settings: false` leaves the settings out (sharing a group).
+ */
+export function exportBackup(date = new Date(), opts: { collections?: ReadonlySet<string>; settings?: boolean } = {}): Backup {
+  const { collections } = opts
   // The migration marker is per device, not a preference.
   const preferences: Partial<SettingsState> = { ...useSettings.getState() }
   delete preferences.layoutVersion
   const { autoDismissMs, unattended } = useAlarms.getState()
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
-  const { spans, groups } = useEntities.getState()
+  const { spans, groups, collections: mine } = useEntities.getState()
   const instants = storedInstants(useEntities.getState().instants)
+  const all = { instants, spans, groups: groups ?? [], collections: mine }
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: date.toISOString(),
-    settings: {
-      preferences,
-      alarms: { autoDismissMs, unattended },
-      view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
-    },
-    data: { instants, spans, groups: groups ?? [] },
+    ...(opts.settings === false ? {} : {
+      settings: {
+        preferences,
+        alarms: { autoDismissMs, unattended },
+        view: { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement },
+      },
+    }),
+    data: collections ? dataForCollections(all, collections) : all,
   }
 }
 
@@ -1155,6 +1259,8 @@ export interface ImportChoice {
   data: boolean
   /** Data only: replace everything, or combine with what is here. */
   mode: ImportMode
+  /** Combining: where each of the file's groups goes (domain/collections); absent = as in the file. */
+  groups?: readonly ImportGroupRow[]
 }
 
 /** Applies the chosen parts of a (parsed) backup. */
@@ -1171,9 +1277,14 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
   }
   if (choice.data && backup.data) {
     const before = useEntities.getState()
-    const merged = importedData(before, backup.data, choice.mode)
+    // Combining maps the file's groups as chosen (new, into yours, or left out); replacing takes the file's.
+    const mapped = choice.mode === 'combine' && choice.groups ? mapImport(backup.data, choice.groups) : null
+    const merged = importedData(before, mapped ? mapped.data : backup.data, choice.mode)
     const synced = syncFavorites(merged.instants, merged.spans)
-    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [] }
+    const collections = choice.mode === 'replace'
+      ? sanitizeCollections(backup.data.collections ?? [])
+      : [...before.collections, ...(mapped?.added ?? [])]
+    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [], collections }
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

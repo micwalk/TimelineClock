@@ -91,3 +91,18 @@ describe('dock toggle', () => {
     expect(screen.getByRole('button', { name: 'Dock Agenda' })).toBeTruthy()
   })
 })
+
+describe('a row\'s eye', () => {
+  it('opens its Visibility under the row; Hide everywhere hides it', () => {
+    useEntities.setState({ instants: [], spans: [], groups: [] })
+    const id = entities.createInstant(Date.now() - 60_000, 'Tea')
+    useUi.setState({ listTab: 'instants', visibilityOpen: null })
+    render(<Agenda />)
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility' }))
+    expect(screen.getByRole('slider', { name: 'Label up to' })).toBeTruthy()
+    expect(screen.getByText(/^Auto: Label up to 3 days/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide everywhere' }))
+    expect(entities.getInstant(id)?.hidden).toBe(true)
+    act(() => useUi.setState({ visibilityOpen: null }))
+  })
+})

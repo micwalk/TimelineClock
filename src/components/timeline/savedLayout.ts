@@ -20,11 +20,14 @@ import type { PushBox } from '../../domain/pushClear.ts'
 import { pushClear } from '../../domain/pushClear.ts'
 import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
-import type { SeriesSummary } from '../../domain/rhythm.ts'
-import { planRhythm, seriesItemId } from '../../domain/rhythm.ts'
-import { SUN_RHYTHM } from '../../domain/sunEvents.ts'
+import type { Stage, Visibility } from '../../domain/displayGroups.ts'
+import { groupVisibility, markFade, recurringGroupOf, stageAt } from '../../domain/displayGroups.ts'
+import { HOUR } from '../../domain/time.ts'
+import { instantVisibility, longestSpans } from '../../domain/reach.ts'
+import type { SpanRecord } from '../../domain/entities.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
+import { setDrawnSource } from '../../store/actions.ts'
 import { useTimelineInstants } from './timelineInstants.ts'
 
 /** Chips extend past the line; keep markers mounted this far off screen. */
@@ -224,10 +227,10 @@ export interface SavedLayout {
   bellIds: string[]
   /** Instant id → live bells folded into its chip (too close to stand apart). */
   bellFolded: Record<string, number>
-  /** Occurrences collapsed into their series' rhythm (id → series): a tick, no chip. */
-  rhythm: Record<string, string>
-  /** Collapsed series' summary chips (placed under `series:<id>`). */
-  seriesChips: SeriesSummary[]
+  /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups). */
+  marks: Record<string, true>
+  /** Marks fading out before their zoom hides them (id → opacity, absent = 1); not structure. */
+  markFade: Record<string, number>
   /** Rows the chips occupy, at least 1. */
   rowsUsed: number
 }
@@ -239,15 +242,12 @@ const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<strin
   return ka.every(k => k in b && a[k] === b[k])
 }
 
-const sameSummaries = (a: readonly SeriesSummary[], b: readonly SeriesSummary[]) =>
-  a.length === b.length && a.every((x, k) => x.seriesId === b[k].seriesId && x.anchorId === b[k].anchorId && x.count === b[k].count && x.nextTs === b[k].nextTs)
-
 /** Structural equality without serializing: the same chips in the same places. */
 export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
     sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
-    sameRecord(a.rhythm, b.rhythm) && sameSummaries(a.seriesChips, b.seriesChips) &&
+    sameRecord(a.marks, b.marks) &&
     sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
@@ -281,9 +281,13 @@ export interface SavedLayoutInputs {
   draggingBell: string | null
   widths: Readonly<Record<string, number>>
   tunables: unknown
+  /** How each group shows by zoom (settings), by group key. */
+  groupVisibility: Readonly<Record<string, Visibility>>
   laneCount: number
   /** Endpoints of the selected or focused span: shown even when hidden. Absent = none. */
   revealIds?: readonly string[]
+  /** The spans (an instant reaches further when it ends a long span: domain/reach). Absent = none. */
+  spans?: readonly SpanRecord[]
 }
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
@@ -297,6 +301,18 @@ interface CacheEntry {
   pxPerMs: number
   crossSize: number
   result: SavedLayout
+}
+
+/** The longest span each instant ends, per inputs (they change only when the data does). */
+const longestCache = new WeakMap<SavedLayoutInputs, Map<string, number>>()
+function longestSpansOf(c: SavedLayoutInputs): Map<string, number> {
+  let m = longestCache.get(c)
+  if (!m) {
+    const ts = new Map(c.instants.map(i => [i.id, i.tsEpochMs]))
+    m = longestSpans(c.spans ?? [], id => ts.get(id))
+    longestCache.set(c, m)
+  }
+  return m
 }
 
 /**
@@ -315,9 +331,23 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     // Hidden instants show only while you're working with them (selected, focused, editing,
     // moving) or with a span they end (selected or focused span).
     const revealed = (i: InstantRecord) => !!c.revealIds?.includes(i.id)
+    // Every instant's stage at this zoom (domain/displayGroups): Label (its chip), Mark (a line from
+    // the axis, no chip) or Hidden, by its own visibility, else its group's, else its reach
+    // (domain/reach). Ringing ones keep their labels.
+    const visibleMs = f.end - f.start
+    const ringingInstants = new Set(c.ringing.map(k => parseRingKey(k).instantId))
+    const longest = longestSpansOf(c)
+    const unnamedReachMs = getTunables().unnamedReachHours * HOUR
+    const visibilityOf = (i: InstantRecord): Visibility => {
+      const g = recurringGroupOf(i)
+      const group = g ? groupVisibility(g, c.groupVisibility) : null
+      return instantVisibility(i, { now: f.now, countdown: !!i.favorite || hasArmedAlarm(i, f.now), longestSpanMs: longest.get(i.id) ?? 0, unnamedReachMs, group })
+    }
+    const stageOf = (i: InstantRecord): Stage => (ringingInstants.has(i.id) ? 'label' : stageAt(visibilityOf(i), visibleMs))
+    const zoomHidden = (i: InstantRecord) => stageOf(i) === 'hidden'
     const isVisible = (i: InstantRecord) =>
       i.id === c.selected || i.id === c.secondary || i.id === c.focusedInstantId || i.id === c.editing || i.id === c.moving ||
-      ((!i.hidden || revealed(i)) && i.tsEpochMs >= lo && i.tsEpochMs <= hi)
+      ((!i.hidden || revealed(i)) && i.tsEpochMs >= lo && i.tsEpochMs <= hi && !zoomHidden(i))
     const prev = cache
     const ringingKeys = new Set(c.ringing)
     const drag = c.draggingBell ? bellDragAt() : null
@@ -349,31 +379,22 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const originPos = Number.isFinite(origin) ? f.pos(origin) : 0
     const vertical = c.orientation === 'vertical'
     const t = getTunables()
-    // Repeats zoomed out collapse into a rhythm (domain/rhythm): ticks and one summary chip.
     const ringingIds = new Set(c.ringing.map(k => parseRingKey(k).instantId))
     const worked = new Set([c.selected, c.secondary, c.mode === 'instant' ? c.focusedInstantId : null, c.editing, c.moving].filter(Boolean))
-    // Computed sunrises and sunsets collapse the same way, as one group (a tapped one is an instant of its own).
-    const rhythmGroup = (i: InstantRecord) => i.seriesId ?? (i.virtual && i.sun ? SUN_RHYTHM : undefined)
-    const rhythm = planRhythm(
-      visible.filter(i => rhythmGroup(i)).map(i => ({
-        id: i.id, seriesId: rhythmGroup(i)!, pos: f.pos(i.tsEpochMs), ts: i.tsEpochMs,
-        keep: !!i.seriesEdited || worked.has(i.id) || ringingIds.has(i.id),
-      })),
-      {
-        now: f.now,
-        // Sun times collapse sooner in vertical (6 chips' height), so they gather before they fade out (sunHideDayPx).
-        gapPx: sid => (vertical ? (sid === SUN_RHYTHM ? Math.max(t.rhythmGapPx, 6 * CHIP_HEIGHT) : t.rhythmGapPx) : Math.max(t.rhythmGapPx, 1.25 * (c.widths[seriesItemId(sid)] ?? 180))),
-        // Its summary chip sits on screen (clear of the edges) when it can.
-        view: sid => {
-          // Clear of the ends by a chip's height (vertical) or half its own width (horizontal).
-          const margin = vertical ? CHIP_HEIGHT : (c.widths[seriesItemId(sid)] ?? 240) / 2 + 8
-          return { lo: margin, hi: f.mainSize - margin }
-        },
-        // Vertical summaries are wide: two side by side would run off screen, so they stack along time.
-        spacing: vertical ? CHIP_HEIGHT + t.chipGapPx : 0,
-      },
-    )
-    const items = layoutItems(visible.filter(i => !rhythm.collapsed[i.id]), {
+    // Marks: past its Label zoom an instant is a line from the axis, no chip; it fades out before
+    // it is Hidden. What you are working with keeps its label. Crowded labels slide aside or fold
+    // into "+N" in the overlap layout, like any chips: crowding never makes a mark.
+    const marks: Record<string, true> = {}
+    const fades: Record<string, number> = {}
+    for (const i of visible) {
+      if (worked.has(i.id) || ringingIds.has(i.id)) continue
+      const v = visibilityOf(i)
+      if (stageAt(v, visibleMs) !== 'mark') continue
+      marks[i.id] = true
+      const fade = markFade(v, visibleMs)
+      if (fade < 1) fades[i.id] = Math.round(fade * 50) / 50
+    }
+    const items = layoutItems(visible.filter(i => !marks[i.id]), {
       now: f.now,
       pos: ts => f.pos(ts) - originPos,
       mainSize: f.mainSize,
@@ -389,26 +410,14 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     })
     // Bells before their instants share the chips' room. A live one is never hidden (pinned:
     // it always gets a place, never a "+N"); they sit next to the axis before ordinary chips.
-    const shownBells = bells.shown.filter(b => !rhythm.collapsed[b.inst.id])
+    const shownIds = new Set(visible.map(i => i.id))
+    const shownBells = bells.shown.filter(b => !marks[b.inst.id] && (shownIds.has(b.inst.id) || !zoomHidden(b.inst)))
     for (const b of shownBells) {
       items.push({
         id: bellItemId(b.alarm.id),
         pos: f.pos(b.ringTs) - originPos,
         ...bellExtent(c.selectedBell === b.alarm.id, vertical),
         priority: 3.5,
-        pinned: true,
-      })
-    }
-    // A collapsed series' summary chip, at its next occurrence. It stands for many: never a "+N".
-    for (const sm of rhythm.summaries) {
-      const id = seriesItemId(sm.seriesId)
-      const w = c.widths[id] ?? 180
-      items.push({
-        id,
-        pos: f.pos(sm.anchorTs) - originPos,
-        mainExtent: vertical ? CHIP_HEIGHT : w,
-        crossExtent: vertical ? w : CHIP_HEIGHT,
-        priority: 3.6,
         pinned: true,
       })
     }
@@ -441,13 +450,16 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       foldCount: r.foldCount,
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
       bellIds: shownBells.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
-      bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !rhythm.collapsed[id])),
-      rhythm: rhythm.collapsed,
-      seriesChips: rhythm.summaries.filter(sm => r.placed[seriesItemId(sm.seriesId)]),
+      bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !marks[id])),
+      marks,
+      markFade: fades,
       rowsUsed: Math.max(1, deepest + 1),
     }
-    // Keep the old object when nothing visible changed, so React skips the render.
-    const result = prev && layoutEqual(prev.result, next) ? prev.result : next
+    // Keep the old object when nothing visible changed, so React skips the render. The fade isn't
+    // structure (it is read per frame), so it is updated in place.
+    const same = !!prev && layoutEqual(prev.result, next)
+    if (same) prev.result.markFade = fades
+    const result = same ? prev.result : next
     cache = {
       inputs: c,
       visible,
@@ -478,9 +490,8 @@ export interface SavedLayoutStructure {
   clusters: { id: string; memberIds: string[]; topPriority: number }[]
   bellIds: string[]
   bellFolded: Record<string, number>
-  seriesChips: SeriesSummary[]
-  /** Occurrences collapsed into a rhythm (they leave the chips, so the chips' change covers it). */
-  rhythm: Record<string, string>
+  /** Instants shown as marks (they leave the chips, so the chips' change covers it). */
+  marks: Record<string, true>
   rowsUsed: number
 }
 
@@ -493,7 +504,7 @@ const sameKeys = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<strin
 export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
-    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameSummaries(a.seriesChips, b.seriesChips) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
@@ -509,12 +520,11 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   clusters: l.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, topPriority: c.topPriority })),
   bellIds: l.bellIds,
   bellFolded: l.bellFolded,
-  seriesChips: l.seriesChips,
-  rhythm: l.rhythm,
+  marks: l.marks,
   rowsUsed: l.rowsUsed,
 })
 
-export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, rhythm: {}, seriesChips: [], rowsUsed: 1 }
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
 
 const source: {
   compute: ReturnType<typeof createSavedLayoutCache>
@@ -532,6 +542,17 @@ export function savedLayoutAt(f: FrameLike): SavedLayout {
   source.last = { f, inputs, result }
   return result
 }
+
+const drawnIndex = new WeakMap<readonly string[], ReadonlySet<string>>()
+/** The instants whose lines are drawn this frame (a Label or a Mark), or null with no timeline mounted. */
+export function drawnIdsAt(f: FrameLike): ReadonlySet<string> | null {
+  if (!source.inputs) return null
+  const ids = savedLayoutAt(f).visibleIds
+  let set = drawnIndex.get(ids)
+  if (!set) drawnIndex.set(ids, set = new Set(ids))
+  return set
+}
+setDrawnSource(drawnIdsAt)
 
 // ---------------------------------------------------------------------------
 // The Cursor ＋ is an obstacle: it never moves, so chips in its row (column) are pushed along
@@ -621,10 +642,11 @@ export function useSavedLayoutSource(laneCount = 0): number {
   const bellUi = useUi(useShallow(s => ({ selectedBell: s.selectedBell, draggingBell: s.draggingBell })))
   const widths = useChipWidths(s => s.widths)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
+  const groupVisibility = useSettings(s => s.groupVisibility) // so do the groups' visibility
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const inputs = useMemo<SavedLayoutInputs>(
-    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, tunables, laneCount, revealIds }),
-    [orientation, dir, instants, v, ringing, bellUi, widths, tunables, laneCount, revealIds],
+    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, tunables, groupVisibility, laneCount, revealIds, spans }),
+    [orientation, dir, instants, v, ringing, bellUi, widths, tunables, groupVisibility, laneCount, revealIds, spans],
   )
   // Set during render so the children rendering next (the chips) read these inputs.
   source.inputs = inputs

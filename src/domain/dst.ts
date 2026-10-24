@@ -2,8 +2,10 @@
 // called on either side ("PDT", "PST"), and the computed "Clocks back 1h" instants the timeline
 // shows at them. Every function takes an optional IANA zone ("America/Los_Angeles"); without one
 // it uses the device's own, so a world clock (#9) can ask about any zone with the same code.
+import { LABELS } from '../config/labels.ts'
 import type { InstantRecord } from './entities.ts'
 import { isAtSun } from './sunEvents.ts'
+import { isAtSeason } from './seasons.ts'
 import { HOUR, MINUTE } from './time.ts'
 
 const partsFmt = new Map<string, Intl.DateTimeFormat>()
@@ -42,8 +44,8 @@ export interface DstShift {
   after: number
 }
 
-/** Offsets change at most every few months: checking every 6 hours finds every change. */
-const SCAN_MS = 6 * HOUR
+/** Offsets change at most every few months: checking once a day finds every change. */
+const SCAN_MS = 24 * HOUR
 
 /** The clock changes in [from, to], in order. */
 export function dstShifts(from: number, to: number, timeZone?: string): DstShift[] {
@@ -80,9 +82,9 @@ export function isDstShiftAt(ts: number, timeZone?: string): boolean {
   return utcOffsetMin(ts - MINUTE, timeZone) !== utcOffsetMin(ts, timeZone)
 }
 
-/** "DST ends (🕰️back)" when the clocks go back, "DST begins (🕰️fwd)" when they go forward (the header names the zones). */
+/** What a clock change is called (config/labels): DST ends when the clocks go back, begins when they go forward (the header names the zones). */
 export function describeShift(s: DstShift): string {
-  return s.after < s.before ? 'DST ends (🕰️back)' : 'DST begins (🕰️fwd)'
+  return s.after < s.before ? LABELS.dstEnds : LABELS.dstBegins
 }
 
 /** A computed clock change's id: "dst:<epoch ms>". */
@@ -112,8 +114,19 @@ export function virtualDstShifts(instants: readonly InstantRecord[], from: numbe
 export const isAtDstShift = (inst: Pick<InstantRecord, 'id' | 'tsEpochMs'>, timeZone?: string) =>
   parseDstVirtualId(inst.id) !== null && isDstShiftAt(inst.tsEpochMs, timeZone)
 
-/** A time the world sets, not you: a sunrise or sunset, or a clock change. Never moved or deleted (hidden instead). */
-export const isFixedTime = (inst: InstantRecord) => isAtSun(inst) || isAtDstShift(inst)
+/** A time the world sets, not you: a sunrise or sunset, a clock change, a solstice or equinox. Never moved or deleted (hidden instead). */
+export const isFixedTime = (inst: InstantRecord) => isAtSun(inst) || isAtDstShift(inst) || isAtSeason(inst)
+
+/** The same wall-clock time and day of the month `months` calendar months from `ts` (Jan 31 + 1 month is the last day of February). */
+export function addCalendarMonths(ts: number, months: number): number {
+  const d = new Date(ts)
+  const day = d.getDate()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + months)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  d.setDate(Math.min(day, last))
+  return d.getTime()
+}
 
 /** The same wall-clock time `days` calendar days from `ts` (a day across a clock change is 23 or 25 hours). */
 export function addCalendarDays(ts: number, days: number): number {

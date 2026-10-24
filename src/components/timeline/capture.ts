@@ -20,6 +20,7 @@ import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
+import { drawnIdsAt } from './savedLayout.ts'
 
 /** At rest only an exact hit captures, px (as for typed times and ± steps). */
 export const EXACT_CAPTURE_PX = 2
@@ -44,9 +45,12 @@ export interface Capture {
 
 let last: { f: Frame; result: Capture | null } | null = null
 let prevId: string | null = null
-let candidates: { from: readonly InstantRecord[]; list: CaptureCandidate[] } | null = null
-const candidatesOf = (instants: readonly InstantRecord[]) => {
-  if (candidates?.from !== instants) candidates = { from: instants, list: instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: i.hidden })) }
+// Only what is drawn captures: an instant Hidden at this zoom, or hidden everywhere, has no line.
+let candidates: { from: readonly InstantRecord[]; drawn: ReadonlySet<string> | null; list: CaptureCandidate[] } | null = null
+const candidatesOf = (instants: readonly InstantRecord[], drawn: ReadonlySet<string> | null) => {
+  if (candidates?.from !== instants || candidates.drawn !== drawn) {
+    candidates = { from: instants, drawn, list: instants.map(i => ({ id: i.id, ts: i.tsEpochMs, hidden: drawn ? !drawn.has(i.id) : i.hidden })) }
+  }
   return candidates.list
 }
 
@@ -64,7 +68,7 @@ export function captureAt(f: Frame): Capture | null {
     const slow = speed < (prevId ? CAPTURE_HOLD_SPEED : CAPTURE_MAX_SPEED)
     const radiusPx = !gesture.dragging ? EXACT_CAPTURE_PX : slow ? (gesture.touch ? t.landingTouchPx : t.landingMousePx) : 0
     const id = radiusPx <= 0 ? null : findCapture({
-      instants: candidatesOf(instants), now: f.now,
+      instants: candidatesOf(instants, drawnIdsAt(f)), now: f.now,
       center: f.center, pxPerMs: f.pxPerMs, radiusPx, prevId, releasePx: gesture.dragging ? RELEASE_PX : 0,
     })
     if (id === NOW_TARGET) result = { id, kind: 'now', ts: f.now, preview: true }

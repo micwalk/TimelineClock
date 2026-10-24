@@ -9,7 +9,7 @@ const frame = (crossSize = 390): Frame => ({
 } as unknown as Frame)
 
 const inst = (id: string, ts: number) => ({ id, tsEpochMs: ts, label: id })
-const savedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, rhythm: {}, seriesChips: [], rowsUsed: 1 }
+const savedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
 
 describe('rightSideLayout', () => {
   it('keeps the chips of overlapping selected lanes apart (the selected span and the implied selection span)', () => {

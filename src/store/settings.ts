@@ -7,6 +7,8 @@ import type { TunableKey, Tunables } from '../domain/tunables.ts'
 import { clampTunable, resolveTunables, sanitizeTunableOverrides } from '../domain/tunables.ts'
 import type { AlarmRingDefaults } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
+import type { Visibility } from '../domain/displayGroups.ts'
+import { sanitizeGroupVisibility } from '../domain/displayGroups.ts'
 import { SUN_EVENTS } from '../domain/sun.ts'
 import { sanitizeRingDefaults } from '../domain/alarmPicker.ts'
 
@@ -66,8 +68,14 @@ export interface SettingsState {
   skyLocation: SkyLocation | null
   /** Which of sunrise and sunset show on the timeline (once a location is set); switched in the Agenda's Repeats tab. */
   sunEvents: SunEvent[]
+  /** How each group shows by zoom (Label / Mark / Hidden: domain/displayGroups), by group key; missing keys use the defaults. */
+  groupVisibility: Record<string, Visibility>
+  /** Zoom strips' handles snap to the ladder's stops (else they slide freely). */
+  stripSnap: boolean
   /** Clock changes (daylight saving) on the timeline. */
   dstShifts: boolean
+  /** Solstices and equinoxes (domain/seasons) on the timeline. */
+  seasons: boolean
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -89,15 +97,18 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     skyStyle: r.skyStyle === 'rainbow' ? 'rainbow' : 'sky',
     skyLocation: sanitizeSkyLocation(r.skyLocation),
     dstShifts: r.dstShifts !== false,
+    seasons: r.seasons !== false,
     // Was one on/off switch for both.
     sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
+    groupVisibility: sanitizeGroupVisibility(r.groupVisibility ?? r.groupDisplay),
+    stripSnap: r.stripSnap !== false,
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
   }
 }
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -125,9 +136,18 @@ export const settings = {
   setSky: (sky: SkyMode) => useSettings.setState({ sky }),
   setSkyStyle: (skyStyle: SkyStyle) => useSettings.setState({ skyStyle }),
   setDstShifts: (dstShifts: boolean) => useSettings.setState({ dstShifts }),
+  setSeasons: (seasons: boolean) => useSettings.setState({ seasons }),
   /** Shows or hides sunrises (or sunsets) on the timeline. */
   setSunEventShown: (event: SunEvent, shown: boolean) =>
     useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),
+  setStripSnap: (stripSnap: boolean) => useSettings.setState({ stripSnap }),
+  setGroupVisibility: (key: string, v: Visibility) => useSettings.setState(s => ({ groupVisibility: { ...s.groupVisibility, [key]: v } })),
+  /** Back to the group's default visibility. */
+  resetGroupVisibility: (key: string) => useSettings.setState(s => {
+    const next = { ...s.groupVisibility }
+    delete next[key]
+    return { groupVisibility: next }
+  }),
   setSkyLocation: (loc: SkyLocation | null) => useSettings.setState({ skyLocation: loc && sanitizeSkyLocation(loc) }),
   setLayoutVersion: (layoutVersion: number) => useSettings.setState({ layoutVersion }),
   setAlarmRings: (alarmRings: AlarmRingDefaults) => useSettings.setState({ alarmRings: sanitizeRingDefaults(alarmRings) }),

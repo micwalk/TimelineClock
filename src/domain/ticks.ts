@@ -3,7 +3,7 @@
 import { DAY, HOUR, MINUTE, SECOND, lerp, smoothstep } from './time.ts'
 import type { Orientation } from './layoutMode.ts'
 
-export type CalendarUnit = 'day' | 'week' | 'month' | 'year'
+export type CalendarUnit = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'year5' | 'decade' | 'year50' | 'century'
 
 export interface TickUnit {
   ms: number
@@ -40,7 +40,12 @@ export const TICK_UNITS: TickUnit[] = [
   { ms: DAY, calendar: 'day' },
   { ms: 7 * DAY, calendar: 'week' },
   { ms: 30 * DAY, calendar: 'month' },
+  { ms: 91 * DAY, calendar: 'quarter' },
   { ms: 365 * DAY, calendar: 'year' },
+  { ms: 5 * 365 * DAY, calendar: 'year5' },
+  { ms: 10 * 365 * DAY, calendar: 'decade' },
+  { ms: 50 * 365 * DAY, calendar: 'year50' },
+  { ms: 100 * 365 * DAY, calendar: 'century' },
 ]
 
 const HORIZONTAL_LABEL_SPACING_PX = 100
@@ -101,12 +106,20 @@ export function computeTickStyle(tier: TickTier, spacingPx: number, minLabelSpac
   }
 }
 
+/** Years in each multi-year tick unit. */
+const YEARS_PER: Partial<Record<CalendarUnit, number>> = { year5: 5, decade: 10, year50: 50, century: 100 }
+
 export function firstCalendarBoundaryAtOrBefore(ts: number, unit: CalendarUnit): number {
   const d = new Date(ts)
   d.setHours(0, 0, 0, 0)
   if (unit === 'week') d.setDate(d.getDate() - d.getDay()) // Sunday
   else if (unit === 'month') d.setDate(1)
+  else if (unit === 'quarter') d.setMonth(Math.floor(d.getMonth() / 3) * 3, 1)
   else if (unit === 'year') d.setMonth(0, 1)
+  else if (unit === 'year5' || unit === 'decade' || unit === 'year50' || unit === 'century') {
+    const span = YEARS_PER[unit] ?? 1
+    d.setFullYear(Math.floor(d.getFullYear() / span) * span, 0, 1)
+  }
   return d.getTime()
 }
 
@@ -115,7 +128,8 @@ export function addCalendar(ts: number, unit: CalendarUnit, amount: number): num
   if (unit === 'day') d.setDate(d.getDate() + amount)
   else if (unit === 'week') d.setDate(d.getDate() + 7 * amount)
   else if (unit === 'month') d.setMonth(d.getMonth() + amount, 1)
-  else d.setFullYear(d.getFullYear() + amount, 0, 1)
+  else if (unit === 'quarter') d.setMonth(d.getMonth() + 3 * amount, 1)
+  else d.setFullYear(d.getFullYear() + amount * (YEARS_PER[unit] ?? 1), 0, 1)
   return d.getTime()
 }
 
@@ -154,6 +168,7 @@ function* unitTimes(unit: TickUnit, start: number, end: number, maxCount: number
 }
 
 const monthFmt = new Intl.DateTimeFormat(undefined, { month: 'short' })
+const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 
 export function formatTickLabel(t: number, unit: TickUnit): string {
@@ -168,8 +183,10 @@ export function formatTickLabel(t: number, unit: TickUnit): string {
     const h = d.getHours()
     return `${h === 0 ? 12 : h > 12 ? h - 12 : h}${h >= 12 ? 'PM' : 'AM'}`
   }
-  if (unit.calendar === 'day' || unit.calendar === 'week') return `${monthFmt.format(d)} ${d.getDate()}`
+  // A day says which day of the week it is ("Thu Oct 15"), as the day ticks do among hours too.
+  if (unit.calendar === 'day' || unit.calendar === 'week') return `${weekdayFmt.format(d)} ${monthFmt.format(d)} ${d.getDate()}`
   if (unit.calendar === 'month') return `${monthFmt.format(d)} ${d.getFullYear()}`
+  if (unit.calendar === 'quarter') return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
   return `${d.getFullYear()}`
 }
 

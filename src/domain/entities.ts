@@ -2,6 +2,8 @@
 // ('timeline.saved.v1' / 'timeline.spans.v1') so existing data keeps loading.
 import type { SunAnchor } from './sunEvents.ts'
 import { sanitizeSunAnchor } from './sunEvents.ts'
+import type { Visibility } from './displayGroups.ts'
+import { sanitizeVisibility } from './displayGroups.ts'
 
 export interface InstantRecord {
   id: string
@@ -14,11 +16,17 @@ export interface InstantRecord {
   snoozeOriginalId?: string
   /** Hidden from the timeline (no line or chip) by the user; its spans and Agenda row stay. */
   hidden?: boolean
+  /** The group it is in (domain/collections); absent = Default. An occurrence is in its series' group instead. */
+  collectionId?: string
   /** An occurrence of a repeating series (domain/series): the series, and its date ("YYYY-MM-DD"). */
   seriesId?: string
   occurrence?: string
   /** Changed on its own (name, time, alarms): the series' rule changes leave it alone. */
   seriesEdited?: boolean
+  /** When it was made (domain/reach: how far ahead you made it sets how far out it stays visible). Absent on instants from before. */
+  createdAt?: number
+  /** Its own visibility by zoom (the eye: Label / Mark / Hidden); absent = Auto (its group's, or domain/reach). */
+  visibility?: Visibility
   /** At a sunrise or sunset (domain/sunEvents): it follows the sun while it stays there (isAtSun). */
   sun?: SunAnchor
   /**
@@ -107,10 +115,13 @@ export function sanitizeInstants(data: unknown): InstantRecord[] {
   return data
     .filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number' && Number.isFinite(x.tsEpochMs))
     .map(x => {
-      const { alarm, alarms, sun, ...rest } = x as InstantRecord & { alarm?: unknown }
+      const { alarm, alarms, sun, createdAt, visibility, collectionId, ...rest } = x as InstantRecord & { alarm?: unknown }
       const list = alarms !== undefined ? sanitizeAlarms(alarms) : alarm === true ? [{ id: legacyAlarmId(x.id), offsetMs: 0 }] : []
       const anchor = sanitizeSunAnchor(sun)
-      return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}), ...(anchor ? { sun: anchor } : {}) }
+      return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}), ...(anchor ? { sun: anchor } : {}),
+        ...(typeof createdAt === 'number' && Number.isFinite(createdAt) ? { createdAt } : {}),
+        ...(typeof collectionId === 'string' && collectionId && collectionId !== 'default' ? { collectionId } : {}),
+        ...(sanitizeVisibility(visibility) ? { visibility: sanitizeVisibility(visibility)! } : {}) }
     })
 }
 
