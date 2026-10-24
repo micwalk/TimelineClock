@@ -11,7 +11,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 **Android app: web only** (nothing to install; it updates itself).
 
-- **Go to a time** (#15): the clock under NOW / ＋ is a button of its own. Tap it (or press G) to
+- **Go to a time** (#15): the clock under NOW / ＋ is a button of its own, the same size
+  (it says NOW over the time while you follow Now). Tap it (or press G) to
   type a time, with a date, or an offset From Now, and the cursor goes there.
 - **Zoom to Now** (#23): long-press **NOW** (or press F) to zoom out just enough to see Now and
   what you selected, or the cursor.

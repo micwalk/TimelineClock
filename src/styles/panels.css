@@ -109,29 +109,34 @@
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.controls__now { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.controls__now { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 116px; }
+.controls__now > .ctl-btn { justify-content: center; }
 /* NOW sits level with the buttons beside it; the clock hangs under it. */
 .controls--horizontal > .controls__side { align-self: start; }
-/* The clock under NOW: a button of its own (go to a typed time, G), quieter than NOW. */
-.ctl-clock-wrap { position: relative; display: flex; justify-content: center; }
+/* The clock under NOW / ＋: a button of its own, the same size and red (go to a typed time, G).
+   While following Now it says NOW over the time. */
+.ctl-clock-wrap { position: relative; display: flex; }
 .ctl-clock {
-  --accent: color-mix(in srgb, var(--c-cursor) 75%, transparent);
-  --halo: var(--c-cursor);
-  display: inline-flex;
+  --accent: var(--c-now);
+  --halo: var(--c-now);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--c-cursor) 12%, var(--surface));
-  color: #fff;
-  font: 700 13px/1.1 var(--font-mono);
+  gap: 2px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--c-now);
+  font: 700 14px/1 var(--font-mono);
   white-space: nowrap;
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 }
-.ctl-clock:hover, .ctl-clock[aria-expanded='true'] { background: color-mix(in srgb, var(--c-cursor) 26%, var(--surface)); transform: translateY(-1px); }
-.ctl-clock__icon { width: 14px; height: 14px; flex: none; color: var(--c-cursor); }
+.ctl-clock:hover, .ctl-clock[aria-expanded='true'] { background: color-mix(in srgb, var(--c-now) 18%, var(--surface)); transform: translateY(-1px); }
+.ctl-clock__label { font: 800 10px/1 var(--font-ui); letter-spacing: 0.1em; }
 /* Its time box opens above it (the bar is at the bottom of the screen). */
 .ctl-clock-wrap > .popover--below { top: auto; bottom: calc(100% + 8px); z-index: 70; }
 /* The Now line runs on down into the button: a red line from the button's top up past the bar's
@@ -866,13 +871,13 @@
 .controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
 .controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
 .controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
-/* Column 4: NOW / ＋, the clock under it. */
+/* Column 4: NOW / ＋ and the clock under it, the same size. */
 .controls__now-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.controls__now-col > .ctl-btn { flex: 1 1 0; height: auto; min-height: 30px; min-width: 0; justify-content: center; padding: 0 4px; }
+.controls__now-col > .ctl-btn, .controls__now-col > .ctl-clock-wrap { flex: 1 1 0; min-height: 0; min-width: 0; }
+.controls__now-col > .ctl-btn { height: auto; justify-content: center; padding: 0 4px; }
 .controls__now-col .ctl-btn--now .ctl-btn__text { display: inline; }
-.controls__now-col .ctl-clock { width: 100%; padding: 3px 2px; font-size: 12px; }
-.controls__now-col .ctl-clock__icon { display: none; }
-.controls__now-col .ctl-btn__plus { font-size: 26px; }
+.controls__now-col .ctl-btn__plus { font-size: 24px; }
+.controls__now-col .ctl-clock { height: auto; padding: 0 2px; font-size: 12px; }
 /* Stopwatch over Timer in column 5: labels without icons; Lap / Stop share the cell, icons over their times. */
 .controls--vertical .ctl-btn--quick .ctl-btn__text { display: inline; font-size: 13px; }
 .controls--vertical .ctl-btn--quick:not(.ctl-btn--stack) .ctl-btn__icon { display: none; }

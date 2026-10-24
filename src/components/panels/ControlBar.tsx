@@ -5,7 +5,7 @@ import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
-  ChevronDownIcon, ChevronLeftIcon, ClockIcon, ChevronRightIcon, ChevronUpIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
+  ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon,
 } from '@heroicons/react/20/solid'
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
@@ -112,8 +112,11 @@ const PlusButton = () => (
   </CtlButton>
 )
 
-/** The clock under NOW, a button of its own: its time box goes to a typed time, or one from Now (G). */
-function ClockButton({ seconds }: { seconds: boolean }) {
+/**
+ * The clock under NOW / ＋, a button of its own and the same size: its time box goes to a typed
+ * time, or one from Now (G). While following Now (the big button is ＋) it says NOW over the time.
+ */
+function ClockButton({ seconds, following }: { seconds: boolean; following: boolean }) {
   const open = useUi(s => s.jumpOpen)
   // The box closes on the press outside it, before the clock's own click would open it again.
   const closedAt = useRef(0)
@@ -122,7 +125,7 @@ function ClockButton({ seconds }: { seconds: boolean }) {
     <div className="ctl-clock-wrap">
       <button type="button" className="ctl-clock glow-box mono" aria-label="Go to a time (G)" title="Go to a time (G)" aria-expanded={open}
         onClick={() => { if (performance.now() - closedAt.current > 300) ui.setJump(!open) }}>
-        <ClockIcon className="ctl-clock__icon" aria-hidden />
+        {following && <span className="ctl-clock__label">NOW</span>}
         <LiveText compute={f => formatClockCompact(f.now, seconds)} />
       </button>
       {open && (
@@ -157,7 +160,7 @@ export function ControlBar() {
           onClick={() => act.goToAdjacentInstant(up)}>{up < 0 ? 'Previous' : 'Next'}</CtlButton>
         <IncrementButton direction={up} cell={cell(1, 3)} compact />
         {/* The column is narrow: the time without seconds fits. */}
-        <div className="controls__now-col" style={cell(1, 4, 2)}>{nowFocused ? <PlusButton /> : <NowButton />}<ClockButton seconds={false} /></div>
+        <div className="controls__now-col" style={cell(1, 4, 2)}>{nowFocused ? <PlusButton /> : <NowButton />}<ClockButton seconds={false} following={nowFocused} /></div>
         <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" style={cell(2, 1)} onClick={act.zoomIn}>Zoom in</CtlButton>
         <CtlButton icon={ChevronDownIcon} label={down < 0 ? 'Previous instant (A)' : 'Next instant (D)'} data-nav="down" style={cell(2, 2)}
           onClick={() => act.goToAdjacentInstant(down)}>{down < 0 ? 'Previous' : 'Next'}</CtlButton>
@@ -182,7 +185,7 @@ export function ControlBar() {
       {/* While following Now, the Now line runs on down into the button. NOW turns to ＋ there, so a double tap goes to Now and drops. */}
       <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>
         {nowFocused ? <PlusButton /> : <NowButton />}
-        <ClockButton seconds />
+        <ClockButton seconds following={nowFocused} />
       </div>
       <div className="controls__side is-after">
         <IncrementButton direction={1} />
