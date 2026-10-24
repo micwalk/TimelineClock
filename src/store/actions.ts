@@ -40,6 +40,7 @@ import { pickerOffsets } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
 import { sunEventName } from '../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
+import { parseSeasonVirtualId, seasonName } from '../domain/seasons.ts'
 import { addCalendarDays, addCalendarMonths, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
 import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
@@ -1030,6 +1031,11 @@ export function materializeOccurrence(id: string): string | undefined {
     const shift = dstShifts(shiftTs - MINUTE, shiftTs + MINUTE).find(s => s.ts === shiftTs)
     if (!shift) return
     entities.addInstants([{ id, tsEpochMs: shiftTs, label: describeShift(shift), favorite: false }])
+    return id
+  }
+  const season = parseSeasonVirtualId(id)
+  if (season) {
+    entities.addInstants([{ id, tsEpochMs: season.ts, label: seasonName(season.kind, useSettings.getState().skyLocation?.lat), favorite: false }])
     return id
   }
   const v = parseVirtualId(id)

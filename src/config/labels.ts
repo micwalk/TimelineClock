@@ -19,6 +19,11 @@ export const LABELS = {
   dstEnds: 'DST ends 🕰️⬅',
   /** A clock change where the clocks go forward (daylight saving begins). */
   dstBegins: 'DST begins 🕰️➡',
+  /** Solstices and equinoxes (domain/seasons), named for the season they begin where you are (Settings › Sky; the north without a location). */
+  vernalEquinox: 'Vernal Equinox',
+  summerSolstice: 'Summer Solstice',
+  autumnalEquinox: 'Autumnal Equinox',
+  winterSolstice: 'Winter Solstice',
   /** The group every instant is in until you move it (domain/collections). */
   defaultGroup: 'Default',
   /** An imported file's Default group, or everything in a file from before groups. */

@@ -3,14 +3,15 @@
 //              switch that pauses it.
 //   Upcoming:  one-off alarms, soonest first, each with a button that cancels them.
 //   Recent:    what rang in the last day and how it was answered.
-// A row goes to its instant on the timeline. The Groups tab (RepeatsList) lists sunrise and sunset
-// (#11; their switches show or hide them on the timeline), then every series, under your groups (CollectionRows),
-// alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
-// Label, Mark or Hidden by zoom).
+// A row goes to its instant on the timeline. The Groups tab (RepeatsList) has three sections:
+// System (sunrise and sunset, #11, daylight saving time and the solstices and equinoxes; their
+// switches show or hide them on the timeline), your groups (CollectionRows), then Repeating: every series, alarms or not, with the
+// same rows. Sun and series rows have an adjust button that opens their zoom strip (#10: Label,
+// Mark or Hidden by zoom).
 import { CollectionRows } from './CollectionRows.tsx'
 import { MARKS } from '../../config/labels.ts'
 import { useMemo } from 'react'
-import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
+import { AdjustmentsHorizontalIcon, BellSlashIcon, ClockIcon, GlobeAmericasIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
 import { GroupZoomStrip } from './ZoomStrip.tsx'
 import { SUN_GROUP } from '../../domain/displayGroups.ts'
 import { useUi } from '../../store/ui.ts'
@@ -21,10 +22,12 @@ import type { SeriesRecord } from '../../domain/series.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { describeRepeat, occurrenceTs } from '../../domain/series.ts'
 import type { SunEvent } from '../../domain/sun.ts'
-import { SUN_EVENTS, nextSunEvent, sunEventName } from '../../domain/sun.ts'
+import { SUN_EVENTS, sunEventName, sunRowTimes } from '../../domain/sun.ts'
 import { settings, useSettings } from '../../store/settings.ts'
 import { endpointName } from '../../domain/spans.ts'
-import { formatClockCompact, formatDuration, formatRelativeShort } from '../../domain/format.ts'
+import { formatClockCompact, formatDuration, formatMonthDay, formatRelativeShort } from '../../domain/format.ts'
+import { describeShift, dstShifts } from '../../domain/dst.ts'
+import { nextSeasonEvent, seasonName } from '../../domain/seasons.ts'
 import { displayName, storedInstants } from '../../domain/entities.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useLayout } from '../../store/layout.ts'
@@ -124,7 +127,7 @@ function StripIfOpen({ rowKey, groupKey }: { rowKey: string; groupKey: string })
 function SeriesRow({ series, next, when, groups = false }: { series: SeriesRecord; next: InstantRecord | null; when: number | null; groups?: boolean }) {
   const name = displayName(series.label, series.alarms.length > 0 ? 'Alarm' : 'Repeat')
   return (
-    <div className={`alarm-row glow-box${series.paused ? ' is-paused' : ''}`} role="button" tabIndex={0}
+    <div className={`alarm-row alarm-row--series glow-box${series.paused ? ' is-paused' : ''}`} role="button" tabIndex={0}
       onClick={() => go(next?.id)} onKeyDown={e => { if (e.key === 'Enter') go(next?.id) }}>
       <span className="alarm-row__time mono">{series.sun ? sunEventName(series.sun.event) : formatClockCompact(occurrenceTs(series, series.from), false)}</span>
       <span className="alarm-row__main">
@@ -148,7 +151,7 @@ function SeriesRow({ series, next, when, groups = false }: { series: SeriesRecor
   )
 }
 
-/** The Agenda's Repeats tab: every repeating series, alarms or not. */
+/** The Agenda's Groups tab: the system's computed instants, your groups, then every repeating series, alarms or not. */
 export function RepeatsList() {
   const instants = storedInstants(useEntities(s => s.instants))
   const groups = useEntities(s => s.groups ?? [])
@@ -156,8 +159,13 @@ export function RepeatsList() {
   const rows = useMemo(() => repeatList(instants, groups, minute * 60_000), [instants, groups, minute])
   return (
     <div className="alarms-list">
-      <CollectionRows />
+      <h3 className="alarms-list__head">System</h3>
       <SunRows minute={minute} />
+      <DstRow minute={minute} />
+      <SeasonsRow minute={minute} />
+      <h3 className="alarms-list__head">Your groups</h3>
+      <CollectionRows />
+      <h3 className="alarms-list__head">Repeating</h3>
       {rows.length === 0
         ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>{MARKS.repeat}</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>
         : rows.map(({ series, next }) => (
@@ -171,8 +179,10 @@ export function RepeatsList() {
 }
 
 /**
- * Sunrise and sunset (#11): they repeat every day by themselves. Each row's switch shows or hides
- * its chips on the timeline; a tap goes to the next one. Without a location, one row says where to set it.
+ * Sunrise and sunset (#11): they repeat every day by themselves. The rows follow the part of the day
+ * you are in (domain/sun sunRowTimes): by day, since sunrise and until sunset; by night, since
+ * sunset and until sunrise. Each row's switch shows or hides its chips on the timeline; a tap goes
+ * to its time. Without a location, one row says where to set it.
  */
 function SunRows({ minute }: { minute: number }) {
   const loc = useSettings(s => s.skyLocation)
@@ -188,32 +198,107 @@ function SunRows({ minute }: { minute: number }) {
       </div>
     )
   }
+  const times = sunRowTimes(minute * 60_000, loc)
   return <>{SUN_EVENTS.map(e => (
     <div key={e} className="group-row">
-      <SunRow event={e} on={shown.includes(e)} next={nextSunEvent(minute * 60_000, loc, e)} place={loc.name.split(',')[0]} />
+      <SunRow event={e} on={shown.includes(e)} at={times[e]} place={loc.name.split(',')[0]} />
       {/* Sunrise and sunset share one group (they gather together). */}
       <StripIfOpen rowKey={`sun:${e}`} groupKey={SUN_GROUP} />
     </div>
   ))}</>
 }
 
-function SunRow({ event, on, next, place }: { event: SunEvent; on: boolean; next: number | null; place: string }) {
+/** How far ahead the clock-change row looks for the next change (they come twice a year). */
+const DST_LOOKAHEAD_MS = 400 * 24 * 3_600_000
+
+/**
+ * Daylight saving time's clock changes: the next one, and a switch that shows or hides them on the
+ * timeline (Settings › Timeline has the same switch). A tap goes to it. Where the clocks never
+ * change, the row says so.
+ */
+function DstRow({ minute }: { minute: number }) {
+  const on = useSettings(s => s.dstShifts)
+  // A change is found by scanning a day at a time: once a day is plenty.
+  const day = Math.floor(minute / 1440)
+  const shifts = useMemo(() => dstShifts(day * 86_400_000, day * 86_400_000 + DST_LOOKAHEAD_MS), [day])
+  const next = shifts.find(sh => sh.ts > minute * 60_000) ?? null
+  const name = 'Daylight Savings Time'
+  const goNext = () => {
+    if (!next) return
+    act.focusCursorAt(next.ts)
+    if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+  }
+  return (
+    <div className={`alarm-row alarm-row--dst glow-box${on ? '' : ' is-paused'}`} role="button" tabIndex={0}
+      onClick={goNext} onKeyDown={e => { if (e.key === 'Enter') goNext() }}>
+      <span className="alarm-row__time mono">{next ? formatMonthDay(next.ts, minute * 60_000) : '—'}</span>
+      <span className="alarm-row__main">
+        <span className="alarm-row__name"><ClockIcon className="alarm-row__dst" aria-hidden /> {name}</span>
+        <span className="alarm-row__sub">{next ? describeShift(next) : 'The clocks don’t change here'}</span>
+      </span>
+      <span className="alarm-row__when">
+        {!on ? 'Hidden' : next ? <LiveText watch={bySecond} compute={f => formatRelativeShort(next.ts - f.now)} /> : ''}
+      </span>
+      <span />
+      <button type="button" role="switch" aria-checked={on} aria-label={on ? 'Hide daylight saving time changes on the timeline' : 'Show daylight saving time changes on the timeline'}
+        className={`alarm-switch${on ? ' is-on' : ''}`}
+        onClick={e => { e.stopPropagation(); settings.setDstShifts(!on) }}>
+        <span className="alarm-switch__knob" />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Solstices and equinoxes (domain/seasons): the next one and how long until it, and a switch that
+ * shows or hides them on the timeline. A tap goes to it.
+ */
+function SeasonsRow({ minute }: { minute: number }) {
+  const on = useSettings(s => s.seasons)
+  const lat = useSettings(s => s.skyLocation?.lat)
+  const next = nextSeasonEvent(minute * 60_000)
+  const goNext = () => {
+    act.focusCursorAt(next.ts)
+    if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+  }
+  return (
+    <div className={`alarm-row alarm-row--dst glow-box${on ? '' : ' is-paused'}`} role="button" tabIndex={0}
+      onClick={goNext} onKeyDown={e => { if (e.key === 'Enter') goNext() }}>
+      <span className="alarm-row__time mono">{formatMonthDay(next.ts, minute * 60_000)}</span>
+      <span className="alarm-row__main">
+        <span className="alarm-row__name"><GlobeAmericasIcon className="alarm-row__dst" aria-hidden /> Solstices and equinoxes</span>
+        <span className="alarm-row__sub">{seasonName(next.kind, lat)} · {formatClockCompact(next.ts, false)}</span>
+      </span>
+      <span className="alarm-row__when">
+        {on ? <LiveText watch={bySecond} compute={f => formatRelativeShort(next.ts - f.now)} /> : 'Hidden'}
+      </span>
+      <span />
+      <button type="button" role="switch" aria-checked={on} aria-label={on ? 'Hide solstices and equinoxes on the timeline' : 'Show solstices and equinoxes on the timeline'}
+        className={`alarm-switch${on ? ' is-on' : ''}`}
+        onClick={e => { e.stopPropagation(); settings.setSeasons(!on) }}>
+        <span className="alarm-switch__knob" />
+      </button>
+    </div>
+  )
+}
+
+function SunRow({ event, on, at, place }: { event: SunEvent; on: boolean; at: number | null; place: string }) {
   const name = sunEventName(event)
   const goNext = () => {
-    if (next === null) return
-    act.focusCursorAt(next)
+    if (at === null) return
+    act.focusCursorAt(at)
     if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
   }
   return (
     <div className={`alarm-row alarm-row--sun glow-box${on ? '' : ' is-paused'}`} role="button" tabIndex={0}
       onClick={goNext} onKeyDown={e => { if (e.key === 'Enter') goNext() }}>
-      <span className="alarm-row__time mono">{next !== null ? formatClockCompact(next, false) : '—'}</span>
+      <span className="alarm-row__time mono">{at !== null ? formatClockCompact(at, false) : '—'}</span>
       <span className="alarm-row__main">
         <span className="alarm-row__name"><SunIcon className="alarm-row__sun" aria-hidden /> {name}</span>
         <span className="alarm-row__sub">{['Daily', place].filter(Boolean).join(' · ')}</span>
       </span>
       <span className="alarm-row__when">
-        {!on ? 'Hidden' : next !== null ? <LiveText watch={bySecond} compute={f => formatRelativeShort(next - f.now)} /> : '—'}
+        {!on ? 'Hidden' : at !== null ? <LiveText watch={bySecond} compute={f => formatRelativeShort(at - f.now)} /> : '—'}
       </span>
       <span className="alarm-row__tools" onClick={ev => ev.stopPropagation()}><AdjustButton rowKey={`sun:${event}`} name="sunrise and sunset" /></span>
       <button type="button" role="switch" aria-checked={on} aria-label={on ? `Hide ${name.toLowerCase()} on the timeline` : `Show ${name.toLowerCase()} on the timeline`}

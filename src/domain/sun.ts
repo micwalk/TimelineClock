@@ -275,6 +275,32 @@ export function nextSunEvent(now: number, p: GeoPoint, event: SunEvent): number 
   return null
 }
 
+/** The last sunrise or sunset at `p` at or before `now`, or null when there was none for a year (polar). */
+export function prevSunEvent(now: number, p: GeoPoint, event: SunEvent): number | null {
+  let noon = solarNoonNear(now + DAY, p)
+  for (let k = 0; k < 372; k++) {
+    const t = eventOfSolarDay(noon, p, event)
+    if (t !== null && t <= now) return t
+    noon = solarNoonNear(noon - DAY, p)
+  }
+  return null
+}
+
+/**
+ * The Groups tab's sunrise and sunset (#11): the part of the day you are in. By day the sunrise
+ * that began it (since) and the sunset that ends it (until); by night the sunset that began it
+ * and the sunrise that ends it. Whichever came last shows when it was; the other, when it comes.
+ */
+export function sunRowTimes(now: number, p: GeoPoint): Record<SunEvent, number | null> {
+  const lastRise = prevSunEvent(now, p, 'sunrise')
+  const lastSet = prevSunEvent(now, p, 'sunset')
+  const day = lastRise !== null && (lastSet === null || lastRise > lastSet)
+  return {
+    sunrise: day ? lastRise : nextSunEvent(now, p, 'sunrise'),
+    sunset: day ? nextSunEvent(now, p, 'sunset') : lastSet,
+  }
+}
+
 /** The sunrise or sunset at `p` nearest `ts` (of the solar days around it), or null when none is near. */
 export function sunEventNear(ts: number, p: GeoPoint, event: SunEvent): number | null {
   let best: number | null = null

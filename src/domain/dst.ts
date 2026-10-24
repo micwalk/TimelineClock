@@ -5,6 +5,7 @@
 import { LABELS } from '../config/labels.ts'
 import type { InstantRecord } from './entities.ts'
 import { isAtSun } from './sunEvents.ts'
+import { isAtSeason } from './seasons.ts'
 import { HOUR, MINUTE } from './time.ts'
 
 const partsFmt = new Map<string, Intl.DateTimeFormat>()
@@ -113,8 +114,8 @@ export function virtualDstShifts(instants: readonly InstantRecord[], from: numbe
 export const isAtDstShift = (inst: Pick<InstantRecord, 'id' | 'tsEpochMs'>, timeZone?: string) =>
   parseDstVirtualId(inst.id) !== null && isDstShiftAt(inst.tsEpochMs, timeZone)
 
-/** A time the world sets, not you: a sunrise or sunset, or a clock change. Never moved or deleted (hidden instead). */
-export const isFixedTime = (inst: InstantRecord) => isAtSun(inst) || isAtDstShift(inst)
+/** A time the world sets, not you: a sunrise or sunset, a clock change, a solstice or equinox. Never moved or deleted (hidden instead). */
+export const isFixedTime = (inst: InstantRecord) => isAtSun(inst) || isAtDstShift(inst) || isAtSeason(inst)
 
 /** The same wall-clock time and day of the month `months` calendar months from `ts` (Jan 31 + 1 month is the last day of February). */
 export function addCalendarMonths(ts: number, months: number): number {

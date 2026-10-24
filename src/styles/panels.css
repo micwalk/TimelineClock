@@ -624,7 +624,7 @@
 .alarm-link--danger { --accent: var(--c-danger); }
 .alarm-link--danger.is-armed { background: color-mix(in srgb, var(--c-danger) 45%, transparent); color: #fff; }
 /* Your groups (CollectionRows): instant-coloured rows above the sun and the repeats. */
-.collection-rows { display: flex; flex-direction: column; gap: 8px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); }
+.collection-rows { display: flex; flex-direction: column; gap: 8px; }
 .alarm-row--collection { --accent: color-mix(in srgb, var(--c-instant-glow) 50%, transparent); --halo: var(--c-instant-glow); cursor: default; }
 .alarm-row--collection .alarm-row__time { font-size: 18px; color: var(--ink-dim); min-width: 2ch; text-align: center; }
 .collection-rows__add { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
@@ -937,6 +937,10 @@
 .alarm-row--sun { --accent: color-mix(in srgb, var(--c-sun) 60%, transparent); --halo: var(--c-sun); }
 .alarm-row__sun { width: 14px; height: 14px; color: var(--c-sun); vertical-align: -2px; }
 .alarm-row__time.alarm-row__sun { width: 20px; height: 20px; justify-self: center; }
+/* Clock changes (Groups tab, System): the time column holds the date. */
+.alarm-row--dst { --accent: color-mix(in srgb, var(--c-instant-glow) 50%, transparent); --halo: var(--c-instant-glow); }
+.alarm-row--dst .alarm-row__time { font-size: 15px; }
+.alarm-row__dst { width: 14px; height: 14px; color: var(--ink-dim); vertical-align: -2px; display: inline-block; }
 
 /* Groups tab (#10): a row and, under it, its zoom strip */
 .group-row { display: flex; flex-direction: column; gap: 6px; }
@@ -968,6 +972,13 @@
 /* Narrow: a sun row's "in 9h" gives its room to the name (the time says when). */
 @container (max-width: 560px) {
   .alarm-row--sun .alarm-row__when { display: none; }
+  /* A series' "in 17h" goes under its name and repeat, so the name keeps its room. */
+  .alarm-row--series { grid-template-columns: auto minmax(0, 1fr) auto auto; row-gap: 4px; }
+  .alarm-row--series > .alarm-row__time { grid-row: 1 / 3; }
+  .alarm-row--series > .alarm-row__main { grid-column: 2; grid-row: 1; }
+  .alarm-row--series > .alarm-row__when { grid-column: 2; grid-row: 2; }
+  .alarm-row--series > .alarm-row__tools { grid-column: 3; grid-row: 1 / 3; }
+  .alarm-row--series > .alarm-switch { grid-column: 4; grid-row: 1 / 3; }
 }
 
 /* TC Preview's Change preview button (Settings, preview app only) */
