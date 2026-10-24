@@ -1,5 +1,6 @@
-// Controls under the timeline: navigation, the big NOW / ＋ button (with the time under it),
-// and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
+// Controls under the timeline: navigation, the big NOW / ＋ button (long-press NOW: zoom to fit
+// Now, #23) with the clock under it (a button of its own: tap to go to a typed time, #15), and
+// the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
 import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -15,6 +16,8 @@ import { AlarmButton } from './AlarmButton.tsx'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact } from '../../domain/format.ts'
 import { useView, view } from '../../store/view.ts'
+import { ui, useUi } from '../../store/ui.ts'
+import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
 
@@ -81,6 +84,56 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
   )
 }
 
+/** NOW: a tap goes to Now, a long-press zooms so Now and the selection (or the cursor) fit. */
+function NowButton() {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressed = useRef(false)
+  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null }
+  return (
+    <CtlButton variant="now" label="Focus Now (R); long-press to zoom to Now (F)"
+      onPointerDown={() => {
+        longPressed.current = false
+        clear()
+        timer.current = setTimeout(() => { longPressed.current = true; act.zoomToNow() }, LONG_PRESS_MS)
+      }}
+      onPointerUp={clear}
+      onPointerLeave={clear}
+      onContextMenu={e => { e.preventDefault(); clear(); act.zoomToNow() }}
+      onClick={() => {
+        if (longPressed.current) { longPressed.current = false; return }
+        act.focusNow()
+      }}>NOW</CtlButton>
+  )
+}
+
+const PlusButton = () => (
+  <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" onClick={() => act.dropInstant()}>
+    <span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span>
+  </CtlButton>
+)
+
+/** The clock under NOW, a button of its own: its time box goes to a typed time, or one from Now (G). */
+function ClockButton({ seconds }: { seconds: boolean }) {
+  const open = useUi(s => s.jumpOpen)
+  // The box closes on the press outside it, before the clock's own click would open it again.
+  const closedAt = useRef(0)
+  const close = () => { closedAt.current = performance.now(); ui.setJump(false) }
+  return (
+    <div className="ctl-clock-wrap">
+      <button type="button" className="ctl-clock glow-box mono" aria-label="Go to a time (G)" title="Go to a time (G)" aria-expanded={open}
+        onClick={() => { if (performance.now() - closedAt.current > 300) ui.setJump(!open) }}>
+        <LiveText compute={f => formatClockCompact(f.now, seconds)} />
+      </button>
+      {open && (
+        <TimeEntry title="Go to a time" className="ctl-jump"
+          clock={{ initialTs: act.nowTime(), onSubmit: (t, day) => { act.applyClockInput(t.h % 12 === 0 ? 12 : t.h % 12, t.m, t.s, t.h >= 12, day); close() } }}
+          offset={{ initialMs: 0, from: 'Now', onSubmit: ms => { if (act.applyOffset(ms, 'now')) close() } }}
+          onCancel={close} />
+      )}
+    </div>
+  )
+}
+
 /** A grid cell of the vertical bar. */
 const cell = (row: number, col: number, rowSpan = 1): CSSProperties => ({ gridRow: rowSpan > 1 ? `${row} / span ${rowSpan}` : row, gridColumn: col })
 
@@ -89,15 +142,10 @@ export function ControlBar() {
   const vertical = useLayout(s => s.orientation === 'vertical')
   const dir = useLayout(s => s.dir)
 
-  // The vertical bar's NOW column is narrow: the time without seconds fits.
-  const clock = <LiveText compute={f => formatClockCompact(f.now, !vertical)} />
-  const nowButton = (style?: CSSProperties) => (nowFocused
-    ? <CtlButton variant="now" label="Drop an instant at Now" title="Drop an instant (+)" style={style} sub={clock} onClick={() => act.dropInstant()}><span className="ctl-btn__plus" aria-hidden>{MARKS.drop}</span></CtlButton>
-    : <CtlButton variant="now" label="Focus Now (R)" style={style} sub={clock} onClick={() => act.focusNow()}>NOW</CtlButton>)
 
   if (vertical) {
-    // A two-row grid that follows the screen: row 1 is "− ▲ step-up", row 2 is "+ ▼ step-down", NOW spans both rows,
-    // then Stopwatch over Timer, and Alarm spanning both rows.
+    // A two-row grid that follows the screen: row 1 is "− ▲ step-up", row 2 is "+ ▼ step-down", column 4 is
+    // NOW over ＋ (both always there) with the clock under them, then Stopwatch over Timer, and Alarm spanning both rows.
     // "Up the screen" is earlier when the future runs down (dir 1) and later when it runs up (dir -1).
     const up: 1 | -1 = dir === 1 ? -1 : 1
     const down: 1 | -1 = up === 1 ? -1 : 1
@@ -107,7 +155,8 @@ export function ControlBar() {
         <CtlButton icon={ChevronUpIcon} label={up < 0 ? 'Previous instant (A)' : 'Next instant (D)'} data-nav="up" style={cell(1, 2)}
           onClick={() => act.goToAdjacentInstant(up)}>{up < 0 ? 'Previous' : 'Next'}</CtlButton>
         <IncrementButton direction={up} cell={cell(1, 3)} compact />
-        {nowButton(cell(1, 4, 2))}
+        {/* The column is narrow: the time without seconds fits. */}
+        <div className="controls__now-col" style={cell(1, 4, 2)}><NowButton /><PlusButton /><ClockButton seconds={false} /></div>
         <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" style={cell(2, 1)} onClick={act.zoomIn}>Zoom in</CtlButton>
         <CtlButton icon={ChevronDownIcon} label={down < 0 ? 'Previous instant (A)' : 'Next instant (D)'} data-nav="down" style={cell(2, 2)}
           onClick={() => act.goToAdjacentInstant(down)}>{down < 0 ? 'Previous' : 'Next'}</CtlButton>
@@ -129,8 +178,11 @@ export function ControlBar() {
         <CtlButton icon={ChevronLeftIcon} label="Previous instant (A)" onClick={() => act.goToAdjacentInstant(-1)}>Previous</CtlButton>
         <IncrementButton direction={-1} />
       </div>
-      {/* While following Now, the Now line runs on down into the button. */}
-      <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>{nowButton()}</div>
+      {/* While following Now, the Now line runs on down into the button. NOW turns to ＋ there, so a double tap goes to Now and drops. */}
+      <div className={`controls__now${nowFocused ? ' is-following' : ''}`}>
+        {nowFocused ? <PlusButton /> : <NowButton />}
+        <ClockButton seconds />
+      </div>
       <div className="controls__side is-after">
         <IncrementButton direction={1} />
         <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>

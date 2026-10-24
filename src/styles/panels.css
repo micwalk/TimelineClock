@@ -109,7 +109,25 @@
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.controls__now { display: flex; justify-content: center; }
+.controls__now { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+/* NOW sits level with the buttons beside it; the clock hangs under it. */
+.controls--horizontal > .controls__side { align-self: start; }
+/* The clock under NOW: a button of its own (go to a typed time, G), quieter than NOW. */
+.ctl-clock-wrap { position: relative; display: flex; justify-content: center; }
+.ctl-clock {
+  --accent: color-mix(in srgb, var(--c-now) 40%, transparent);
+  --halo: transparent;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 12px/1.1 var(--font-mono);
+  white-space: nowrap;
+  transition: background 120ms ease;
+}
+.ctl-clock:hover, .ctl-clock[aria-expanded='true'] { background: var(--surface-raised); }
+/* Its time box opens above it (the bar is at the bottom of the screen). */
+.ctl-clock-wrap > .popover--below { top: auto; bottom: calc(100% + 8px); z-index: 70; }
 /* The Now line runs on down into the button: a red line from the button's top up past the bar's
    edge (any overlap lands on the Now line itself), brightening as it meets the button. */
 .controls__now.is-following .ctl-btn { position: relative; }
@@ -827,7 +845,7 @@
 }
 
 /* Vertical timeline: the bar stays at the bottom as a two-row grid that follows the screen.
-   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. NOW / ＋ spans both rows in column 4.
+   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. Column 4: NOW over ＋, the clock under them.
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
@@ -842,6 +860,12 @@
 .controls--vertical .ctl-split { display: flex; min-width: 0; min-height: 44px; }
 .controls--vertical .ctl-split > .ctl-btn { flex: 1 1 auto; height: auto; min-width: 0; justify-content: center; padding: 0 4px; gap: 2px; }
 .controls--vertical .ctl-split__caret { flex: none; width: 26px; height: auto; }
+/* Column 4: NOW over ＋, the clock under them. */
+.controls__now-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.controls__now-col > .ctl-btn { flex: 1 1 0; height: auto; min-height: 30px; min-width: 0; justify-content: center; padding: 0 4px; }
+.controls__now-col .ctl-btn__plus { font-size: 22px; }
+.controls__now-col .ctl-btn--now .ctl-btn__text { display: inline; }
+.controls__now-col .ctl-clock { width: 100%; padding: 2px 4px; }
 /* Stopwatch over Timer in column 5: labels without icons; Lap / Stop share the cell, icons over their times. */
 .controls--vertical .ctl-btn--quick .ctl-btn__text { display: inline; font-size: 13px; }
 .controls--vertical .ctl-btn--quick:not(.ctl-btn--stack) .ctl-btn__icon { display: none; }

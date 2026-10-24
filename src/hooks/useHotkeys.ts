@@ -25,6 +25,8 @@ export function useHotkeys() {
         case 'x': return run(() => act.moveCursorByIncrement(1))
         case 'z': return run(() => act.moveCursorByIncrement(-1))
         case 'r': return run(() => act.focusNow())
+        case 'f': return run(act.zoomToNow)
+        case 'g': return run(() => ui.setJump(!useUi.getState().jumpOpen))
         case 'd': case 'ArrowRight': case 'ArrowDown': return run(() => act.goToAdjacentInstant(1))
         case 'a': case 'ArrowLeft': case 'ArrowUp': return run(() => act.goToAdjacentInstant(-1))
         case '+': case '=': return run(() => act.dropInstant())

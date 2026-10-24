@@ -55,14 +55,18 @@ describe('the vertical bar', () => {
     useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().now - 60 * MINUTE })
   })
 
-  it('is a two-row grid: zoom out, up, step up, NOW over zoom in, down, step down', () => {
+  it('is a two-row grid: zoom out, up, step up over zoom in, down, step down; NOW over ＋ beside them', () => {
     render(<ControlBar />)
     expect(screen.getByRole('navigation').className).toContain('controls--vertical')
     expect(cellOf(byName(/^Zoom out/))).toBe('1/1')
     expect(cellOf(byName(/^Previous instant/))).toBe('1/2')
     expect(cellOf(byName(/^Back 30 minutes/))).toBe('1/3')
-    expect(cellOf(byName(/^Focus Now/))).toBe('1/4')
-    expect(byName(/^Focus Now/).style.gridRow).toBe('1 / span 2')
+    // Column 4, both rows: NOW over ＋ (both always there), the clock under them.
+    const col = byName(/^Focus Now/).parentElement!
+    expect(col.style.gridRow).toBe('1 / span 2')
+    expect(col.style.gridColumn).toBe('4')
+    expect(col.contains(byName(/^Drop an instant at Now/))).toBe(true)
+    expect(col.contains(byName(/^Go to a time/))).toBe(true)
     expect(cellOf(byName(/^Start a stopwatch/))).toBe('1/5')
     expect(cellOf(byName(/^Start a timer/))).toBe('2/5')
     expect(cellOf(byName(/^Zoom in/))).toBe('2/1')
@@ -178,9 +182,27 @@ describe('Stopwatch and Timer buttons', () => {
     expect(screen.getAllByRole('menuitem')[0].textContent).toBe('13m')
   })
 
-  it('NOW / ＋ shows the time under it', () => {
+  it('the clock under NOW / ＋ is a button of its own: it goes to a typed offset from Now', () => {
+    useUi.setState({ jumpOpen: false })
     render(<ControlBar />)
-    expect(screen.getByRole('button', { name: 'Drop an instant at Now' }).querySelector('.ctl-btn__sub')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Go to a time (G)' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'From Now' }))
+    const before = engine.sample().now
+    fireEvent.change(screen.getByRole('textbox', { name: /^Offset from Now/ }), { target: { value: '200' } })
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
+    const s = useView.getState()
+    expect(s.viewFocusMode).toBe('cursor')
+    expect(Math.abs(s.timeCenter - (before + 2 * 3_600_000))).toBeLessThan(5_000)
+    expect(useUi.getState().jumpOpen).toBe(false)
+  })
+
+  it('a long-press on NOW zooms so Now and the cursor fit', () => {
+    useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().center - 6 * 3_600_000, timeWidth: 3_600_000 })
+    render(<ControlBar />)
+    fireEvent.contextMenu(screen.getByText('NOW'))
+    const s = useView.getState()
+    expect(s.viewFocusMode).toBe('cursor')
+    expect(s.timeWidth).toBeGreaterThanOrEqual(6 * 3_600_000)
   })
 })
 

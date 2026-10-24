@@ -43,6 +43,8 @@ export interface UiState {
   alarmMenuFromList: boolean
   /** The series the picker edits (from the Alarms tab), or null for a new alarm. */
   alarmEditSeries: string | null
+  /** The control bar's clock: its time box (go to a typed time; also opened by G). */
+  jumpOpen: boolean
   /** The Help / About dialog. */
   helpOpen: boolean
   plusMorph: PlusMorph | null
@@ -69,6 +71,7 @@ export const useUi = create<UiState>(() => ({
   droppedId: null,
   timerMenuOpen: false,
   alarmMenuOpen: false,
+  jumpOpen: false,
   alarmMenuFromList: false,
   alarmEditSeries: null,
   helpOpen: false,
@@ -106,6 +109,7 @@ export const ui = {
   },
   closeTagMenu: () => useUi.setState({ tagMenu: null }),
   setTimerMenu: (timerMenuOpen: boolean) => useUi.setState({ timerMenuOpen }),
+  setJump: (jumpOpen: boolean) => useUi.setState({ jumpOpen }),
   setAlarmMenu: (alarmMenuOpen: boolean) => useUi.setState({ alarmMenuOpen, alarmMenuFromList: false, alarmEditSeries: null }),
   /** From the Alarms tab: a new alarm, or editing a series. */
   openAlarmEditor: (seriesId: string | null) => useUi.setState({ alarmMenuOpen: true, alarmMenuFromList: true, alarmEditSeries: seriesId }),
