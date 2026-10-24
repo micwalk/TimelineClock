@@ -74,6 +74,8 @@ export interface SettingsState {
   stripSnap: boolean
   /** Clock changes (daylight saving) on the timeline. */
   dstShifts: boolean
+  /** Solstices and equinoxes (domain/seasons) on the timeline. */
+  seasons: boolean
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -95,6 +97,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     skyStyle: r.skyStyle === 'rainbow' ? 'rainbow' : 'sky',
     skyLocation: sanitizeSkyLocation(r.skyLocation),
     dstShifts: r.dstShifts !== false,
+    seasons: r.seasons !== false,
     // Was one on/off switch for both.
     sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
     groupVisibility: sanitizeGroupVisibility(r.groupVisibility ?? r.groupDisplay),
@@ -105,7 +108,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -133,6 +136,7 @@ export const settings = {
   setSky: (sky: SkyMode) => useSettings.setState({ sky }),
   setSkyStyle: (skyStyle: SkyStyle) => useSettings.setState({ skyStyle }),
   setDstShifts: (dstShifts: boolean) => useSettings.setState({ dstShifts }),
+  setSeasons: (seasons: boolean) => useSettings.setState({ seasons }),
   /** Shows or hides sunrises (or sunsets) on the timeline. */
   setSunEventShown: (event: SunEvent, shown: boolean) =>
     useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),

@@ -7,6 +7,22 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.6.1 — 2026-10-24
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- The **Groups** tab has three sections: **System**, **Your groups**, then **Repeating**. System
+  has Sunrise and Sunset, which follow the part of the day (by day: since sunrise, until sunset;
+  by night: since sunset, until sunrise), **Daylight Savings Time** (the next change) and
+  **Solstices and equinoxes** (the next one), each with a switch that shows or hides them on the
+  timeline.
+- **Solstices and equinoxes** are on the timeline as instants ("Summer Solstice", "Vernal
+  Equinox"; named for your hemisphere from Settings › Sky, the north without a location), like
+  clock changes: tap one to keep it, set an alarm on it; they never move. Settings › Timeline has
+  the switch too.
+- Narrow Agenda: a repeat's row puts "in 17h" under its name, which no longer squeezes to a
+  letter.
+
 ## 0.6.0 — 2026-10-21
 
 **Android app: web only** (nothing to install; it updates itself).
@@ -23,7 +39,6 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **One-off alarms on any day**: the Alarm picker has a **Date** for Once (empty is today or
   tomorrow, as before), so an alarm can be months away; where it lands shows the date beyond a
   week.
-
 ## 0.5.0 — 2026-10-21
 
 **Android app: web only** (nothing to install; it updates itself).

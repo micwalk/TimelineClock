@@ -11,6 +11,7 @@ import type { InstantRecord } from '../../domain/entities.ts'
 import { virtualOccurrences } from '../../domain/series.ts'
 import { virtualSunEvents } from '../../domain/sunEvents.ts'
 import { virtualDstShifts } from '../../domain/dst.ts'
+import { virtualSeasons } from '../../domain/seasons.ts'
 import { DAY } from '../../domain/time.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
@@ -37,20 +38,24 @@ export function useTimelineInstants(): InstantRecord[] {
   // the sun group's zoom they are gone: the sky shows it.
   const visibilities = useSettings(s => s.groupVisibility)
   const wide = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS && stageAt(groupVisibility(SUN_GROUP, visibilities), f.end - f.start) !== 'hidden')
-  // Clock changes: a few a year, shown while no more than 2 years are on screen.
+  // Clock changes, solstices and equinoxes: a few a year, shown while no more than 2 years are on screen.
   const dstNear = useFrameValue(f => f.end - f.start <= COMPUTED_MAX_MS)
   const dst = useSettings(s => s.dstShifts)
+  const seasons = useSettings(s => s.seasons)
+  const lat = useSettings(s => s.skyLocation?.lat ?? null)
   return useMemo(() => {
     const hidden = groupHiddenTest(collections ?? [], groups ?? [], engine.sample().now)
     const shown = (list: InstantRecord[]) => (hidden ? list.filter(i => !hidden(i)) : list)
     const sun = loc && wide
-    if ((!groups || groups.length === 0) && !sun && !(dst && dstNear)) return shown(instants)
+    if ((!groups || groups.length === 0) && !sun && !((dst || seasons) && dstNear)) return shown(instants)
     const [first, last] = range.split(':').map(Number)
     const occurrences = groups && groups.length > 0 ? virtualOccurrences(groups, instants, engine.sample().now, first * DAY, last * DAY) : []
     const withOccurrences = shown(occurrences.length > 0 ? [...instants, ...occurrences] : instants)
     const suns = sun ? virtualSunEvents(loc, withOccurrences, first * DAY, last * DAY, sunEvents) : []
     // Clock changes (daylight saving): a few a year, always shown while switched on.
     const shifts = dst && dstNear ? virtualDstShifts(withOccurrences, first * DAY, last * DAY) : []
-    return suns.length + shifts.length > 0 ? [...withOccurrences, ...suns, ...shifts] : withOccurrences
-  }, [instants, groups, collections, range, loc, wide, sunEvents, dst, dstNear])
+    // Solstices and equinoxes: four a year, the same moment everywhere.
+    const turns = seasons && dstNear ? virtualSeasons(withOccurrences, first * DAY, last * DAY, lat) : []
+    return suns.length + shifts.length + turns.length > 0 ? [...withOccurrences, ...suns, ...shifts, ...turns] : withOccurrences
+  }, [instants, groups, collections, range, loc, wide, sunEvents, dst, seasons, lat, dstNear])
 }

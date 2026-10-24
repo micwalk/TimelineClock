@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isAtSun, parseSunVirtualId, sanitizeSunAnchor, sunVirtualId, virtualSunEvents } from './sunEvents.ts'
-import { nextSunEvent, sunEventOnDay } from './sun.ts'
+import { nextSunEvent, sunEventOnDay, sunRowTimes } from './sun.ts'
 import { nextOccurrence, occurrenceTs, occursOn, planOccurrences, ruleFromOccurrence, sanitizeGroups, seriesFromInstant, virtualOccurrences } from './series.ts'
 import type { SeriesRecord } from './series.ts'
 import { DAY, HOUR, MINUTE } from './time.ts'
@@ -100,4 +100,19 @@ describe('series at sunset', () => {
 it('sunVirtualId round-trips', () => {
   expect(parseSunVirtualId(sunVirtualId('sunrise', 123))).toEqual({ event: 'sunrise', ts: 123 })
   expect(parseSunVirtualId('v:g@2026-10-15')).toBeNull()
+})
+
+describe('sunRowTimes', () => {
+  it('shows the part of the day you are in: since its start, until its end', () => {
+    const rise = sunEventOnDay(day(2026, 10, 15), SF, 'sunrise')!
+    const set = sunEventOnDay(day(2026, 10, 15), SF, 'sunset')!
+    const noon = (rise + set) / 2
+    expect(sunRowTimes(noon, SF)).toEqual({ sunrise: rise, sunset: set })
+    // Night: the sunset that began it, the sunrise that ends it.
+    const night = set + 3 * HOUR
+    const t = sunRowTimes(night, SF)
+    expect(t.sunset).toBe(set)
+    expect(t.sunrise).toBe(nextSunEvent(night, SF, 'sunrise'))
+    expect(t.sunrise! > night).toBe(true)
+  })
 })

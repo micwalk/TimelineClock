@@ -41,6 +41,7 @@ import { sunEventName } from '../../domain/sun.ts'
 import { isAtSun } from '../../domain/sunEvents.ts'
 import { VisibilityEditor } from '../panels/VisibilityEditor.tsx'
 import { isAtDstShift } from '../../domain/dst.ts'
+import { isAtSeason } from '../../domain/seasons.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
 import { useMorphChip } from './plusMorph.ts'
@@ -131,7 +132,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const atSun = useMemo(() => isAtSun({ tsEpochMs: ts, sun: inst.sun }), [ts, inst.sun])
   // At a clock change (daylight saving): never moved or deleted (its name says what it is: config/labels).
   const atShift = useMemo(() => isAtDstShift({ id: inst.id, tsEpochMs: ts }), [inst.id, ts])
-  const fixed = atSun || atShift
+  // At a solstice or equinox: likewise.
+  const atSeason = useMemo(() => isAtSeason({ id: inst.id, tsEpochMs: ts }), [inst.id, ts])
+  const fixed = atSun || atShift || atSeason
   const withSeconds = fineSeconds || selected || focused
 
   // Move mode: a second tap on the chip (or its clock tool) types the time instead of dragging.
@@ -163,7 +166,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {/* A sunrise or sunset never moves. */}
       {focused && !fixed && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* A sunrise or sunset already shows every day: repeating one only means something with an alarm on it. */}
-      {(inst.seriesId || (!atShift && (!atSun || openAlarms(inst).length > 0))) && <RepeatTool inst={inst} />}
+      {(inst.seriesId || (!atShift && !atSeason && (!atSun || openAlarms(inst).length > 0))) && <RepeatTool inst={inst} />}
       {/* The eye: how far out it stays (chip, mark, gone), or hidden everywhere. */}
       <VisibilityTool inst={inst} />
       {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
