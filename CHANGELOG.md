@@ -15,8 +15,6 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   type a time, with a date, or an offset From Now, and the cursor goes there.
 - **Zoom to Now** (#23): long-press **NOW** (or press F) to zoom out just enough to see Now and
   what you selected, or the cursor.
-- Vertical control bar: **NOW** and **＋** are both always there, one over the other, with the clock
-  under them.
 
 ## 0.6.1 — 2026-10-24
 

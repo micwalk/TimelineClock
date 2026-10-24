@@ -55,17 +55,17 @@ describe('the vertical bar', () => {
     useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().now - 60 * MINUTE })
   })
 
-  it('is a two-row grid: zoom out, up, step up over zoom in, down, step down; NOW over ＋ beside them', () => {
+  it('is a two-row grid: zoom out, up, step up over zoom in, down, step down; NOW and the clock beside them', () => {
     render(<ControlBar />)
     expect(screen.getByRole('navigation').className).toContain('controls--vertical')
     expect(cellOf(byName(/^Zoom out/))).toBe('1/1')
     expect(cellOf(byName(/^Previous instant/))).toBe('1/2')
     expect(cellOf(byName(/^Back 30 minutes/))).toBe('1/3')
-    // Column 4, both rows: NOW over ＋ (both always there), the clock under them.
+    // Column 4, both rows: NOW (＋ while following Now), the clock under it.
     const col = byName(/^Focus Now/).parentElement!
     expect(col.style.gridRow).toBe('1 / span 2')
     expect(col.style.gridColumn).toBe('4')
-    expect(col.contains(byName(/^Drop an instant at Now/))).toBe(true)
+    expect(screen.queryByRole('button', { name: /^Drop an instant at Now/ })).toBeNull()
     expect(col.contains(byName(/^Go to a time/))).toBe(true)
     expect(cellOf(byName(/^Start a stopwatch/))).toBe('1/5')
     expect(cellOf(byName(/^Start a timer/))).toBe('2/5')
