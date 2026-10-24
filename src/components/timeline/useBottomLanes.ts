@@ -6,7 +6,7 @@ import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, resolveSpan, resolveTimeRef, savedSpanLanes, spanEndName, spanGeometry, spanHeader } from '../../domain/spans.ts'
-import { useEntities } from '../../store/entities.ts'
+import { useEntities, useShownInstants } from '../../store/entities.ts'
 import { useSettings } from '../../store/settings.ts'
 import { useQuick } from '../../store/quick.ts'
 import { stopwatchPhase } from '../../domain/quickCreate.ts'
@@ -41,7 +41,8 @@ export type BottomLane = LaneBase & (
  * saved spans, keeping only those on screen (unplaced: see placeLanes). Re-renders only when that set changes.
  */
 export function useVisibleLanes(): BottomLane[] {
-  const instants = useEntities(s => s.instants)
+  // A span with an end in a group you switched off has no lane (resolveSpan finds no end).
+  const instants = useShownInstants()
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,

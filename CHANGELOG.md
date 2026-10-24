@@ -7,6 +7,23 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.6.0 — 2026-10-21
+
+**Android app: web only** (nothing to install; it updates itself).
+
+- **Groups** (TLC-9): every instant is in one group, **Default** until you pick another from the
+  new Group box at the top of its Visibility (or make a **New group…** right there). A repeat's
+  group is its whole series'. The Agenda's **Groups** tab lists your groups first: a switch hides
+  or shows everything in one (an alarm still to ring always shows), the pencil renames it, and
+  the trash deletes it, moving what's in it to Default or deleting that too (a second tap
+  confirms).
+- **Share a group**: Settings › Data › Export lets you tick groups (and untick Settings), and an
+  import puts each of the file's groups into a new group, one of yours, or leaves it out. Import
+  someone's export again into the same group and their instants update in place.
+- **One-off alarms on any day**: the Alarm picker has a **Date** for Once (empty is today or
+  tomorrow, as before), so an alarm can be months away; where it lands shows the date beyond a
+  week.
+
 ## 0.5.0 — 2026-10-21
 
 **Android app: web only** (nothing to install; it updates itself).

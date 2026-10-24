@@ -1,4 +1,5 @@
-// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, spans, alarms and groups (repeats, the sun, unnamed).
+// Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, spans, alarms and groups (yours, the sun, repeats).
+// Instants in a group you switched off are left out of the lists (and spans that end at one).
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
@@ -12,7 +13,7 @@ import { displayName, storedInstants } from '../../domain/entities.ts'
 import { openAlarms } from '../../domain/alarms.ts'
 import type { ResolvedSpan } from '../../domain/spans.ts'
 import { endpointName, isFavoriteNowSpan, resolveSpan, spanEndName } from '../../domain/spans.ts'
-import { useEntities } from '../../store/entities.ts'
+import { useEntities, useShownInstants } from '../../store/entities.ts'
 import { useView, view } from '../../store/view.ts'
 import type { ListTab } from '../../store/ui.ts'
 import { ui, useUi } from '../../store/ui.ts'
@@ -133,7 +134,7 @@ function lowerBound(sorted: InstantRecord[], ts: number) {
 }
 
 function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
-  const instants = storedInstants(useEntities(s => s.instants))
+  const instants = storedInstants(useShownInstants())
   const v = useView(useShallow(s => ({ mode: s.viewFocusMode, focusedId: s.focusedInstantId, selectedId: s.currentSelectedInstantId })))
   const sorted = useMemo(
     () => instants.filter(i => !favoritesOnly || i.favorite).sort((a, b) => a.tsEpochMs - b.tsEpochMs),
@@ -239,7 +240,7 @@ function SpanRow({ row, focused }: { row: SpanRowData; focused: boolean }) {
 }
 
 function SpansList() {
-  const instants = storedInstants(useEntities(s => s.instants))
+  const instants = storedInstants(useShownInstants())
   const spans = useEntities(s => s.spans)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,

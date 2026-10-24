@@ -4,9 +4,10 @@
 //   Upcoming:  one-off alarms, soonest first, each with a button that cancels them.
 //   Recent:    what rang in the last day and how it was answered.
 // A row goes to its instant on the timeline. The Groups tab (RepeatsList) lists sunrise and sunset
-// (#11; their switches show or hide them on the timeline), then every series,
+// (#11; their switches show or hide them on the timeline), then every series, under your groups (CollectionRows),
 // alarms or not, with the same rows; each has an adjust button that opens its zoom strip (#10:
 // Label, Mark or Hidden by zoom).
+import { CollectionRows } from './CollectionRows.tsx'
 import { MARKS } from '../../config/labels.ts'
 import { useMemo } from 'react'
 import { AdjustmentsHorizontalIcon, BellSlashIcon, PencilIcon, PlusIcon, SunIcon } from '@heroicons/react/20/solid'
@@ -155,6 +156,7 @@ export function RepeatsList() {
   const rows = useMemo(() => repeatList(instants, groups, minute * 60_000), [instants, groups, minute])
   return (
     <div className="alarms-list">
+      <CollectionRows />
       <SunRows minute={minute} />
       {rows.length === 0
         ? <p className="alarms-empty">Nothing repeats yet. Select any instant and use its <b>{MARKS.repeat}</b> tool, or set a repeating alarm with the <b>Alarm</b> button (L).</p>

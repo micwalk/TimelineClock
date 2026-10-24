@@ -16,6 +16,8 @@ export interface InstantRecord {
   snoozeOriginalId?: string
   /** Hidden from the timeline (no line or chip) by the user; its spans and Agenda row stay. */
   hidden?: boolean
+  /** The group it is in (domain/collections); absent = Default. An occurrence is in its series' group instead. */
+  collectionId?: string
   /** An occurrence of a repeating series (domain/series): the series, and its date ("YYYY-MM-DD"). */
   seriesId?: string
   occurrence?: string
@@ -113,11 +115,12 @@ export function sanitizeInstants(data: unknown): InstantRecord[] {
   return data
     .filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number' && Number.isFinite(x.tsEpochMs))
     .map(x => {
-      const { alarm, alarms, sun, createdAt, visibility, ...rest } = x as InstantRecord & { alarm?: unknown }
+      const { alarm, alarms, sun, createdAt, visibility, collectionId, ...rest } = x as InstantRecord & { alarm?: unknown }
       const list = alarms !== undefined ? sanitizeAlarms(alarms) : alarm === true ? [{ id: legacyAlarmId(x.id), offsetMs: 0 }] : []
       const anchor = sanitizeSunAnchor(sun)
       return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}), ...(anchor ? { sun: anchor } : {}),
         ...(typeof createdAt === 'number' && Number.isFinite(createdAt) ? { createdAt } : {}),
+        ...(typeof collectionId === 'string' && collectionId && collectionId !== 'default' ? { collectionId } : {}),
         ...(sanitizeVisibility(visibility) ? { visibility: sanitizeVisibility(visibility)! } : {}) }
     })
 }
