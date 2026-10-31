@@ -7,6 +7,30 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.7.0 — 2026-10-31
+
+**Android app: install again** (new notification channels, and the app plays alarm sounds itself
+while it is open).
+
+- **Alarm sounds** (#18): four tones, **Classic**, **Beacon**, **Marimba** and **Klaxon**, ring
+  until you answer, or a **chime**: one sound, once, nothing to answer (it shows as "Chimed" in
+  Recent). Pick it in the Alarm picker's new **Sound** row or a bell's ♪ tool; Settings ›
+  Alarms › **Sounds** plays each one (▶) and sets what new alarms use (Classic to start with). A
+  repeat's alarms share one sound; a snooze keeps the sound it snoozed. Classic, the sound
+  alarms had until now, no longer distorts: no low hum for phone speakers to rattle on, no
+  clicks, and well under full scale.
+- **Android app**: each sound is a notification category, **Alarm tone 1** to **Alarm tone 4**
+  and **Chime**. Settings › Alarms › Sounds › **Change…** opens Android's settings for it, where
+  you can pick any ringtone or a file of your own; the app shows what you picked. The old "Alarms
+  and timers" categories are gone, the "(app open)" one too: while the app is open there is no
+  ringing notification over it, the app plays the alarm's sound itself (and vibrates: the app
+  asks for the vibrate permission). A ringing alarm is the app's only notification: chimes still
+  showing go, and a chime due while it rings just sounds, since Android bundles two of an app's
+  notifications into one collapsed group and posts them silently.
+- **A chip's bell**: a new one (the chip's bell tool) is selected, its tools (how long before,
+  sound, delete) one tap away; a selected bell lights up, its tools under the bell, in vertical
+  too, as they do under a bell of its own.
+
 ## 0.6.2 — 2026-10-24
 
 **Android app: web only** (nothing to install; it updates itself).
