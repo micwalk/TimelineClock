@@ -109,7 +109,19 @@ describe('desiredNativeAlarms', () => {
     const many = Array.from({ length: MAX_NATIVE_ALARMS + 10 }, (_, i) => inst(`i${i}`, (i + 1) * MINUTE, { alarm: true }))
     const alarms = desiredNativeAlarms(many, [], now, RING)
     expect(alarms).toHaveLength(MAX_NATIVE_ALARMS)
+    expect(alarms.every(a => a.sound === 'tone1')).toBe(true)
     expect(alarms[alarms.length - 1].instantId).toBe(`i${MAX_NATIVE_ALARMS - 1}`)
+  })
+})
+
+describe('desiredNativeAlarms sounds', () => {
+  it('sends each alarm its own sound, else the default', () => {
+    const inst = { id: 'w', tsEpochMs: now + 60_000, label: 'Wake', alarms: [
+      { id: 'a1', offsetMs: 0 },
+      { id: 'a2', offsetMs: 30_000, sound: 'chime' as const },
+    ] }
+    const alarms = desiredNativeAlarms([inst], [], now, RING, 'tone3')
+    expect(alarms.map(a => [a.instantId, a.sound])).toEqual([['w|a2', 'chime'], ['w|a1', 'tone3']])
   })
 })
 
@@ -120,6 +132,7 @@ describe('replayAlarmActions', () => {
     const ops = {
       isOn: (id: string) => alarmed.has(id),
       dismiss: vi.fn((id: string) => { alarmed.delete(id) }),
+      chimed: vi.fn((id: string) => { alarmed.delete(id) }),
       snooze: vi.fn((id: string, at: number | undefined) => { void at; alarmed.delete(id); const next = `snooze${++n}`; alarmed.add(next); return next }),
     }
     return ops
@@ -141,6 +154,14 @@ describe('replayAlarmActions', () => {
     ], ops)
     expect(ops.snooze.mock.calls.map(c => c[0])).toEqual(['a', 'snooze1'])
     expect(ops.dismiss).toHaveBeenCalledWith('snooze2')
+  })
+
+  it('records chimes, once', () => {
+    const ops = fakeOps(['a'])
+    replayAlarmActions([{ type: 'chime', instantId: 'a' }, { type: 'chime', instantId: 'a' }], ops)
+    expect(ops.chimed).toHaveBeenCalledTimes(1)
+    expect(ops.dismiss).not.toHaveBeenCalled()
+    expect(sanitizeAlarmActions([{ type: 'chime', instantId: 'a' }])).toEqual([{ type: 'chime', instantId: 'a' }])
   })
 
   it('skips alarms already answered in the app', () => {

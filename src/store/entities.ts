@@ -4,6 +4,7 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
 import type { AlarmAnswer, AlarmRecord, InstantRecord, SpanRecord } from '../domain/entities.ts'
+import type { AlarmSound } from '../domain/sounds.ts'
 import { NOW_SENTINEL, newAlarmId, newInstantId, newSpanId, sanitizeInstants, sanitizeSpans, storedInstants, syncFavorites } from '../domain/entities.ts'
 import { syncAlarmVisibility } from '../domain/alarms.ts'
 import type { GroupRecord } from '../domain/series.ts'
@@ -181,14 +182,16 @@ export const entities = {
    * Adds an alarm (at the instant, or `offsetMs` before it; a snooze names the alarm it snoozed);
    * returns its id. An alarm still to ring is never hidden, so this shows the instant.
    */
-  addAlarm(id: string, opts: { offsetMs?: number; snoozeOf?: string } = {}): string {
-    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: Math.round(opts.offsetMs ?? 0), ...(opts.snoozeOf ? { snoozeOf: opts.snoozeOf } : {}) }
+  addAlarm(id: string, opts: { offsetMs?: number; snoozeOf?: string; sound?: AlarmSound } = {}): string {
+    const alarm: AlarmRecord = { id: newAlarmId(), offsetMs: Math.round(opts.offsetMs ?? 0), ...(opts.snoozeOf ? { snoozeOf: opts.snoozeOf } : {}), ...(opts.sound ? { sound: opts.sound } : {}) }
     patchInstant(id, i => ({ alarms: [...(i.alarms ?? []), alarm], ...(i.hidden ? { hidden: false } : {}) }))
     return alarm.id
   },
   removeAlarm: (id: string, alarmId: string) => patchAlarms(id, list => list.filter(a => a.id !== alarmId)),
   setAlarmOffset: (id: string, alarmId: string, offsetMs: number) =>
     patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, offsetMs: Math.round(offsetMs) } : a))),
+  setAlarmSound: (id: string, alarmId: string, sound: AlarmSound) =>
+    patchAlarms(id, list => list.map(a => (a.id === alarmId ? { ...a, sound } : a))),
   /** Answers alarms that rang (dismissed, snoozed): they stay as history and never ring again. */
   answerAlarms: (id: string, alarmIds: readonly string[], answer: AlarmAnswer) =>
     patchAlarms(id, list => list.map(a => (alarmIds.includes(a.id) && !a.answered ? { ...a, answered: answer } : a))),

@@ -2,9 +2,11 @@
 // the entities alone. services/native applies it: alarms through the app's Alarms plugin, the
 // running timer and stopwatch through LiveNotifications.
 import { displayName } from './entities.ts'
-import type { InstantRecord, SpanRecord } from './entities.ts'
+import type { AlarmRecord, InstantRecord, SpanRecord } from './entities.ts'
 import { alarmLabel, ringKey, ringTime } from './alarms.ts'
 import { formatClockCompact, formatDuration } from './format.ts'
+import type { AlarmSound } from './sounds.ts'
+import { DEFAULT_TONE, soundOf } from './sounds.ts'
 import type { StopwatchState } from './quickCreate.ts'
 import { stopwatchPhase, stopwatchStartLabel } from './quickCreate.ts'
 
@@ -93,19 +95,32 @@ export interface NativeAlarm {
   ringText: string
   /** The timer's countdown notification, replaced when it rings (0: not a timer). */
   liveId: number
+  /** Which channel sounds it (NotificationChannels.java): a tone rings until answered, the chime once. */
+  sound: AlarmSound
 }
 
 /**
  * Alarms as native alarms, soonest first: those ahead, and those that came due within `ringMs`
  * and are still unanswered (ringing, or about to). An alarm at a timer's end is named after the
- * timer's span; one before its instant says how long is left ("Wake up in 15m").
+ * timer's span; one before its instant says how long is left ("Wake up in 15m"). Each has its
+ * own sound, else `defaultSound` (Settings › Alarms).
  */
 export function desiredNativeAlarms(
   instants: readonly InstantRecord[],
   spans: readonly SpanRecord[],
   now: number,
   ringMs: number,
+  defaultSound: AlarmSound = DEFAULT_TONE,
 ): NativeAlarm[] {
+  return desiredNativeAlarmTexts(instants, spans, now, ringMs).map(({ alarm, ...n }) => ({ ...n, sound: soundOf(alarm, defaultSound) }))
+}
+
+function desiredNativeAlarmTexts(
+  instants: readonly InstantRecord[],
+  spans: readonly SpanRecord[],
+  now: number,
+  ringMs: number,
+): (Omit<NativeAlarm, 'sound'> & { alarm: AlarmRecord })[] {
   const ids = alarmNotificationIds(instants)
   return instants
     .flatMap(inst => (inst.alarms ?? []).filter(a => !a.answered && ringTime(inst, a) > now - ringMs).map(alarm => ({ inst, alarm, at: ringTime(inst, alarm) })))
@@ -115,10 +130,10 @@ export function desiredNativeAlarms(
       const key = ringKey(inst.id, alarm.id)
       const clock = formatClockCompact(inst.tsEpochMs, true)
       if (alarm.offsetMs > 0) {
-        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `${formatDuration(alarm.offsetMs, { exact: true })} to go · ${clock}`, liveId: 0 }
+        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `${formatDuration(alarm.offsetMs, { exact: true })} to go · ${clock}`, liveId: 0, alarm }
       }
       if (alarm.offsetMs < 0) {
-        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `Snoozed · was due ${clock}`, liveId: 0 }
+        return { id: ids.get(key)!, instantId: key, at, title: alarmLabel(inst, alarm), ringText: `Snoozed · was due ${clock}`, liveId: 0, alarm }
       }
       const timer = timerSpanFor(inst.id, instants, spans)
       return {
@@ -128,6 +143,7 @@ export function desiredNativeAlarms(
         title: timer ? displayName(timer.span.label || inst.label, 'Timer') : displayName(inst.label, 'Alarm'),
         ringText: timer ? `Time's up · ${clock}` : `Due ${clock}`,
         liveId: timer ? liveIdFor('countdown', inst.id) : 0,
+        alarm,
       }
     })
 }
@@ -135,9 +151,9 @@ export function desiredNativeAlarms(
 // ---------------------------------------------------------------------------
 // Answers given from a ringing notification, replayed into the entities
 
-/** Recorded by the native side (Alarms.java) while the page may have been frozen. */
+/** Recorded by the native side (Alarms.java) while the page may have been frozen. A chime answers itself as it sounds. */
 export interface NativeAlarmAction {
-  type: 'dismiss' | 'snooze'
+  type: 'dismiss' | 'snooze' | 'chime'
   /** The alarm's ring key (NativeAlarm.instantId). */
   instantId: string
   /** Snooze: when it rings again. */
@@ -150,7 +166,7 @@ export function sanitizeAlarmActions(raw: unknown): NativeAlarmAction[] {
   return raw.flatMap((x): NativeAlarmAction[] => {
     if (!x || typeof x !== 'object') return []
     const r = x as Record<string, unknown>
-    if ((r.type !== 'dismiss' && r.type !== 'snooze') || typeof r.instantId !== 'string') return []
+    if ((r.type !== 'dismiss' && r.type !== 'snooze' && r.type !== 'chime') || typeof r.instantId !== 'string') return []
     const at = typeof r.at === 'number' && Number.isFinite(r.at) ? r.at : undefined
     return [{ type: r.type, instantId: r.instantId, ...(at !== undefined ? { at } : {}) }]
   })
@@ -166,6 +182,8 @@ export function replayAlarmActions(
   ops: {
     isOn: (key: string) => boolean
     dismiss: (key: string) => void
+    /** It chimed (answered as it sounded). */
+    chimed: (key: string) => void
     /** Returns the snooze's new alarm's key. */
     snooze: (key: string, at: number | undefined) => string | undefined
   },
@@ -175,6 +193,7 @@ export function replayAlarmActions(
     const id = now.get(a.instantId) ?? a.instantId
     if (!ops.isOn(id)) continue
     if (a.type === 'dismiss') ops.dismiss(id)
+    else if (a.type === 'chime') ops.chimed(id)
     else {
       const next = ops.snooze(id, a.at)
       if (next) now.set(a.instantId, next)
@@ -282,7 +301,7 @@ export function liveTapTarget(
 
 export interface ShellStatus {
   notifications: boolean
-  /** The "Alarms and timers" channel isn't turned off. */
+  /** No alarm tone's channel ("Alarm tone 1"…) is turned off. */
   alarmChannel: boolean
   exactAlarms: boolean
   /**
@@ -298,7 +317,7 @@ export interface ShellStatus {
 export function shellStatusItems(status: ShellStatus): { label: string; ok: boolean; fix?: string }[] {
   const items = [
     { label: 'Notifications', ok: status.notifications, fix: 'Allow notifications for TimelineClock in Android Settings › Apps.' },
-    { label: 'Alarm sound', ok: status.alarmChannel, fix: 'Turn on both “Alarms and timers” notification categories.' },
+    { label: 'Alarm sound', ok: status.alarmChannel, fix: 'Turn on the “Alarm tone 1” to “Alarm tone 4” notification categories.' },
     { label: 'Exact alarms', ok: status.exactAlarms, fix: 'Allow “Alarms & reminders” in the app’s Android settings.' },
   ]
   if (status.liveUpdates !== undefined) {

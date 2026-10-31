@@ -52,9 +52,9 @@ export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused:
   return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + 1 + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
 }
 
-/** A bell before its instant (BellMarker): its button, and its tools (delete, type the offset) while selected. */
+/** A bell before its instant (BellMarker): its button, and its tools (type the offset, sound, delete) while selected. */
 export const BELL_SIZE = 26
-const BELL_TOOLS = 2
+const BELL_TOOLS = 3
 
 /** A bell's box: the bell, and its tools under it while selected. */
 function bellExtent(selected: boolean, vertical: boolean): { mainExtent: number; crossExtent: number; tail?: number } {

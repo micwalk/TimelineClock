@@ -17,6 +17,8 @@
 // instead of a clock time (`time` then only remembers roughly when, for sorting). Its occurrences
 // carry the anchor too; a day the sun doesn't rise or set (polar) has none.
 import type { InstantRecord } from './entities.ts'
+import type { AlarmSound } from './sounds.ts'
+import { isSound } from './sounds.ts'
 import type { SunAnchor } from './sunEvents.ts'
 import { isAtSun, sanitizeSunAnchor } from './sunEvents.ts'
 import { sunEventOnDay } from './sun.ts'
@@ -37,6 +39,8 @@ export interface SeriesRecord {
   repeat: Repeat
   /** The alarms every occurrence gets: how long before it each rings (0 = at it). */
   alarms: number[]
+  /** What they sound like (domain/sounds); absent: the default tone. */
+  sound?: AlarmSound
   /** First date ("YYYY-MM-DD", local). */
   from: string
   /** Last date, inclusive (the series was ended there). */
@@ -180,7 +184,7 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
         id,
         tsEpochMs: ts,
         label: s.label,
-        ...(s.alarms.length > 0 ? { alarms: s.alarms.map((offsetMs, k) => ({ id: `${id}#${k}`, offsetMs })) } : {}),
+        ...(s.alarms.length > 0 ? { alarms: s.alarms.map((offsetMs, k) => ({ id: `${id}#${k}`, offsetMs, ...soundPart(s) })) } : {}),
         seriesId: s.id,
         occurrence: date,
         ...(s.sun ? { sun: s.sun } : {}),
@@ -191,6 +195,9 @@ export function virtualOccurrences(groups: readonly GroupRecord[], instants: rea
   return out
 }
 
+/** The `sound` an occurrence's alarms get from their series (none: the default tone). */
+const soundPart = (s: SeriesRecord): { sound?: AlarmSound } => (s.sound ? { sound: s.sound } : {})
+
 /** A new occurrence instant for `date`, with the series' alarms. */
 export function newOccurrence(s: SeriesRecord, date: string, ids: { instant: () => string; alarm: () => string }): InstantRecord {
   return {
@@ -198,7 +205,7 @@ export function newOccurrence(s: SeriesRecord, date: string, ids: { instant: () 
     tsEpochMs: occurrenceTs(s, date),
     label: s.label,
     favorite: false,
-    ...(s.alarms.length > 0 ? { alarms: s.alarms.map(offsetMs => ({ id: ids.alarm(), offsetMs })) } : {}),
+    ...(s.alarms.length > 0 ? { alarms: s.alarms.map(offsetMs => ({ id: ids.alarm(), offsetMs, ...soundPart(s) })) } : {}),
     seriesId: s.id,
     occurrence: date,
     ...(s.sun ? { sun: s.sun } : {}),
@@ -275,7 +282,7 @@ export function refreshOccurrence(s: SeriesRecord, inst: InstantRecord, now: num
   const alarms = s.alarms.map(offsetMs => {
     const k = old.findIndex(a => a.offsetMs === offsetMs && !a.snoozeOf)
     const keep = k >= 0 ? old.splice(k, 1)[0] : null
-    return { id: keep?.id ?? newAlarmId(), offsetMs }
+    return { id: keep?.id ?? newAlarmId(), offsetMs, ...soundPart(s) }
   })
   const { alarms: _drop, sun: _sun, ...rest } = inst
   void _drop
@@ -288,12 +295,15 @@ export function refreshOccurrence(s: SeriesRecord, inst: InstantRecord, now: num
  * its sun anchor while it still sits on its sunrise or sunset (`sun` is then undefined: moved off
  * it, the rule becomes that clock time).
  */
-export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'sun'> {
+export function ruleFromOccurrence(inst: InstantRecord): Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'sun' | 'sound'> {
+  const own = (inst.alarms ?? []).filter(a => !a.snoozeOf)
   return {
     label: inst.label,
     time: clockKey(inst.tsEpochMs),
-    alarms: (inst.alarms ?? []).filter(a => !a.snoozeOf).map(a => a.offsetMs).sort((a, b) => b - a),
+    alarms: own.map(a => a.offsetMs).sort((a, b) => b - a),
     sun: isAtSun(inst) ? inst.sun : undefined,
+    // A series has one sound for its alarms: the one at the instant's, else the first.
+    sound: (own.find(a => a.offsetMs === 0) ?? own[0])?.sound,
   }
 }
 
@@ -312,7 +322,7 @@ export function occursAheadBefore(s: SeriesRecord, date: string, now: number): b
  * ahead): the old one ends the day before, keeping its rule; the new one runs from `date` with
  * `rule`. Skipped dates go with the part they fall in.
  */
-export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'repeat' | 'sun'>>, id = newGroupId()): [SeriesRecord, SeriesRecord] {
+export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<SeriesRecord, 'label' | 'time' | 'alarms' | 'repeat' | 'sun' | 'sound'>>, id = newGroupId()): [SeriesRecord, SeriesRecord] {
   const prev = prevDateKey(date)
   const before = s.skips?.filter(d => d < date) ?? []
   const after = s.skips?.filter(d => d >= date) ?? []
@@ -326,8 +336,8 @@ export function splitSeries(s: SeriesRecord, date: string, rule: Partial<Pick<Se
 
 /** A new series that `inst` starts (it becomes the first occurrence; at a sunset, it repeats at each sunset). */
 export function seriesFromInstant(inst: InstantRecord, repeat: Repeat, id = newGroupId()): SeriesRecord {
-  const { sun, ...rule } = ruleFromOccurrence(inst)
-  return { id, kind: 'series', ...rule, ...(sun ? { sun } : {}), repeat, from: dateKey(inst.tsEpochMs), ...(inst.collectionId ? { collectionId: inst.collectionId } : {}) }
+  const { sun, sound, ...rule } = ruleFromOccurrence(inst)
+  return { id, kind: 'series', ...rule, ...(sun ? { sun } : {}), ...(sound ? { sound } : {}), repeat, from: dateKey(inst.tsEpochMs), ...(inst.collectionId ? { collectionId: inst.collectionId } : {}) }
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +413,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
       ...(skips.length > 0 ? { skips } : {}),
       ...(r.paused === true ? { paused: true } : {}),
       ...(sun ? { sun } : {}),
+      ...(isSound(r.sound) ? { sound: r.sound } : {}),
       ...(typeof r.collectionId === 'string' && r.collectionId && r.collectionId !== 'default' ? { collectionId: r.collectionId } : {}),
     }]
   })

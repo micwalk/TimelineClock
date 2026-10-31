@@ -7,7 +7,7 @@ import { useSettings } from '../../store/settings.ts'
 
 beforeEach(() => {
   useEntities.setState({ instants: [], spans: [], groups: [] })
-  useSettings.setState({ alarmRings: { onTime: true, warnings: [], choices: [] } })
+  useSettings.setState({ alarmRings: { onTime: true, warnings: [], choices: [], sound: 'tone1' } })
 })
 afterEach(() => rtlAct(() => ui.setAlarmMenu(false)))
 

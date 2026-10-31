@@ -276,7 +276,7 @@ describe('the alarm picker, filled in', () => {
   })
 
   it('starts from the defaults in Settings', () => {
-    useSettings.setState({ alarmRings: { choices: [10 * MINUTE], onTime: false, warnings: [10 * MINUTE] } })
+    useSettings.setState({ alarmRings: { choices: [10 * MINUTE], onTime: false, warnings: [10 * MINUTE], sound: 'tone1' } })
     useUi.setState({ alarmMenuOpen: false, alarmMenuFromList: false, alarmEditSeries: null })
     useQuick.setState({ recentAlarms: [] })
     render(<ControlBar />)

@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
@@ -22,7 +22,9 @@ import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import { ui, useUi } from '../../store/ui.ts'
-import { getTunables } from '../../store/settings.ts'
+import { getTunables, useSettings } from '../../store/settings.ts'
+import { soundOf } from '../../domain/sounds.ts'
+import { SoundChips } from '../common/SoundPicker.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -375,12 +377,13 @@ function DeleteOccurrenceTool({ inst }: { inst: InstantRecord }) {
   )
 }
 
-/** A selected bell's tools: type how long before its instant it rings, or delete it. */
+/** A selected bell's tools: type how long before its instant it rings, pick its sound, or delete it. */
 function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
   const [typing, setTyping] = useState(false)
   return (
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
+      {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
         <TimeEntry
@@ -391,6 +394,27 @@ function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
         />
       )}
     </>
+  )
+}
+
+/** A bell's sound (domain/sounds): a tone that rings until answered, or the chime. */
+function SoundTool({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const fallback = useSettings(s => s.alarmRings.sound)
+  usePopoverDismiss(ref, () => setOpen(false), open)
+  useKeepOnScreen(menuRef, open)
+  return (
+    <div ref={ref} className="skip-tool">
+      <IconButton icon={MusicalNoteIcon} label="Sound" color={bellColor} bare pressed={open} onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Sound">
+          <div className="repeat-menu__title">Sound</div>
+          <SoundChips value={soundOf(alarm, fallback)} onChange={s => { act.setAlarmSound(inst.id, alarm.id, s); setOpen(false) }} />
+        </div>
+      )}
+    </div>
   )
 }
 

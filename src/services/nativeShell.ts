@@ -2,6 +2,9 @@
 // defines window.Capacitor before the page's own scripts run. Everything native loads on
 // demand from services/native, so browsers never download it.
 
+import type { AlarmSound } from '../domain/sounds.ts'
+import type { NativeSound } from './native/alarmsPlugin.ts'
+
 interface CapacitorGlobal {
   isNativePlatform?: () => boolean
 }
@@ -70,4 +73,38 @@ export async function nativeDiagnostics(): Promise<string> {
 export async function clearNativeDiagnostics() {
   if (!isNativeShell()) return
   await (await loadNative()).clearDiagnostics()
+}
+
+/**
+ * Settings › Alarms (Android app only): each alarm sound's channel as Android has it now. Null in
+ * a browser, or from an app from before sounds were channels (it needs installing again).
+ */
+export async function nativeSounds(): Promise<NativeSound[] | null> {
+  if (!isNativeShell()) return null
+  try {
+    return (await (await import('./native/alarmsPlugin.ts')).Alarms.getSounds()).sounds
+  } catch (err) {
+    console.warn('[Native] Could not read the alarm sounds', err)
+    return null
+  }
+}
+
+/** Opens Android's settings for a sound's channel, to pick any sound for it. */
+export async function openNativeSoundSettings(sound: AlarmSound) {
+  if (!isNativeShell()) return
+  try {
+    await (await import('./native/alarmsPlugin.ts')).Alarms.openSoundSettings({ sound })
+  } catch (err) {
+    console.warn('[Native] Could not open the sound settings', err)
+  }
+}
+
+/** Plays a sound's channel sound once, as Android has it (stops by itself). */
+export async function previewNativeSound(sound: AlarmSound) {
+  if (!isNativeShell()) return
+  try {
+    await (await import('./native/alarmsPlugin.ts')).Alarms.previewSound({ sound })
+  } catch (err) {
+    console.warn('[Native] Could not preview the sound', err)
+  }
 }

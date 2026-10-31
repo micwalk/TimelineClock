@@ -29,6 +29,7 @@ import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import type { AlarmSound } from '../domain/sounds.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
   OCCURRENCE_HORIZON_MS, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
@@ -667,6 +668,14 @@ export function setAlarmOffset(id: string, alarmId: string, offsetMs: number) {
   if (!alarm.snoozeOf) touchOccurrence(id)
 }
 
+/** What an alarm sounds like (a tone that rings until answered, or the chime: domain/sounds). Answered ones stay as they were. */
+export function setAlarmSound(id: string, alarmId: string, sound: AlarmSound) {
+  const alarm = findAlarm(entities.getInstant(id), alarmId)
+  if (!alarm || alarm.answered || alarm.sound === sound) return
+  entities.setAlarmSound(id, alarmId, sound)
+  if (!alarm.snoozeOf) touchOccurrence(id)
+}
+
 /** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
 export function selectBell(alarmId: string | null) {
   ui.selectBell(useUi.getState().selectedBell === alarmId ? null : alarmId)
@@ -1191,22 +1200,23 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
  * time itself unless `onTime` is false), once (an instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
  * Returns the instant (the first occurrence of a series).
  */
-export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent }): string | undefined {
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent; sound?: AlarmSound }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
   void primeNotifications()
-  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}) })
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}), ...(a.sound ? { sound: a.sound } : {}) })
+  const sound = a.sound ? { sound: a.sound } : {}
   // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.
   const loc = useSettings.getState().skyLocation
   const sun = a.sun && loc ? { event: a.sun, lat: loc.lat, lon: loc.lon } : undefined
   const label = a.label || (sun ? sunEventName(sun.event) : '')
   if (!a.repeat) {
     const id = entities.createInstant(a.at, label)
-    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })), ...(sun ? { sun } : {}) }))
+    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs, ...sound })), ...(sun ? { sun } : {}) }))
     revealInstant(id)
     return id
   }
-  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}) }
+  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}), ...sound }
   entities.putGroup(series)
   syncSeries()
   const first = useEntities.getState().instants
@@ -1221,7 +1231,7 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
  * occurrences ahead take the change in place (refreshSeries); ones changed on their own keep
  * theirs.
  */
-export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun'>>) {
+export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun' | 'sound'>>) {
   const series = entities.getGroup(seriesId)
   if (!series) return
   entities.putGroup({ ...series, ...patch })

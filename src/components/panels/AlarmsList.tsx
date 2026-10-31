@@ -19,7 +19,7 @@ import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { alarmList, repeatList } from '../../domain/alarmList.ts'
 import type { SeriesRecord } from '../../domain/series.ts'
-import type { InstantRecord } from '../../domain/entities.ts'
+import type { AlarmAnswer, InstantRecord } from '../../domain/entities.ts'
 import { describeRepeat, occurrenceTs } from '../../domain/series.ts'
 import type { SunEvent } from '../../domain/sun.ts'
 import { SUN_EVENTS, sunEventName, sunRowTimes } from '../../domain/sun.ts'
@@ -34,6 +34,9 @@ import { useLayout } from '../../store/layout.ts'
 import { ui } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
+
+/** How a recent alarm was answered. */
+const ANSWER_TEXT: Record<AlarmAnswer, string> = { dismissed: 'Dismissed', snoozed: 'Snoozed', chimed: 'Chimed' }
 
 /** A row that goes somewhere: in the drawer, close it so the result is not hidden behind it. */
 function go(instantId: string | null | undefined) {
@@ -98,7 +101,7 @@ export function AlarmsList() {
           <span className="alarm-row__time mono">{formatClockCompact(ringTs, false)}</span>
           <span className="alarm-row__main">
             <span className="alarm-row__name">{endpointName(inst)}</span>
-            <span className="alarm-row__sub">{answered === 'snoozed' ? 'Snoozed' : 'Dismissed'}</span>
+            <span className="alarm-row__sub">{ANSWER_TEXT[answered]}</span>
           </span>
           <span className="alarm-row__when"><LiveText watch={bySecond} compute={f => formatRelativeShort(ringTs - f.now)} /></span>
           <span />

@@ -1,10 +1,13 @@
 // Watches alarmed instants and rings them. Owns the side effects (timers, sound,
 // notifications); the decision logic is in domain/alarms.
+import type { AlarmAnswer, AlarmRecord } from '../domain/entities.ts'
 import { storedInstants } from '../domain/entities.ts'
 import { alarmLabel, alarmsToCancel, findAlarm, findDueAlarms, nextAlarmTime, parseRingKey, ringKey, ringTime, snoozeLanding } from '../domain/alarms.ts'
 import { timerSpanFor } from '../domain/nativeNotifications.ts'
+import type { AlarmSound } from '../domain/sounds.ts'
+import { isChime, soundOf } from '../domain/sounds.ts'
 import { MINUTE, SECOND } from '../domain/time.ts'
-import { getTunables } from '../store/settings.ts'
+import { getTunables, useSettings } from '../store/settings.ts'
 import { useAlarms } from '../store/alarms.ts'
 import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
@@ -17,9 +20,11 @@ const IDLE_RECHECK_MS = 60_000
 const MAX_WAIT_MS = 1000
 const MIN_WAIT_MS = 50
 
-// Keep one audio manager across HMR reloads so a ringing alarm doesn't cut out.
+// Keep one audio manager across HMR reloads so a ringing alarm doesn't cut out (one from before
+// playOnce is replaced).
 const hmr = ((globalThis as unknown as { __TC_HMR__?: { audio?: AlarmAudioManager } }).__TC_HMR__ ??= {})
-const audio = (hmr.audio ??= new AlarmAudioManager())
+if (typeof hmr.audio?.playOnce !== 'function') hmr.audio = new AlarmAudioManager()
+const audio = hmr.audio as AlarmAudioManager
 const notifications = new NotificationService()
 
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -29,6 +34,28 @@ let onNotificationClick: (instantId: string) => void = () => {}
 
 function hasRinging() {
   return useAlarms.getState().ringing.length > 0
+}
+
+/** An alarm's sound: its own, else the default tone (Settings › Alarms). */
+const soundFor = (alarm: AlarmRecord) => soundOf(alarm, useSettings.getState().alarmRings.sound)
+
+/** The tone that plays while alarms ring: the latest to start ringing's. */
+function ringingTone(): AlarmSound | null {
+  const { ringing } = useAlarms.getState()
+  const last = ringing[ringing.length - 1]
+  if (!last) return null
+  const alarm = findAlarm(entities.getInstant(last.instantId), last.alarmId)
+  return alarm ? soundFor(alarm) : useSettings.getState().alarmRings.sound
+}
+
+/** Silence was asked for: quiet until another alarm comes due. */
+let silenced = false
+
+/** Rings the latest alarm's tone (the page's own sound: pageRings), or stops when none rings. */
+function updateSound() {
+  const tone = ringingTone()
+  if (!tone) { silenced = false; audio.stopAlarmSound() }
+  else if (pageRings() && !silenced) audio.startAlarmSound(isChime(tone) ? 'tone1' : tone, hasRinging)
 }
 
 /**
@@ -52,15 +79,25 @@ function check() {
 
   const ringingKeys = new Set(useAlarms.getState().ringing.map(r => ringKey(r.instantId, r.alarmId)))
   const due = findDueAlarms(storedInstants(useEntities.getState().instants), now, ringingKeys, autoDismissMs)
-  if (due.length > 0) {
+  // A chime sounds once and answers itself; the rest ring until answered. In the Android app the
+  // native side chimes and reports it (services/native replays it): answered here first, the sync
+  // would cancel it before it sounds.
+  const chimes = due.filter(d => isChime(soundFor(d.alarm)))
+  const rings = due.filter(d => !chimes.includes(d))
+  if (!pageRings()) chimes.length = 0
+  if (rings.length > 0) {
     useAlarms.setState(s => ({
-      ringing: [...s.ringing, ...due.map(({ inst, alarm }) => ({ instantId: inst.id, alarmId: alarm.id, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: now }))],
+      ringing: [...s.ringing, ...rings.map(({ inst, alarm }) => ({ instantId: inst.id, alarmId: alarm.id, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: now }))],
     }))
-    if (pageRings()) audio.startAlarmSound(hasRinging)
-    for (const { inst, alarm } of due) {
-      const instantId = inst.id
-      void notifications.notifyAlarm(alarmLabel(inst, alarm), { instantId, key: ringKey(instantId, alarm.id), onClick: () => onNotificationClick(instantId) })
-    }
+    silenced = false
+    updateSound()
+  }
+  if (chimes.length > 0 && pageRings()) audio.playOnce('chime')
+  for (const { inst, alarm } of [...rings, ...chimes]) {
+    const instantId = inst.id
+    const chime = chimes.some(c => c.alarm === alarm)
+    if (chime) answer(ringKey(instantId, alarm.id), 'chimed')
+    void notifications.notifyAlarm(alarmLabel(inst, alarm), { instantId, key: ringKey(instantId, alarm.id), onClick: () => onNotificationClick(instantId) }, chime)
   }
   schedule()
 }
@@ -81,7 +118,7 @@ export const isAlarmRinging = (key: string) => useAlarms.getState().ringing.some
 /** Stops alarms ringing (they may be answered already); the sound stops with the last one. */
 function stopRinging(instantId: string, alarmIds: readonly string[]) {
   useAlarms.setState(s => ({ ringing: s.ringing.filter(r => !(r.instantId === instantId && alarmIds.includes(r.alarmId))) }))
-  if (!hasRinging()) audio.stopAlarmSound()
+  updateSound()
 }
 
 /**
@@ -89,10 +126,16 @@ function stopRinging(instantId: string, alarmIds: readonly string[]) {
  * again). The last alarm at or after a timer's end (its own, or the last snooze of it) finishes
  * the timer, so its end also stops being a favorite (its span to Now goes).
  */
-export function dismiss(key: string) {
+export const dismiss = (key: string) => answer(key, 'dismissed')
+
+/** A chime at `key` sounded (from the Android app: it chimed while the page wasn't running). */
+export const chimed = (key: string) => answer(key, 'chimed')
+
+/** Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). */
+function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {
   const { instantId, alarmId } = parseRingKey(key)
   const alarm = findAlarm(entities.getInstant(instantId), alarmId)
-  if (alarm) entities.answerAlarms(instantId, [alarmId], 'dismissed')
+  if (alarm) entities.answerAlarms(instantId, [alarmId], how)
   stopRinging(instantId, [alarmId])
   const inst = entities.getInstant(instantId)
   const { instants, spans } = useEntities.getState()
@@ -125,7 +168,7 @@ export function snoozeUntil(key: string, at: number, exact = false): string | un
   if (!inst || !alarm || alarm.answered) { stopRinging(instantId, [alarmId]); return }
   const landing = snoozeLanding(inst, alarm, at, Date.now(), getTunables().snoozeJoinSec * SECOND, exact)
   entities.answerAlarms(instantId, [alarmId], 'snoozed')
-  const nextId = 'joins' in landing ? landing.joins : entities.addAlarm(instantId, { offsetMs: landing.offsetMs, snoozeOf: alarmId })
+  const nextId = 'joins' in landing ? landing.joins : entities.addAlarm(instantId, { offsetMs: landing.offsetMs, snoozeOf: alarmId, ...(alarm.sound ? { sound: alarm.sound } : {}) })
   stopRinging(instantId, [alarmId])
   return ringKey(instantId, nextId)
 }
@@ -151,9 +194,16 @@ export function cancelAlarms(instantId: string) {
 
 /** Stops the sound but keeps alarms on screen (in the Android app, their notifications too). */
 export function silence() {
+  silenced = true
   audio.stopAlarmSound()
   void silenceNativeAlarms()
 }
+
+/** Plays a sound once to hear what it is (Settings › Alarms); the web presets (the Android app plays its own: services/native). */
+export const previewSound = (sound: AlarmSound) => audio.playOnce(sound)
+
+/** Stops a preview. */
+export const stopPreview = () => audio.stopOnce()
 
 export function primeAudio() {
   audio.initializeAudioContext()
@@ -186,6 +236,6 @@ export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: st
   const onGesture = () => primeAudio()
   document.addEventListener('pointerdown', onGesture, { once: true })
   document.addEventListener('keydown', onGesture, { once: true })
-  if (hasRinging() && pageRings()) audio.startAlarmSound(hasRinging)
+  if (hasRinging()) updateSound()
   check()
 }
