@@ -30,6 +30,8 @@ while it is open).
 - **A chip's bell**: a new one (the chip's bell tool) is selected, its tools (how long before,
   sound, delete) one tap away; a selected bell lights up, its tools under the bell, in vertical
   too, as they do under a bell of its own.
+- **Phones**: holding NOW (zoom to Now) or ＋ (show in the Agenda) no longer starts selecting
+  the button's text.
 
 ## 0.6.2 — 2026-10-24
 

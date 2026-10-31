@@ -18,6 +18,13 @@
   gap: 10px;
   padding: 10px 16px 12px;
 }
+/* A long press (NOW zooms to Now, ＋ shows the Agenda) must not start selecting the label or
+   open the phone's callout. Buttons only: the time box NOW opens stays a normal input. */
+.controls button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
 .ctl-btn {
   --accent: color-mix(in srgb, var(--c-instant) 70%, var(--c-axis-glow));
