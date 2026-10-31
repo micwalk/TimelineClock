@@ -1,5 +1,6 @@
 package com.micwalk.timelineclock;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.webkit.RenderProcessGoneDetail;
@@ -69,12 +70,16 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         Alarms.appOpen = true;
         Diag.log(this, "resumed");
+        Context app = getApplicationContext();
+        Alarms.run(() -> Alarms.appOpened(app));
     }
 
     @Override
     public void onPause() {
         Alarms.appOpen = false;
         Diag.log(this, "paused");
+        Context app = getApplicationContext();
+        Alarms.run(() -> Alarms.appLeft(app));
         super.onPause();
     }
 

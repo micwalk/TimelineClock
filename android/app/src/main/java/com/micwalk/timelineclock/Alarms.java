@@ -27,7 +27,10 @@ final class Alarms {
 
     private static final String TAG = "Alarms";
 
-    /** The app is on screen (MainActivity resumed): alarms ring without a pop-up over it. */
+    /**
+     * The app is on screen (MainActivity resumed): no ringing notification then, the page shows
+     * its ringing card and Ringer plays the alarm's sound.
+     */
     static volatile boolean appOpen;
 
     /** Work started on the main thread (notification taps) runs here, off it. */
@@ -78,9 +81,11 @@ final class Alarms {
                 s.title = d.title;
                 s.ringText = d.ringText;
                 s.liveId = d.liveId;
+                s.sound = d.sound;
             }
             AlarmStore.saveAlarms(c, stored);
             for (AlarmSpec d : plan.ringNow) ring(c, d, now);
+            if (!plan.cancel.isEmpty()) ringInApp(c);
             if (!plan.cancel.isEmpty() || !plan.schedule.isEmpty() || !plan.ringNow.isEmpty()) {
                 Diag.log(c, "sync: " + desired.size() + " wanted, cancel " + plan.cancel.size() + ", schedule " + plan.schedule.size() + ", ring now " + plan.ringNow.size());
             }
@@ -118,9 +123,31 @@ final class Alarms {
                 s.silenced = true;
                 AlarmStore.put(c, s);
                 Diag.log(c, "silence " + s.id);
+                Ringer.stop(c, s.id);
                 // Cancelling is what stops an insistent sound for sure; the quiet copy replaces it.
                 NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
-                post(c, s);
+                if (!appOpen) post(c, s);
+            }
+            ringInApp(c);
+        }
+    }
+
+    /** The app came on screen: its ringing card takes over from the notifications, and Ringer plays. */
+    static void appOpened(Context c) {
+        synchronized (AlarmStore.LOCK) {
+            for (AlarmSpec s : AlarmStore.alarms(c).values()) {
+                if (AlarmSpec.RINGING.equals(s.state)) NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
+            }
+            ringInApp(c);
+        }
+    }
+
+    /** The app left the screen: the ringing alarms go back to their notifications (rung again; silenced ones quiet). */
+    static void appLeft(Context c) {
+        synchronized (AlarmStore.LOCK) {
+            Ringer.stop(c, 0);
+            for (AlarmSpec s : AlarmStore.alarms(c).values()) {
+                if (AlarmSpec.RINGING.equals(s.state)) post(c, s);
             }
         }
     }
@@ -141,6 +168,7 @@ final class Alarms {
             AlarmSpec s = AlarmStore.get(c, id);
             NotificationViews.cancel(c, NotificationViews.TAG_RING, id);
             cancelAlarm(c, AlarmReceiver.ACTION_RING_END, id);
+            Ringer.stop(c, id);
             if (s == null || AlarmSpec.DISMISSED.equals(s.state)) return;
             cancelAlarm(c, AlarmReceiver.ACTION_FIRE, id);
             s.state = AlarmSpec.DISMISSED;
@@ -148,6 +176,7 @@ final class Alarms {
             AlarmStore.put(c, s);
             record(c, "dismiss", s, 0);
             Diag.log(c, "dismissed " + s.id);
+            ringInApp(c);
         }
         AlarmsPlugin.announceActions();
     }
@@ -161,6 +190,7 @@ final class Alarms {
             AlarmSpec s = AlarmStore.get(c, id);
             NotificationViews.cancel(c, NotificationViews.TAG_RING, id);
             cancelAlarm(c, AlarmReceiver.ACTION_RING_END, id);
+            Ringer.stop(c, id);
             if (s == null || AlarmSpec.DISMISSED.equals(s.state)) return;
             long now = System.currentTimeMillis();
             long at = now + AlarmStore.snoozeMinutes(c) * 60_000L;
@@ -175,6 +205,7 @@ final class Alarms {
             schedule(c, s);
             record(c, "snooze", s, at);
             Diag.log(c, "snoozed " + s.id + " to " + clock(c, at));
+            ringInApp(c);
             int liveId = s.liveId != 0 ? s.liveId : s.id;
             NotificationViews.post(c, NotificationViews.TAG_LIVE, liveId,
                 NotificationViews.live(c, liveId, true, s.title, "Rings at " + clock(c, at), at, s.instantId));
@@ -210,32 +241,86 @@ final class Alarms {
 
     // ---------------------------------------------------------------------------------------
 
-    /** Rings `s` from `since`: ringing notification, countdown gone, and the unanswered timeout. */
+    /**
+     * Rings `s` from `since`: ringing notification (with the app open, Ringer plays instead),
+     * countdown gone, and the unanswered timeout. A chime only sounds once (chime).
+     */
     private static void ring(Context c, AlarmSpec s, long since) {
-        Diag.log(c, "ring " + s.id + (appOpen ? " (app open)" : "") + (s.silenced ? " silenced" : ""));
+        if (NotificationChannels.CHIME.equals(s.sound)) {
+            chime(c, s);
+            return;
+        }
+        Diag.log(c, "ring " + s.id + " " + s.sound + (appOpen ? " (app open)" : "") + (s.silenced ? " silenced" : ""));
         s.state = AlarmSpec.RINGING;
         s.ringingSince = since;
         AlarmStore.put(c, s);
         if (s.liveId != 0) NotificationViews.cancel(c, NotificationViews.TAG_LIVE, s.liveId);
-        post(c, s);
+        if (appOpen) ringInApp(c);
+        else post(c, s);
         setWhileIdle(c, AlarmReceiver.ACTION_RING_END, s.id, since + AlarmStore.ringMs(c));
+    }
+
+    /**
+     * A chime: one sound (a notification, or Ringer with the app open) and it is over, answered
+     * as it sounds; the page hears about it like a dismiss.
+     */
+    private static void chime(Context c, AlarmSpec s) {
+        Diag.log(c, "chime " + s.id + (appOpen ? " (app open)" : ""));
+        if (s.liveId != 0) NotificationViews.cancel(c, NotificationViews.TAG_LIVE, s.liveId);
+        // While an alarm rings it stays the only notification (NotificationViews.cancelChimes): the chime just sounds.
+        if (appOpen || anyRinging(c)) Ringer.once(c, s.sound, false);
+        else {
+            try {
+                NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.chime(c, s));
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Could not post the chime", e);
+                Diag.log(c, "chime notification failed: " + e);
+            }
+        }
+        s.state = AlarmSpec.DISMISSED;
+        s.pendingAck = true;
+        AlarmStore.put(c, s);
+        record(c, "chime", s, 0);
+        AlarmsPlugin.announceActions();
+    }
+
+    /**
+     * With the app open, the latest ringing alarm that isn't silenced plays (Ringer); none, quiet.
+     * Call it after the store has the change (it reads what is ringing from there).
+     */
+    private static void ringInApp(Context c) {
+        if (!appOpen) return;
+        AlarmSpec latest = null;
+        for (AlarmSpec s : AlarmStore.alarms(c).values()) {
+            if (!AlarmSpec.RINGING.equals(s.state) || s.silenced) continue;
+            if (latest == null || s.ringingSince > latest.ringingSince) latest = s;
+        }
+        if (latest == null) Ringer.stop(c, 0);
+        else if (Ringer.ringingId() != latest.id) Ringer.ring(c, latest.id, latest.sound);
+    }
+
+    private static boolean anyRinging(Context c) {
+        for (AlarmSpec s : AlarmStore.alarms(c).values()) if (AlarmSpec.RINGING.equals(s.state)) return true;
+        return false;
     }
 
     /** The ringing notification for `s`, sounding unless it was silenced. */
     private static void post(Context c, AlarmSpec s) {
         try {
-            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced, appOpen));
+            NotificationViews.cancelChimes(c);
+            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.ringing(c, s, AlarmStore.snoozeMinutes(c), s.silenced));
         } catch (RuntimeException e) {
             Log.e(TAG, "Could not post the ringing notification", e);
             Diag.log(c, "ringing notification failed: " + e);
         }
     }
 
-    /** Stops everything about `s`: its wake-ups and its ringing notification. */
+    /** Stops everything about `s`: its wake-ups, its ringing notification and its sound in the app. */
     private static void stop(Context c, AlarmSpec s) {
         cancelAlarm(c, AlarmReceiver.ACTION_FIRE, s.id);
         cancelAlarm(c, AlarmReceiver.ACTION_RING_END, s.id);
         NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
+        Ringer.stop(c, s.id);
     }
 
     /** setAlarmClock: exact, wakes the phone, not delayed by Doze, shown as the next alarm. */
