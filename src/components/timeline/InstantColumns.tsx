@@ -113,7 +113,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   // bells before it folded in. One reads as a bell; more as their count, "3🔔".
   const atInstant = (inst.alarms ?? []).filter(a => a.offsetMs === 0 && !a.answered && a.id !== draggingBell && (!isPast || ringingIds.includes(a.id)))
   const ringingHere = atInstant.find(a => ringingIds.includes(a.id))
-  const bellAlarm = ringingHere ?? atInstant[0]
+  // The selected one (a bell just added among others at the instant) is the one its tools edit.
+  const bellAlarm = ringingHere ?? atInstant.find(a => a.id === selectedBell) ?? atInstant[0]
   const bellCount = atInstant.length + bellFolded
   const showBell = bellCount > 0
   const bellSelected = !!bellAlarm && selectedBell === bellAlarm.id
@@ -183,8 +184,10 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
     </>
   ) : null
-  // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it).
+  // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it);
+  // a selected bell's start under the bell in vertical.
   const toolsBelow = toolButtons !== null && chipToolsBelow({ moving, vertical })
+  const bellTools = bellSelected && !moving
   // While the chip is being named, a tool keeps the pointer from taking focus (the row would
   // shift as the name box closes, under the tap), ends naming (the name commits), then acts.
   const tools = toolButtons && (
@@ -256,7 +259,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
         </button>
       )}
       {(editing || toolsBelow) && (
-        <div ref={belowRef} className="tl-col__below">
+        <div ref={belowRef} className={`tl-col__below${bellTools ? ' tl-col__below--bell' : ''}`}>
           {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
           {toolsBelow && tools}
         </div>
@@ -515,7 +518,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
             }} />
           )}
           {selected && (
-            <div className="tl-col__below">
+            <div className="tl-col__below tl-col__below--bell">
               <div className="tl-col__tools">
                 {past
                   ? <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />

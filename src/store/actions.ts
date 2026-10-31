@@ -635,12 +635,16 @@ export function toggleFavorite(id: string) {
   if (inst) setFavorite(id, !inst.favorite)
 }
 
-/** Adds an alarm at the instant (its bell can then be dragged earlier); returns its id. */
+/**
+ * Adds an alarm at the instant (its bell can then be dragged earlier) and selects its bell, so
+ * its tools (how long before, sound) are one tap away; returns its id.
+ */
 export function addAlarm(id: string): string | undefined {
   if (!entities.getInstant(id)) return
   const alarmId = entities.addAlarm(id)
   touchOccurrence(id)
   void primeNotifications() // the first bell asks for notification permission
+  ui.selectBell(alarmId)
   return alarmId
 }
 

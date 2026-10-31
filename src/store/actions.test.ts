@@ -388,6 +388,16 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toBeUndefined()
   })
 
+  it('a new bell is selected, so its tools (offset, sound) are one tap away', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Tea')
+    const a = act.addAlarm(id)!
+    expect(useUi.getState().selectedBell).toBe(a)
+    const b = act.addAlarm(id)!
+    expect(useUi.getState().selectedBell).toBe(b)
+    act.removeAlarm(id, b)
+    expect(useUi.getState().selectedBell).toBeNull()
+  })
+
   it('never rings in the past: an offset reaching back past Now stops at Now', () => {
     const id = entities.createInstant(Date.now() + 10 * MINUTE, 'Soon')
     const a = act.addAlarm(id)!

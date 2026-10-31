@@ -262,6 +262,9 @@
 /* Vertical: the row starts at the chip's left edge, tools right-aligned, so none sits on the marker line. */
 .timeline[data-orientation='vertical'] .tl-col__below { left: 0; transform: none; min-width: 100%; }
 .timeline[data-orientation='vertical'] .tl-col__below .tl-col__tools { margin-left: auto; }
+/* A selected bell's tools (the bell at the chip's start): under the bell, in its colour. */
+.tl-col__below--bell { --accent: var(--c-alarm); --halo: var(--c-alarm); }
+.timeline[data-orientation='vertical'] .tl-col__below--bell .tl-col__tools { margin-left: 0; }
 /* While renaming, the input is the one box: the chip around it draws nothing, hovered or not
    (a tap leaves a sticky hover on phones). Doubled class: .chip's rules come later. */
 .chip.chip--editing,
@@ -475,7 +478,7 @@
 }
 .skip-menu__item:hover { background: var(--box-bg-raised); }
 .skip-menu__note { color: var(--ink-dim); font: 600 12px/1.1 var(--font-ui); }
-.chip-bell.is-selected { background: var(--box-bg-raised); box-shadow: 0 0 0 2px var(--c-alarm), 0 0 calc(10px * var(--glow)) var(--c-alarm); }
+.chip-bell.is-selected, .chip-bell.is-selected:hover { background: color-mix(in srgb, var(--c-alarm) 32%, var(--box-bg-strong)); box-shadow: 0 0 0 2px var(--c-alarm), 0 0 calc(10px * var(--glow)) var(--c-alarm); }
 .chip-bell.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }
 .tl-bell.is-dragging .chip-bell { cursor: grabbing; scale: 1.12; }
 .tl-bell .chip-bell { animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
@@ -548,7 +551,6 @@
   white-space: nowrap;
   pointer-events: none;
 }
-.tl-bell .tl-col__below { --accent: var(--c-alarm); --halo: var(--c-alarm); }
 
 @media (prefers-reduced-motion: reduce) {
   .tl-bell .chip-bell { animation: none; }
