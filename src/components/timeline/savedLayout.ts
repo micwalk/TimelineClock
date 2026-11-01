@@ -45,8 +45,8 @@ const TOOLS_GAP_BESIDE = 6
 /** How many tool buttons a chip shows (as InstantColumns draws them): selected, or moving. */
 export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number; selectedBell?: string | null }): number {
   if (o.moving) return 3 // type the time, confirm, cancel
-  // The bell beside the chip, selected: its tools instead (type the offset, delete).
-  if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell && a.offsetMs <= 0)) return BELL_TOOLS
+  // A bell on the chip (at the instant, or folded in), selected: its tools instead (type the offset, sound, delete).
+  if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell)) return BELL_TOOLS
   if (!o.selected) return 0
   // Favorite, add an alarm (ahead only), cancel alarms (any unanswered), repeat, move (focused), hide (not with an alarm to ring), delete.
   return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + 1 + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
@@ -160,7 +160,7 @@ export interface LayoutContext {
   editingId: string | null
   movingId: string | null
   ringingIds: ReadonlySet<string>
-  /** The alarm whose bell is selected: a chip's own bell shows its tools under the chip. */
+  /** The alarm whose bell is selected, when it is on its chip (at the instant, or folded in): its tools show under the chip. */
   selectedBell?: string | null
   widths: Readonly<Record<string, number>>
   /** Defaults to horizontal. Vertical swaps the chip's extents: its height runs along time. */
@@ -225,8 +225,8 @@ export interface SavedLayout {
   clusters: ClusterInfo[]
   /** Bells before their instants that are drawn (alarm ids, in time order); placed under `bell:<id>` in rows/crossOffsets/shifts. */
   bellIds: string[]
-  /** Instant id → live bells folded into its chip (too close to stand apart). */
-  bellFolded: Record<string, number>
+  /** Instant id → live bells folded into its chip (too close to stand apart): alarm ids, comma-joined, earliest first. */
+  bellFolded: Record<string, string>
   /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups). */
   marks: Record<string, true>
   /** Marks fading out before their zoom hides them (id → opacity, absent = 1); not structure. */
@@ -404,7 +404,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       editingId: c.editing,
       movingId: c.moving,
       ringingIds,
-      selectedBell: c.selectedBell,
+      selectedBell: c.selectedBell && !bells.shown.some(b => b.alarm.id === c.selectedBell) ? c.selectedBell : null,
       widths: c.widths,
       orientation: c.orientation,
     })
@@ -489,7 +489,7 @@ export interface SavedLayoutStructure {
   foldCount: Record<string, number>
   clusters: { id: string; memberIds: string[]; topPriority: number }[]
   bellIds: string[]
-  bellFolded: Record<string, number>
+  bellFolded: Record<string, string>
   /** Instants shown as marks (they leave the chips, so the chips' change covers it). */
   marks: Record<string, true>
   rowsUsed: number

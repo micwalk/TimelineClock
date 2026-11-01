@@ -299,8 +299,9 @@
 
 /* --- Alarm bells (TLC-1) -------------------------------------------------
    A chip's alarms sit in a bell beside it (left of the chip, inside the measured group, so the
-   layout keeps room for it); more than one (bells before the instant folded in when zoomed out,
-   or several at it) reads as their count, "3🔔".
+   layout keeps room for it); several at it read as their count, "2🔔". Bells before or after the
+   instant folded in when zoomed out sit before the chip (warnings) or after it (snoozes), one bell
+   a side listing their offsets, "🔔1m, 15m".
    A bell before its instant is its own marker (.tl-bell) at the time it rings, in the chips'
    layout, with a stub to the axis and a dashed line along the axis back to its instant. */
 .chip-bell {
@@ -326,7 +327,10 @@
 /* A bigger touch target than the glyph. */
 .chip-bell::after { content: ''; position: absolute; inset: -7px; }
 .chip-bell__count { font: 700 12px/1 var(--font-ui); }
-.chip-bell.is-folded-only { cursor: pointer; }
+/* Bells folded into their chip (zoomed out), one a side: their offsets after the glyph, "1m, 15m". */
+.chip-bell--offset { gap: 3px; padding: 0 6px 0 4px; }
+.chip-bell--offset.is-zoom { cursor: pointer; }
+.chip-bell__offset { font: 700 11px/1 var(--font-mono); color: var(--c-alarm); }
 /* A snooze's bell: a small ⟲ on its corner (outside the layout's box). */
 .chip-bell__snooze {
   position: absolute;

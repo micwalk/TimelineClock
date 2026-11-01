@@ -29,7 +29,11 @@ while it is open).
   notifications into one collapsed group and posts them silently.
 - **A chip's bell**: a new one (the chip's bell tool) is selected, its tools (how long before,
   sound, delete) one tap away; a selected bell lights up, its tools under the bell, in vertical
-  too, as they do under a bell of its own.
+  too, as they do under a bell of its own. Zoomed out, bells too close to their instant to stand
+  apart no longer vanish into a count: one bell before the chip lists the warnings' offsets
+  ("🔔1m, 15m"), one after it the snoozes'; a lone one is tapped for its tools like any bell.
+- **Renaming a favorite's span to Now** shows the new name on its lane chip (it always showed
+  the instant's), and favoriting again keeps it.
 - **Phones**: holding NOW (zoom to Now) or ＋ (show in the Agenda) no longer starts selecting
   the button's text.
 
