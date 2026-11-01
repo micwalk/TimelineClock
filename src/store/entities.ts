@@ -208,7 +208,7 @@ export const entities = {
     realize([startInstantId])
     const found = get().spans.find(sp => sp.startInstantId === startInstantId && sp.endIsNow)
     if (found) {
-      patchSpan(found.id, { visible, label: '' })
+      patchSpan(found.id, { visible })
       return found.id
     }
     const rec: SpanRecord = { id: newSpanId(), startInstantId, endInstantId: NOW_SENTINEL, label: '', visible, endIsNow: true }
