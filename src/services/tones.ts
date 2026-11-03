@@ -47,9 +47,10 @@ const midi = (n: number) => 440 * 2 ** ((n - 69) / 12)
 
 export const TONE_PRESETS: Record<AlarmSound, TonePreset> = {
   /**
-   * The app's first alarm, cleaned up: a falling three-step ring with vibrato. No low hum (phone
-   * speakers can't play it and rattle), steps that glide instead of jumping (no clicks), and
-   * voices that stay well under full scale together.
+   * The app's first alarm, cleaned up: a falling three-step ring with vibrato. Pitched where phone
+   * speakers play cleanly (nothing under 600 Hz for them to buzz on), pure sines an octave apart
+   * (no stack of harmonics to rasp), a vibrato in cents so both voices wobble together and stay
+   * in tune, steps that glide instead of jumping (no clicks), and well under full scale.
    */
   tone1: {
     name: 'Classic',
@@ -59,9 +60,9 @@ export const TONE_PRESETS: Record<AlarmSound, TonePreset> = {
       const vib = ctx.createOscillator()
       const vibGain = ctx.createGain()
       vib.frequency.setValueAtTime(6, t)
-      vibGain.gain.setValueAtTime(8, t)
+      vibGain.gain.setValueAtTime(18, t) // cents
       vib.connect(vibGain)
-      const voices: [OscillatorType, number[], number][] = [['sine', [800, 600, 400], 0.5], ['triangle', [1200, 900, 600], 0.22]]
+      const voices: [OscillatorType, number[], number][] = [['sine', [1200, 900, 600], 0.5], ['sine', [2400, 1800, 1200], 0.14]]
       const oscs = voices.map(([type, steps, peak]) => {
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
@@ -71,7 +72,7 @@ export const TONE_PRESETS: Record<AlarmSound, TonePreset> = {
           osc.frequency.setValueAtTime(steps[k], t + (k + 1) * 0.1 - 0.015)
           osc.frequency.exponentialRampToValueAtTime(f, t + (k + 1) * 0.1)
         })
-        vibGain.connect(osc.frequency)
+        vibGain.connect(osc.detune)
         gain.gain.setValueAtTime(0, t)
         gain.gain.linearRampToValueAtTime(peak, t + 0.03)
         gain.gain.exponentialRampToValueAtTime(0.001, t + len)

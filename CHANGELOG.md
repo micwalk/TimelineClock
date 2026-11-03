@@ -17,8 +17,9 @@ while it is open).
   Recent). Pick it in the Alarm picker's new **Sound** row or a bell's ♪ tool; Settings ›
   Alarms › **Sounds** plays each one (▶) and sets what new alarms use (Classic to start with). A
   repeat's alarms share one sound; a snooze keeps the sound it snoozed. Classic, the sound
-  alarms had until now, no longer distorts: no low hum for phone speakers to rattle on, no
-  clicks, and well under full scale.
+  alarms had until now, no longer distorts: pitched up where phone speakers play cleanly, pure
+  tones that stay in tune with each other through the vibrato, no clicks, and well under full
+  scale.
 - **Android app**: each sound is a notification category, **Alarm tone 1** to **Alarm tone 4**
   and **Chime**. Settings › Alarms › Sounds › **Change…** opens Android's settings for it, where
   you can pick any ringtone or a file of your own; the app shows what you picked. The old "Alarms
