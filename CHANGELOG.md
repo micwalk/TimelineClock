@@ -40,6 +40,8 @@ while it is open).
 - **NOW, on Now**: a long-press opens the box to go to a time (G still does); a tap there does
   nothing, so a stray tap no longer pops it up. Away from Now, a tap still goes to Now and a
   long-press still zooms out until Now shows.
+- **Moving an instant** snaps to a tick when you let go, as the cursor does (let go almost at
+  rest, within 8px of one; a fling never snaps).
 - **A chip's popovers** (sound, repeat, cancel, delete, typing a time) open where they stay,
   rather than opening off to one side and jumping into place, and draw over the Now and Cursor
   tags, as does a selected bell with its tools.

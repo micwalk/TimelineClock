@@ -380,11 +380,12 @@ export function toggleAgendaDock() {
  * End of a drag. It lands on what the cursor showed it was about to land on (`land`: the
  * capture, the one rule for "near enough"). Otherwise, released almost at rest (`snap`), it
  * eases to the nearest tick within `tickSnapPx` when the setting is on; `{ snap: false }` (a
- * release with speed) leaves the cursor exactly where the pan stopped.
+ * release with speed) leaves the cursor exactly where the pan stopped. A moving instant (move
+ * mode, riding the center) snaps to ticks the same way; it never lands on anything.
  */
 export function endPan({ snap = true, land = null }: { snap?: boolean; land?: LandingTarget | null } = {}) {
-  if (v().viewFocusMode !== 'cursor' || v().moveMode) return
-  if (land) { landOn(land, true); return }
+  if (v().viewFocusMode !== 'cursor') return
+  if (land && !v().moveMode) { landOn(land, true); return }
   if (!snap || !useSettings.getState().tickSnap) return
   const f = frame()
   const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
@@ -813,7 +814,8 @@ export function enterMove(id: string) {
 export function confirmMove() {
   const mm = v().moveMode
   if (!mm) return
-  setInstantTime(mm.instantId, frame().center)
+  // Where the view is headed (a tick snap may still be easing there), not where this frame is.
+  setInstantTime(mm.instantId, v().timeCenter)
   touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId, false)

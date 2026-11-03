@@ -756,6 +756,20 @@ describe('tick snap', () => {
     settings.resetTunable('tickSnapPx')
   })
 
+  it('endPan snaps a moving instant to a tick too, never onto another instant; OK takes the snapped time', () => {
+    useSettings.setState({ tickSnap: true })
+    const { tick, t } = offTick()
+    const id = entities.createInstant(t - 2 * HOUR, 'Rice')
+    entities.createInstant(t + 1000, 'Tea')
+    act.enterMove(id)
+    useView.setState({ timeCenter: t })
+    act.endPan({ land: null })
+    expect(view().timeCenter).toBe(tick)
+    expect(view().moveMode?.instantId).toBe(id)
+    act.confirmMove()
+    expect(entities.getInstant(id)?.tsEpochMs).toBe(tick)
+  })
+
   it('endPan with snap: false leaves the cursor and does not land on Now or an instant', () => {
     useSettings.setState({ tickSnap: true })
     const { t } = offTick()
