@@ -870,9 +870,11 @@
   animation: popover-in 140ms ease-out;
 }
 .popover--below { top: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+/* Scale, not translate: useKeepOnScreen nudges popovers with `translate`, which an animation of
+   it would override until it ends (the popover would open in one spot, then jump). */
 @keyframes popover-in {
-  from { opacity: 0; translate: 0 -4px; }
-  to { opacity: 1; translate: 0 0; }
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
 }
 /* One row of equal-height boxes: the sign, the days, hh:mm:ss (or hh:mm:ss and AM/PM). */
 .time-entry { display: flex; align-items: stretch; justify-content: center; gap: 6px; }
