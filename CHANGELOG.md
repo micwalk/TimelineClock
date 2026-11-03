@@ -40,7 +40,8 @@ while it is open).
   nothing, so a stray tap no longer pops it up. Away from Now, a tap still goes to Now and a
   long-press still zooms out until Now shows.
 - **A chip's popovers** (sound, repeat, cancel, delete, typing a time) open where they stay,
-  rather than opening off to one side and jumping into place.
+  rather than opening off to one side and jumping into place, and draw over the Now and Cursor
+  tags, as does a selected bell with its tools.
 
 ## 0.6.2 — 2026-10-24
 

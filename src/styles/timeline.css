@@ -167,6 +167,9 @@
 /* The selected or focused instant's chip and tools draw over everything else on the timeline. */
 .tl-col--label.is-selected:not(.is-now):not(.is-cursor),
 .tl-col--label.is-focused:not(.is-now):not(.is-cursor) { z-index: calc(var(--z-popovers) - 1); }
+/* So do a selected bell's (on a chip or its own) with its tools, and any chip's open popover (sound, repeat…). */
+.tl-col--label:has(.chip-bell.is-selected) { z-index: calc(var(--z-popovers) - 1); }
+.tl-col--label:has(.popover) { z-index: var(--z-popovers); }
 
 .tl-col__line {
   position: absolute;
