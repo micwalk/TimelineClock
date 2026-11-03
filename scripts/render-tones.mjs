@@ -68,6 +68,14 @@ const reply = await new Promise(ok => {
   ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: 'renderAll()', awaitPromise: true, returnByValue: true } }))
 })
 ws.close()
+// Close the whole browser: killing the process alone leaves its child processes running.
+const browserWs = await fetch(`http://127.0.0.1:${PORT}/json/version`).then(r => r.json()).then(v => v.webSocketDebuggerUrl).catch(() => null)
+if (browserWs) {
+  const b = new WebSocket(browserWs)
+  await new Promise(ok => { b.onopen = ok; b.onerror = ok })
+  b.send(JSON.stringify({ id: 1, method: 'Browser.close' }))
+  await new Promise(r => setTimeout(r, 800))
+}
 browser.kill()
 if (!reply.result?.result?.value) throw new Error(`The browser rendered nothing: ${JSON.stringify(reply).slice(0, 300)}`)
 const rendered = JSON.parse(reply.result.result.value)
