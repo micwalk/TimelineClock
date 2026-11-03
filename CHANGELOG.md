@@ -40,6 +40,9 @@ while it is open).
 - **NOW, on Now**: a long-press opens the box to go to a time (G still does); a tap there does
   nothing, so a stray tap no longer pops it up. Away from Now, a tap still goes to Now and a
   long-press still zooms out until Now shows.
+- **The control bar is two rows**: Stopwatch, Timer and Alarm sit right of ＋, under the
+  forward buttons, rather than on a row of their own (they still get one when the window is
+  narrow).
 - **Moving an instant** snaps to a tick when you let go, as the cursor does (let go almost at
   rest, within 8px of one; a fling never snaps).
 - **A chip's popovers** (sound, repeat, cancel, delete, typing a time) open where they stay,

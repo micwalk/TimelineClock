@@ -207,7 +207,7 @@ export function ControlBar() {
 
   // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
   // while following Now), with the navigation gathered to either side of it; Stopwatch, Timer
-  // and Alarm are a centered row of their own below.
+  // and Alarm sit right of ＋ (a row of their own below when the bar is narrow: panels.css).
   return (
     <nav className="controls controls--horizontal" aria-label="Timeline controls">
       <div className="controls__side is-before">

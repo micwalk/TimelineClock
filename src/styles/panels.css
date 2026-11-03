@@ -100,9 +100,15 @@
 
 /* Stopwatch and Timer: always labelled (they are the way in for new users). */
 /* Horizontal: NOW centered under the timeline (its center is the Now line's while following Now),
-   the navigation gathered to either side, and Stopwatch, Timer and Alarm a centered row below.
+   the navigation gathered to either side, and Stopwatch, Timer and Alarm right of ＋, level with
+   it: two rows. Too narrow for them there, labelled, they take a centered row of their own below.
    A side never wraps: once its labels don't fit, its buttons go to icons (the step keeps its text). */
-.controls--horizontal { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.controls--horizontal {
+  container: ctl-bar / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
 .controls__side { container: ctl-side / inline-size; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
 @container ctl-side (max-width: 410px) {
   .ctl-btn__text { display: none; }
@@ -116,6 +122,13 @@
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.controls--horizontal > .controls__side.is-before { grid-area: 1 / 1; }
+.controls--horizontal > .controls__now { grid-area: 1 / 2 / span 2; }
+.controls--horizontal > .controls__side.is-after { grid-area: 1 / 3; }
+.controls--horizontal > .controls__quick { grid-area: 2 / 3; align-self: end; justify-content: flex-start; flex-wrap: nowrap; }
+@container ctl-bar (max-width: 860px) {
+  .controls--horizontal > .controls__quick { grid-area: 3 / 1 / auto / -1; align-self: auto; justify-content: center; flex-wrap: wrap; }
+}
 .controls__now { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 132px; }
 .controls__now .ctl-btn { width: 100%; height: 44px; justify-content: center; }
 /* NOW sits level with the buttons beside it; ＋ hangs under it. */
