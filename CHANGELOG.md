@@ -36,6 +36,11 @@ while it is open).
   the instant's), and favoriting again keeps it.
 - **Phones**: holding NOW (zoom to Now) or ＋ (show in the Agenda) no longer starts selecting
   the button's text.
+- **NOW, on Now**: a long-press opens the box to go to a time (G still does); a tap there does
+  nothing, so a stray tap no longer pops it up. Away from Now, a tap still goes to Now and a
+  long-press still zooms out until Now shows.
+- **A chip's popovers** (sound, repeat, cancel, delete, typing a time) open where they stay,
+  rather than opening off to one side and jumping into place.
 
 ## 0.6.2 — 2026-10-24
 

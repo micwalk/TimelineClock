@@ -181,10 +181,13 @@ describe('Stopwatch and Timer buttons', () => {
     expect(screen.getAllByRole('menuitem')[0].textContent).toBe('13m')
   })
 
-  it('NOW, while following Now, goes to a typed time: here an offset from Now', () => {
+  it('NOW, while following Now, goes to a typed time on a long-press (a tap does nothing): here an offset from Now', () => {
     useUi.setState({ jumpOpen: false })
     render(<ControlBar />)
-    fireEvent.click(screen.getByRole('button', { name: /^Go to a time \(G\)/ }))
+    const now = screen.getByRole('button', { name: /long-press to go to a time \(G\)/ })
+    fireEvent.click(now)
+    expect(useUi.getState().jumpOpen).toBe(false)
+    fireEvent.contextMenu(now)
     fireEvent.click(screen.getByRole('tab', { name: 'From Now' }))
     const before = engine.sample().now
     fireEvent.change(screen.getByRole('textbox', { name: /^Offset from Now/ }), { target: { value: '200' } })
