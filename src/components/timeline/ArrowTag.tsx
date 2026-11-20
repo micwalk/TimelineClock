@@ -1,6 +1,6 @@
 // A live marker's readout: a box on the live side of the axis (above it, or left of
 // it when vertical) with an arrowhead (inward-curved edges) whose tip touches the axis. The
-// Cursor tag moves its box out of the Now tag's way through --lift (the arrowhead stays on the
+// Cursor tag moves its box out of the Now tag's way with a translate it writes per frame (the arrowhead stays on the
 // axis).
 import { useEffect, useRef } from 'react'
 import type { ReactNode, RefObject } from 'react'

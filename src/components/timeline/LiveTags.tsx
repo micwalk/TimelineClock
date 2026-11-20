@@ -46,6 +46,17 @@ const tagDateMode = (f: Frame): 0 | 1 | 2 => {
 }
 
 /** "Rice +00:10": whole seconds, so it only changes once a second. */
+/** The value last written to each element's inline style property: a frame writes only what changed. */
+const lastWritten = new WeakMap<HTMLElement | SVGElement, Map<string, string>>()
+function writeStyle(el: HTMLElement | SVGElement | null, prop: 'translate' | 'opacity' | 'scale', value: string) {
+  if (!el) return
+  let props = lastWritten.get(el)
+  if (!props) { props = new Map(); lastWritten.set(el, props) }
+  if (props.get(prop) === value) return
+  props.set(prop, value)
+  el.style[prop] = value
+}
+
 const offsetText = (name: string, ms: number) => `${name} ${formatSignedDuration(ms)}`
 
 function clockPopover(anchor: 'now' | 'cursor') {
@@ -123,8 +134,8 @@ export function CursorTag() {
   // vertical; there the push flips sides where the cursor crosses Now, which the merge into Now
   // hides (or, on a fast pan that doesn't merge, eases out).
   const cursorPos = (f: Frame) => f.mainSize / 2 + captureFlowAt(f).lean
-  const avoid = useRef<{ seq: number; last: number; res: SpringState; perf: number; written: string; plus: string; merging: boolean }>(
-    { seq: -1, last: 0, res: { x: 0, v: 0 }, perf: NaN, written: '', plus: '', merging: false })
+  const avoid = useRef<{ seq: number; last: number; res: SpringState; perf: number; plus: string; merging: boolean }>(
+    { seq: -1, last: 0, res: { x: 0, v: 0 }, perf: NaN, plus: '', merging: false })
   const placeTag = (f: Frame, label: HTMLDivElement) => {
     const a = avoid.current
     if (a.seq === f.seq) return
@@ -152,12 +163,16 @@ export function CursorTag() {
       }
     }
     a.perf = f.perf
-    const written = `${lift.toFixed(2)}|${merge.toFixed(3)}`
-    if (written !== a.written) {
-      a.written = written
-      label.style.setProperty('--lift', lift.toFixed(2))
-      label.style.setProperty('--merge', merge.toFixed(3))
-    }
+    // Written on the parts that move, not as custom properties on the label: those are
+    // inherited, so the whole tag would restyle every frame. The lift moves the tag out of the
+    // Now tag's way (up in horizontal, along the time axis in vertical); merging into Now, the
+    // tag sinks into the Now tag and fades, the arrowheads meet.
+    const fade = merge > 0 ? (1 - merge).toFixed(3) : ''
+    writeStyle(label.querySelector('.tl-tag'), 'translate', lift !== 0 ? `0 ${(f.orientation === 'horizontal' ? -lift : lift).toFixed(2)}px` : '')
+    writeStyle(label.querySelector('.tl-tag__arrow'), 'opacity', fade)
+    writeStyle(label.querySelector('.tl-tag__box'), 'opacity', fade)
+    writeStyle(label.querySelector('.tl-tag__hide'), 'opacity', fade)
+    writeStyle(label.querySelector('.tl-tag__box'), 'scale', merge > 0 ? (1 - 0.3 * merge).toFixed(3) : '')
     const merging = merge > 0.5
     if (merging !== a.merging || label.classList.contains('is-merging') !== merging) { a.merging = merging; label.classList.toggle('is-merging', merging) }
     // The ＋ never moves: it stays put while the tag leans onto a line or moves out of Now's way.
