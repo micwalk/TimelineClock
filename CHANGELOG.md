@@ -7,6 +7,18 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.7.1 — 2026-11-19
+
+Web only.
+
+- **Faster on phones.** The Agenda (the ☰ drawer, or docked) mounts only the rows near what is on
+  screen, so opening it no longer stalls with a long history: about 0.1 s however many instants you
+  have, where 2,000 took about 2 s (CPU slowed 4× to stand in for a phone), and a docked Agenda no
+  longer updates thousands of rows while you pan. The axis ticks are painted on a canvas instead of
+  an element each (they look the same), halving the browser's style work while zooming. The Cursor
+  tag moves out of Now's way without restyling all of itself every frame, and live times change
+  their text in place: pans do about a fifth less style work.
+
 ## 0.7.0 — 2026-10-31
 
 **Android app: install again** (new notification channels, and the app plays alarm sounds itself

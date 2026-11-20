@@ -339,3 +339,19 @@ The overlap layout is pan-invariant and cached; before the cache, pan cost 19.5%
 Next levers, if phones still struggle: fewer composited layers for chips (a world container
 for unselected chips, the selected one outside it for its z-order), and lane lines that don't
 change width while zooming.
+
+
+0.7.1 (main-thread time for the same gestures, 4×, 412×915 vertical; runs vary by about 10%):
+
+| Change | Measured |
+|---|---|
+| Ticks on two canvases instead of an element each | zoom style recalc −55%, zoom total −10 to −20% |
+| Cursor tag: `translate`/`opacity`/`scale` written on its parts, not inherited `--lift`/`--merge` on its column | pan style recalc −28% |
+| LiveText changes its text node in place (no child-list change, so no `:has()` restyle of the timeline) | removes a restyle of `.timeline` per pan frame |
+| Agenda lists windowed (WindowedList) | opening the drawer: 140 instants 0.29 → 0.12 s, 600: 0.7 → 0.11 s, 2,000: 1.9 s plus stalls → 0.11 s |
+
+Measured and left alone: putting chips in a world layer like the lines. Hiding every chip outright saves only about 14% of a pan on
+a busy screen, and a transformed container is a stacking context, so selected, focused and popover chips (which draw over the
+tags) would have to move out of it, remounting them. Style cost per element is mostly a fixed overhead per style update
+(about 0.1 ms at 4× even with no stylesheet), so what pays is fewer separately moving elements, not lighter CSS: removing
+the glow, the `:has()` rules or Tailwind's CSS changed nothing measurable.
