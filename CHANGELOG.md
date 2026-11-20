@@ -9,7 +9,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 ## 0.7.1 — 2026-11-19
 
-Web only.
+**Android app: install again** (the Classic tone's sound file changed). Released together with
+0.7.0's alarm sounds, which were never published on their own: what 0.7.0 lists below ships here.
 
 - **Faster on phones.** The Agenda (the ☰ drawer, or docked) mounts only the rows near what is on
   screen, so opening it no longer stalls with a long history: about 0.1 s however many instants you
@@ -18,6 +19,17 @@ Web only.
   an element each (they look the same), halving the browser's style work while zooming. The Cursor
   tag moves out of Now's way without restyling all of itself every frame, and live times change
   their text in place: pans do about a fifth less style work.
+- **Bells folded into a chip** (zoomed out): one bell a side listing their offsets, nearest
+  first, warnings before the chip and snoozes after it.
+- **A selected bell**, and a chip's open popover, draw over the Now and Cursor tags.
+- **NOW while following Now**: a long-press opens the go-to-a-time box; a tap does nothing. A
+  long press on NOW or ＋ no longer selects the button's text on phones.
+- **Control bar in two rows**: Stopwatch, Timer and Alarm sit right of ＋, level with it.
+- **Move mode** snaps to a tick when you let go almost at rest, as the cursor does; OK takes the
+  snapped time.
+- **Popovers** open where they stay: the entrance scales rather than slides, so it no longer
+  fights the on-screen nudge.
+- A favorite's span to Now shows its name once renamed, and keeps it when favorited again.
 
 ## 0.7.0 — 2026-10-31
 
