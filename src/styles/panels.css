@@ -386,7 +386,12 @@
 .list-scroll::-webkit-scrollbar { width: 8px; }
 .list-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
 
-.list-rows { display: flex; flex-direction: column; gap: 9px; }
+.list-rows { --list-gap: 9px; display: flex; flex-direction: column; gap: var(--list-gap); }
+/* A long list mounts only the rows near the screen (WindowedList); spacers stand in for the rest,
+   their margins taking back the gap so the rows sit exactly where they would. */
+.list-spacer { flex: none; pointer-events: none; }
+.list-spacer--before { margin-bottom: calc(-1 * var(--list-gap)); }
+.list-spacer--after { margin-top: calc(-1 * var(--list-gap)); }
 .list-empty { padding: 24px 8px; color: var(--ink-faint); font-size: 15px; }
 
 .list-row {

@@ -1,6 +1,6 @@
 // Tabbed list (the Agenda), docked or in the drawer: all instants, favorites, spans, alarms and groups (yours, the sun, repeats).
 // Instants in a group you switched off are left out of the lists (and spans that end at one).
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
@@ -20,9 +20,10 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
+import { WindowedList } from '../common/WindowedList.tsx'
+import type { ListItem } from '../common/WindowedList.tsx'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline'
 import { useLayout } from '../../store/layout.ts'
-import { useFlip } from '../../hooks/useFlip.ts'
 import { HelpButton } from './Help.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { AlarmsList, RepeatsList } from './AlarmsList.tsx'
@@ -36,14 +37,6 @@ const TABS: { key: ListTab; label: string; short: string }[] = [
   { key: 'alarms', label: 'Alarms', short: 'Alarms' },
   { key: 'groups', label: 'Groups', short: 'Groups' },
 ]
-
-/** Scrolls the row marked data-focused into view whenever `focusKey` changes. */
-function useScrollFocused(container: React.RefObject<HTMLElement | null>, focusKey: string) {
-  useEffect(() => {
-    const row = container.current?.querySelector<HTMLElement>('[data-focused="true"]')
-    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [container, focusKey])
-}
 
 // ---------------------------------------------------------------------------
 // Instants
@@ -148,29 +141,25 @@ function InstantsList({ favoritesOnly }: { favoritesOnly: boolean }) {
   const nowIdx = showLive ? pastCount : -1
   const cursorIdx = useFrameValue(f => (showCursor ? lowerBound(sorted, f.center) : -1))
 
-  const rows: { key: string; node: React.ReactNode }[] = []
+  const rows: ListItem[] = []
   const pushLive = (i: number) => {
-    if (i === nowIdx) rows.push({ key: 'now', node: <LiveRow key="now" kind="now" focused={v.mode === 'now'} /> })
-    if (i === cursorIdx) rows.push({ key: 'cursor', node: <LiveRow key="cursor" kind="cursor" focused /> })
+    if (i === nowIdx) rows.push({ key: 'now', render: () => <LiveRow key="now" kind="now" focused={v.mode === 'now'} /> })
+    if (i === cursorIdx) rows.push({ key: 'cursor', render: () => <LiveRow key="cursor" kind="cursor" focused /> })
   }
   sorted.forEach((inst, i) => {
     pushLive(i)
     rows.push({
       key: inst.id,
-      node: <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} isPast={i < pastCount} />,
+      render: () => <SavedRow key={inst.id} inst={inst} focused={v.mode === 'instant' && v.focusedId === inst.id} selected={v.selectedId === inst.id} isPast={i < pastCount} />,
     })
   })
   pushLive(sorted.length)
 
-  const ref = useRef<HTMLDivElement>(null)
-  const orderKey = rows.map(r => r.key).join(',')
-  useFlip(ref, orderKey)
-  useScrollFocused(ref, `${v.mode}:${v.focusedId}`)
-
   if (rows.length === 0) {
     return <p className="list-empty">{favoritesOnly ? 'No favorites yet. Star an instant to pin it here.' : 'No instants yet.'}</p>
   }
-  return <div ref={ref} className="list-rows">{rows.map(r => r.node)}</div>
+  const focusKey = v.mode === 'instant' ? v.focusedId : v.mode === 'now' ? 'now' : v.mode === 'cursor' ? 'cursor' : null
+  return <WindowedList items={rows} focusKey={focusKey} />
 }
 
 // ---------------------------------------------------------------------------
@@ -269,20 +258,21 @@ function SpansList() {
     return out.sort((a, b) => a.mid - b.mid)
   }, [instants, spans, v.selectedId, v.secondaryId, v.showNow, v.showPrev])
 
-  const ref = useRef<HTMLDivElement>(null)
-  useFlip(ref, rows.map(r => r.key).join(','))
-  useScrollFocused(ref, `${v.mode}:${v.focusedSpanId}`)
-
   if (rows.length === 0) return <p className="list-empty">No spans yet. Use the pin on a span to save it.</p>
+  const items: ListItem[] = rows.map(row => ({
+    key: row.key,
+    render: () => <SpanRow key={row.key} row={row} focused={row.kind === 'saved' && v.mode === 'span' && v.focusedSpanId === row.r.span.id} />,
+  }))
   return (
-    <div ref={ref} className="list-rows">
-      <div className="list-head list-row--span" aria-hidden>
-        <span /><span>Name</span><span>Start</span><span>Start time</span><span>Duration</span><span>End time</span><span>End</span><span />
-      </div>
-      {rows.map(row => (
-        <SpanRow key={row.key} row={row} focused={row.kind === 'saved' && v.mode === 'span' && v.focusedSpanId === row.r.span.id} />
-      ))}
-    </div>
+    <WindowedList
+      items={items}
+      focusKey={v.mode === 'span' ? v.focusedSpanId : null}
+      head={
+        <div className="list-head list-row--span" aria-hidden>
+          <span /><span>Name</span><span>Start</span><span>Start time</span><span>Duration</span><span>End time</span><span>End</span><span />
+        </div>
+      }
+    />
   )
 }
 
