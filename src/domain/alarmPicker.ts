@@ -9,6 +9,8 @@ import { CLOCK_RE, sanitizeRepeat } from './series.ts'
 import { formatTimerLength, parseTimerInput } from './quickCreate.ts'
 import { DAY, MINUTE } from './time.ts'
 import type { SunEvent } from './sun.ts'
+import type { AlarmSound } from './sounds.ts'
+import { DEFAULT_TONE, isSound } from './sounds.ts'
 
 export interface AlarmTime {
   h: number
@@ -103,9 +105,11 @@ export interface AlarmRingDefaults {
   onTime: boolean
   /** Warnings picked to start with, ms (offered too). */
   warnings: number[]
+  /** What alarms sound like unless set on their own (domain/sounds). */
+  sound: AlarmSound
 }
 
-export const DEFAULT_RING_DEFAULTS: AlarmRingDefaults = { choices: WARN_CHOICES_MS, onTime: true, warnings: [] }
+export const DEFAULT_RING_DEFAULTS: AlarmRingDefaults = { choices: WARN_CHOICES_MS, onTime: true, warnings: [], sound: DEFAULT_TONE }
 
 const warningList = (raw: unknown): number[] =>
   Array.isArray(raw) ? [...new Set(raw.filter((w): w is number => typeof w === 'number' && w > 0 && w < DAY))].sort((a, b) => a - b).slice(0, 8) : []
@@ -115,7 +119,12 @@ export function sanitizeRingDefaults(raw: unknown): AlarmRingDefaults {
   const r = raw as Record<string, unknown>
   const warnings = warningList(r.warnings)
   // Starting with no ring at all would make every new alarm need fixing: then it rings on time.
-  return { choices: Array.isArray(r.choices) ? warningList(r.choices) : WARN_CHOICES_MS, onTime: r.onTime !== false || warnings.length === 0, warnings }
+  return {
+    choices: Array.isArray(r.choices) ? warningList(r.choices) : WARN_CHOICES_MS,
+    onTime: r.onTime !== false || warnings.length === 0,
+    warnings,
+    sound: isSound(r.sound) ? r.sound : DEFAULT_TONE,
+  }
 }
 
 /** "5m, 15m, 1h 30m" read back as lengths (each like a typed warning); null when any part isn't one. */
@@ -153,12 +162,14 @@ export interface RecentAlarm {
   onTime?: false
   /** At sunrise or sunset (then `time` is only roughly when). */
   sun?: SunEvent
+  /** Its own sound (absent: the default tone). */
+  sound?: AlarmSound
 }
 
 export const MAX_RECENT_ALARMS = 3
 
 const sameRecent = (a: RecentAlarm, b: RecentAlarm) =>
-  a.time === b.time && a.label === b.label && a.sun === b.sun && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
+  a.time === b.time && a.label === b.label && a.sun === b.sun && a.sound === b.sound && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
 
 export function pushRecentAlarm(list: readonly RecentAlarm[], a: RecentAlarm): RecentAlarm[] {
   return [a, ...list.filter(x => !sameRecent(x, a))].slice(0, MAX_RECENT_ALARMS)
@@ -175,6 +186,7 @@ export function sanitizeRecentAlarms(raw: unknown): RecentAlarm[] {
     const warnings = Array.isArray(r.warnings) ? r.warnings.filter((w): w is number => typeof w === 'number' && w > 0 && w < DAY) : []
     const onTime = r.onTime === false && warnings.length > 0 ? { onTime: false as const } : {}
     const sun = r.sun === 'sunrise' || r.sun === 'sunset' ? { sun: r.sun as SunEvent } : {}
-    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime, ...sun }]
+    const sound = isSound(r.sound) ? { sound: r.sound } : {}
+    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime, ...sun, ...sound }]
   }).slice(0, MAX_RECENT_ALARMS)
 }

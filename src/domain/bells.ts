@@ -5,7 +5,8 @@
 // instant. Rules:
 //   - A live alarm (still to ring, or ringing) is never hidden: it is a bell of its own, or,
 //     when it is too close to its instant to stand apart (zoomed out), it folds into the
-//     instant's chip, which counts it (one bell reads as a bell; more as "3🔔").
+//     instant's chip, a small bell with its offset ("15m") before the chip (a warning) or after
+//     it (a snooze).
 //   - An answered or missed alarm (history) shows, hollow, only while its instant is selected
 //     or focused, and only where it has room of its own.
 //   - The bell being dragged always shows, at the drag's time.
@@ -42,15 +43,16 @@ export const isLiveAlarm = (inst: InstantRecord, a: AlarmRecord, now: number, ri
 
 export interface BellLayout {
   shown: ShownBell[]
-  /** Instant id → live bells folded into its chip (alarms before it that are too close to stand apart). */
-  folded: Record<string, number>
+  /** Instant id → live bells folded into its chip (too close to stand apart): alarm ids, comma-joined, earliest first. */
+  folded: Record<string, string>
 }
 
 export function bellsToShow(instants: readonly InstantRecord[], o: BellOptions): BellLayout {
   const shown: ShownBell[] = []
-  const folded: Record<string, number> = {}
+  const folded: Record<string, string> = {}
   for (const inst of instants) {
     if (!inst.alarms) continue
+    const into: AlarmRecord[] = []
     for (const alarm of inst.alarms) {
       const dragged = o.dragging?.alarmId === alarm.id
       if (dragged) {
@@ -62,13 +64,14 @@ export function bellsToShow(instants: readonly InstantRecord[], o: BellOptions):
       if (!live && !o.revealPast.has(inst.id)) continue
       const ringTs = ringTime(inst, alarm)
       if (Math.abs(o.pos(inst.tsEpochMs) - o.pos(ringTs)) < o.collapsePx) {
-        if (live) folded[inst.id] = (folded[inst.id] ?? 0) + 1
+        if (live) into.push(alarm)
         continue
       }
       // Off screen, a bell still counts while its line to its instant crosses the screen.
       if (Math.max(ringTs, inst.tsEpochMs) < o.lo || Math.min(ringTs, inst.tsEpochMs) > o.hi) continue
       shown.push({ inst, alarm, ringTs, past: !live })
     }
+    if (into.length) folded[inst.id] = into.sort((a, b) => b.offsetMs - a.offsetMs).map(a => a.id).join(',')
   }
   return { shown, folded }
 }

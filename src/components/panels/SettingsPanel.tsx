@@ -16,6 +16,7 @@ import { DataSettings } from './DataSettings.tsx'
 import { SkySettings } from './SkySettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
+import { SoundSettings } from './SoundSettings.tsx'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
 
@@ -168,6 +169,7 @@ export function SettingsPanel() {
               </select>
             </label>
             <AlarmRingSettings />
+            <SoundSettings />
           </section>
 
           <section className="settings__group">

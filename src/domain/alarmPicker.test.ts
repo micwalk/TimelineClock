@@ -88,7 +88,9 @@ describe('ring defaults (Settings)', () => {
     expect(parseWarningList('5m, soon')).toBeNull()
     expect(sanitizeRingDefaults(null)).toEqual(DEFAULT_RING_DEFAULTS)
     expect(sanitizeRingDefaults({ choices: [], onTime: false, warnings: [] }).onTime).toBe(true)
-    expect(sanitizeRingDefaults({ choices: [HOUR], onTime: false, warnings: [HOUR] })).toEqual({ choices: [HOUR], onTime: false, warnings: [HOUR] })
+    expect(sanitizeRingDefaults({ choices: [HOUR], onTime: false, warnings: [HOUR] })).toEqual({ choices: [HOUR], onTime: false, warnings: [HOUR], sound: 'tone1' })
+    expect(sanitizeRingDefaults({ sound: 'chime' }).sound).toBe('chime')
+    expect(sanitizeRingDefaults({ sound: 'tone9' }).sound).toBe('tone1')
   })
 })
 

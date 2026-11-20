@@ -1,5 +1,5 @@
 // Controls under the timeline: navigation; NOW with the clock (long-press: zoom out until Now
-// shows, #23; following Now, a tap types a time to go to, #15) over ＋ (drop at Now or the cursor;
+// shows, #23; following Now, it types a time to go to instead, #15) over ＋ (drop at Now or the cursor;
 // on an instant, its name to rename it); and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
 import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
@@ -109,8 +109,9 @@ function useLongPress(onLong: () => void, onTap: () => void) {
 }
 
 /**
- * The top button: NOW with the clock under it. A tap goes to Now; already there, it opens the
- * time box (go to a typed time, or one from Now; also G). A long-press zooms out until Now shows (F).
+ * The top button: NOW with the clock under it. A tap goes to Now; a long-press zooms out until
+ * Now shows (F). Already there, a long-press opens the time box instead (go to a typed time, or
+ * one from Now; also G), and a tap does nothing.
  */
 function NowButton({ seconds }: { seconds: boolean }) {
   const following = useView(s => s.viewFocusMode === 'now')
@@ -118,14 +119,16 @@ function NowButton({ seconds }: { seconds: boolean }) {
   // The box closes on the press outside it, before this button's own click would open it again.
   const closedAt = useRef(0)
   const close = () => { closedAt.current = performance.now(); ui.setJump(false) }
-  const press = useLongPress(act.zoomToNow, () => {
+  const press = useLongPress(() => {
+    if (!following) act.zoomToNow()
+    else if (performance.now() - closedAt.current > 300) ui.setJump(true)
+  }, () => {
     if (!following) act.focusNow()
-    else if (performance.now() - closedAt.current > 300) ui.setJump(!open)
   })
   return (
     <div className="ctl-clock-wrap">
       <CtlButton variant="now" className="ctl-now"
-        label={following ? 'Go to a time (G); long-press to zoom to Now (F)' : 'Focus Now (R); long-press to zoom to Now (F)'}
+        label={following ? 'Now; long-press to go to a time (G)' : 'Focus Now (R); long-press to zoom to Now (F)'}
         aria-expanded={following ? open : undefined}
         sub={<LiveText compute={f => formatClockCompact(f.now, seconds)} />}
         {...press}>NOW</CtlButton>
@@ -204,7 +207,7 @@ export function ControlBar() {
 
   // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
   // while following Now), with the navigation gathered to either side of it; Stopwatch, Timer
-  // and Alarm are a centered row of their own below.
+  // and Alarm sit right of ＋ (a row of their own below when the bar is narrow: panels.css).
   return (
     <nav className="controls controls--horizontal" aria-label="Timeline controls">
       <div className="controls__side is-before">

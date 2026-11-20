@@ -48,7 +48,7 @@ export function resolveSpan(span: SpanRecord, byId: Map<string, InstantRecord>):
 
 export const spanEndTs = (r: ResolvedSpan, now: number) => (r.end ? r.end.tsEpochMs : now)
 
-/** Favorite instants own a hidden-label span to Now; it shows a star instead of a header. */
+/** Favorite instants own a span to Now; its chip leads with a star. */
 export const isFavoriteNowSpan = (r: ResolvedSpan) => !!r.span.endIsNow && !!r.start.favorite
 
 /**
@@ -57,8 +57,8 @@ export const isFavoriteNowSpan = (r: ResolvedSpan) => !!r.span.endIsNow && !!r.s
  */
 export const canStopNowSpan = (r: ResolvedSpan, now: number) => isFavoriteNowSpan(r) && r.start.tsEpochMs <= now
 
-export const spanHeader = (r: ResolvedSpan): string | undefined =>
-  isFavoriteNowSpan(r) || !r.span.label ? undefined : r.span.label
+/** A span's name, when it has one (a favorite's span to Now too, once renamed). */
+export const spanHeader = (r: ResolvedSpan): string | undefined => r.span.label || undefined
 
 /** An instant's name wherever it is named in text (lane chips, the Agenda, menus): its name, else its compact time ("8:53a"), never "?". */
 export const endpointName = (i: InstantRecord): string => (i.label ? chipName(i.label) : formatClockCompact(i.tsEpochMs, false))

@@ -18,7 +18,7 @@ import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBot
 import type { LaneSlots } from './useBottomLanes.ts'
 import { useSavedLayoutSource } from './savedLayout.ts'
 import { useLayout } from '../../store/layout.ts'
-import { geometryStyleFor } from './geometry.ts'
+import { GEOMETRY, GEOMETRY_VERTICAL, geometryStyleFor, liveBandHeight } from './geometry.ts'
 import { ContextHeader } from './ContextHeader.tsx'
 import { SkyLayer } from './SkyLayer.tsx'
 
@@ -63,7 +63,7 @@ export function Timeline() {
       }}
     >
       <SkyLayer />
-      <TickLayer />
+      <TickLayer axis={orientation === 'vertical' ? GEOMETRY_VERTICAL.axis : GEOMETRY.axis + liveBandHeight(liveCount)} />
       <AgendaButton />
       <ContextHeader />
       <div className="tl-axis" />

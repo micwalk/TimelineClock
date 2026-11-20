@@ -7,6 +7,72 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.7.1 — 2026-11-19
+
+**Android app: install again** (the Classic tone's sound file changed). Released together with
+0.7.0's alarm sounds, which were never published on their own: what 0.7.0 lists below ships here.
+
+- **Faster on phones.** The Agenda (the ☰ drawer, or docked) mounts only the rows near what is on
+  screen, so opening it no longer stalls with a long history: about 0.1 s however many instants you
+  have, where 2,000 took about 2 s (CPU slowed 4× to stand in for a phone), and a docked Agenda no
+  longer updates thousands of rows while you pan. The axis ticks are painted on a canvas instead of
+  an element each (they look the same), halving the browser's style work while zooming. The Cursor
+  tag moves out of Now's way without restyling all of itself every frame, and live times change
+  their text in place: pans do about a fifth less style work.
+- **Bells folded into a chip** (zoomed out): one bell a side listing their offsets, nearest
+  first, warnings before the chip and snoozes after it.
+- **A selected bell**, and a chip's open popover, draw over the Now and Cursor tags.
+- **NOW while following Now**: a long-press opens the go-to-a-time box; a tap does nothing. A
+  long press on NOW or ＋ no longer selects the button's text on phones.
+- **Control bar in two rows**: Stopwatch, Timer and Alarm sit right of ＋, level with it.
+- **Move mode** snaps to a tick when you let go almost at rest, as the cursor does; OK takes the
+  snapped time.
+- **Popovers** open where they stay: the entrance scales rather than slides, so it no longer
+  fights the on-screen nudge.
+- A favorite's span to Now shows its name once renamed, and keeps it when favorited again.
+
+## 0.7.0 — 2026-10-31
+
+**Android app: install again** (new notification channels, and the app plays alarm sounds itself
+while it is open).
+
+- **Alarm sounds** (#18): four tones, **Classic**, **Beacon**, **Marimba** and **Klaxon**, ring
+  until you answer, or a **chime**: one sound, once, nothing to answer (it shows as "Chimed" in
+  Recent). Pick it in the Alarm picker's new **Sound** row or a bell's ♪ tool; Settings ›
+  Alarms › **Sounds** plays each one (▶) and sets what new alarms use (Classic to start with). A
+  repeat's alarms share one sound; a snooze keeps the sound it snoozed. Classic, the sound
+  alarms had until now, no longer distorts: pitched up where phone speakers play cleanly, pure
+  tones that stay in tune with each other through the vibrato, no clicks, and well under full
+  scale.
+- **Android app**: each sound is a notification category, **Alarm tone 1** to **Alarm tone 4**
+  and **Chime**. Settings › Alarms › Sounds › **Change…** opens Android's settings for it, where
+  you can pick any ringtone or a file of your own; the app shows what you picked. The old "Alarms
+  and timers" categories are gone, the "(app open)" one too: while the app is open there is no
+  ringing notification over it, the app plays the alarm's sound itself (and vibrates: the app
+  asks for the vibrate permission). A ringing alarm is the app's only notification: chimes still
+  showing go, and a chime due while it rings just sounds, since Android bundles two of an app's
+  notifications into one collapsed group and posts them silently.
+- **A chip's bell**: a new one (the chip's bell tool) is selected, its tools (how long before,
+  sound, delete) one tap away; a selected bell lights up, its tools under the bell, in vertical
+  too, as they do under a bell of its own. Zoomed out, bells too close to their instant to stand
+  apart no longer vanish into a count: one bell before the chip lists the warnings' offsets
+  ("🔔1m, 15m"), one after it the snoozes'; a lone one is tapped for its tools like any bell.
+- **Renaming a favorite's span to Now** shows the new name on its lane chip (it always showed
+  the instant's), and favoriting again keeps it.
+- **Phones**: holding NOW (zoom to Now) or ＋ (show in the Agenda) no longer starts selecting
+  the button's text.
+- **NOW, on Now**: a long-press opens the box to go to a time (G still does); a tap there does
+  nothing, so a stray tap no longer pops it up. Away from Now, a tap still goes to Now and a
+  long-press still zooms out until Now shows.
+- **The control bar is two rows**: Stopwatch, Timer and Alarm sit right of ＋, under the
+  forward buttons, rather than on a row of their own (they still get one when the window is
+  narrow).
+- **Moving an instant** snaps to a tick when you let go, as the cursor does (let go almost at
+  rest, within 8px of one; a fling never snaps).
+- **A chip's popovers** (sound, repeat, cancel, delete, typing a time) open where they stay,
+  rather than opening off to one side and jumping into place, and draw over the Now and Cursor
+  tags, as does a selected bell with its tools.
+
 ## 0.6.2 — 2026-10-24
 
 **Android app: web only** (nothing to install; it updates itself).

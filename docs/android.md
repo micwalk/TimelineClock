@@ -150,8 +150,9 @@ In the app, open **Settings** (the gear). At the bottom:
   Updates**, each with ✓. Anything with ✗ says what to turn on:
   - Notifications: Android **Settings** › **Apps** › **TimelineClock** › **Notifications** ›
     allow.
-  - Alarm sound: same screen, both **Alarms and timers** categories must be on (one is for
-    when the app is open).
+  - Alarm sound: same screen, the **Alarm tone 1** to **Alarm tone 4** categories must be on.
+    Each is one of the alarm sounds: tap one to pick any sound for it (a ringtone, or a file of
+    your own). Settings › Alarms › Sounds in the app lists them, with **Change…** to get there.
   - Exact alarms: **Settings** › **Apps** › **TimelineClock** › **Alarms & reminders** (this
     is normally allowed automatically).
   - Live Updates: the app's **Notifications** screen, **Live updates** on. Without it, the
@@ -264,11 +265,24 @@ Netlify builds for every pull request).
   comes only from the `TC_SIGNING_*` environment variables (see `android/app/build.gradle`);
   without them the release APK is unsigned.
   - `MainActivity.java` creates the notification channels and registers the app's plugins.
-  - `NotificationChannels.java`: "Alarms and timers" (high importance, `res/raw/alarm.ogg` on
-    the alarm stream), "Alarms and timers (app open)" (the same sound at default importance,
-    which leaves out the heads-up pop-up: used while `MainActivity` is resumed, as the page
-    shows its own ringing panel) and "Running timers and stopwatch" (silent). Android keeps a channel's
-    sound and importance once created, so changing them needs a new channel id.
+  - `NotificationChannels.java`: the alarm sounds (#18, `src/domain/sounds.ts`) are channels:
+    "Alarm tone 1" to "Alarm tone 4" (high importance, on the alarm stream, starting with
+    `res/raw/tone_1.ogg`…`tone_4.ogg`) and "Chime" (once, on the notification stream,
+    `res/raw/chime.ogg`); the `.ogg` files are rendered from `src/services/tones.ts` by
+    `node scripts/render-tones.mjs`. The user changes a channel's sound in Android's settings for
+    it (the page opens them: `AlarmsPlugin.openSoundSettings`, and reads what is set:
+    `getSounds`). Plus "Running timers and stopwatch" (silent). The old "Alarms and timers"
+    channels are deleted. Android keeps a channel's sound and importance once created, so
+    changing the app's own defaults needs a new channel id.
+  - `Ringer.java`: while `MainActivity` is resumed no ringing notification is posted (the page
+    shows its ringing card); Ringer plays the alarm's channel sound itself (looping, alarm
+    stream; a chime once), so it is whatever the user picked. Leaving the app while it rings
+    stops that and posts the notifications (`Alarms.appLeft`); coming back takes them down
+    (`Alarms.appOpened`). It also plays Settings' previews.
+  - A ringing alarm is kept the app's only notification (in a group of its own, chimes still
+    showing taken down, a chime due while it rings only sounded): Android 16 bundles two
+    ungrouped notifications of an app into one collapsed group and posts them silently, so
+    the alarm would neither sound nor show Dismiss and Snooze.
   - `NotificationViews.java`: the notifications, all Live Updates (promoted ongoing:
     `setRequestPromotedOngoing`, the `POST_PROMOTED_NOTIFICATIONS` permission). Promotion
     rules out custom layouts and colorized notifications, so Android draws the time, which
@@ -300,7 +314,10 @@ Netlify builds for every pull request).
 - Alarms use `AlarmManager.setAlarmClock`: exact, wakes the phone, not held back by Doze,
   and shown as the next alarm on the lock screen. The page plays no alarm sound inside the
   app (the notification rings), unless Android won't show notifications.
-- Build locally: JDK 21 and the Android SDK (platform 37; Gradle can fetch it), then
+- Build locally: JDK 21 and the Android SDK (platform 37; Gradle can fetch it, but the SDK
+  repository now names it `android-37.0` and AGP 8.13 asks for `android-37`: copy
+  `platforms/android-37.0` to `platforms/android-37` and set `path` and `api-level` to 37 in
+  its package.xml), then
   `npx cap sync android && cd android && ./gradlew assembleRelease` (add `-PtcPreview` for TC
   Preview; `:app:testReleaseUnitTest` runs the native unit tests). CI:
   `.github/workflows/android.yml`, with the shared setup in `.github/actions/android-setup`. It

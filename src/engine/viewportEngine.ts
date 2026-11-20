@@ -50,14 +50,20 @@ const scheduleAnimationFrame: (cb: () => void) => unknown =
   typeof requestAnimationFrame === 'function' ? cb => requestAnimationFrame(cb) : cb => setTimeout(cb, 16)
 
 let reducedMotionQuery: MediaQueryList | null | undefined
-/** The user asked for less motion (live; cheap enough to call every frame). */
+let reducedMotionMatches = false
+/**
+ * The user asked for less motion (live; cheap enough to call every frame). The answer is kept and
+ * updated when the setting changes: asking the media query costs, and chips ask every frame.
+ */
 export function reducedMotion(): boolean {
   if (reducedMotionQuery === undefined) {
     reducedMotionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)') ?? null
       : null
+    reducedMotionMatches = !!reducedMotionQuery?.matches
+    reducedMotionQuery?.addEventListener?.('change', e => { reducedMotionMatches = e.matches })
   }
-  return !!reducedMotionQuery?.matches
+  return reducedMotionMatches
 }
 const prefersReducedMotion = reducedMotion
 

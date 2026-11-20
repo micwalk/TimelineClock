@@ -12,6 +12,8 @@
     <!-- Live Updates: the running timer / stopwatch and a ringing alarm pinned at the top of the
          lock screen and the shade, and shown as a status-bar chip. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- While the app is open it rings an alarm itself (Ringer), vibrating as its channel would. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Alarms are set again after a restart (AlarmReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

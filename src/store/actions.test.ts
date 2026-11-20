@@ -388,6 +388,16 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toBeUndefined()
   })
 
+  it('a new bell is selected, so its tools (offset, sound) are one tap away', () => {
+    const id = entities.createInstant(Date.now() + HOUR, 'Tea')
+    const a = act.addAlarm(id)!
+    expect(useUi.getState().selectedBell).toBe(a)
+    const b = act.addAlarm(id)!
+    expect(useUi.getState().selectedBell).toBe(b)
+    act.removeAlarm(id, b)
+    expect(useUi.getState().selectedBell).toBeNull()
+  })
+
   it('never rings in the past: an offset reaching back past Now stops at Now', () => {
     const id = entities.createInstant(Date.now() + 10 * MINUTE, 'Soon')
     const a = act.addAlarm(id)!
@@ -744,6 +754,20 @@ describe('tick snap', () => {
     expect(view().timeCenter).not.toBe(t)
     expect(Math.abs(view().timeCenter - t) * pxPerMs).toBeLessThan(0.5)
     settings.resetTunable('tickSnapPx')
+  })
+
+  it('endPan snaps a moving instant to a tick too, never onto another instant; OK takes the snapped time', () => {
+    useSettings.setState({ tickSnap: true })
+    const { tick, t } = offTick()
+    const id = entities.createInstant(t - 2 * HOUR, 'Rice')
+    entities.createInstant(t + 1000, 'Tea')
+    act.enterMove(id)
+    useView.setState({ timeCenter: t })
+    act.endPan({ land: null })
+    expect(view().timeCenter).toBe(tick)
+    expect(view().moveMode?.instantId).toBe(id)
+    act.confirmMove()
+    expect(entities.getInstant(id)?.tsEpochMs).toBe(tick)
   })
 
   it('endPan with snap: false leaves the cursor and does not land on Now or an instant', () => {

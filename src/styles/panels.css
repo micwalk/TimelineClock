@@ -18,6 +18,13 @@
   gap: 10px;
   padding: 10px 16px 12px;
 }
+/* A long press (NOW zooms to Now, ＋ shows the Agenda) must not start selecting the label or
+   open the phone's callout. Buttons only: the time box NOW opens stays a normal input. */
+.controls button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
 .ctl-btn {
   --accent: color-mix(in srgb, var(--c-instant) 70%, var(--c-axis-glow));
@@ -93,9 +100,15 @@
 
 /* Stopwatch and Timer: always labelled (they are the way in for new users). */
 /* Horizontal: NOW centered under the timeline (its center is the Now line's while following Now),
-   the navigation gathered to either side, and Stopwatch, Timer and Alarm a centered row below.
+   the navigation gathered to either side, and Stopwatch, Timer and Alarm right of ＋, level with
+   it: two rows. Too narrow for them there, labelled, they take a centered row of their own below.
    A side never wraps: once its labels don't fit, its buttons go to icons (the step keeps its text). */
-.controls--horizontal { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.controls--horizontal {
+  container: ctl-bar / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
 .controls__side { container: ctl-side / inline-size; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
 @container ctl-side (max-width: 410px) {
   .ctl-btn__text { display: none; }
@@ -109,6 +122,13 @@
 .controls__side.is-before { justify-content: flex-end; }
 .controls__side.is-after { justify-content: flex-start; }
 .controls__quick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.controls--horizontal > .controls__side.is-before { grid-area: 1 / 1; }
+.controls--horizontal > .controls__now { grid-area: 1 / 2 / span 2; }
+.controls--horizontal > .controls__side.is-after { grid-area: 1 / 3; }
+.controls--horizontal > .controls__quick { grid-area: 2 / 3; align-self: end; justify-content: flex-start; flex-wrap: nowrap; }
+@container ctl-bar (max-width: 860px) {
+  .controls--horizontal > .controls__quick { grid-area: 3 / 1 / auto / -1; align-self: auto; justify-content: center; flex-wrap: wrap; }
+}
 .controls__now { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 132px; }
 .controls__now .ctl-btn { width: 100%; height: 44px; justify-content: center; }
 /* NOW sits level with the buttons beside it; ＋ hangs under it. */
@@ -366,7 +386,12 @@
 .list-scroll::-webkit-scrollbar { width: 8px; }
 .list-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
 
-.list-rows { display: flex; flex-direction: column; gap: 9px; }
+.list-rows { --list-gap: 9px; display: flex; flex-direction: column; gap: var(--list-gap); }
+/* A long list mounts only the rows near the screen (WindowedList); spacers stand in for the rest,
+   their margins taking back the gap so the rows sit exactly where they would. */
+.list-spacer { flex: none; pointer-events: none; }
+.list-spacer--before { margin-bottom: calc(-1 * var(--list-gap)); }
+.list-spacer--after { margin-top: calc(-1 * var(--list-gap)); }
 .list-empty { padding: 24px 8px; color: var(--ink-faint); font-size: 15px; }
 
 .list-row {
@@ -749,6 +774,13 @@
 /* Settings > Data: export / import */
 .settings__action--plain { --accent: var(--c-axis-glow); background: var(--surface-raised); color: var(--ink); }
 .settings__action:disabled { opacity: 0.5; cursor: default; }
+/* Settings > Alarms > Sounds */
+.sound-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.sound-list__row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 2px 0; font: 600 13px/1.2 var(--font-ui); }
+.sound-list__slot { color: var(--ink-faint); font-size: 12px; }
+.sound-list__name { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sound-list__name.is-off { color: var(--c-danger); }
+.sound-list__change { --accent: var(--c-axis-glow); padding: 4px 10px; border-radius: 7px; background: var(--surface-raised); color: var(--ink); font: 600 12px/1 var(--font-ui); }
 /* Settings > Sky */
 .sky-settings__place { font: 500 13px/1.3 var(--font-ui); color: var(--ink); }
 .sky-settings__clear { margin-left: 8px; padding: 0; border: none; background: none; color: var(--c-cursor); font: 600 12px var(--font-ui); cursor: pointer; text-decoration: underline; }

@@ -60,6 +60,18 @@ final class NotificationViews {
         NotificationManagerCompat.from(c).cancel(tag, id);
     }
 
+    /**
+     * Takes down chimes still showing (they have sounded; Recent in the app keeps them), so a
+     * ringing alarm is the app's only notification: with two, Android bundles them into one
+     * collapsed group, the alarm's Dismiss and Snooze hidden in it.
+     */
+    static void cancelChimes(Context c) {
+        NotificationManagerCompat nm = NotificationManagerCompat.from(c);
+        for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
+            if (NotificationChannels.CHIME.equals(n.getNotification().getChannelId())) nm.cancel(n.getTag(), n.getId());
+        }
+    }
+
     /** Opens the app at the instant; `kind` ("countdown", "stopwatch", "alarm") decides what it shows. */
     static PendingIntent openApp(Context c, String kind, String instantId, int requestCode, int alarmId) {
         Intent open = new Intent(c, MainActivity.class);
@@ -115,13 +127,12 @@ final class NotificationViews {
      * A ringing alarm: its name, the time since it came due counting up (Android shows a
      * chronometer in the status-bar chip only while it is positive; Android 17 also shows it
      * big, as "over"), Dismiss and Snooze. Sounds over and over (FLAG_INSISTENT) until answered
-     * or the ring time runs out, unless `silent` (after a tap on it, or Silence in the app).
-     * `appOpen`: on the channel without a pop-up, as the app shows its own ringing panel.
-     * Swiping it away dismisses it.
+     * or the ring time runs out, unless `silent` (after a tap on it, or Silence in the app), on
+     * its tone's channel. Swiping it away dismisses it. (Not posted while the app is on screen:
+     * Alarms.ringInApp.)
      */
-    static Notification ringing(Context c, AlarmSpec s, int snoozeMinutes, boolean silent, boolean appOpen) {
-        String channel = appOpen ? NotificationChannels.ALARMS_IN_APP : NotificationChannels.ALARMS;
-        NotificationCompat.Builder b = base(c, channel, s.at, false, s.title, s.ringText)
+    static Notification ringing(Context c, AlarmSpec s, int snoozeMinutes, boolean silent) {
+        NotificationCompat.Builder b = base(c, NotificationChannels.forSound(s.sound), s.at, false, s.title, s.ringText)
             // Its own request code range, so it never shares a PendingIntent with a live notification.
             .setContentIntent(openApp(c, "alarm", s.instantId, s.id ^ 0x40000000, s.id))
             .setDeleteIntent(alarmBroadcast(c, AlarmReceiver.ACTION_DISMISS, s.id))
@@ -129,11 +140,31 @@ final class NotificationViews {
             .addAction(0, "Snooze " + snoozeMinutes + " min", alarmBroadcast(c, AlarmReceiver.ACTION_SNOOZE, s.id))
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
+            // A group of its own: Android groups an app's ungrouped notifications once there are
+            // two (a chime still showing, a running timer) and posts them silently.
+            .setGroup("tc-ring-" + s.id)
             .setAutoCancel(false);
         if (silent) b.setSilent(true).setOnlyAlertOnce(true);
         Notification n = withBigTime(c, b.build(), s.at, false, "over");
         if (!silent) n.flags |= Notification.FLAG_INSISTENT;
         return n;
+    }
+
+    /** A chime: its name and line, sounding once on the Chime channel; nothing to answer, a tap opens the app. */
+    static Notification chime(Context c, AlarmSpec s) {
+        return new NotificationCompat.Builder(c, NotificationChannels.CHIME)
+            .setSmallIcon(R.drawable.ic_stat_timeline)
+            .setColor(ContextCompat.getColor(c, R.color.now_red))
+            .setContentTitle(s.title)
+            .setContentText(s.ringText)
+            .setShowWhen(true)
+            .setWhen(s.at)
+            .setLocalOnly(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(openApp(c, "alarm", s.instantId, s.id ^ 0x40000000, 0))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .build();
     }
 
     /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
-import { canStopNowSpan, resolveSpan, savedSpanLanes, spanGeometry } from './spans.ts'
+import { canStopNowSpan, resolveSpan, savedSpanLanes, spanGeometry, spanHeader } from './spans.ts'
 import { HOUR } from './time.ts'
 
 describe('spanGeometry', () => {
@@ -27,6 +27,15 @@ describe('canStopNowSpan', () => {
     expect(canStopNowSpan({ span: toNow, start: start(2 * HOUR) }, HOUR)).toBe(false)
     expect(canStopNowSpan({ span: { ...toNow, endIsNow: false }, start: start(0), end: start(HOUR) }, 2 * HOUR)).toBe(false)
     expect(canStopNowSpan({ span: toNow, start: start(0, false) }, HOUR)).toBe(false)
+  })
+})
+
+describe('spanHeader', () => {
+  it('is the span’s name, a favorite’s span to Now included once renamed', () => {
+    const start: InstantRecord = { id: 'a', tsEpochMs: 0, label: 'Rice', favorite: true }
+    const toNow: SpanRecord = { id: 's', startInstantId: 'a', endInstantId: 'now', label: '', visible: true, endIsNow: true }
+    expect(spanHeader({ span: toNow, start })).toBeUndefined()
+    expect(spanHeader({ span: { ...toNow, label: 'Simmer' }, start })).toBe('Simmer')
   })
 })
 

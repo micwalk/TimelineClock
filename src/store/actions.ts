@@ -29,6 +29,7 @@ import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
 import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import type { AlarmSound } from '../domain/sounds.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
   OCCURRENCE_HORIZON_MS, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
@@ -379,11 +380,12 @@ export function toggleAgendaDock() {
  * End of a drag. It lands on what the cursor showed it was about to land on (`land`: the
  * capture, the one rule for "near enough"). Otherwise, released almost at rest (`snap`), it
  * eases to the nearest tick within `tickSnapPx` when the setting is on; `{ snap: false }` (a
- * release with speed) leaves the cursor exactly where the pan stopped.
+ * release with speed) leaves the cursor exactly where the pan stopped. A moving instant (move
+ * mode, riding the center) snaps to ticks the same way; it never lands on anything.
  */
 export function endPan({ snap = true, land = null }: { snap?: boolean; land?: LandingTarget | null } = {}) {
-  if (v().viewFocusMode !== 'cursor' || v().moveMode) return
-  if (land) { landOn(land, true); return }
+  if (v().viewFocusMode !== 'cursor') return
+  if (land && !v().moveMode) { landOn(land, true); return }
   if (!snap || !useSettings.getState().tickSnap) return
   const f = frame()
   const tick = nearestFinestTick(f.center, f.pxPerMs, labelSpacingPx(f.orientation))
@@ -634,12 +636,16 @@ export function toggleFavorite(id: string) {
   if (inst) setFavorite(id, !inst.favorite)
 }
 
-/** Adds an alarm at the instant (its bell can then be dragged earlier); returns its id. */
+/**
+ * Adds an alarm at the instant (its bell can then be dragged earlier) and selects its bell, so
+ * its tools (how long before, sound) are one tap away; returns its id.
+ */
 export function addAlarm(id: string): string | undefined {
   if (!entities.getInstant(id)) return
   const alarmId = entities.addAlarm(id)
   touchOccurrence(id)
   void primeNotifications() // the first bell asks for notification permission
+  ui.selectBell(alarmId)
   return alarmId
 }
 
@@ -664,6 +670,14 @@ export function setAlarmOffset(id: string, alarmId: string, offsetMs: number) {
   const earliest = alarm.offsetMs < 0 ? -Infinity : 0
   const latest = Math.max(earliest === 0 ? 0 : -Infinity, inst.tsEpochMs - nowTime())
   entities.setAlarmOffset(id, alarmId, Math.min(Math.max(earliest, offsetMs), latest))
+  if (!alarm.snoozeOf) touchOccurrence(id)
+}
+
+/** What an alarm sounds like (a tone that rings until answered, or the chime: domain/sounds). Answered ones stay as they were. */
+export function setAlarmSound(id: string, alarmId: string, sound: AlarmSound) {
+  const alarm = findAlarm(entities.getInstant(id), alarmId)
+  if (!alarm || alarm.answered || alarm.sound === sound) return
+  entities.setAlarmSound(id, alarmId, sound)
   if (!alarm.snoozeOf) touchOccurrence(id)
 }
 
@@ -800,7 +814,8 @@ export function enterMove(id: string) {
 export function confirmMove() {
   const mm = v().moveMode
   if (!mm) return
-  setInstantTime(mm.instantId, frame().center)
+  // Where the view is headed (a tick snap may still be easing there), not where this frame is.
+  setInstantTime(mm.instantId, v().timeCenter)
   touchOccurrence(mm.instantId)
   view.setMoveMode(null)
   focusInstant(mm.instantId, false)
@@ -1191,22 +1206,23 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
  * time itself unless `onTime` is false), once (an instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
  * Returns the instant (the first occurrence of a series).
  */
-export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent }): string | undefined {
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent; sound?: AlarmSound }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
   void primeNotifications()
-  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}) })
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}), ...(a.sound ? { sound: a.sound } : {}) })
+  const sound = a.sound ? { sound: a.sound } : {}
   // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.
   const loc = useSettings.getState().skyLocation
   const sun = a.sun && loc ? { event: a.sun, lat: loc.lat, lon: loc.lon } : undefined
   const label = a.label || (sun ? sunEventName(sun.event) : '')
   if (!a.repeat) {
     const id = entities.createInstant(a.at, label)
-    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs })), ...(sun ? { sun } : {}) }))
+    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs, ...sound })), ...(sun ? { sun } : {}) }))
     revealInstant(id)
     return id
   }
-  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}) }
+  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}), ...sound }
   entities.putGroup(series)
   syncSeries()
   const first = useEntities.getState().instants
@@ -1221,7 +1237,7 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
  * occurrences ahead take the change in place (refreshSeries); ones changed on their own keep
  * theirs.
  */
-export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun'>>) {
+export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun' | 'sound'>>) {
   const series = entities.getGroup(seriesId)
   if (!series) return
   entities.putGroup({ ...series, ...patch })

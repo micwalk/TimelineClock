@@ -30,7 +30,11 @@ export function LiveText({ compute, className, watch }: { compute: (f: Frame, ct
     const text = compute(f, liveCtx)
     if (text === last.current || !ref.current) return
     last.current = text
-    ref.current.textContent = text
+    // Change the text node in place: replacing it is a child-list change, which makes the
+    // stylesheet's :has() rules restyle the timeline every frame.
+    const node = ref.current.firstChild
+    if (node instanceof Text && !node.nextSibling) node.data = text
+    else ref.current.textContent = text
   })
   return <span ref={ref} className={className} />
 }

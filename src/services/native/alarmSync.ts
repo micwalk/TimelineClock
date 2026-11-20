@@ -9,7 +9,8 @@ import { desiredNativeAlarms, replayAlarmActions, sanitizeAlarmActions } from '.
 import { useAlarms } from '../../store/alarms.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { useShell } from '../../store/shell.ts'
-import { SNOOZE_MINUTES, dismiss, snooze } from '../AlarmScheduler.ts'
+import { SNOOZE_MINUTES, chimed, dismiss, snooze } from '../AlarmScheduler.ts'
+import { useSettings } from '../../store/settings.ts'
 import { Alarms } from './alarmsPlugin.ts'
 import { diag, timed } from './diagLog.ts'
 
@@ -33,6 +34,7 @@ async function syncOnce() {
       return !!alarm && !alarm.answered
     },
     dismiss,
+    chimed,
     snooze: (key, at) => snooze(key, SNOOZE_MINUTES, at),
   })
 
@@ -40,7 +42,7 @@ async function syncOnce() {
   const instants = storedInstants(useEntities.getState().instants)
   const { autoDismissMs, unattended } = useAlarms.getState()
   const status = await timed('sync', Alarms.sync({
-    alarms: desiredNativeAlarms(instants, spans, Date.now(), autoDismissMs),
+    alarms: desiredNativeAlarms(instants, spans, Date.now(), autoDismissMs, useSettings.getState().alarmRings.sound),
     ringMs: autoDismissMs,
     unattended,
     snoozeMinutes: SNOOZE_MINUTES,

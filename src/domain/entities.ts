@@ -4,6 +4,8 @@ import type { SunAnchor } from './sunEvents.ts'
 import { sanitizeSunAnchor } from './sunEvents.ts'
 import type { Visibility } from './displayGroups.ts'
 import { sanitizeVisibility } from './displayGroups.ts'
+import type { AlarmSound } from './sounds.ts'
+import { isSound } from './sounds.ts'
 
 export interface InstantRecord {
   id: string
@@ -42,8 +44,11 @@ export interface InstantRecord {
 export const storedInstants = (list: readonly InstantRecord[]): InstantRecord[] =>
   (list.some(i => i.virtual) ? list.filter(i => !i.virtual) : (list as InstantRecord[]))
 
-/** How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one before it rings deletes it.) */
-export type AlarmAnswer = 'dismissed' | 'snoozed'
+/**
+ * How an alarm that rang was answered: kept as history, it never rings again. (Cancelling one
+ * before it rings deletes it.) A chime answers itself as it sounds: 'chimed'.
+ */
+export type AlarmAnswer = 'dismissed' | 'snoozed' | 'chimed'
 
 /**
  * One alarm on an instant. It rings `offsetMs` before the instant: when the instant's span to
@@ -58,11 +63,13 @@ export interface AlarmRecord {
   offsetMs: number
   /** A snooze: the alarm it snoozed (which is answered 'snoozed'). */
   snoozeOf?: string
-  /** Answered after it rang: dismissed, or snoozed (another alarm rings later). */
+  /** Answered after it rang: dismissed, or snoozed (another alarm rings later), or it chimed. */
   answered?: AlarmAnswer
+  /** What it sounds like (domain/sounds); absent: the default tone (Settings › Alarms). */
+  sound?: AlarmSound
 }
 
-const ANSWERS: readonly string[] = ['dismissed', 'snoozed'] satisfies AlarmAnswer[]
+const ANSWERS: readonly string[] = ['dismissed', 'snoozed', 'chimed'] satisfies AlarmAnswer[]
 
 export const NOW_SENTINEL = '__NOW__'
 
@@ -102,7 +109,7 @@ function sanitizeAlarms(data: unknown): AlarmRecord[] {
     const snoozeOf = typeof r.snoozeOf === 'string' ? r.snoozeOf : undefined
     // Only a snooze rings after its instant.
     const offsetMs = snoozeOf ? r.offsetMs : Math.max(0, r.offsetMs)
-    return [{ id: r.id, offsetMs, ...(snoozeOf ? { snoozeOf } : {}), ...(answered ? { answered } : {}) }]
+    return [{ id: r.id, offsetMs, ...(snoozeOf ? { snoozeOf } : {}), ...(answered ? { answered } : {}), ...(isSound(r.sound) ? { sound: r.sound } : {}) }]
   })
 }
 

@@ -157,3 +157,24 @@ describe('duplicateOccurrences', () => {
     expect(duplicateOccurrences([occ('a', { alarms: [{ id: 'r', offsetMs: 0, answered: 'dismissed' }] }), occ('b', { seriesEdited: true })])).toEqual([])
   })
 })
+
+describe('sound', () => {
+  it('gives every occurrence the series sound, and reads it back from one', () => {
+    const s = series({ sound: 'tone3' })
+    const inst = newOccurrenceFor(s)
+    expect(inst.alarms?.every(a => a.sound === 'tone3')).toBe(true)
+    expect(virtualOccurrences([s], [], at(12), at(26), at(26) + DAY)[0].alarms?.every(a => a.sound === 'tone3')).toBe(true)
+    expect(refreshOccurrence(series({ sound: 'chime' }), inst, at(12), () => 'n')?.alarms?.every(a => a.sound === 'chime')).toBe(true)
+    expect(ruleFromOccurrence(inst).sound).toBe('tone3')
+    expect(ruleFromOccurrence({ ...inst, alarms: [] }).sound).toBeUndefined()
+  })
+
+  it('keeps a known sound from storage, drops others', () => {
+    expect(sanitizeGroups([{ ...series(), sound: 'chime' }])[0].sound).toBe('chime')
+    expect(sanitizeGroups([{ ...series(), sound: 'loud' }])[0].sound).toBeUndefined()
+  })
+})
+
+function newOccurrenceFor(s: SeriesRecord): InstantRecord {
+  return planOccurrences([s], [], at(12), at(20), ids)[0]
+}

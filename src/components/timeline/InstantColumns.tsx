@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
@@ -22,7 +22,9 @@ import { useView, view } from '../../store/view.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import { ui, useUi } from '../../store/ui.ts'
-import { getTunables } from '../../store/settings.ts'
+import { getTunables, useSettings } from '../../store/settings.ts'
+import { soundOf } from '../../domain/sounds.ts'
+import { SoundChips } from '../common/SoundPicker.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -80,8 +82,8 @@ interface ChipProps {
   /** Snoozes folded into this chip, and their ids (comma-joined to keep props primitive). */
   foldCount: number
   foldedIds: string
-  /** Bells before the instant folded into its chip (too close to stand apart: zoomed out). */
-  bellFolded: number
+  /** Bells before or after the instant folded into its chip (too close to stand apart: zoomed out): alarm ids, comma-joined, earliest first. */
+  bellFolded: string
   selected: boolean
   focused: boolean
   editing: boolean
@@ -107,23 +109,33 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   const vertical = useLayout(s => s.orientation === 'vertical')
   const unnamed = !inst.label
 
-  // The bell beside the chip: its alarms at the instant (still to ring, or ringing), and the
-  // bells before it folded in. One reads as a bell; more as their count, "3🔔".
+  // The bell beside the chip: its alarms at the instant (still to ring, or ringing). One reads
+  // as a bell; more as their count, "2🔔".
   const atInstant = (inst.alarms ?? []).filter(a => a.offsetMs === 0 && !a.answered && a.id !== draggingBell && (!isPast || ringingIds.includes(a.id)))
   const ringingHere = atInstant.find(a => ringingIds.includes(a.id))
-  const bellAlarm = ringingHere ?? atInstant[0]
-  const bellCount = atInstant.length + bellFolded
+  // The selected one (a bell just added among others at the instant) is the one its tools edit.
+  const bellAlarm = ringingHere ?? atInstant.find(a => a.id === selectedBell) ?? atInstant[0]
+  const bellCount = atInstant.length
   const showBell = bellCount > 0
-  const bellSelected = !!bellAlarm && selectedBell === bellAlarm.id
+  // Bells too close to stand apart (zoomed out) sit on the chip too, one bell a side listing
+  // their offsets ("🔔1m, 15m"): warnings before the chip, snoozes after it.
+  const folded = useMemo(() => {
+    const ids = bellFolded ? bellFolded.split(',') : []
+    return ids.map(id => inst.alarms?.find(a => a.id === id)).filter((a): a is AlarmRecord => !!a)
+  }, [bellFolded, inst.alarms])
+  // The bell whose tools show: the one at the instant, or a folded one.
+  const toolAlarm = bellAlarm && selectedBell === bellAlarm.id ? bellAlarm : folded.find(a => a.id === selectedBell)
+  const bellSelected = !!toolAlarm
   // A selected bell's tools close on a press anywhere else.
   usePopoverDismiss(groupRef, () => ui.selectBell(null), bellSelected)
   const onBell = () => {
     if (consumeBellDragClick()) return
     if (ringingHere) act.dismissAlarm(ringKey(inst.id, ringingHere.id))
-    // Folded bells need room to tell apart: zoom in on them. Otherwise it is the alarm at the instant.
-    else if (bellAlarm && bellFolded === 0) act.selectBell(bellAlarm.id)
-    else act.zoomToTimes([ts, ...(inst.alarms ?? []).filter(a => !a.answered).map(a => ringTime(inst, a))])
+    else if (bellAlarm) act.selectBell(bellAlarm.id)
   }
+  const foldedBells = (alarms: AlarmRecord[]) => alarms.length > 0 && (
+    <FoldedBells inst={inst} alarms={alarms} selected={alarms.some(a => a.id === selectedBell)} ringing={alarms.find(a => ringingIds.includes(a.id))} />
+  )
   // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
   // Zoomed out past hours (ticks an hour or coarser), "· in 3d 8h" is noise: only a selected chip keeps it.
   const coarse = useFrameValue(f => pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms >= HOUR)
@@ -156,8 +168,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     act.zoomToTimes(times)
   }
 
-  const toolButtons = bellSelected && !moving && bellAlarm ? (
-    <BellTools inst={inst} alarm={bellAlarm} />
+  const toolButtons = bellSelected && !moving && toolAlarm ? (
+    <BellTools inst={inst} alarm={toolAlarm} />
   ) : selected && !moving ? (
     <>
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
@@ -181,8 +193,10 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       <IconButton icon={XMarkIcon} label="Cancel move" color="var(--c-danger)" bare onClick={act.cancelMove} />
     </>
   ) : null
-  // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it).
+  // Tools sit in a row under the chip (beside a moving chip in horizontal, whose badge is under it);
+  // a selected bell's start under the bell in vertical.
   const toolsBelow = toolButtons !== null && chipToolsBelow({ moving, vertical })
+  const bellTools = bellSelected && !moving
   // While the chip is being named, a tool keeps the pointer from taking focus (the row would
   // shift as the name box closes, under the tap), ends naming (the name commits), then acts.
   const tools = toolButtons && (
@@ -195,11 +209,12 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
 
   return (
     <div ref={groupRef} className={`tl-col__chip${foldCount > 0 ? ' has-fold' : ''}`} style={vertical ? ({ left: GEOMETRY_VERTICAL.chipStart } as CSSProperties) : undefined}>
+      {foldedBells(folded.filter(a => a.offsetMs > 0))}
       {showBell && (
         <button type="button" data-no-pan
-          className={`chip-bell glow-box${ringingHere ? ' is-ringing' : ''}${bellSelected ? ' is-selected' : ''}${atInstant.length === 0 ? ' is-folded-only' : ''}`}
-          aria-label={ringingHere ? 'Dismiss alarm (drag later to snooze)' : bellFolded > 0 ? `${bellCount} alarm${bellCount > 1 ? 's' : ''}, zoom to show them` : 'Alarm: drag earlier to ring before, tap for its tools'}
-          title={ringingHere ? 'Tap to dismiss; drag later to snooze until there' : bellFolded > 0 ? 'Alarms: tap to show them all' : 'Drag earlier to ring before the instant; tap for its tools'}
+          className={`chip-bell glow-box${ringingHere ? ' is-ringing' : ''}${toolAlarm === bellAlarm ? ' is-selected' : ''}`}
+          aria-label={ringingHere ? 'Dismiss alarm (drag later to snooze)' : 'Alarm: drag earlier to ring before, tap for its tools'}
+          title={ringingHere ? 'Tap to dismiss; drag later to snooze until there' : 'Drag earlier to ring before the instant; tap for its tools'}
           onPointerDown={bellAlarm ? e => startBellDrag(e, inst.id, bellAlarm.id) : undefined}
           onClick={onBell}>
           {bellCount > 1 && <span className="chip-bell__count">{bellCount}</span>}
@@ -242,6 +257,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
           </>
         )}
       </div>
+      {foldedBells(folded.filter(a => a.offsetMs < 0))}
       {seriesHint && !editing && (
         <button type="button" className="tl-col__apply glow-box" onClick={() => act.applyToFutureOccurrences(inst.id)}
           title="Make every later occurrence like this one: name, time of day and alarms">
@@ -254,7 +270,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
         </button>
       )}
       {(editing || toolsBelow) && (
-        <div ref={belowRef} className="tl-col__below">
+        <div ref={belowRef} className={`tl-col__below${bellTools ? ' tl-col__below--bell' : ''}`}>
           {editing && <span className="chip__time">{formatClockCompact(ts, true)}</span>}
           {toolsBelow && tools}
         </div>
@@ -375,12 +391,42 @@ function DeleteOccurrenceTool({ inst }: { inst: InstantRecord }) {
   )
 }
 
-/** A selected bell's tools: type how long before its instant it rings, or delete it. */
+/**
+ * Bells on one side of their instant folded into its chip (too close to stand apart, zoomed out):
+ * one bell listing their offsets, nearest first, "🔔1m, 15m". A ringing one is dismissed by a tap;
+ * a lone one is selected (its tools) and drags out along time like any bell; more zoom in on them.
+ */
+function FoldedBells({ inst, alarms, selected, ringing }: { inst: InstantRecord; alarms: AlarmRecord[]; selected: boolean; ringing: AlarmRecord | undefined }) {
+  const nearest = [...alarms].sort((a, b) => Math.abs(a.offsetMs) - Math.abs(b.offsetMs))
+  const offsets = nearest.map(a => formatDuration(Math.abs(a.offsetMs), { exact: true })).join(', ')
+  const lone = alarms.length === 1 ? alarms[0] : null
+  const when = `${offsets} ${alarms[0].offsetMs > 0 ? 'before' : 'after'}`
+  const onTap = () => {
+    if (consumeBellDragClick()) return
+    if (ringing) act.dismissAlarm(ringKey(inst.id, ringing.id))
+    else if (lone) act.selectBell(lone.id)
+    else act.zoomToTimes([inst.tsEpochMs, ...alarms.map(a => ringTime(inst, a))])
+  }
+  const label = ringing ? `Alarm ${when}, ringing: tap to dismiss` : lone ? `Alarm ${when}: drag to move, tap for its tools` : `Alarms ${when}: tap to show them`
+  return (
+    <button type="button" data-no-pan className={`chip-bell chip-bell--offset glow-box${ringing ? ' is-ringing' : ''}${selected ? ' is-selected' : ''}${lone ? '' : ' is-zoom'}`}
+      aria-label={label} title={label}
+      onPointerDown={lone ? e => startBellDrag(e, inst.id, lone.id) : undefined}
+      onClick={onTap}>
+      <BellAlertIcon aria-hidden />
+      <span className="chip-bell__offset">{offsets}</span>
+      {alarms.some(a => a.snoozeOf) && <span className="chip-bell__snooze" aria-hidden>{SNOOZE_MARK}</span>}
+    </button>
+  )
+}
+
+/** A selected bell's tools: type how long before its instant it rings, pick its sound, or delete it. */
 function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
   const [typing, setTyping] = useState(false)
   return (
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
+      {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
         <TimeEntry
@@ -391,6 +437,27 @@ function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
         />
       )}
     </>
+  )
+}
+
+/** A bell's sound (domain/sounds): a tone that rings until answered, or the chime. */
+function SoundTool({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const fallback = useSettings(s => s.alarmRings.sound)
+  usePopoverDismiss(ref, () => setOpen(false), open)
+  useKeepOnScreen(menuRef, open)
+  return (
+    <div ref={ref} className="skip-tool">
+      <IconButton icon={MusicalNoteIcon} label="Sound" color={bellColor} bare pressed={open} onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Sound">
+          <div className="repeat-menu__title">Sound</div>
+          <SoundChips value={soundOf(alarm, fallback)} onChange={s => { act.setAlarmSound(inst.id, alarm.id, s); setOpen(false) }} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -491,7 +558,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
             }} />
           )}
           {selected && (
-            <div className="tl-col__below">
+            <div className="tl-col__below tl-col__below--bell">
               <div className="tl-col__tools">
                 {past
                   ? <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
@@ -510,7 +577,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
 const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: number; bellLinked: boolean; captured: boolean } & SavedFlags) {
+  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -539,8 +606,9 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   const pullTools = (f: Frame, target: ChipOffsets) => {
     const el = belowRef.current
     if (!el) return
-    const pull = f.orientation === 'vertical' && chipWidth
-      ? Math.max(0, GEOMETRY_VERTICAL.chipStart + target.cross + chipWidth - (f.crossSize - TOOLS_EDGE)) : 0
+    // A bell's tools start at the chip's left edge, so they never need pulling back.
+    const pull = f.orientation === 'vertical' && chipWidth && !el.classList.contains('tl-col__below--bell')
+      ?Math.max(0, GEOMETRY_VERTICAL.chipStart + target.cross + chipWidth - (f.crossSize - TOOLS_EDGE)) : 0
     const transform = pull > 0 ? `translateX(${-pull}px)` : ''
     if (el.style.transform !== transform) el.style.transform = transform
   }
@@ -667,7 +735,7 @@ export function SavedInstantColumns() {
             inst={inst}
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
-            bellFolded={layout.bellFolded[id] ?? 0}
+            bellFolded={layout.bellFolded[id] ?? ''}
             bellLinked={bellsByInstant.has(id)}
             selected={v.selected === id}
             focused={focusedId === id}

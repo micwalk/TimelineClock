@@ -25,6 +25,8 @@ final class AlarmSpec {
     String ringText = "";
     /** The countdown notification to replace when it rings (0: none). */
     int liveId;
+    /** What it sounds like: "tone1"…"tone4" ring until answered, "chime" sounds once (NotificationChannels). */
+    String sound = "tone1";
 
     String state = SCHEDULED;
     long ringingSince;
@@ -37,7 +39,7 @@ final class AlarmSpec {
 
     /** Same alarm as far as the page is concerned (it doesn't know about native state). */
     boolean samePageFields(AlarmSpec o) {
-        return id == o.id && at == o.at && instantId.equals(o.instantId) && title.equals(o.title) && ringText.equals(o.ringText) && liveId == o.liveId;
+        return id == o.id && at == o.at && instantId.equals(o.instantId) && title.equals(o.title) && ringText.equals(o.ringText) && liveId == o.liveId && sound.equals(o.sound);
     }
 
     JSONObject toJson() throws JSONException {
@@ -48,6 +50,7 @@ final class AlarmSpec {
             .put("title", title)
             .put("ringText", ringText)
             .put("liveId", liveId)
+            .put("sound", sound)
             .put("state", state)
             .put("ringingSince", ringingSince)
             .put("pendingAck", pendingAck)
@@ -65,6 +68,7 @@ final class AlarmSpec {
         s.title = o.optString("title", "");
         s.ringText = o.optString("ringText", "");
         s.liveId = o.optInt("liveId", 0);
+        s.sound = NotificationChannels.forSound(o.optString("sound", "tone1"));
         s.state = o.optString("state", SCHEDULED);
         s.ringingSince = o.optLong("ringingSince", 0);
         s.pendingAck = o.optBoolean("pendingAck", false);

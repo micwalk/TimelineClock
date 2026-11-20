@@ -10,6 +10,7 @@
 //   REPEAT   (Once)(Daily)(Weekdays)(Weekends) / M T W T F S S / Every − 2 + days
 //   RINGS    [On time][−5m][−15m][−30m][−1h][other]        ← at the time and/or before it; "20" in
 //                                                            other adds a −20m (and a fresh box)
+//   SOUND    (Classic)(Beacon)(Marimba)(Klaxon)(Glass · chime) ← its alarms' sound (domain/sounds)
 //   NAME     [ optional ]
 //   [            Set alarm · Tue 7:00a            ]
 //
@@ -38,6 +39,8 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
+import { SoundChips } from '../common/SoundPicker.tsx'
+import type { AlarmSound } from '../../domain/sounds.ts'
 import { CtlButton } from './CtlButton.tsx'
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
@@ -126,13 +129,14 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   const [label, setLabel] = useState('')
   /** A one-off alarm's day ("YYYY-MM-DD"); empty = today or tomorrow, whichever comes first. */
   const [date, setDate] = useState('')
+  const [sound, setSound] = useState<AlarmSound>(ringDefaults.sound)
   const seeded = useRef<string | null>(null)
   const close = () => {
-    ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel(''); setDate('')
+    ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel(''); setDate(''); setSound(ringDefaults.sound)
     seeded.current = null
   }
   /** Fills the form in: a series being edited, or a recent alarm. */
-  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string; sun?: SunEvent }) => {
+  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string; sun?: SunEvent; sound?: AlarmSound }) => {
     const [h, m] = a.time.split(':').map(Number)
     setText(a.sun ? sunEventName(a.sun) : `${h % 12 || 12}:${String(m).padStart(2, '0')}`)
     setPm(h >= 12)
@@ -142,6 +146,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     setOnTime(a.onTime)
     setLabel(a.label)
     setDate('')
+    setSound(a.sound ?? ringDefaults.sound)
   }
   // Start from what is being edited, else from the defaults (Settings > Alarms), once per opening.
   const seedKey = editing?.id ?? 'new'
@@ -152,6 +157,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     } else {
       setWarnings(ringDefaults.warnings)
       setOnTime(ringDefaults.onTime)
+      setSound(ringDefaults.sound)
     }
   }
   const { wrapRef, menuRef, menuStyle, above } = useAnchoredMenu(open && !sheet, close)
@@ -197,8 +203,8 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     // A repeat may have no alarm (made with the ⟳ tool); a new alarm must ring.
     if (!time || ring === null || (!editing && rings.length === 0)) return
     const anchor = sun ? { event: sun.event, lat: sun.loc.lat, lon: sun.loc.lon } : undefined
-    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings, sun: anchor })
-    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime, ...(sun ? { sun: sun.event } : {}) })
+    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings, sun: anchor, sound })
+    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime, sound, ...(sun ? { sun: sun.event } : {}) })
     close()
   }
   /** A recent alarm fills the form in (nothing is set until Set): change what you like first. */
@@ -290,6 +296,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }} enterKeyHint="done" autoComplete="off" />
         </div>
       ))}
+      {section('Sound', <SoundChips value={sound} onChange={setSound} label="What it sounds like" />)}
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
       <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null || (!editing && rings.length === 0)}>
         {editing

@@ -21,12 +21,15 @@ describe('bellsToShow', () => {
     expect(ids(bellsToShow([wake], opts()))).toEqual(['m15'])
   })
 
-  it('folds a live bell too close to its instant into the chip, and counts it', () => {
-    expect(bellsToShow([wake], opts()).folded).toEqual({ wake: 1 })
+  it('folds a live bell too close to its instant into the chip, earliest first', () => {
+    expect(bellsToShow([wake], opts()).folded).toEqual({ wake: 'm5' })
     // Zoomed out (0.5px per minute): both fold.
     const r = bellsToShow([wake], opts({ pos: ts => (ts - now) / MINUTE / 2 }))
     expect(r.shown).toEqual([])
-    expect(r.folded).toEqual({ wake: 2 })
+    expect(r.folded).toEqual({ wake: 'm15,m5' })
+    // A snooze after the instant folds after the warnings.
+    const late = inst('late', 60 * MINUTE, [{ id: 's2', offsetMs: -2 * MINUTE, snoozeOf: 'at' }, { id: 'm3', offsetMs: 3 * MINUTE }])
+    expect(bellsToShow([late], opts()).folded).toEqual({ late: 'm3,s2' })
   })
 
   it('never hides a live bell, ringing ones included, but leaves off-screen ones out', () => {
