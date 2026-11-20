@@ -59,7 +59,6 @@
 .tl-ticks { position: absolute; inset: 0; pointer-events: none; }
 .tl-ticks--lines { z-index: var(--z-lines); }
 .tl-ticks--labels { z-index: var(--z-ticks-labels); }
-.tl-tick__label:empty { display: none; }
 
 /* The sky behind everything (SkyLayer): a gradient band the engine pans. */
 .tl-sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: var(--sky-strength); }
@@ -92,31 +91,8 @@
 }
 .tl-ticks__inner { position: absolute; left: 0; top: 0; will-change: transform; }
 
-.tl-tick { position: absolute; left: 0; top: var(--tl-axis); }
-.tl-tick__line {
-  position: absolute;
-  left: -0.5px;
-  width: 1px;
-  top: calc(var(--h) * -1px);
-  height: calc(var(--h) * 2px);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 0 calc(4px * var(--glow)) var(--c-axis-glow);
-}
-.tl-tick__label {
-  position: absolute;
-  left: 0;
-  bottom: calc(var(--h) * 1px + 7px);
-  transform: translateX(-50%);
-  /* Opaque pill so no line shows through; the fade is on the text, not the pill. */
-  padding: 2px 4px;
-  border-radius: 5px;
-  background: var(--tick-label-bg);
-  font: 500 calc(var(--fs) * 1px) / 1 var(--font-mono);
-  color: rgb(255 255 255 / var(--a));
-  white-space: nowrap;
-  text-shadow: 0 0 calc(6px * var(--glow)) color-mix(in srgb, var(--c-axis-glow) calc(var(--a) * 100%), transparent);
-}
-.tl-tick.is-bold .tl-tick__label { font-weight: 700; }
+/* Lines and labels are painted on a canvas each (TickLayer, domain/tickPaint): their look is there. */
+.tl-ticks__canvas { position: absolute; display: block; }
 
 /* --- Instant columns ---------------------------------------------------- */
 
@@ -592,14 +568,13 @@
     drop-shadow(0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--halo) 60%, transparent));
   pointer-events: none;
 }
-/* --lift (px, written per frame by the Cursor tag: domain/tagAvoid) moves the tag out of the Now
+/* The Cursor tag writes its own translate per frame (LiveTags, domain/tagAvoid) to move out of the Now
    tag's way: up in horizontal, along the time axis in vertical. The ＋ inside is held in place. */
 .tl-tag {
   position: absolute;
   left: 0;
   bottom: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px);
   transform: translateX(-50%);
-  translate: 0 calc(var(--lift, 0) * -1px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -972,22 +947,6 @@
 .timeline[data-orientation='vertical'] .tl-context__label { top: 0; left: 4px; padding: 8px 3px; writing-mode: vertical-rl; }
 .timeline[data-orientation='vertical'] .tl-context.is-up .tl-context__label span { display: inline-block; transform: rotate(180deg); }
 
-/* Ticks: short horizontal marks across the axis, labels left of it */
-.timeline[data-orientation='vertical'] .tl-tick { left: var(--tl-axis); top: 0; }
-.timeline[data-orientation='vertical'] .tl-tick__line {
-  left: calc(var(--h) * -1px);
-  width: calc(var(--h) * 2px);
-  top: -0.5px;
-  height: 1px;
-}
-.timeline[data-orientation='vertical'] .tl-tick__label {
-  left: auto;
-  bottom: auto;
-  right: calc(var(--h) * 1px + 7px);
-  top: 0;
-  transform: translateY(-50%);
-  text-align: right;
-}
 
 /* Markers: a horizontal line across the full width, faded at both ends */
 .timeline[data-orientation='vertical'] .tl-col {
@@ -1040,7 +999,6 @@
   top: 0;
   right: calc(100% - var(--tl-axis) + var(--tl-tag-arrow) - 1px);
   transform: translateY(-50%);
-  translate: 0 calc(var(--lift, 0) * 1px);
   align-items: flex-end;
 }
 /* Menus and popovers open to the right of the tag, over the chips */
@@ -1251,12 +1209,8 @@
   transform: translateY(-50%);
 }
 
-/* The cursor merging into Now (capture: --merge 0..1, per frame): its tag sinks into the Now
-   tag and fades, the arrowheads meet; taps go to the Now tag once it is mostly in. */
-.tl-col--label.is-cursor .tl-tag__box,
-.tl-col--label.is-cursor .tl-tag__hide,
-.tl-col--label.is-cursor .tl-tag__arrow { opacity: calc(1 - var(--merge, 0)); }
-.tl-col--label.is-cursor .tl-tag__box { scale: calc(1 - 0.3 * var(--merge, 0)); }
+/* The cursor merging into Now (capture, per frame): LiveTags fades and shrinks its tag into the
+   Now tag; taps go to the Now tag once it is mostly in. */
 .tl-col--label.is-cursor.is-merging .tl-tag__box,
 .tl-col--label.is-cursor.is-merging .tl-tag__hide { pointer-events: none; }
 
