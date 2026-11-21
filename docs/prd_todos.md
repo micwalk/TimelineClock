@@ -39,10 +39,12 @@ A todo adds no fourth one:
 | **■ Stop** (finished) | The favorite's normal stop: a ✓ instant at Now, the saved span todo → ✓; the alarm answered `done` |
 | …on a todo with a duration | The same; the estimate span and its end instant are then hidden (kept, not deleted) |
 | **Done** on the card (already did it) | Dismiss and Stop in one tap |
+| Another todo starts counting (not multitasking) | The one counting **pauses**: its count is saved as a span to a pause instant at Now; it stays open (§4.3) |
+| **▶ Resume** a paused one | A new instant at Now, favorited: the next stretch counts from there |
 | Won't do it | The alarm answered `dropped` |
 | Later (tonight, tomorrow) | The instant moves (with its estimate's end); its alarm re-arms (`rearmAfterMove`) |
 | Passed (Feed cats at 7a, not done by 6p) | Derived: a series' occurrence still open when the next one arrives |
-| "Book appointment", no time yet | **Not an instant**: a draft (§4.4), the one non-time record |
+| "Book appointment", no time yet | **Not an instant**: a draft (§4.5), the one non-time record |
 
 Why the alarm and not the instant: being answered is what an alarm is for, the same family
 as its sound (a chime answers itself; a tone rings until answered; a todo's dismissal starts
@@ -97,7 +99,7 @@ type AlarmAnswer = 'dismissed' | 'snoozed' | 'chimed' | 'done' | 'dropped'
 - **Passed** (a repeat's occurrence still open when the next arrives) unfavorites it: the
   count ends with nothing saved, as unfavoriting does.
 - Cancelling all alarms (bell-slash) on an open todo would leave no asking alarm: on a todo
-  the tool reads **Unschedule** and does §4.4's "back to the list" instead.
+  the tool reads **Unschedule** and does §4.5's "back to the list" instead.
 
 ### 4.2 Durations: a todo with a length is a span
 
@@ -115,7 +117,40 @@ type AlarmAnswer = 'dismissed' | 'snoozed' | 'chimed' | 'done' | 'dropped'
   rule (a snooze or two then reads as part of it). If she really began later, she moves the
   start instant (move mode) like any instant. (Open: §9.)
 
-### 4.3 Series
+### 4.3 One todo at a time: pausing (owner, 2026-11-21)
+
+Generally one todo is being worked on. So **at most one todo counts at a time**, and
+"stopped working on it, not done" is a recorded state: **paused**.
+
+- **Pausing happens by itself** when another todo starts counting (its alarm dismissed, or
+  a paused one resumed): the one counting is paused. It can also be paused by hand: on a
+  todo's lane chip, **⏸** sits beside the ■ (in place of the lap pin a plain favorite has).
+- **Pause** is the favorite's stop without the finish: `act.stopNowSpan`'s path drops an
+  instant at Now and saves the span to it (this stretch of work), unfavorites, and leaves
+  the asking alarm `dismissed`: the todo is still open. No celebration.
+- **Resume** (▶ on the Now row, or the chip tools) drops an instant at Now and favorites it:
+  the next stretch counts from there, not from the scheduled time. Resuming pauses whatever
+  todo counts now.
+- **Stop (■) or Done** on a resumed stretch finishes the todo: the ✓ instant ends the last
+  stretch. **Done on a paused todo** (Now row, chip tool): the ✓ instant at Now, the alarm
+  `done`, the celebration; no new stretch (she wasn't timing it).
+- **Actual time** is the sum of its stretches ("31m in 2 stretches · planned 20m").
+- **Not multitasking, but sometimes:** an automatic pause shows a toast, "Paused Laundry
+  (12m) · Keep both". Keep both undoes the pause (deletes the pause instant, favorites again)
+  and leaves two counting: the washing machine case.
+- Only todos pause each other. A plain favorite (a stopwatch, "Gym") never pauses or is
+  paused by a todo.
+- Done in one tap from a ringing card (a minute's job, e.g. feeding the cats mid-laundry)
+  does not pause the counting todo: it never counted.
+
+**Linking the pieces.** A todo now makes instants other than its own (pause, resume, ✓).
+Each carries `partOf?: string`, the todo's instant id, a relation field on InstantRecord
+(not a new concept), so the Todos tab, actual time and Done find them. The stretches are
+ordinary saved spans named after the todo. Pause and resume instants draw as **Marks**
+(their `visibility`: a short line, no chip) so they don't crowd the chips; the stretches'
+lanes carry the meaning. The ✓ instant keeps its chip (and its fold, §7.1).
+
+### 4.4 Series
 
 `SeriesRecord.ask?: 'todo'` and `SeriesRecord.durationMs?`: every occurrence's alarm at the
 instant asks, and gets its estimate span (warnings don't ask). **Passed** is derived, never
@@ -124,7 +159,7 @@ the Now section and reads "passed" in history; nothing is moved or carried over 
 call, 2026-11-20). Virtual occurrences past the horizon draw no estimate span (the span is
 made when the occurrence is).
 
-### 4.4 Unscheduled entries (the one new record)
+### 4.5 Unscheduled entries (the one new record)
 
 A todo with no time isn't in time yet, so it isn't an instant. It is a **draft of one**:
 
@@ -170,9 +205,10 @@ unsure, 2026-11-21; it overlaps the rejected "make it a todo" tool).
 
 New tab after Favorites ("Todos", short "Todo"). Sections, top down:
 
-1. **Now**: rang and not done: counting ones (☐, name, "since 7:00a · 25m", ■, **Later**),
-   then any she unfavorited (☐, name, **Done**, **Later**). This fixes the iPhone problem:
-   nothing silenced is lost. Its count is a badge on the tab and a small badge on the ☰ that opens the Agenda
+1. **Now**: rang and not done. The counting one first (name, "25m", ⏸, ■), then paused
+   ones ("12m so far", **▶ Resume**, **Done**, **Later**), then ones not started (rang and
+   unfavorited: ☐, name, "since 7:00a", **▶**, **Done**, **Later**). This fixes the iPhone
+   problem: nothing silenced is lost. Its count is a badge on the tab and a small badge on the ☰ that opens the Agenda
    drawer; todos show nowhere else (owner's call).
 2. **Today**: scheduled later today, in time order (☐, name, time, length, ⟳ for repeats).
 3. **Upcoming**: after today (collapsed past a week, as the Alarms tab does).
@@ -202,9 +238,9 @@ iPhone: it can't make the todo disappear, only start it counting (owner's calls,
 2026-11-20 and -21).
 
 **Counting**: the todo's span to Now is a favorite's live lane like any other ("Laundry ·
-3:12"), with its ■ stop; nothing new on the lane. Several dismissed todos are several lanes:
-that is the visible list of what's open (lanes keep their slots and fold their names as
-today).
+3:12"), with its ■ stop and a ⏸ in place of the lap pin. One todo counts at a time
+(§4.3), so the live side holds at most one todo lane; paused and open ones wait in the Todos
+tab's Now section, not on the timeline.
 
 **Chips**: an open todo leads with ☐, a done one with ✓, a passed one with the passed mark
 (`config/labels`). The chip tools add **✓ Done** first.
@@ -235,7 +271,9 @@ back out (principle 7). Better drawing of the actual span waits for first-class 
 
 - Web: `ask`, the new answers; durations (estimate span, hide on Stop); `SeriesRecord.ask`
   and `durationMs`; drafts store and backup; derived todo state (`domain/todos.ts`, with
-  tests: scheduled, ringing, counting, done, dropped, passed, unfavorited); Todos tab
+  tests: scheduled, ringing, counting, paused, resumed, done, dropped, passed, unfavorited;
+  one counting at a time; actual = sum of stretches); pause/resume (`partOf`, Marks, the
+  Keep both toast, ⏸ on the lane); Todos tab
   with Add, Now / Today / Upcoming / Unscheduled / Done; capture from anywhere (N);
   Schedule; the badges; the Alarm picker's Ask and Takes; the ringing card; Dismiss
   favorites, Stop / Done on the favorite path; chip marks and tools; the ✓ fold; the celebration (glow,
@@ -256,7 +294,8 @@ and Snooze both; todos show only in the Todos tab plus a ☰ badge; no "make it 
 
 Owner, 2026-11-21: a todo is the alarm's `ask`, drafts the only new record; Dismiss stays;
 dismissing a todo's alarm favorites it (otherwise only by hand), and doing it is the normal
-favorite stop; a todo with a duration is a span, and Stop replaces it with the actual and
+favorite stop; generally one todo at a time, so starting one pauses the other ("stopped,
+not done" is recorded); a todo with a duration is a span, and Stop replaces it with the actual and
 hides the estimate; Done always makes a ✓ instant, folded into the chip when close; the
 celebration is glow, sparks and a fanfare; instant notes are their own feature.
 
@@ -266,6 +305,9 @@ Open:
 2. **Snooze then Dismiss**: the count still runs from the scheduled time, so a todo
    snoozed twice reads 10m on dismissal. Fine, or should it start from the dismiss?
    (Same choice as 1.)
+3. **Pause and resume instants as Marks** (no chip): enough, or should a paused stretch
+   end in a small ⏸ chip? Proposed: Marks; first-class spans will draw stretches better.
+4. **The automatic pause**: silent with a Keep both toast (proposed), or ask first?
 
 ## 10. Success
 
