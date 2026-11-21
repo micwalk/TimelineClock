@@ -56,7 +56,8 @@ first-class spans (§6) → runs (§5).
 
 Note: written when a todo was its own record; in the Phase 1 model a todo is an instant
 with an alarm that asks "Done?" ([prd_todos.md](prd_todos.md) §4), and Start / Done are
-instants and spans as below.
+instants and spans as below. Start, Stop on the favorite, and the estimate span (hidden once
+the actual is saved) moved into the todo PRD v0.4 §4.2; the rest here is still exploration.
 
 The two real problems: **estimates are wrong** (always short), and **breaks are invisible**,
 so the reminder after a break gets snoozed because "not ready yet" has nowhere else to go.
