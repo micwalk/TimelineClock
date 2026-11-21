@@ -55,7 +55,7 @@ first-class spans (§6) → runs (§5).
 ## 4. Todo time tracking and breaks (from the todo PRD draft, 2026-11-20)
 
 Note: written when a todo was its own record; in the Phase 1 model a todo is an instant
-with an alarm that asks "Done?" ([prd_todos.md](prd_todos.md) §4), and Start / Done are
+with alarms, tied together by a todo record ([prd_todos.md](prd_todos.md) v0.5 §4), and Start / Done are
 instants and spans as below. The count (Dismiss favorites the todo), Stop on the favorite,
 and the estimate span (hidden once
 the actual is saved) moved into the todo PRD v0.4 §4.2; the rest here is still exploration.
