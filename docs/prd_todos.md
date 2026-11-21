@@ -133,7 +133,8 @@ todo?: { id: string; role: 'at' | 'was' | 'done' | 'pause' | 'resume' }   // pau
 Spans need no field: a span whose ends belong to the same todo is that todo's. Every such
 span is a **stretch**, time actually worked, made by the favorite's stop and named after the
 todo. In Phase 1 there is at most one: `at` → `done`. In Phase 2 a stretch runs from `at` or
-`resume` to `pause` or `done`.
+`resume` to `pause` or `done`, and a todo has as many as she makes: each ▶ Resume starts one,
+each ⏸ or ✓ ends it, with no limit.
 - **Actual time** = the sum of its stretches (+ the one counting now). One stretch reads
   "31m"; more read "31m in 2 stretches". With a length: "31m · planned 20m".
 - Done straight from the ringing card makes no stretch (nothing was timed): it reads "done",
