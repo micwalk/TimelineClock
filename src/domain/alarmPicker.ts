@@ -164,12 +164,15 @@ export interface RecentAlarm {
   sun?: SunEvent
   /** Its own sound (absent: the default tone). */
   sound?: AlarmSound
+  /** A todo (the Todo switch), with its length if it has one. */
+  todo?: { durationMs?: number }
 }
 
 export const MAX_RECENT_ALARMS = 3
 
 const sameRecent = (a: RecentAlarm, b: RecentAlarm) =>
   a.time === b.time && a.label === b.label && a.sun === b.sun && a.sound === b.sound && !a.onTime === !b.onTime && JSON.stringify(a.repeat) === JSON.stringify(b.repeat) && JSON.stringify(a.warnings) === JSON.stringify(b.warnings)
+  && JSON.stringify(a.todo ?? null) === JSON.stringify(b.todo ?? null)
 
 export function pushRecentAlarm(list: readonly RecentAlarm[], a: RecentAlarm): RecentAlarm[] {
   return [a, ...list.filter(x => !sameRecent(x, a))].slice(0, MAX_RECENT_ALARMS)
@@ -187,6 +190,8 @@ export function sanitizeRecentAlarms(raw: unknown): RecentAlarm[] {
     const onTime = r.onTime === false && warnings.length > 0 ? { onTime: false as const } : {}
     const sun = r.sun === 'sunrise' || r.sun === 'sunset' ? { sun: r.sun as SunEvent } : {}
     const sound = isSound(r.sound) ? { sound: r.sound } : {}
-    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime, ...sun, ...sound }]
+    const t = r.todo && typeof r.todo === 'object' ? (r.todo as Record<string, unknown>) : null
+    const todo = t ? { todo: typeof t.durationMs === 'number' && t.durationMs > 0 && t.durationMs < DAY ? { durationMs: t.durationMs } : {} } : {}
+    return [{ time: r.time, repeat, warnings, label: typeof r.label === 'string' ? r.label : '', ...onTime, ...sun, ...sound, ...todo }]
   }).slice(0, MAX_RECENT_ALARMS)
 }

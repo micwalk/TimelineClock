@@ -178,7 +178,7 @@ const EMPTY: RightSidePlacement = { chips: {}, flags: {}, flagGroups: [] }
 
 /** Lanes that draw a chip with tools on the saved side (vertical). */
 const chipLane = (lane: BottomLane, selectedSpanId: string | null) =>
-  !isLiveLane(lane) && (lane.kind === 'secondary' || (lane.kind === 'saved' && laneHasControls(lane, selectedSpanId)))
+  !isLiveLane(lane) && (lane.kind === 'secondary' || lane.kind === 'block' || (lane.kind === 'saved' && laneHasControls(lane, selectedSpanId)))
 
 export function rightSideLayout(f: Frame): RightSidePlacement {
   if (f.orientation !== 'vertical' || !inputs) return EMPTY

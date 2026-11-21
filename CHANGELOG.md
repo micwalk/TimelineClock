@@ -7,6 +7,35 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.8.0 — 2026-11-21
+
+**Android app: web only** (nothing native changed; the app picks this up by itself. Its
+notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
+
+- **Todos** (docs/prd_todos.md, Phase 1). A todo is a thing to do: a name, maybe a time and how
+  long it takes. A new **Todos** tab (after Favorites) has an Add box that reads "book appt",
+  "laundry 4p 20m" or "feed cats 7a daily", and lists what rang and isn't done (Now), today's,
+  upcoming, unscheduled (drag to reorder; **Schedule**: In 15m, In 1h, Tonight, Tomorrow, a typed
+  time or the time entry) and the last day's done, with how long each took ("31m · planned 20m").
+  **N** adds one from anywhere without moving anything else.
+- **When a todo rings**: **Done** (already did it) or **Dismiss** ("on it" / "not yet"). Dismissed,
+  it doesn't disappear: its instant is favorited and counts on the timeline from its time until you
+  tap the lane's **✓** (the stop, on a todo), which saves the time it took. **Snooze 5m**, **Later…**
+  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and a quiet **Won't do**.
+- **On the timeline**: a todo's chip leads with ☐ (✓ done, ↷ passed); its tools start with ✓ Done,
+  the bell-slash reads Unschedule, and the trash deletes the todo on a second tap. A todo with a
+  length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
+  once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
+  you zoom in.
+- **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a short
+  brass fanfare plays (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
+  times; sparks follow reduced motion, and their count, spread and length are in Advanced).
+- **Repeating todos**: the Alarm picker's **Todo** switch (with an optional **Takes** length), or
+  "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next
+  arrives is simply passed.
+- Badges: the Todos tab and the ☰ count what rang and isn't done. Todos are in backups
+  (`data.todos`) and follow their group, as instants do.
+
 ## 0.7.2 — 2026-11-21
 
 **Android app: install again** (chime notifications are native).

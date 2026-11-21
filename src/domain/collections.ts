@@ -90,6 +90,8 @@ export interface CollectionData {
   spans: SpanRecord[]
   groups?: GroupRecord[]
   collections?: CollectionRecord[]
+  /** Todos (domain/todos): each in its group, as its instants are. */
+  todos?: { id: string; collectionId?: string }[]
 }
 
 /** Just the chosen groups: their instants and series, and spans with both ends kept (a span to Now with its instant). */
@@ -104,6 +106,7 @@ export function dataForCollections<D extends CollectionData>(data: D, chosen: Re
     spans: data.spans.filter(sp => ids.has(sp.startInstantId) && (sp.endIsNow || ids.has(sp.endInstantId))),
     groups: series.filter(s => chosen.has(s.collectionId ?? DEFAULT_COLLECTION)),
     collections: (data.collections ?? [defaultCollection()]).filter(c => chosen.has(c.id)),
+    ...(data.todos ? { todos: data.todos.filter(t => chosen.has(t.collectionId ?? DEFAULT_COLLECTION)) } : {}),
   }
 }
 
@@ -122,7 +125,8 @@ export interface ImportGroupRow {
 export function fileCollections(data: CollectionData): { id: string; label: string; count: number }[] {
   const counts = collectionCounts(data.instants, data.groups ?? [])
   const list = data.collections ?? [{ id: DEFAULT_COLLECTION, label: LABELS.importedGroup }]
-  return list.map(c => ({ id: c.id, label: c.label, count: counts.get(c.id) ?? 0 })).filter(c => c.count > 0 || (data.groups ?? []).some(s => (s.collectionId ?? DEFAULT_COLLECTION) === c.id))
+  return list.map(c => ({ id: c.id, label: c.label, count: counts.get(c.id) ?? 0 })).filter(c => c.count > 0 || (data.groups ?? []).some(s => (s.collectionId ?? DEFAULT_COLLECTION) === c.id)
+    || (data.todos ?? []).some(t => (t.collectionId ?? DEFAULT_COLLECTION) === c.id))
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
@@ -176,7 +180,11 @@ export function mapImport<D extends CollectionData>(data: D, rows: readonly Impo
   })
   const ids = new Set(instants.map(i => i.id))
   const spans = data.spans.filter(sp => ids.has(sp.startInstantId) && (sp.endIsNow || ids.has(sp.endInstantId)))
+  const todos = data.todos?.flatMap(t => {
+    const to = where(t.collectionId ?? DEFAULT_COLLECTION)
+    return to === null ? [] : [into(t, to)]
+  })
   const { collections: _drop, ...rest } = data
   void _drop
-  return { data: { ...rest, instants, spans, groups } as D, added }
+  return { data: { ...rest, instants, spans, groups, ...(todos ? { todos } : {}) } as D, added }
 }

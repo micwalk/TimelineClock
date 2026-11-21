@@ -134,3 +134,69 @@ export const TONE_PRESETS: Record<AlarmSound, TonePreset> = {
     },
   },
 }
+
+/**
+ * A brass note: two slightly detuned saws through a low-pass that opens on the attack (the
+ * "blat" of a horn) and settles, a little vibrato on long notes, and a soft octave below for body.
+ */
+function brass(ctx: BaseAudioContext, out: AudioNode, t: number, freq: number, len: number, peak: number): AudioScheduledSourceNode[] {
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.Q.value = 1.2
+  filter.frequency.setValueAtTime(freq * 1.5, t)
+  filter.frequency.linearRampToValueAtTime(freq * 6, t + 0.05)
+  filter.frequency.exponentialRampToValueAtTime(freq * 3.2, t + Math.min(0.3, len))
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, t)
+  gain.gain.linearRampToValueAtTime(peak, t + 0.035)
+  gain.gain.setValueAtTime(peak * 0.85, t + Math.max(0.05, len - 0.12))
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + len)
+  filter.connect(gain)
+  gain.connect(out)
+  const sources: AudioScheduledSourceNode[] = []
+  const vib = len > 0.4 ? ctx.createOscillator() : null
+  const vibDepth = vib ? ctx.createGain() : null
+  if (vib && vibDepth) {
+    vib.frequency.value = 5.5
+    vibDepth.gain.setValueAtTime(0, t)
+    vibDepth.gain.linearRampToValueAtTime(12, t + len * 0.6) // cents
+    vib.connect(vibDepth)
+    vib.start(t)
+    vib.stop(t + len + 0.05)
+    sources.push(vib)
+  }
+  for (const [ratio, detune, level] of [[1, -6, 1], [1, 6, 1], [0.5, 0, 0.35]] as const) {
+    const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(freq * ratio, t)
+    osc.detune.setValueAtTime(detune, t)
+    if (vibDepth) vibDepth.connect(osc.detune)
+    g.gain.value = level * 0.5
+    osc.connect(g)
+    g.connect(filter)
+    osc.start(t)
+    osc.stop(t + len + 0.05)
+    osc.onended = () => { osc.disconnect(); g.disconnect() }
+    sources.push(osc)
+  }
+  const last = sources[sources.length - 1]
+  last.addEventListener('ended', () => { filter.disconnect(); gain.disconnect(); vibDepth?.disconnect() })
+  return sources
+}
+
+/**
+ * The Done fanfare (docs/prd_todos.md §7.2): a short "ta-da-daaa" brass call, an original
+ * rising arpeggio (C, E, then a held G), played once when a todo is done.
+ */
+export const FANFARE: TonePreset = {
+  name: 'Fanfare',
+  cycle: 1.4,
+  play(ctx, out, t) {
+    return [
+      ...brass(ctx, out, t, midi(72), 0.13, 0.5),
+      ...brass(ctx, out, t + 0.15, midi(76), 0.13, 0.5),
+      ...brass(ctx, out, t + 0.3, midi(79), 0.95, 0.55),
+    ]
+  },
+}

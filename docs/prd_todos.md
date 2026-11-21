@@ -1,6 +1,7 @@
 # Todos — Product Requirements (draft v0.8, 2026-11-21)
 
-Status: proposal for the owner's review. Nothing here is built. A todo is a **record** that
+Status: Phase 1 (web) built in 0.8.0 on branch `todo`; see §12 for what was built and the calls
+made building it. Phase 1b, 2 and 3 are not built. A todo is a **record** that
 ties together the instants, spans and alarms it makes; it holds no times itself. A todo's
 length (its estimate) lives on the record; once scheduled, the timeline draws it as a
 **planned block** computed from the record, never stored, and what gets saved is only what
@@ -413,3 +414,36 @@ scheduling, tracking time. Its addendum's requirements, sorted for this app:
 - Streaks.
 - iPhone: alarms with the app closed need a native iOS app (this app's native side is Android
   only, and the web can't ring closed without a push server).
+
+## 12. Phase 1 as built (0.8.0, branch `todo`), and the calls made building it
+
+Built: everything in §8's Phase 1 (web). Not built: Phase 1b (Android: the notification still
+offers Dismiss / Snooze; dismissing there replays as a Dismiss, so the todo starts counting, as
+§8 wants), Phase 2 (needs its own spec), Phase 3. Where things live: AGENTS.md › UX Patterns ›
+Todos.
+
+Calls made by Claude while building (for the owner to override):
+
+| # | Call | Why |
+|---|---|---|
+| 1 | The branch starts from `minor-0.7.2` (0.7.2 plus this PRD): there is no v0.7.3 yet | Rebase onto 0.7.3 once it exists |
+| 2 | Records live in the entities store, under their own key `timeline.todos.v1` | One place for data: backups, imports and groups handle them with the rest |
+| 3 | The record has a `closedAt` (when it stopped being open) | The Done section lists "the last day's" done, won't do and passed; won't do and passed have no instant to date them |
+| 4 | Only an alarm at (or after) its time starts the count; dismissing a warning before it just answers the warning | Dismissing "Laundry in 15m" isn't starting the laundry |
+| 5 | A chime at a todo's time, and an alarm nobody answered (auto-dismissed after Ring for), start the count too | Silenced either way: nothing silenced is lost |
+| 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says | Otherwise a dismissed todo would be invisible unless selected |
+| 7 | Done before its time, or Won't do before it rang: an `at` none of whose alarms rang is deleted | §4.3's "a plan that never happened isn't history" (said for Back to the list) |
+| 8 | Later also drops pending snoozes, stops a count (nothing saved), and adds an alarm at the time if none is left to ring | Later is "the plan changed": it should ring at the new time, once |
+| 9 | A folded ✓ draws as a Mark (a stub from the axis), not as nothing | Its line stays visible: history isn't hidden, only its chip folds |
+| 10 | The planned block is a new `block` lane kind (domain/blocks `TimeBlock`, look `planned`), packed with the saved span lanes. Tap selects its `at`, double-tap focuses it. During a live move it stays put until the move is confirmed | Sparing #12: the same lane kind can draw first-class spans as blocks later (a `solid` look) |
+| 11 | Schedule and Later: the quick chips, a typed box ("3p", "1h30", "tomorrow 9a") and the hh:mm:ss time entry (for a date) | The typed box matches the ringing card's Other…; the time entry reaches any date |
+| 12 | In a typed "when", "1:30" is a clock time; lengths are "90", "1h30", "45m" | It answers "when", not "how long" |
+| 13 | The Add box reads only words at its end that can't be part of a name: "3p", "at 7", "20m", "daily", "tomorrow"; "buy 2 eggs" stays a name; a repeat needs a time, else its words stay in the name | Capture must never mangle a name |
+| 14 | ✓ and Later/Schedule on every open row (not only Now's), a ⋯ for Rename, Takes (length), Won't do and Delete (a second tap); done rows have an "open again" ↺ | One tap from the tab, whatever the row; a mistaken ✓ is undoable (↺ was not in the PRD) |
+| 15 | No ＋ in the Agenda header: the Add box is at the top of the Todos tab, which the ☰ reaches | It would open the same box one tap later |
+| 16 | On a todo's chip, the trash deletes the todo (on a second tap); the bell-slash reads Unschedule (Back to the list) while it is ahead | §4.3 |
+| 17 | Repeating a todo's `at` with ⟳, or editing a series in the Alarm picker with Todo on, makes a repeating todo (its occurrences ahead get records) | The repeat should keep being a todo |
+| 18 | Renaming the `at` renames the todo, and the other way round | The `at` carries the todo's name |
+| 19 | A group switched off hides its todos from the tab too | As it hides its instants |
+| 20 | Todo colour `--c-todo` (violet); the todo card's Dismiss is cyan, not red; Done is green | §6: no red for open todos |
+| 21 | The fanfare is an original C–E–G brass arpeggio (synthesized), only while the page is on screen; the volume slider plays it when let go | §7.2 |

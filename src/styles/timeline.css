@@ -1354,3 +1354,72 @@
 .sound-pick__title, .alarm-pick__label:has(.sound-pick__gear) { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sound-pick__gear { --accent: var(--ink-dim); width: 22px; height: 22px; }
 .sound-pick__gear > svg { width: 15px; height: 15px; }
+
+/* ---------------------------------------------------------------------------
+   Todos (docs/prd_todos.md). A todo's planned block: a lane in the planned look, dashed and
+   hollow (a plan, not something that happened); its chip says the todo and its length. */
+.tl-lane--planned { --accent: var(--c-planned); }
+.tl-lane--planned .tl-lane__line {
+  top: -4px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, transparent) 0 8px, transparent 8px 13px);
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 calc(8px * var(--glow)) color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.timeline[data-orientation='vertical'] .tl-lane--planned .tl-lane__line {
+  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, transparent) 0 8px, transparent 8px 13px);
+}
+.tl-lane--planned .span-chip { border-style: dashed; background: var(--box-bg); color: var(--ink-dim); }
+
+/* A todo's ☐ / ✓ / ↷ / – before its name. */
+.chip__todo { flex: none; color: var(--c-todo); font: 800 13px/1 var(--font-ui); text-shadow: 0 0 calc(4px * var(--glow)) var(--c-todo); }
+.chip.is-todo-done .chip__todo { color: var(--c-ok); text-shadow: 0 0 calc(4px * var(--glow)) var(--c-ok); }
+.chip.is-todo-passed .chip__todo, .chip.is-todo-dropped .chip__todo { color: var(--ink-faint); text-shadow: none; }
+/* Delete todo, after a first tap on its trash. */
+.tl-col__confirm {
+  --accent: var(--c-danger);
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--c-danger) 45%, transparent);
+  color: #fff;
+  font: 700 12px/1 var(--font-ui);
+  white-space: nowrap;
+}
+/* ✓ Done on a counting todo's lane, in the stop's place. */
+.span-chip__end-btn--done { --accent: var(--c-ok); }
+.span-chip__done { color: var(--c-ok); font: 900 15px/1 var(--font-ui); text-shadow: 0 0 calc(5px * var(--glow)) var(--c-ok); }
+.tl-lane__chip-row:has(.span-chip__end-btn--done) .span-chip.has-end { padding-right: 34px; }
+
+/* ✓ Done: the chip it made (or the chip it folded into) flares in a short glow burst, the drop
+   pulse's family; the sparks are a canvas over everything (Celebration). */
+@keyframes done-flare {
+  0% { transform: scale(0.85); filter: brightness(2.6) saturate(1.4); box-shadow: 0 0 calc(30px * var(--glow)) var(--c-ok); }
+  35% { transform: scale(1.18); filter: brightness(1.8); box-shadow: 0 0 calc(22px * var(--glow)) var(--c-ok); }
+  100% { transform: scale(1); filter: none; }
+}
+@keyframes done-flare-still {
+  0%, 100% { filter: none; }
+  40% { filter: brightness(1.8); box-shadow: 0 0 calc(22px * var(--glow)) var(--c-ok); }
+}
+.chip--saved.is-celebrating { --accent: var(--c-ok); --halo: var(--c-ok); animation: done-flare 1200ms ease-out 1; }
+.sparks { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 305; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chip--saved.is-celebrating { animation: done-flare-still 1200ms ease-out 1; }
+}
+
+/* Todos that rang and aren't done: a small badge on the ☰. */
+.tl-agenda-btn__badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--c-todo);
+  color: #0b1020;
+  font: 800 10.5px/16px var(--font-ui);
+  box-shadow: 0 0 calc(6px * var(--glow)) var(--c-todo);
+}

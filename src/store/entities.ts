@@ -11,12 +11,15 @@ import type { GroupRecord } from '../domain/series.ts'
 import { sanitizeGroups } from '../domain/series.ts'
 import type { CollectionRecord } from '../domain/collections.ts'
 import { DEFAULT_COLLECTION, groupHiddenTest, sanitizeCollections } from '../domain/collections.ts'
+import type { TodoLink, TodoRecord } from '../domain/todos.ts'
+import { sanitizeTodos } from '../domain/todos.ts'
 import { loadJson, saveJson } from './storage.ts'
 
 const INSTANTS_KEY = 'timeline.saved.v1'
 const SPANS_KEY = 'timeline.spans.v1'
 const GROUPS_KEY = 'timeline.groups.v1'
 const COLLECTIONS_KEY = 'timeline.collections.v1'
+const TODOS_KEY = 'timeline.todos.v1'
 
 export interface EntitiesState {
   instants: InstantRecord[]
@@ -25,16 +28,19 @@ export interface EntitiesState {
   groups: GroupRecord[]
   /** Your groups (domain/collections), Default first. */
   collections: CollectionRecord[]
+  /** Todos (domain/todos): records of things to do; their instants point at them. */
+  todos: TodoRecord[]
 }
 
 const loadInstants = () => sanitizeInstants(loadJson<unknown>(INSTANTS_KEY, []))
 const loadSpans = () => sanitizeSpans(loadJson<unknown>(SPANS_KEY, []))
 const loadGroups = () => sanitizeGroups(loadJson<unknown>(GROUPS_KEY, []))
 const loadCollections = () => sanitizeCollections(loadJson<unknown>(COLLECTIONS_KEY, []))
+const loadTodos = () => sanitizeTodos(loadJson<unknown>(TODOS_KEY, []))
 
 export const useEntities = create<EntitiesState>(() => {
   const { instants, spans } = syncFavorites(loadInstants(), loadSpans())
-  return { instants: syncAlarmVisibility(instants, Date.now()), spans, groups: loadGroups(), collections: loadCollections() }
+  return { instants: syncAlarmVisibility(instants, Date.now()), spans, groups: loadGroups(), collections: loadCollections(), todos: loadTodos() }
 })
 
 useEntities.subscribe((s, prev) => {
@@ -43,6 +49,7 @@ useEntities.subscribe((s, prev) => {
   if (s.spans !== prev.spans) saveJson(SPANS_KEY, s.spans)
   if (s.groups !== prev.groups && s.groups) saveJson(GROUPS_KEY, s.groups)
   if (s.collections !== prev.collections && s.collections) saveJson(COLLECTIONS_KEY, s.collections)
+  if (s.todos !== prev.todos && s.todos) saveJson(TODOS_KEY, s.todos)
 })
 
 /**
@@ -65,7 +72,7 @@ export function useShownInstants(): InstantRecord[] {
   const instants = useEntities(s => s.instants)
   const groups = useEntities(s => s.groups)
   const collections = useEntities(s => s.collections)
-  return useMemo(() => shownInstants({ instants, spans: [], groups, collections }), [instants, groups, collections])
+  return useMemo(() => shownInstants({ instants, spans: [], groups, collections, todos: [] }), [instants, groups, collections])
 }
 
 const set = useEntities.setState
@@ -97,6 +104,20 @@ const patchAlarms = (id: string, change: (list: AlarmRecord[]) => AlarmRecord[])
       return real(next.length > 0 ? { ...rest, alarms: next } : rest)
     }),
   }))
+
+/**
+ * A repeating todo's record goes with its occurrence: once the instants being deleted leave an
+ * occurrence's todo with none (its date skipped, the series ended), the record goes too. Other
+ * todos stay (a plain todo whose `at` is deleted is just unscheduled again).
+ */
+function withoutOrphanOccurrences(todos: TodoRecord[] | undefined, instants: readonly InstantRecord[], gone: ReadonlySet<string>): TodoRecord[] {
+  const list = todos ?? []
+  const hit = new Set(instants.filter(i => gone.has(i.id) && i.todo).map(i => i.todo!.id))
+  if (hit.size === 0) return list
+  const left = new Set(instants.filter(i => !gone.has(i.id) && i.todo && hit.has(i.todo.id)).map(i => i.todo!.id))
+  const drop = (t: TodoRecord) => hit.has(t.id) && !left.has(t.id) && !!t.seriesId && t.status === 'open'
+  return list.some(drop) ? list.filter(t => !drop(t)) : list
+}
 
 const withoutCollection = <T extends { collectionId?: string }>(rec: T): T => {
   const { collectionId: _c, ...rest } = rec
@@ -140,6 +161,7 @@ export const entities = {
       collections: s.collections.filter(c => c.id !== id),
       instants: s.instants.map(i => (i.collectionId === id ? withoutCollection(i) : i)),
       groups: (s.groups ?? []).map(g => (g.collectionId === id ? withoutCollection(g) : g)),
+      todos: (s.todos ?? []).map(t => (t.collectionId === id ? withoutCollection(t) : t)),
     }))
   },
   /** Puts an instant in a group (Default: none named). */
@@ -154,6 +176,7 @@ export const entities = {
     set(s => ({
       instants: s.instants.filter(i => !gone.has(i.id)),
       spans: s.spans.filter(sp => !gone.has(sp.startInstantId) && !gone.has(sp.endInstantId)),
+      todos: withoutOrphanOccurrences(s.todos, s.instants, gone),
     }))
   },
   patchInstant,
@@ -170,6 +193,7 @@ export const entities = {
     set(s => ({
       instants: s.instants.filter(i => i.id !== id),
       spans: s.spans.filter(sp => sp.startInstantId !== id && sp.endInstantId !== id),
+      todos: withoutOrphanOccurrences(s.todos, s.instants, new Set([id])),
     }))
   },
 
@@ -244,6 +268,17 @@ export const entities = {
   },
 
   deleteSpan: (id: string) => set(s => ({ spans: s.spans.filter(sp => sp.id !== id) })),
+
+  // Todos (domain/todos)
+  getTodo: (id: string | null | undefined) => (id ? (get().todos ?? []).find(t => t.id === id) : undefined),
+  /** Adds or replaces a todo record. */
+  putTodo: (t: TodoRecord) => set(s => ({ todos: (s.todos ?? []).some(x => x.id === t.id) ? s.todos.map(x => (x.id === t.id ? t : x)) : [...(s.todos ?? []), t] })),
+  /** Adds todo records (a series' occurrences'). */
+  addTodos: (list: readonly TodoRecord[]) => { if (list.length > 0) set(s => ({ todos: [...(s.todos ?? []), ...list] })) },
+  patchTodo: (id: string, patch: Partial<TodoRecord>) => set(s => ({ todos: (s.todos ?? []).map(t => (t.id === id ? { ...t, ...patch } : t)) })),
+  removeTodo: (id: string) => set(s => ({ todos: (s.todos ?? []).filter(t => t.id !== id) })),
+  /** Sets or clears which todo an instant belongs to, and its part. */
+  setInstantTodo: (id: string, link: TodoLink | null) => patchInstant(id, () => ({ todo: link ?? undefined })),
   setSpanLabel: (id: string, label: string) => patchSpan(id, { label }),
   setSpanVisible: (id: string, visible: boolean) => patchSpan(id, { visible }),
 

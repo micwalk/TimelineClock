@@ -4,6 +4,8 @@ import { AgendaShell } from './components/panels/AgendaShell.tsx'
 import { useLayout } from './store/layout.ts'
 import { RingingAlarms } from './components/panels/RingingAlarms.tsx'
 import { HelpDialog } from './components/panels/Help.tsx'
+import { TodoCapture } from './components/panels/TodosList.tsx'
+import { Celebration } from './components/timeline/Celebration.tsx'
 import { useHotkeys } from './hooks/useHotkeys.ts'
 
 export default function App() {
@@ -19,6 +21,8 @@ export default function App() {
       </div>
       {agenda !== 'side' && <AgendaShell />}
       <RingingAlarms />
+      <TodoCapture />
+      <Celebration />
       <HelpDialog />
     </div>
   )

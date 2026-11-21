@@ -1,6 +1,6 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
-import { MARKS } from '../../config/labels.ts'
+import { MARKS, TODO_COPY } from '../../config/labels.ts'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -10,7 +10,7 @@ import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, 
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
-import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
+import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatDurationShort, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
 import { hasArmedAlarm, openAlarms, ringKey, ringTime } from '../../domain/alarms.ts'
@@ -84,6 +84,8 @@ interface ChipProps {
   foldedIds: string
   /** Bells before or after the instant folded into its chip (too close to stand apart: zoomed out): alarm ids, comma-joined, earliest first. */
   bellFolded: string
+  /** A todo's ✓ folded into this chip (its `at`; too close to stand apart): the ✓ instant's id, or ''. */
+  doneFolded: string
   selected: boolean
   focused: boolean
   editing: boolean
@@ -91,8 +93,13 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
+  // A todo's `at` leads with its state (☐ open, ✓ done, ↷ passed, – won't do: config/labels).
+  const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
+  const openTodo = todoStatus === 'open' ? inst.todo!.id : null
+  const doneFoldTs = useEntities(s => (doneFolded ? s.instants.find(i => i.id === doneFolded)?.tsEpochMs : undefined))
+  const celebrating = useUi(s => s.celebrating?.instantId === inst.id || (!!doneFolded && s.celebrating?.instantId === doneFolded))
   // Only alarms and a selected chip's tools care whether it is past: others don't watch the clock.
   const isPast = useFrameValueWhile(!!inst.alarms || selected, f => ts < f.now, false)
   const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
@@ -172,9 +179,11 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     <BellTools inst={inst} alarm={toolAlarm} />
   ) : selected && !moving ? (
     <>
+      {/* A todo: ✓ Done first. */}
+      {openTodo && <IconButton icon={CheckIcon} label={`Done: ${displayName(inst.label, 'todo')}`} color="var(--c-ok)" bare onClick={() => act.doneTodo(openTodo)} />}
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
-      {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
+      {openAlarms(inst).length > 0 && <CancelTool inst={inst} todoId={openTodo && !isPast ? openTodo : null} />}
       {/* A sunrise or sunset never moves. */}
       {focused && !fixed && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* A sunrise or sunset already shows every day: repeating one only means something with an alarm on it. */}
@@ -182,7 +191,9 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {/* The eye: how far out it stays (chip, mark, gone), or hidden everywhere. */}
       <VisibilityTool inst={inst} />
       {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
-      {inst.seriesId
+      {openTodo && !inst.seriesId
+        ? <DeleteTodoTool todoId={openTodo} />
+        : inst.seriesId
         ? <DeleteOccurrenceTool inst={inst} />
         : !fixed && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
     </>
@@ -221,7 +232,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
           <BellAlertIcon aria-hidden />
         </button>
       )}
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -246,12 +257,15 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
+            {todoStatus && <span className="chip__todo" aria-label={TODO_STATUS_TEXT[todoStatus]}>{TODO_MARK[doneFolded ? 'done' : todoStatus]}</span>}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
               {moving ? <LiveText compute={f => formatChipTime(f.center, f.now, f.end - f.start, true)} /> : <LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} />}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+            {/* Its ✓, folded in: when it was done, "· +12m". */}
+            {doneFoldTs !== undefined && <span className="chip__rel">· {TODO_COPY.foldAfter(formatDurationShort(doneFoldTs - ts))}</span>}
             {moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(f.center - f.now)}`} />}
           </button>
           </>
@@ -289,14 +303,38 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   )
 }
 
-/** Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap too. */
-function CancelTool({ inst }: { inst: InstantRecord }) {
+/**
+ * Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap
+ * too. On a scheduled todo it reads Unschedule: back to the list (docs/prd_todos.md §4.3).
+ */
+function CancelTool({ inst, todoId }: { inst: InstantRecord; todoId: string | null }) {
   const all = openAlarms(inst).length
+  if (todoId) return <IconButton icon={BellSlashIcon} label="Unschedule: back to the todo list" color={bellColor} bare onClick={() => act.backToList(todoId)} />
   return (
     <IconButton icon={BellSlashIcon} label={all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'} color={bellColor} bare
       onClick={() => act.cancelAlarms(inst.id)} />
   )
 }
+
+/** How long a first tap on a todo's trash waits for the second, ms. */
+const CONFIRM_MS = 3000
+
+/** Delete, on a todo's chip: a second tap deletes the todo (what happened stays as history). */
+function DeleteTodoTool({ todoId }: { todoId: string }) {
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), CONFIRM_MS)
+    return () => clearTimeout(t)
+  }, [armed])
+  return armed
+    ? <button type="button" className="tl-col__confirm glow-box" onClick={() => act.deleteTodo(todoId)}>Delete todo</button>
+    : <IconButton icon={TrashIcon} label="Delete todo (tap again)" color="var(--c-danger)" className="glow-box" onClick={() => setArmed(true)} />
+}
+
+/** A todo's state on its chip (config/labels). */
+const TODO_MARK = { open: MARKS.todoOpen, done: MARKS.todoDone, passed: MARKS.todoPassed, dropped: MARKS.todoDropped } as const
+const TODO_STATUS_TEXT = { open: 'todo', done: 'done', passed: TODO_COPY.passed, dropped: TODO_COPY.dropped } as const
 
 /**
  * What a chip's time text depends on: the zoom band (time / date and time / date / with year:
@@ -576,8 +614,8 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, doneFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; doneFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -618,7 +656,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   return (
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
-      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} belowRef={belowRef}
+      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
@@ -736,6 +774,7 @@ export function SavedInstantColumns() {
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             bellFolded={layout.bellFolded[id] ?? ''}
+            doneFolded={layout.doneFolded[id] ?? ''}
             bellLinked={bellsByInstant.has(id)}
             selected={v.selected === id}
             focused={focusedId === id}

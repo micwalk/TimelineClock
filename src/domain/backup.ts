@@ -6,6 +6,8 @@ import type { GroupRecord } from './series.ts'
 import { sanitizeGroups } from './series.ts'
 import type { CollectionRecord } from './collections.ts'
 import { sanitizeCollections } from './collections.ts'
+import type { TodoRecord } from './todos.ts'
+import { sanitizeTodos } from './todos.ts'
 
 export const BACKUP_FORMAT = 'timeline-clock-backup'
 export const BACKUP_VERSION = 1
@@ -17,6 +19,8 @@ export interface BackupData {
   groups?: GroupRecord[]
   /** Your groups (domain/collections; missing from backups made before them: everything is in Default). */
   collections?: CollectionRecord[]
+  /** Todos (domain/todos; missing from backups made before them). */
+  todos?: TodoRecord[]
 }
 
 /** Settings sections, kept as raw records here; the stores sanitize them on import. */
@@ -55,9 +59,11 @@ export function cleanData(data: BackupData): BackupData {
   const nowSpanByStart = new Map<string, string>()
   for (const s of spans) if (s.endIsNow) nowSpanByStart.set(s.startInstantId, s.id)
   const groups = [...new Map((data.groups ?? []).map(g => [g.id, g])).values()]
+  const todos = [...new Map((data.todos ?? []).map(t => [t.id, t])).values()]
   return {
     instants, spans: spans.filter(s => !s.endIsNow || nowSpanByStart.get(s.startInstantId) === s.id), ...(groups.length > 0 ? { groups } : {}),
     ...(data.collections ? { collections: sanitizeCollections([...new Map(data.collections.map(c => [c.id, c])).values()]) } : {}),
+    ...(todos.length > 0 ? { todos } : {}),
   }
 }
 
@@ -86,7 +92,7 @@ export function parseBackup(text: string): ParseResult {
   if (r.data && typeof r.data === 'object') {
     const d = asRecord(r.data)
     backup.data = cleanData({ instants: sanitizeInstants(d.instants), spans: sanitizeSpans(d.spans), groups: sanitizeGroups(d.groups),
-      ...(Array.isArray(d.collections) ? { collections: sanitizeCollections(d.collections) } : {}) })
+      ...(Array.isArray(d.collections) ? { collections: sanitizeCollections(d.collections) } : {}), todos: sanitizeTodos(d.todos) })
   }
   if (!backup.settings && !backup.data) return { ok: false, error: 'The backup has no settings or data.' }
   return { ok: true, backup }
@@ -103,6 +109,7 @@ export function combineData(current: BackupData, incoming: BackupData): BackupDa
     instants: [...current.instants, ...incoming.instants],
     spans: [...current.spans.filter(s => !(s.endIsNow && incomingNowStarts.has(s.startInstantId))), ...incoming.spans],
     groups: [...(current.groups ?? []), ...(incoming.groups ?? [])],
+    todos: [...(current.todos ?? []), ...(incoming.todos ?? [])],
     // Your groups stay; the import adds its new ones (domain/collections mapImport).
     ...(current.collections || incoming.collections ? { collections: [...(current.collections ?? []), ...(incoming.collections ?? [])] } : {}),
   })
@@ -122,6 +129,9 @@ export function backupFileName(date: Date): string {
 export function describeBackup(b: Backup): string {
   const parts: string[] = []
   if (b.settings) parts.push('settings')
-  if (b.data) parts.push(`${b.data.instants.length} instant${b.data.instants.length === 1 ? '' : 's'}, ${b.data.spans.length} span${b.data.spans.length === 1 ? '' : 's'}`)
+  if (b.data) {
+    const todos = b.data.todos?.length ?? 0
+    parts.push(`${b.data.instants.length} instant${b.data.instants.length === 1 ? '' : 's'}, ${b.data.spans.length} span${b.data.spans.length === 1 ? '' : 's'}${todos > 0 ? `, ${todos} todo${todos === 1 ? '' : 's'}` : ''}`)
+  }
   return parts.join(' + ')
 }

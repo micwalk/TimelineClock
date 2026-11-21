@@ -13,6 +13,7 @@ import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
 import { view } from '../store/view.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
+import { FANFARE } from './tones.ts'
 import { isNativeShell, requestNativeNotifications, silenceNativeAlarms } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
 
@@ -23,7 +24,7 @@ const MIN_WAIT_MS = 50
 // Keep one audio manager across HMR reloads so a ringing alarm doesn't cut out (one from before
 // playOnce is replaced).
 const hmr = ((globalThis as unknown as { __TC_HMR__?: { audio?: AlarmAudioManager } }).__TC_HMR__ ??= {})
-if (typeof hmr.audio?.playOnce !== 'function') hmr.audio = new AlarmAudioManager()
+if (typeof hmr.audio?.playPreset !== 'function') hmr.audio = new AlarmAudioManager()
 const audio = hmr.audio as AlarmAudioManager
 const notifications = new NotificationService()
 
@@ -161,12 +162,17 @@ export function clearChime(key: string) {
   useAlarms.setState(s => ({ chimes: s.chimes.filter(c => ringKey(c.instantId, c.alarmId) !== key) }))
 }
 
-/** Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). */
-function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {
+/**
+ * Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). `todo`: a
+ * todo's alarm at its time starts it counting (startTodoCount); the app's own stops (Later, Done,
+ * Unschedule: store/actions) pass false.
+ */
+function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>, todo = true) {
   const { instantId, alarmId } = parseRingKey(key)
   const alarm = findAlarm(entities.getInstant(instantId), alarmId)
   if (alarm) entities.answerAlarms(instantId, [alarmId], how)
   stopRinging(instantId, [alarmId])
+  if (todo && alarm) startTodoCount(instantId, alarm)
   const inst = entities.getInstant(instantId)
   const { instants, spans } = useEntities.getState()
   const stillDue = inst?.alarms?.some(a => !a.answered && a.offsetMs <= 0)
@@ -177,9 +183,30 @@ function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {
   }
 }
 
+/**
+ * A todo's alarm at (or after) its time was dismissed, or chimed: it can't disappear, it starts
+ * counting (docs/prd_todos.md §4.3). Its `at` instant is favorited, so its span to Now counts on
+ * the live side from the scheduled time, and its other alarms still to ring are cancelled (it is
+ * under way). A warning before its time only answers the warning.
+ */
+function startTodoCount(instantId: string, alarm: AlarmRecord) {
+  const inst = entities.getInstant(instantId)
+  if (inst?.todo?.role !== 'at' || alarm.offsetMs > 0) return
+  if (entities.getTodo(inst.todo.id)?.status !== 'open') return
+  const now = Date.now()
+  for (const a of inst.alarms ?? []) if (!a.answered && a.id !== alarm.id && ringTime(inst, a) > now) entities.removeAlarm(instantId, a.id)
+  if (!inst.favorite && inst.tsEpochMs <= now) entities.setFavorite(instantId, true)
+}
+
+/**
+ * Stops an alarm ringing without starting a todo's count: the app's own answers, when it is about
+ * to do something else with the todo (Later moves it, Done finishes it, Unschedule puts it back).
+ */
+export const dismissQuietly = (key: string) => answer(key, 'dismissed', false)
+
 /** Answers every ringing alarm of an instant (it is going away). */
 export function dismissInstant(instantId: string) {
-  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismiss(ringKey(r.instantId, r.alarmId))
+  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismissQuietly(ringKey(r.instantId, r.alarmId))
 }
 
 /** Snooze length (minutes); the Android app's Snooze button uses it too. */
@@ -217,7 +244,8 @@ export function cancelAlarms(instantId: string) {
   const now = Date.now()
   const ringing = new Set(useAlarms.getState().ringing.filter(r => r.instantId === instantId).map(r => r.alarmId))
   for (const a of alarmsToCancel(inst)) {
-    if (ringing.has(a.id) || ringTime(inst, a) <= now) dismiss(ringKey(instantId, a.id))
+    // Cancelling isn't answering it to get on with a todo: no count starts.
+    if (ringing.has(a.id) || ringTime(inst, a) <= now) dismissQuietly(ringKey(instantId, a.id))
     else entities.removeAlarm(instantId, a.id)
   }
 }
@@ -231,6 +259,12 @@ export function silence() {
 
 /** Plays a sound once to hear what it is (Settings › Alarms); the web presets (the Android app plays its own: services/native). */
 export const previewSound = (sound: AlarmSound) => audio.playOnce(sound)
+
+/** The Done fanfare (services/tones FANFARE), at `volume` (0–1). Only while the page is on screen. */
+export function playFanfare(volume: number) {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  audio.playPreset(FANFARE, volume)
+}
 
 /** Stops a preview. */
 export const stopPreview = () => audio.stopOnce()

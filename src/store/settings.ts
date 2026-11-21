@@ -11,6 +11,8 @@ import type { Visibility } from '../domain/displayGroups.ts'
 import { sanitizeGroupVisibility } from '../domain/displayGroups.ts'
 import { SUN_EVENTS } from '../domain/sun.ts'
 import { sanitizeRingDefaults } from '../domain/alarmPicker.ts'
+import type { TodoTimes } from '../domain/todos.ts'
+import { DEFAULT_TODO_TIMES, parseClockSetting } from '../domain/todos.ts'
 
 /** When favorites get their lane to Now: only while selected (default), or always. */
 export type FavoriteLanes = 'selected' | 'always'
@@ -76,6 +78,12 @@ export interface SettingsState {
   dstShifts: boolean
   /** Solstices and equinoxes (domain/seasons) on the timeline. */
   seasons: boolean
+  /** Todos' quick times (domain/todos quickChoices): Tonight and Tomorrow, "HH:MM". */
+  todoTonight: string
+  todoTomorrow: string
+  /** The short fanfare on ✓ Done (services/tones), and how loud (0–1). */
+  doneFanfare: boolean
+  fanfareVolume: number
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
   layoutVersion: number
 }
@@ -102,13 +110,17 @@ export function sanitizeSettings(raw: unknown): SettingsState {
     sunEvents: r.sunEvents === false ? [] : Array.isArray(r.sunEvents) ? SUN_EVENTS.filter(e => (r.sunEvents as unknown[]).includes(e)) : [...SUN_EVENTS],
     groupVisibility: sanitizeGroupVisibility(r.groupVisibility ?? r.groupDisplay),
     stripSnap: r.stripSnap !== false,
+    todoTonight: parseClockSetting(r.todoTonight) ? r.todoTonight as string : '19:00',
+    todoTomorrow: parseClockSetting(r.todoTomorrow) ? r.todoTomorrow as string : '09:00',
+    doneFanfare: r.doneFanfare !== false,
+    fanfareVolume: typeof r.fanfareVolume === 'number' && Number.isFinite(r.fanfareVolume) ? Math.min(1, Math.max(0, r.fanfareVolume)) : 0.7,
     layoutVersion: typeof r.layoutVersion === 'number' && Number.isFinite(r.layoutVersion) ? r.layoutVersion : 0,
   }
 }
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, todoTonight: s.todoTonight, todoTomorrow: s.todoTomorrow, doneFanfare: s.doneFanfare, fanfareVolume: s.fanfareVolume, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -120,6 +132,12 @@ export function applySettingsToDocument() {
   }
   apply(useSettings.getState())
   useSettings.subscribe(apply)
+}
+
+/** Todos' Tonight and Tomorrow times (Settings › Alarms). */
+export const getTodoTimes = (): TodoTimes => {
+  const s = useSettings.getState()
+  return { tonight: parseClockSetting(s.todoTonight) ?? DEFAULT_TODO_TIMES.tonight, tomorrow: parseClockSetting(s.todoTomorrow) ?? DEFAULT_TODO_TIMES.tomorrow }
 }
 
 /** Every tunable, with the user's changes applied. Read it when acting, not once at import. */
@@ -141,6 +159,9 @@ export const settings = {
   setSunEventShown: (event: SunEvent, shown: boolean) =>
     useSettings.setState(s => ({ sunEvents: SUN_EVENTS.filter(e => (e === event ? shown : s.sunEvents.includes(e))) })),
   setStripSnap: (stripSnap: boolean) => useSettings.setState({ stripSnap }),
+  setTodoTime: (which: 'todoTonight' | 'todoTomorrow', hhmm: string) => { if (parseClockSetting(hhmm)) useSettings.setState({ [which]: hhmm }) },
+  setDoneFanfare: (doneFanfare: boolean) => useSettings.setState({ doneFanfare }),
+  setFanfareVolume: (v: number) => { if (Number.isFinite(v)) useSettings.setState({ fanfareVolume: Math.min(1, Math.max(0, v)) }) },
   setGroupVisibility: (key: string, v: Visibility) => useSettings.setState(s => ({ groupVisibility: { ...s.groupVisibility, [key]: v } })),
   /** Back to the group's default visibility. */
   resetGroupVisibility: (key: string) => useSettings.setState(s => {

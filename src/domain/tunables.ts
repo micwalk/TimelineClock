@@ -3,7 +3,7 @@
 // SPECS is the single source of truth: the keys, the Tunables type, the defaults
 // and the Settings list all derive from it.
 
-export type TunableGroup = 'Layout' | 'Gestures' | 'Glide' | 'Labels'
+export type TunableGroup = 'Layout' | 'Gestures' | 'Glide' | 'Labels' | 'Todos'
 
 export interface TunableSpec {
   label: string
@@ -39,6 +39,10 @@ const SPECS = {
   glideTauMs: { label: 'Glide friction time constant (ms)', default: 325, min: 50, max: 2000, step: 5, group: 'Glide' },
   unnamedReachHours: { label: 'Unnamed instants keep their Label out to (hours on screen)', default: 24, min: 1, max: 8760, step: 1, group: 'Labels' },
   secondsBelowTickMs: { label: 'Show seconds when ticks are finer than (ms)', default: 60000, min: 1000, max: 3600000, step: 1000, group: 'Labels' },
+  doneFoldPx: { label: 'A done ✓ folds into its todo’s chip when closer than (px)', default: 48, min: 0, max: 300, step: 2, group: 'Todos' },
+  sparkCount: { label: 'Sparks on Done', default: 42, min: 0, max: 200, step: 1, group: 'Todos' },
+  sparkSpreadPx: { label: 'How far the sparks fly (px)', default: 140, min: 20, max: 600, step: 10, group: 'Todos' },
+  sparkMs: { label: 'How long the sparks last (ms)', default: 1500, min: 300, max: 5000, step: 50, group: 'Todos' },
 } as const satisfies Record<string, TunableSpec>
 
 export type TunableKey = keyof typeof SPECS

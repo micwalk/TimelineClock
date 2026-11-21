@@ -18,6 +18,7 @@ import { SkySettings } from './SkySettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
 import { SoundSettings } from './SoundSettings.tsx'
+import { playFanfare } from '../../services/AlarmScheduler.ts'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
 
@@ -188,6 +189,7 @@ export function SettingsPanel() {
             </label>
             <AlarmRingSettings />
             <div data-settings="sounds"><SoundSettings /></div>
+            <TodoSettings />
           </section>
 
           <section className="settings__group">
@@ -209,6 +211,40 @@ export function SettingsPanel() {
         document.body,
       )}
     </>
+  )
+}
+
+/** Settings > Alarms › Todos: the quick times (Tonight, Tomorrow) and the Done fanfare. */
+function TodoSettings() {
+  const tonight = useSettings(s => s.todoTonight)
+  const tomorrow = useSettings(s => s.todoTomorrow)
+  const fanfare = useSettings(s => s.doneFanfare)
+  const volume = useSettings(s => s.fanfareVolume)
+  return (
+    <div data-settings="todos">
+      <h4 className="settings__sub">Todos</h4>
+      <label className="settings__row" title="What a todo's Tonight means (Schedule, Later)">
+        <span>Tonight</span>
+        <input type="time" value={tonight} onChange={e => settings.setTodoTime('todoTonight', e.target.value)} />
+      </label>
+      <label className="settings__row" title="What a todo's Tomorrow means (Schedule, Later)">
+        <span>Tomorrow</span>
+        <input type="time" value={tomorrow} onChange={e => settings.setTodoTime('todoTomorrow', e.target.value)} />
+      </label>
+      <label className="settings__row">
+        <span>Done fanfare</span>
+        <input type="checkbox" checked={fanfare} onChange={e => settings.setDoneFanfare(e.target.checked)} />
+      </label>
+      {fanfare && (
+        <label className="settings__row">
+          <span>Fanfare volume</span>
+          <input type="range" min={0} max={1} step={0.05} value={volume}
+            onChange={e => settings.setFanfareVolume(Number(e.target.value))}
+            onPointerUp={() => playFanfare(useSettings.getState().fanfareVolume)} />
+          <output className="mono">{Math.round(volume * 100)}%</output>
+        </label>
+      )}
+    </div>
   )
 }
 

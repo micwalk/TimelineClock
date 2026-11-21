@@ -9,6 +9,34 @@ export const MARKS = {
   snooze: '⟲',
   /** Drop an instant (the NOW button while following Now). */
   drop: '＋',
+  /** A todo's chip and row (domain/todos), by its state: open, done, passed (a repeat's next one came), won't do. */
+  todoOpen: '☐',
+  todoDone: '✓',
+  todoPassed: '↷',
+  todoDropped: '–',
+} as const
+
+/**
+ * What the app says about todos (domain/todos). No guilt: facts, never judgements ("since
+ * 7:00a", not "late"; "passed", not "missed"; "31m · planned 20m", not "11m over").
+ */
+export const TODO_COPY = {
+  /** The instant where a todo was done: "✓ Feed cats". */
+  doneName: (name: string) => `${MARKS.todoDone} ${name}`,
+  /** A waiting todo's row: "since 7:00a". */
+  since: (clock: string) => `since ${clock}`,
+  /** What it took, with its length: "31m · planned 20m". */
+  planned: (length: string) => `planned ${length}`,
+  /** Worked on in pieces: "31m in 2 stretches". */
+  stretches: (n: number) => `in ${n} stretches`,
+  /** Done straight away (nothing was timed). */
+  done: 'done',
+  passed: 'passed',
+  dropped: "won't do",
+  /** The Done section's head: "4 done today". */
+  doneToday: (n: number) => `${n} done today`,
+  /** A ✓ folded into its todo's chip: "+12m" after it. */
+  foldAfter: (length: string) => `+${length}`,
 } as const
 
 /** Names of instants the app computes. */

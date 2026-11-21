@@ -1,7 +1,7 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
 
-export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'groups'
+export type ListTab = 'instants' | 'favorites' | 'todos' | 'spans' | 'alarms' | 'groups'
 
 /** Which time-entry popover is open, if any. */
 export type TimeInputTarget =
@@ -63,6 +63,13 @@ export interface UiState {
   draggingBell: string | null
   /** An occurrence of a repeating series just edited on its own: its chip offers "Apply to all future" for a while. */
   seriesHint: string | null
+  /** The todo capture box (N, or the Todos tab's ＋): a name and Enter, over whatever is on screen. */
+  captureOpen: boolean
+  /**
+   * A todo just done: the ✓ instant (its chip flares, sparks fly from it) and the todo (its row
+   * flares). `n` tells one celebration from the next.
+   */
+  celebrating: { instantId: string; todoId: string; n: number } | null
 }
 
 export const useUi = create<UiState>(() => ({
@@ -87,7 +94,14 @@ export const useUi = create<UiState>(() => ({
   selectedBell: null,
   draggingBell: null,
   seriesHint: null,
+  captureOpen: false,
+  celebrating: null,
 }))
+
+/** How long a Done's celebration lasts (its glow; the sparks have their own tunable). */
+export const CELEBRATE_MS = 1600
+let celebrateTimer: ReturnType<typeof setTimeout> | null = null
+let celebrations = 0
 
 /** How long an edited occurrence offers "Apply to all future". */
 export const SERIES_HINT_MS = 8000
@@ -128,6 +142,13 @@ export const ui = {
   setPlusHidden: (plusHidden: boolean) => useUi.setState({ plusHidden }),
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
+  setCapture: (captureOpen: boolean) => useUi.setState({ captureOpen }),
+  celebrate(instantId: string, todoId: string) {
+    if (celebrateTimer) clearTimeout(celebrateTimer)
+    const n = ++celebrations
+    useUi.setState({ celebrating: { instantId, todoId, n } })
+    celebrateTimer = setTimeout(() => { celebrateTimer = null; useUi.setState(s => (s.celebrating?.n === n ? { celebrating: null } : s)) }, CELEBRATE_MS)
+  },
   showSeriesHint(id: string | null) {
     if (seriesHintTimer) clearTimeout(seriesHintTimer)
     seriesHintTimer = null

@@ -5,7 +5,10 @@ import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } f
 import { StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
-import { durationStep, formatDurationTo, truncateText } from '../../domain/format.ts'
+import { durationStep, formatDuration, formatDurationTo, truncateText } from '../../domain/format.ts'
+import type { TimeBlock } from '../../domain/blocks.ts'
+import { MARKS } from '../../config/labels.ts'
+import { useEntities } from '../../store/entities.ts'
 import { SECOND } from '../../domain/time.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import type { ResolvedSpan, TimeRef } from '../../domain/spans.ts'
@@ -190,6 +193,38 @@ function EndButtons({ instant }: { instant: InstantRecord }) {
 
 const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i.id })
 
+/**
+ * ✓ Done on a counting todo's lane (docs/prd_todos.md §7.1): its stopwatch controls become the
+ * todo's, so the stop reads ✓ (the same stop: the new instant is its `done`) and there is no lap
+ * (Phase 3 makes it ⏸ Pause).
+ */
+function DoneButton({ instant, name }: { instant: InstantRecord; name: string }) {
+  const label = `Done: ${name}`
+  return (
+    <button
+      type="button"
+      className="span-chip__end-btn span-chip__end-btn--done"
+      aria-label={label}
+      title={label}
+      onClick={e => { e.stopPropagation(); act.stopNowSpan(instant.id) }}
+      onDoubleClick={e => e.stopPropagation()}
+    >
+      <span className="span-chip__done" aria-hidden>{MARKS.todoDone}</span>
+    </button>
+  )
+}
+
+/** A block's chip (domain/blocks): its name and length, "Laundry · 20m". */
+function BlockChip({ block }: { block: TimeBlock }) {
+  return (
+    <span className="span-chip__text">
+      <span className="span-chip__name">{truncateText(block.label, 24)}</span>
+      <span className="span-chip__sep" aria-hidden>·</span>
+      <span className="mono">{formatDuration(block.end - block.start, { exact: true })}</span>
+    </span>
+  )
+}
+
 function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, live, toolsOpen, a = r.start.tsEpochMs, b = r.end ? r.end.tsEpochMs : 'now' }: {
   r: ResolvedSpan
   laneKey: string
@@ -214,6 +249,12 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
   const lengthTypable = !!r.end && !live && !isFixedTime(r.end)
   // A countdown to a favorite ahead becomes stoppable once it passes (and counts up).
   const stoppable = useFrameValue(f => canStopNowSpan(r, f.now))
+  // A counting todo's lane ends in ✓ Done instead of the lap and the stop.
+  const todoName = useEntities(s => {
+    const link = r.span.endIsNow ? r.start.todo : undefined
+    const t = link ? s.todos?.find(x => x.id === link.id) : undefined
+    return t?.status === 'open' ? t.label : null
+  })
   const typeLength = lengthTypable ? () => setTypingLength(true) : undefined
   const lengthEntry = typingLength && r.end ? (
     <TimeEntry
@@ -246,7 +287,7 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       arrows={controls}
       barOnly={!controls}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
-      chipEnd={stoppable ? <EndButtons instant={r.start} /> : undefined}
+      chipEnd={stoppable ? (todoName !== null ? <DoneButton instant={r.start} name={todoName} /> : <EndButtons instant={r.start} />) : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength}
@@ -314,6 +355,25 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               arrows
               chip={<ImpliedChip a={instantEnd(p, lane.a)} b={instantEnd(s, lane.b)} />}
               tools={() => ({ left: <PinButton a={lane.a} b={lane.b} /> })}
+            />
+          )
+        }
+        if (lane.kind === 'block') {
+          // A todo's plan: a tap selects its `at`, a double-tap goes to it.
+          const b = lane.block
+          return (
+            <SpanLane
+              key={lane.key}
+              top={lane.top}
+              index={lane.index}
+              variant="planned"
+              layoutKey={lane.key}
+              a={lane.a}
+              b={lane.b}
+              chip={<BlockChip block={b} />}
+              chipLabel={`Planned: ${b.label}, ${formatDuration(b.end - b.start, { exact: true })}`}
+              onChipClick={b.instantId ? () => act.selectInstant(b.instantId!) : undefined}
+              onChipDoubleClick={b.instantId ? () => act.focusInstant(b.instantId!) : undefined}
             />
           )
         }

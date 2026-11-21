@@ -150,7 +150,7 @@ For spans use `<SpanLane a={…} b={…} />`. Endpoints are `TimeRef`s: a timest
 
 | Store            | localStorage key        | Notes                                                             |
 |------------------|-------------------------|-------------------------------------------------------------------|
-| `useEntities`    | `timeline.saved.v1`, `timeline.spans.v1` | Same record format as the original canvas app.    |
+| `useEntities`    | `timeline.saved.v1`, `timeline.spans.v1`, `timeline.groups.v1`, `timeline.collections.v1`, `timeline.todos.v1` | Instants and spans in the original canvas app's format; repeating series, your groups and todos (domain/todos: records that hold no times; their instants point at them with `todo: { id, role }`). |
 | `useView`        | `timeline.state`        | Focus, selection, zoom, step, cursor lock. Debounced 300ms.        |
 | `useAlarms`      | `timeline.alarms.v1`    | Ringing alarms + ring duration/unanswered behavior.               |
 | `useSettings`    | `timeline.settings.v1`  | Glow, tunables (Settings > Advanced), favorite lanes, layout version for one-time migrations (store/migrations.ts). |
