@@ -203,9 +203,11 @@ the alarm; Phase 3 adds counting by choice (owner, 2026-11-21).
 
 - **▶ Start** (on any open todo's Todos row, and a chip tool): a new stopwatch span at Now,
   i.e. a `start` instant at Now, favorited, its span to Now counting on the live side. The
-  same button whatever its state: unscheduled, waiting, paused (where it reads as resuming,
-  but it is the same Start), or scheduled ahead (its alarms still to ring are cancelled:
-  she is on it; its planned block stays where it was planned, so plan vs actual still reads).
+  same button whatever its state: unscheduled, waiting, or paused (where it reads as
+  resuming, but it is the same Start). **Scheduled ahead, the plan moves to Now** (owner,
+  2026-11-21): its `at` instant moves to Now and is favorited (no `start` instant: the
+  stretch begins at `at`, as a dismissed one does), its alarms still to ring are cancelled
+  (she is on it), and its planned block follows to Now.
 - **⏸ Pause**: the favorite's stop with role `pause`: the stretch saved, the record open, no
   celebration. On the lane it takes the lap pin's place (#28), beside ✓.
 - **Done on a paused todo**: a `done` instant at Now, no new stretch (she wasn't timing it).
@@ -363,12 +365,9 @@ record, drawn as a computed planned block once scheduled, and only actuals are s
 v0.7); the next phase is the scheduling workflow (Phase 2); time tracking is Phase 3: ▶ Start
 from the list makes a new stopwatch span at Now, pausing is by hand, and Switch is only on
 the ringing card (no automatic pause); Done from the ringing card saves no span; instant notes
-are their own feature (#36).
+are their own feature (#36); starting a todo before its time moves its plan to Now.
 
-Open:
-1. **Start before its time** (Phase 3, proposed above): the planned block stays where it was
-   planned and the alarms still to ring are cancelled. Or should starting early move the plan
-   to Now?
+Open: none right now. Next: the Phase 2 scheduling workflow's own spec (§4.6).
 
 ## 10. Success
 
