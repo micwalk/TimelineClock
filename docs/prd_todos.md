@@ -1,7 +1,7 @@
 # Todos — Product Requirements, Phase 1 (draft v0.4, 2026-11-21)
 
 Status: proposal for the owner's review. Nothing here is built. A todo is an alarm that asks
-to be answered, and doing it is the ordinary favorite → ■ stop. v0.4 adds durations (a todo
+to be answered, and doing it is the ordinary favorite, whose stopwatch controls (■ stop, lap) read ✓ Done and ⏸ Pause on a todo. v0.4 adds durations (a todo
 with a length is a span) and the Done celebration. Runs, breaks, tags and the rest of time
 tracking are in [explore_time_tracking.md](explore_time_tracking.md).
 
@@ -27,7 +27,7 @@ A todo adds no fourth one:
 
 > **A todo is an instant with an alarm that asks to be answered.**
 > Dismissing its alarm favorites the instant, so its span to Now counts on the live side:
-> silenced, not done, and you can see it. The normal ■ stop records when it was done.
+> silenced, not done, and you can see it. Its lane keeps the stopwatch controls, as **✓ Done** and **⏸ Pause**.
 > A todo with a duration is also a span: the estimate. Stopping replaces it with the actual.
 
 | Todo idea | What it is underneath |
@@ -36,7 +36,7 @@ A todo adds no fourth one:
 | "Book appointment at 3p" | An instant at 3p with an asking alarm |
 | "Laundry at 4p, 20m" | That, plus an end instant at 4:20p and the saved span between: the estimate |
 | It rang, she **dismissed** it | The alarm answered `dismissed`, and the instant is **favorited**: its span to Now counts on the live side ("Feed cats · 25m") until stopped |
-| **■ Stop** (finished) | The favorite's normal stop: a ✓ instant at Now, the saved span todo → ✓; the alarm answered `done` |
+| **✓ Done** on the lane (the ■ stop, for a todo) | The favorite's normal stop: a ✓ instant at Now, the saved span todo → ✓; the alarm answered `done` |
 | …on a todo with a duration | The same; the estimate span and its end instant are then hidden (kept, not deleted) |
 | **Done** on the card (already did it) | Dismiss and Stop in one tap |
 | Another todo starts counting (not multitasking) | The one counting **pauses**: its count is saved as a span to a pause instant at Now; it stays open (§4.3) |
@@ -59,11 +59,11 @@ because it is counting on screen until she stops it.
 ## 3. Stories
 
 - **Recurring chore.** "Feed cats" daily 7a and 6p. It rings; **Done** (it's a minute's job);
-  🎉. Dismissed instead, its lane counts "Feed cats · 25m" until she taps ■ (🎉), or until the
+  🎉. Dismissed instead, its lane counts "Feed cats · 25m" until she taps ✓ (🎉), or until the
   next feeding comes (then it stops counting and reads "passed").
 - **A chore with a length.** "Laundry 4p · 20m". The timeline shows the planned 4:00–4:20
   block. It rings; she dismisses it and gets going; the live lane counts "Laundry · 3:12".
-  At 4:31 she taps ■: 🎉, the block now reads 4:00–4:31 (31m), the 20m estimate tucked away.
+  At 4:31 she taps ✓: 🎉, the block now reads 4:00–4:31 (31m), the 20m estimate tucked away.
 - **One-off errand.** "Book appointment", no time. It sits in the Todos tab. When she has a
   gap: **Schedule → In 1h**, and it rings then.
 - **Not now.** It rings at a bad moment: **Later → Tonight**. Name kept, it rings again then.
@@ -75,7 +75,7 @@ because it is counting on screen until she stops it.
 ```ts
 interface AlarmRecord {
   // …as today: id, offsetMs, snoozeOf, answered, sound
-  /** A todo: dismissing it favorites its instant (counting until ■ stop); done when stopped. */
+  /** A todo: dismissing it favorites its instant (counting until ✓ Done); done when stopped. */
   ask?: 'todo'
 }
 type AlarmAnswer = 'dismissed' | 'snoozed' | 'chimed' | 'done' | 'dropped'
@@ -123,15 +123,15 @@ Generally one todo is being worked on. So **at most one todo counts at a time**,
 "stopped working on it, not done" is a recorded state: **paused**.
 
 - **Pausing happens by itself** when another todo starts counting (its alarm dismissed, or
-  a paused one resumed): the one counting is paused. It can also be paused by hand: on a
-  todo's lane chip, **⏸** sits beside the ■ (in place of the lap pin a plain favorite has).
+  a paused one resumed): the one counting is paused. It can also be paused by hand: **⏸ Pause** on its
+  lane chip.
 - **Pause** is the favorite's stop without the finish: `act.stopNowSpan`'s path drops an
   instant at Now and saves the span to it (this stretch of work), unfavorites, and leaves
   the asking alarm `dismissed`: the todo is still open. No celebration.
 - **Resume** (▶ on the Now row, or the chip tools) drops an instant at Now and favorites it:
   the next stretch counts from there, not from the scheduled time. Resuming pauses whatever
   todo counts now.
-- **Stop (■) or Done** on a resumed stretch finishes the todo: the ✓ instant ends the last
+- **✓ Done** on a resumed stretch finishes the todo: the ✓ instant ends the last
   stretch. **Done on a paused todo** (Now row, chip tool): the ✓ instant at Now, the alarm
   `done`, the celebration; no new stretch (she wasn't timing it).
 - **Actual time** is the sum of its stretches ("31m in 2 stretches · planned 20m").
@@ -205,7 +205,7 @@ unsure, 2026-11-21; it overlaps the rejected "make it a todo" tool).
 
 New tab after Favorites ("Todos", short "Todo"). Sections, top down:
 
-1. **Now**: rang and not done. The counting one first (name, "25m", ⏸, ■), then paused
+1. **Now**: rang and not done. The counting one first (name, "25m", ⏸, ✓), then paused
    ones ("12m so far", **▶ Resume**, **Done**, **Later**), then ones not started (rang and
    unfavorited: ☐, name, "since 7:00a", **▶**, **Done**, **Later**). This fixes the iPhone
    problem: nothing silenced is lost. Its count is a badge on the tab and a small badge on the ☰ that opens the Agenda
@@ -237,8 +237,10 @@ Later is "the plan changed" (the instant moves). Dismiss is no longer the lie it
 iPhone: it can't make the todo disappear, only start it counting (owner's calls,
 2026-11-20 and -21).
 
-**Counting**: the todo's span to Now is a favorite's live lane like any other ("Laundry ·
-3:12"), with its ■ stop and a ⏸ in place of the lap pin. One todo counts at a time
+**Counting**: the todo's span to Now is a favorite's live lane ("Laundry · 3:12"). **Its
+stopwatch controls become todo controls**: the ■ stop is **✓ Done** (same action, plus the
+answer and the celebration) and the lap pin (#28) is **⏸ Pause**. Nothing else on the lane
+changes. The Todos tab's Now row shows the same two. One todo counts at a time
 (§4.3), so the live side holds at most one todo lane; paused and open ones wait in the Todos
 tab's Now section, not on the timeline.
 
