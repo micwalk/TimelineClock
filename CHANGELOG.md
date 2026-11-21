@@ -18,6 +18,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   gone by itself after the Ring for time.
 - **Lap on a favorite's lane** (#28): a pin beside the ■ stop saves the span up to Now and goes
   on tracking from a new instant there (on a running stopwatch, it is the Lap).
+- **No text selection on buttons**: a long press on any button (NOW's clock included, in the
+  Android app) no longer starts selecting its text. NOW's clock reads a little larger.
 - **Control bar**: Stopwatch, Timer and Alarm stay on the ＋ row, to its right, at every width;
   when there isn't room for their labels they show just their icons.
 

@@ -18,13 +18,6 @@
   gap: 10px;
   padding: 10px 16px 12px;
 }
-/* A long press (NOW zooms to Now, ＋ shows the Agenda) must not start selecting the label or
-   open the phone's callout. Buttons only: the time box NOW opens stays a normal input. */
-.controls button {
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
 
 .ctl-btn {
   --accent: color-mix(in srgb, var(--c-instant) 70%, var(--c-axis-glow));
@@ -146,6 +139,8 @@
 .ctl-clock-wrap > .popover--below { top: auto; bottom: calc(100% + 8px); z-index: 70; }
 /* The Now line runs on down into the button: a red line from the button's top up past the bar's
    edge (any overlap lands on the Now line itself), brightening as it meets the button. */
+/* NOW's clock reads a little larger than other buttons' second lines. */
+.ctl-now .ctl-btn__sub { font-size: 12.5px; }
 .controls__now.is-following .ctl-now { position: relative; }
 .controls__now.is-following .ctl-now::before {
   content: '';

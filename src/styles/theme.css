@@ -136,6 +136,16 @@ body {
 
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input { font: inherit; color: inherit; }
+/* A long press on a button (NOW, ＋, a chip) never selects its text or opens the phone's callout,
+   its children's text included (hooks/noButtonSelect cancels what still starts); a box to type in
+   inside one (a chip's name being edited) stays selectable. */
+:where(button, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="switch"]),
+:where(button, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="switch"]) * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+:where(button, [role="button"]) :where(input, textarea, [contenteditable="true"]) { user-select: text; -webkit-user-select: text; }
 :focus-visible { outline: 2px solid var(--c-cursor); outline-offset: 2px; }
 
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
