@@ -54,11 +54,12 @@ first-class spans (§6) → runs (§5).
 
 ## 4. Todo time tracking and breaks (from the todo PRD draft, 2026-11-20)
 
-Note: written when a todo was its own record; in the Phase 1 model a todo is an instant
-with alarms, tied together by a todo record ([prd_todos.md](prd_todos.md) v0.5 §4), and Start / Done are
-instants and spans as below. The count (Dismiss favorites the todo), Stop on the favorite,
-and the estimate span (hidden once
-the actual is saved) moved into the todo PRD v0.4 §4.2; the rest here is still exploration.
+Note: written before the todo PRD settled. In [prd_todos.md](prd_todos.md) v0.6 a todo is a
+record tied to ordinary instants and spans; the count (Dismiss favorites the todo) and Done
+(the favorite's stop) are there, and pausing and switching are its Phase 2 (§4.4). **Its
+timeline shows actuals only**: a todo's estimate is a number on the record, never a planned
+span (owner, 2026-11-21), so the "planned block" below is drawn from the record's length if
+runs ever need one, not stored. The rest here is still exploration.
 
 The two real problems: **estimates are wrong** (always short), and **breaks are invisible**,
 so the reminder after a break gets snoozed because "not ready yet" has nowhere else to go.
@@ -83,7 +84,8 @@ so the reminder after a break gets snoozed because "not ready yet" has nowhere e
    +5m/+15m add to the estimate (and push the run); Keep going turns the lane to overrun,
    counting up in a warning colour ("Laundry · 6m over"). One more chime after the
    `overrunNudgeMin` tunable (10m), then silence; the lane keeps counting.
-4. **Done.** The ✓ instant; the actual span start → done is saved beside the planned one.
+4. **Done.** The ✓ instant; the actual span start → done is saved (the plan stays a number
+   on the record).
 
 **Next todo while the last is still going (the handoff).** In a run, the next one's ring
 reads: "Dishes is next · Laundry 6m over". Buttons: **Finish Laundry, start Dishes** (one
@@ -193,7 +195,9 @@ Phase 1 needs nothing new. Estimates and the stack need spans to be a bit more f
 1. **A span made in one step with a length**: start instant + length makes the end instant
    (already near: `act.setSpanLength`).
 2. **Moving a span moves both ends** (today you move instants one at a time).
-3. **Planned vs actual**: a span flag `planned?: true` (draws hollow, has no "ago").
+3. **Planned vs actual**: only if runs need planned blocks drawn ahead (todos alone don't:
+   their plan is a length on the record). Then a computed, unstored block from `at` + length,
+   drawn hollow, rather than a stored `planned?: true` span.
 4. **A span's end that is not a user-facing instant**: the planned block's end shouldn't
    clutter the chips as its own instant. Either the end instant gets `role: 'spanEnd'`
    (no chip, only the lane), or a span may carry `durationMs` instead of an end id.
