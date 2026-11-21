@@ -54,9 +54,9 @@ first-class spans (§6) → runs (§5).
 
 ## 4. Todo time tracking and breaks (from the todo PRD draft, 2026-11-20)
 
-Note: written before the todo PRD settled. In [prd_todos.md](prd_todos.md) v0.6 a todo is a
+Note: written before the todo PRD settled. In [prd_todos.md](prd_todos.md) v0.8 a todo is a
 record tied to ordinary instants and spans; the count (Dismiss favorites the todo) and Done
-(the favorite's stop) are there, and pausing and switching are its Phase 2 (§4.4). **Its
+(the favorite's stop) are there, and todo time tracking (Start, Pause, Switch) is its Phase 3 (§4.4). **Its
 plan is on the record**: a todo's estimate is a number there, drawn once scheduled as a
 computed planned block (never stored), and only actuals are saved (owner, 2026-11-21). Its
 Phase 2 is the scheduling workflow (§4.6), which is where §5's runs question comes back. The rest here is still exploration.
