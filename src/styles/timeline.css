@@ -812,8 +812,9 @@
 .span-chip__stop { width: 14px; height: 14px; color: var(--accent); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--accent)); }
 /* A button at the chip's right end, drawn inside its box (the stop): the chip makes room for it. */
 .tl-lane__chip-row { position: relative; }
-.span-chip.has-end { padding-right: 32px; }
-.tl-lane__chip-end { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; }
+/* The lap (pin) and the stop: the chip makes room for both. */
+.span-chip.has-end { padding-right: 60px; }
+.tl-lane__chip-end { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
 .span-chip__end-btn {
   display: grid;
   place-items: center;

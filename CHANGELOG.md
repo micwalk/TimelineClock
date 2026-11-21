@@ -16,6 +16,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **Chimes show a notification**: in the Android app also with the app open (silently: the app
   plays the sound) or while another alarm rings, and in the app a quiet "Chime" card with an OK,
   gone by itself after the Ring for time.
+- **Lap on a favorite's lane** (#28): a pin beside the ■ stop saves the span up to Now and goes
+  on tracking from a new instant there (on a running stopwatch, it is the Lap).
 - **Control bar**: Stopwatch, Timer and Alarm stay on the ＋ row, to its right, at every width;
   when there isn't room for their labels they show just their icons.
 

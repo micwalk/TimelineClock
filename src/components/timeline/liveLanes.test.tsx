@@ -125,6 +125,17 @@ describe('live and saved lanes', () => {
     expect(useUi.getState().laneTools).toBeNull()
   })
 
+  it('a favorite’s span to Now has a lap (pin): its span is saved and tracking goes on from a new instant at Now', () => {
+    const a = favoriteLane(5)
+    const spanId = entities.nowSpanOf(a)?.id
+    fireEvent.click(screen.getByRole('button', { name: "Lap: save Tea's span here and go on from Now" }))
+    expect(entities.getInstant(a)?.favorite).toBe(false)
+    const lap = entities.getSpan(spanId!)
+    expect(lap).toMatchObject({ startInstantId: a, endIsNow: false })
+    expect(entities.getInstant(lap!.endInstantId!)?.favorite).toBe(true)
+    expect(entities.nowSpanOf(lap!.endInstantId!)).toBeDefined()
+  })
+
   it('unfavoriting moves into the lane’s tools (the star tool, as on the instant’s chip)', () => {
     const a = favoriteLane(5)
     fireEvent.click(screen.getByText('Tea'))
