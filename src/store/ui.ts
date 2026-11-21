@@ -21,6 +21,9 @@ export type TagMenu = 'now' | 'cursor'
  */
 export interface PlusMorph { id: string; phase: 'in' }
 
+/** A part of Settings that can be opened from elsewhere (its section gets `data-settings="<name>"`). */
+export type SettingsSection = 'sounds'
+
 export interface UiState {
   listTab: ListTab
   /** The group whose zoom strip is open in the Groups tab. */
@@ -47,6 +50,8 @@ export interface UiState {
   jumpOpen: boolean
   /** The Help / About dialog. */
   helpOpen: boolean
+  /** Settings was asked to open at this section (SettingsPanel opens it and clears this). */
+  settingsRequest: SettingsSection | null
   plusMorph: PlusMorph | null
   /** The Cursor tag's ＋ is away: inside the chip of the instant the cursor is on, or on its way. */
   plusHidden: boolean
@@ -75,6 +80,7 @@ export const useUi = create<UiState>(() => ({
   alarmMenuFromList: false,
   alarmEditSeries: null,
   helpOpen: false,
+  settingsRequest: null,
   plusMorph: null,
   plusHidden: false,
   cursorHidden: false,
@@ -101,6 +107,9 @@ export const ui = {
   closeAgenda: () => useUi.setState({ agendaOpen: false }),
   openHelp: () => useUi.setState({ helpOpen: true }),
   closeHelp: () => useUi.setState({ helpOpen: false }),
+  /** Opens Settings at `section`, opening the Agenda drawer first when the gear is in it. */
+  openSettings: (section: SettingsSection) => useUi.setState({ settingsRequest: section, agendaOpen: true }),
+  clearSettingsRequest: () => useUi.setState({ settingsRequest: null }),
   toggleHelp: () => useUi.setState(s => ({ helpOpen: !s.helpOpen })),
   markDropped(id: string) {
     if (dropTimer) clearTimeout(dropTimer)

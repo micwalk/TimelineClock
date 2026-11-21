@@ -530,6 +530,28 @@ describe('stopNowSpan (the stop on a favorite’s live lane)', () => {
   })
 })
 
+describe('lapNowSpan (the pin on a favorite’s live lane, #28)', () => {
+  it('ends the span to Now at a new instant at Now, which is favorited: the next lap runs from it', () => {
+    const now = engine.sample().now
+    const id = entities.createInstant(now - 26 * MINUTE, 'Rice')
+    act.setFavorite(id, true)
+    const spanId = entities.nowSpanOf(id)!.id
+    act.lapNowSpan(id)
+    const end = useEntities.getState().instants.find(i => i.id !== id)!
+    expect(entities.getSpan(spanId)).toMatchObject({ startInstantId: id, endInstantId: end.id, endIsNow: false })
+    expect(instant(id).favorite).toBe(false)
+    expect(end.favorite).toBe(true)
+    expect(entities.nowSpanOf(end.id)).toBeDefined()
+  })
+
+  it('laps a running stopwatch on its lane', () => {
+    act.startStopwatch()
+    act.lapNowSpan(useQuick.getState().stopwatch.marks[0])
+    expect(useQuick.getState().stopwatch.marks).toHaveLength(2)
+    expect(useQuick.getState().stopwatch.stopped).toBe(false)
+  })
+})
+
 describe('dropInstant', () => {
   it('drops an unnamed instant at Now without touching focus, selection or editing', () => {
     const before = { ...view() }

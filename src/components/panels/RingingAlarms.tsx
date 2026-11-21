@@ -8,8 +8,10 @@
 // for a warning (it then takes the big button's place if 5m doesn't fit); Dismiss all only when
 // the instant has other alarms to answer. Other… turns that row into a box to type a length
 // ("10", "1h30"), in place, with the keyboard up and where it lands shown as you type.
+// A chime that just sounded (it needs no answer) is a quieter card of its own with an OK, gone by
+// itself after the alarms' "Ring for" time.
 import { useRef, useState } from 'react'
-import { BellAlertIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
+import { BellAlertIcon, BellIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
 import { PencilIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
@@ -111,19 +113,43 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
   )
 }
 
+/** A chime that sounded: its name and time, how long ago, and OK. */
+function ChimeCard({ chime }: { chime: RingingAlarm }) {
+  const key = ringKey(chime.instantId, chime.alarmId)
+  const inst = useEntities(s => s.instants.find(i => i.id === chime.instantId))
+  const ts = inst?.tsEpochMs ?? chime.tsEpochMs
+  return (
+    <div className="alarm-card alarm-card--chime">
+      <div className="alarm-card__head">
+        <span className="alarm-card__label">{displayName(inst?.label, clock(ts))}</span>
+        <span className="alarm-card__time mono">{clock(ts)}</span>
+      </div>
+      <div className="alarm-card__chime-row">
+        <LiveText className="alarm-card__rel" watch={bySecond} compute={f => formatRelativeShort(ts - f.now)} />
+        <button type="button" className="alarm-link alarm-link--ok glow-box" onClick={() => act.clearChime(key)}>OK</button>
+      </div>
+    </div>
+  )
+}
+
 export function RingingAlarms() {
   const ringing = useAlarms(s => s.ringing)
-  if (ringing.length === 0) return null
+  const chimes = useAlarms(s => s.chimes)
+  if (ringing.length === 0 && chimes.length === 0) return null
+  const ringingNow = ringing.length > 0
   return (
-    <aside className="alarm-panel glow-box" role="alertdialog" aria-label="Alarm ringing">
+    <aside className={`alarm-panel glow-box${ringingNow ? '' : ' is-chime'}`} role={ringingNow ? 'alertdialog' : 'status'} aria-label={ringingNow ? 'Alarm ringing' : 'Chime'}>
       <header className="alarm-panel__header glow-text">
-        <BellAlertIcon className="alarm-panel__bell" aria-hidden />
-        <span>Alarm</span>
+        {ringingNow ? <BellAlertIcon className="alarm-panel__bell" aria-hidden /> : <BellIcon className="alarm-panel__bell" aria-hidden />}
+        <span>{ringingNow ? 'Alarm' : 'Chime'}</span>
       </header>
       {ringing.map(alarm => <AlarmCard key={ringKey(alarm.instantId, alarm.alarmId)} alarm={alarm} />)}
-      <button type="button" className="alarm-btn alarm-btn--silence glow-box" onClick={act.silenceAlarms}>
-        <SpeakerXMarkIcon aria-hidden /> Silence
-      </button>
+      {chimes.map(c => <ChimeCard key={ringKey(c.instantId, c.alarmId)} chime={c} />)}
+      {ringingNow && (
+        <button type="button" className="alarm-btn alarm-btn--silence glow-box" onClick={act.silenceAlarms}>
+          <SpeakerXMarkIcon aria-hidden /> Silence
+        </button>
+      )}
     </aside>
   )
 }

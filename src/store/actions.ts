@@ -614,6 +614,28 @@ export function stopNowSpan(instantId: string) {
   setFavorite(instantId, false)
 }
 
+/**
+ * The pin (lap) on a favorite's live lane (#28): like the stop, an instant at Now ends its span
+ * to Now, saved, and the instant stops being a favorite, but the new instant is favorited, so a
+ * span to Now runs on from it (the next lap). A running stopwatch's lane laps the stopwatch.
+ */
+export function lapNowSpan(instantId: string) {
+  const inst = entities.getInstant(instantId)
+  const sp = entities.nowSpanOf(instantId)
+  if (!inst?.favorite || !sp || inst.tsEpochMs > nowTime()) return
+  ui.closeLaneTools()
+  if (stopwatchPhase(stopwatch()) === 'running' && stopwatch().marks.includes(instantId)) {
+    lapStopwatch()
+    return
+  }
+  endNaming()
+  const id = entities.createInstant(nowTime())
+  ui.markDropped(id)
+  closeNowSpan(instantId, id, sp.label)
+  setFavorite(instantId, false)
+  setFavorite(id, true)
+}
+
 /** Reset: stop tracking. Everything the stopwatch made stays on the timeline. */
 export function resetStopwatch() {
   const s = stopwatch()
@@ -960,6 +982,7 @@ function landCursorAt(ts: number) {
 export {
   dismiss as dismissAlarm,
   silence as silenceAlarms,
+  clearChime,
 } from '../services/AlarmScheduler.ts'
 
 /**

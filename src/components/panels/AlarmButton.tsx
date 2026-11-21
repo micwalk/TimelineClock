@@ -39,7 +39,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
-import { SoundChips } from '../common/SoundPicker.tsx'
+import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import type { AlarmSound } from '../../domain/sounds.ts'
 import { CtlButton } from './CtlButton.tsx'
 
@@ -220,9 +220,9 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     setWarnings(w => (w.includes(otherMs) ? w : [...w, otherMs]))
     setOther('')
   }
-  const section = (title: string, body: ReactNode) => (
+  const section = (title: string, body: ReactNode, extra?: ReactNode) => (
     <div className="alarm-pick__section">
-      <div className="alarm-pick__label">{title}</div>
+      <div className="alarm-pick__label">{title}{extra}</div>
       {body}
     </div>
   )
@@ -296,7 +296,7 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }} enterKeyHint="done" autoComplete="off" />
         </div>
       ))}
-      {section('Sound', <SoundChips value={sound} onChange={setSound} label="What it sounds like" />)}
+      {section('Sound', <SoundChips value={sound} onChange={setSound} label="What it sounds like" />, <SoundSettingsButton onLeave={close} />)}
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
       <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null || (!editing && rings.length === 0)}>
         {editing

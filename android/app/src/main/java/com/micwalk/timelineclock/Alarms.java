@@ -261,21 +261,20 @@ final class Alarms {
     }
 
     /**
-     * A chime: one sound (a notification, or Ringer with the app open) and it is over, answered
-     * as it sounds; the page hears about it like a dismiss.
+     * A chime: one sound and a notification, and it is over, answered as it sounds; the page
+     * hears about it like a dismiss (and shows a card for it). With the app open, or while an
+     * alarm rings, Ringer plays the sound and the notification is posted silently.
      */
     private static void chime(Context c, AlarmSpec s) {
         Diag.log(c, "chime " + s.id + (appOpen ? " (app open)" : ""));
         if (s.liveId != 0) NotificationViews.cancel(c, NotificationViews.TAG_LIVE, s.liveId);
-        // While an alarm rings it stays the only notification (NotificationViews.cancelChimes): the chime just sounds.
-        if (appOpen || anyRinging(c)) Ringer.once(c, s.sound, false);
-        else {
-            try {
-                NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.chime(c, s));
-            } catch (RuntimeException e) {
-                Log.e(TAG, "Could not post the chime", e);
-                Diag.log(c, "chime notification failed: " + e);
-            }
+        boolean quiet = appOpen || anyRinging(c);
+        if (quiet) Ringer.once(c, s.sound, false);
+        try {
+            NotificationViews.post(c, NotificationViews.TAG_RING, s.id, NotificationViews.chime(c, s, quiet));
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Could not post the chime", e);
+            Diag.log(c, "chime notification failed: " + e);
         }
         s.state = AlarmSpec.DISMISSED;
         s.pendingAck = true;
@@ -315,11 +314,15 @@ final class Alarms {
         }
     }
 
-    /** Stops everything about `s`: its wake-ups, its ringing notification and its sound in the app. */
+    /**
+     * Stops everything about `s`: its wake-ups, its ringing notification and its sound in the app.
+     * A chime that sounded keeps its notification (the page drops it once it heard; a tap clears it).
+     */
     private static void stop(Context c, AlarmSpec s) {
         cancelAlarm(c, AlarmReceiver.ACTION_FIRE, s.id);
         cancelAlarm(c, AlarmReceiver.ACTION_RING_END, s.id);
-        NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
+        boolean chimed = NotificationChannels.CHIME.equals(s.sound) && AlarmSpec.DISMISSED.equals(s.state);
+        if (!chimed) NotificationViews.cancel(c, NotificationViews.TAG_RING, s.id);
         Ringer.stop(c, s.id);
     }
 

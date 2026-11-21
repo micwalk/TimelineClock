@@ -217,7 +217,8 @@ jobs:
   # asks which pull request's Netlify deploy preview to load, so a PR can be tried on the
   # phone before it reaches main. Published as the "preview" pre-release (never "latest"),
   # updated in place by each build, at a download link that stays the same. Same-repo pull
-  # requests only: forks get no secrets.
+  # requests only: forks get no secrets. Once published, it comments on the pull request with
+  # the download link.
   # Retarget it to another release (a fresh tag and download link, e.g. "preview-2"): set the
   # TC_PREVIEW_TAG repository variable (Settings > Secrets and variables > Actions > Variables)
   # for every build from then on, or type a tag in Run workflow's preview_tag for one build.
@@ -232,6 +233,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      pull-requests: write
     concurrency:
       group: android-preview-release
       cancel-in-progress: false
@@ -304,3 +306,23 @@ jobs:
             gh release create "$PREVIEW_TAG" "$apk" --prerelease --target "$HEAD_SHA" --title "$title" --notes-file notes.md
           fi
           echo "Download: https://github.com/${GITHUB_REPOSITORY}/releases/download/$PREVIEW_TAG/$apk" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # A new comment each build (they come only with native changes), so the PR's
+      # participants are notified that it is ready to install.
+      - name: Comment on the pull request
+        if: env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/$PREVIEW_TAG/timeline-clock-preview.apk"
+          {
+            echo "📱 **TC Preview is built** from \`${HEAD_SHA:0:7}\`."
+            echo
+            echo "- Install: $url"
+            echo "- In the app, pick preview **$PR_NUMBER** (Settings › Change preview, or long-press the icon)."
+            echo "- Release notes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$PREVIEW_TAG"
+            echo
+            echo "_Later pushes with only web changes reach it through the deploy preview, with no new build._"
+          } > comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md \
+            || echo "::warning::TC Preview is published, but the comment on PR #$PR_NUMBER failed."

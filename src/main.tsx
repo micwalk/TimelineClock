@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { engine } from './engine/viewportEngine.ts'
 import { startAlarmScheduler } from './services/AlarmScheduler.ts'
 import { startNativeShell } from './services/nativeShell.ts'
+import { startNoButtonSelect } from './hooks/noButtonSelect.ts'
 import { startNotificationClicks } from './services/notificationClicks.ts'
 import { startPwaUpdates } from './services/pwaUpdate.ts'
 import { startSeriesSync } from './services/seriesSync.ts'
@@ -20,6 +21,7 @@ engine.start()
 startAlarmScheduler({ onNotificationClick: id => revealInstant(id) })
 startNotificationClicks()
 startSeriesSync()
+startNoButtonSelect()
 // Inside the Android app only: alarm and live notifications (docs/android.md).
 startNativeShell()
 

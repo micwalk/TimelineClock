@@ -154,23 +154,37 @@ function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
 }
 
 /**
- * A favorite's span to Now, counting up, ends in a stop (the chip's only button, so a tap near
- * it can't hit anything worse than the chip): an instant at Now ends the span, which is saved
- * and flows to the saved side; the instant stops being a favorite.
+ * A favorite's span to Now, counting up, ends in a lap and a stop (the chip's only buttons, so a
+ * tap near them can't hit anything worse than the chip). Stop: an instant at Now ends the span,
+ * which is saved and flows to the saved side; the instant stops being a favorite. Lap (a pin,
+ * #28): the same, and the new instant is tracked instead, so a span to Now runs on from it.
  */
-function StopButton({ instant }: { instant: InstantRecord }) {
+function EndButtons({ instant }: { instant: InstantRecord }) {
   const label = `Stop ${endpointName(instant)} here: save its span`
+  const lapLabel = `Lap: save ${endpointName(instant)}'s span here and go on from Now`
   return (
-    <button
-      type="button"
-      className="span-chip__end-btn"
-      aria-label={label}
-      title={label}
-      onClick={e => { e.stopPropagation(); act.stopNowSpan(instant.id) }}
-      onDoubleClick={e => e.stopPropagation()}
-    >
-      <StopIcon className="span-chip__stop" aria-hidden />
-    </button>
+    <>
+      <button
+        type="button"
+        className="span-chip__end-btn"
+        aria-label={lapLabel}
+        title={lapLabel}
+        onClick={e => { e.stopPropagation(); act.lapNowSpan(instant.id) }}
+        onDoubleClick={e => e.stopPropagation()}
+      >
+        <MapPinIcon className="span-chip__stop" aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="span-chip__end-btn"
+        aria-label={label}
+        title={label}
+        onClick={e => { e.stopPropagation(); act.stopNowSpan(instant.id) }}
+        onDoubleClick={e => e.stopPropagation()}
+      >
+        <StopIcon className="span-chip__stop" aria-hidden />
+      </button>
+    </>
   )
 }
 
@@ -232,7 +246,7 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       arrows={controls}
       barOnly={!controls}
       chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
-      chipEnd={stoppable ? <StopButton instant={r.start} /> : undefined}
+      chipEnd={stoppable ? <EndButtons instant={r.start} /> : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength}
