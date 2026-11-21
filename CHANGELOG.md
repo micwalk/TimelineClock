@@ -7,6 +7,18 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.7.2 — 2026-11-21
+
+**Android app: install again** (chime notifications are native).
+
+- **Sound picker** (the Alarm picker's Sound, a bell's ♪): one sound a row, a ▶ beside each to
+  hear it, and a gear that opens Settings at Alarms › Sounds.
+- **Chimes show a notification**: in the Android app also with the app open (silently: the app
+  plays the sound) or while another alarm rings, and in the app a quiet "Chime" card with an OK,
+  gone by itself after the Ring for time.
+- **Control bar**: Stopwatch, Timer and Alarm stay on the ＋ row, to its right, at every width;
+  when there isn't room for their labels they show just their icons.
+
 ## 0.7.1 — 2026-11-19
 
 **Android app: install again** (the Classic tone's sound file changed). Released together with

@@ -7,6 +7,7 @@ import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import { MINUTE } from '../../domain/time.ts'
 import { settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
+import { ui, useUi } from '../../store/ui.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
 import { AppVersion } from './AppVersion.tsx'
 import { ShellStatus } from './ShellStatus.tsx'
@@ -36,6 +37,23 @@ export function SettingsPanel() {
   const ringMs = useAlarms(s => s.autoDismissMs)
   const unattended = useAlarms(s => s.unattended)
   const open = pos !== null
+  const request = useUi(s => s.settingsRequest)
+
+  // Asked to open at a section (ui.openSettings, e.g. the sound picker's gear). In the drawer,
+  // wait for it to finish sliding in, so the panel goes by where the gear comes to rest.
+  useEffect(() => {
+    if (!request) return
+    let live = true
+    const drawer = document.querySelector('.agenda-drawer')
+    const moving = drawer && typeof drawer.getAnimations === 'function' ? drawer.getAnimations().map(a => a.finished.catch(() => undefined)) : []
+    void Promise.all(moving).then(() => {
+      if (!live || !gearRef.current) return
+      ui.clearSettingsRequest()
+      setPos(panelPosition(gearRef.current.getBoundingClientRect(), window.innerWidth, window.innerHeight))
+      requestAnimationFrame(() => panelRef.current?.querySelector(`[data-settings="${request}"]`)?.scrollIntoView({ block: 'start' }))
+    })
+    return () => { live = false }
+  }, [request])
 
   useEffect(() => {
     if (!open) return
@@ -169,7 +187,7 @@ export function SettingsPanel() {
               </select>
             </label>
             <AlarmRingSettings />
-            <SoundSettings />
+            <div data-settings="sounds"><SoundSettings /></div>
           </section>
 
           <section className="settings__group">

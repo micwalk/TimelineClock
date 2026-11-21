@@ -24,7 +24,7 @@ import { useLayout } from '../../store/layout.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
-import { SoundChips } from '../common/SoundPicker.tsx'
+import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -453,7 +453,7 @@ function SoundTool({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
       <IconButton icon={MusicalNoteIcon} label="Sound" color={bellColor} bare pressed={open} onClick={() => setOpen(o => !o)} />
       {open && (
         <div ref={menuRef} className="popover popover--chip repeat-menu glow-box" role="dialog" aria-label="Sound">
-          <div className="repeat-menu__title">Sound</div>
+          <div className="repeat-menu__title sound-pick__title">Sound<SoundSettingsButton onLeave={() => setOpen(false)} /></div>
           <SoundChips value={soundOf(alarm, fallback)} onChange={s => { act.setAlarmSound(inst.id, alarm.id, s); setOpen(false) }} />
         </div>
       )}

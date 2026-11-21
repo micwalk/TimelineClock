@@ -77,6 +77,10 @@ function check() {
     else dismiss(key)
   }
 
+  if (useAlarms.getState().chimes.some(c => now - c.triggeredAt > autoDismissMs)) {
+    useAlarms.setState(s => ({ chimes: s.chimes.filter(c => now - c.triggeredAt <= autoDismissMs) }))
+  }
+
   const ringingKeys = new Set(useAlarms.getState().ringing.map(r => ringKey(r.instantId, r.alarmId)))
   const due = findDueAlarms(storedInstants(useEntities.getState().instants), now, ringingKeys, autoDismissMs)
   // A chime sounds once and answers itself; the rest ring until answered. In the Android app the
@@ -96,7 +100,7 @@ function check() {
   for (const { inst, alarm } of [...rings, ...chimes]) {
     const instantId = inst.id
     const chime = chimes.some(c => c.alarm === alarm)
-    if (chime) answer(ringKey(instantId, alarm.id), 'chimed')
+    if (chime) { answer(ringKey(instantId, alarm.id), 'chimed'); showChime(ringKey(instantId, alarm.id)) }
     void notifications.notifyAlarm(alarmLabel(inst, alarm), { instantId, key: ringKey(instantId, alarm.id), onClick: () => onNotificationClick(instantId) }, chime)
   }
   schedule()
@@ -109,6 +113,8 @@ function schedule() {
   let wait = IDLE_RECHECK_MS
   if (next !== null) wait = Math.max(MIN_WAIT_MS, Math.min(next - now, MAX_WAIT_MS))
   if (hasRinging()) wait = Math.min(wait, MAX_WAIT_MS) // for auto-dismiss
+  const { chimes, autoDismissMs } = useAlarms.getState()
+  for (const c of chimes) wait = Math.min(wait, Math.max(MIN_WAIT_MS, c.triggeredAt + autoDismissMs - now + 1)) // cards going
   timer = setTimeout(check, wait)
 }
 
@@ -128,8 +134,32 @@ function stopRinging(instantId: string, alarmIds: readonly string[]) {
  */
 export const dismiss = (key: string) => answer(key, 'dismissed')
 
-/** A chime at `key` sounded (from the Android app: it chimed while the page wasn't running). */
-export const chimed = (key: string) => answer(key, 'chimed')
+/** A chime at `key` sounded (from the Android app, which chimes there itself). */
+export function chimed(key: string) {
+  answer(key, 'chimed')
+  showChime(key)
+}
+
+/**
+ * Shows a chime that sounded as a card in the app (RingingAlarms), until OK'd or as long as an
+ * alarm rings unanswered (`autoDismissMs`); one reported later than that (the app was closed) shows none.
+ */
+function showChime(key: string) {
+  const { instantId, alarmId } = parseRingKey(key)
+  const inst = entities.getInstant(instantId)
+  const alarm = findAlarm(inst, alarmId)
+  if (!inst || !alarm) return
+  const at = ringTime(inst, alarm)
+  const { chimes, autoDismissMs } = useAlarms.getState()
+  if (Date.now() - at > autoDismissMs || chimes.some(c => c.instantId === instantId && c.alarmId === alarmId)) return
+  useAlarms.setState({ chimes: [...chimes, { instantId, alarmId, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: at }] })
+  schedule()
+}
+
+/** Takes a chime's card away (its OK). */
+export function clearChime(key: string) {
+  useAlarms.setState(s => ({ chimes: s.chimes.filter(c => ringKey(c.instantId, c.alarmId) !== key) }))
+}
 
 /** Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). */
 function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {

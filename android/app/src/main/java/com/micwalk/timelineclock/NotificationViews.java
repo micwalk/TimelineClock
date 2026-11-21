@@ -150,9 +150,15 @@ final class NotificationViews {
         return n;
     }
 
-    /** A chime: its name and line, sounding once on the Chime channel; nothing to answer, a tap opens the app. */
-    static Notification chime(Context c, AlarmSpec s) {
+    /**
+     * A chime: its name and line, sounding once on the Chime channel (`silent`: Ringer plays it,
+     * the app being open, or an alarm rings); nothing to answer, a tap opens the app. A group of
+     * its own, so it never bundles a ringing alarm's Dismiss and Snooze away.
+     */
+    static Notification chime(Context c, AlarmSpec s, boolean silent) {
         return new NotificationCompat.Builder(c, NotificationChannels.CHIME)
+            .setSilent(silent)
+            .setGroup("tc-chime-" + s.id)
             .setSmallIcon(R.drawable.ic_stat_timeline)
             .setColor(ContextCompat.getColor(c, R.color.now_red))
             .setContentTitle(s.title)

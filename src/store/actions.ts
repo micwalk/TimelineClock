@@ -960,6 +960,7 @@ function landCursorAt(ts: number) {
 export {
   dismiss as dismissAlarm,
   silence as silenceAlarms,
+  clearChime,
 } from '../services/AlarmScheduler.ts'
 
 /**

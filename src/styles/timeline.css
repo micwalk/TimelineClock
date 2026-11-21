@@ -1324,3 +1324,32 @@
   left: calc(var(--tl-axis) - 6px);
   width: calc((100% - var(--tl-axis)) / 3 + 6px);
 }
+
+/* The sound picker (common/SoundPicker): one sound a row, a ▶ beside each; its title row ends in
+   a gear to Settings › Alarms › Sounds. */
+.sound-pick { --glow-soft: calc(var(--glow) * 0.3); display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+.sound-pick__row { display: flex; align-items: center; gap: 6px; }
+.sound-pick__choice {
+  --glow: var(--glow-soft);
+  --accent: color-mix(in srgb, var(--c-alarm) 55%, transparent);
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: 700 13px/30px var(--font-ui);
+  text-align: left;
+}
+.sound-pick__choice.is-on { --accent: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 35%, transparent); color: #fff; }
+.sound-pick__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sound-pick__name.is-off { color: var(--c-danger); }
+.sound-pick__note { flex: none; color: var(--ink-dim); font: 600 11px/1 var(--font-ui); }
+.sound-pick__title, .alarm-pick__label:has(.sound-pick__gear) { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sound-pick__gear { --accent: var(--ink-dim); width: 22px; height: 22px; }
+.sound-pick__gear > svg { width: 15px; height: 15px; }

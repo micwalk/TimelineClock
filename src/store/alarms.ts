@@ -9,6 +9,8 @@ const ALARMS_KEY = 'timeline.alarms.v1'
 
 export interface AlarmsState {
   ringing: RingingAlarm[]
+  /** Chimes that just sounded (they need no answer): a card each until OK'd or old (not saved). */
+  chimes: RingingAlarm[]
   /** How long an unanswered alarm rings before `unattended` kicks in. */
   autoDismissMs: number
   /** What happens to an alarm nobody answered. */
@@ -43,6 +45,7 @@ const loaded = loadJson<Partial<AlarmsState>>(ALARMS_KEY, {})
 
 export const useAlarms = create<AlarmsState>(() => ({
   ringing: sanitizeRinging(loaded.ringing),
+  chimes: [],
   ...sanitizeAlarmPrefs(loaded),
 }))
 
