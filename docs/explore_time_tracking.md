@@ -57,9 +57,9 @@ first-class spans (§6) → runs (§5).
 Note: written before the todo PRD settled. In [prd_todos.md](prd_todos.md) v0.6 a todo is a
 record tied to ordinary instants and spans; the count (Dismiss favorites the todo) and Done
 (the favorite's stop) are there, and pausing and switching are its Phase 2 (§4.4). **Its
-timeline shows actuals only**: a todo's estimate is a number on the record, never a planned
-span (owner, 2026-11-21), so the "planned block" below is drawn from the record's length if
-runs ever need one, not stored. The rest here is still exploration.
+plan is on the record**: a todo's estimate is a number there, drawn once scheduled as a
+computed planned block (never stored), and only actuals are saved (owner, 2026-11-21). Its
+Phase 2 is the scheduling workflow (§4.6), which is where §5's runs question comes back. The rest here is still exploration.
 
 The two real problems: **estimates are wrong** (always short), and **breaks are invisible**,
 so the reminder after a break gets snoozed because "not ready yet" has nowhere else to go.
@@ -195,9 +195,8 @@ Phase 1 needs nothing new. Estimates and the stack need spans to be a bit more f
 1. **A span made in one step with a length**: start instant + length makes the end instant
    (already near: `act.setSpanLength`).
 2. **Moving a span moves both ends** (today you move instants one at a time).
-3. **Planned vs actual**: only if runs need planned blocks drawn ahead (todos alone don't:
-   their plan is a length on the record). Then a computed, unstored block from `at` + length,
-   drawn hollow, rather than a stored `planned?: true` span.
+3. **Planned vs actual**: settled for todos: the planned block is computed from `at` + the
+   record's length and drawn hollow, never a stored `planned?: true` span.
 4. **A span's end that is not a user-facing instant**: the planned block's end shouldn't
    clutter the chips as its own instant. Either the end instant gets `role: 'spanEnd'`
    (no chip, only the lane), or a span may carry `durationMs` instead of an end id.

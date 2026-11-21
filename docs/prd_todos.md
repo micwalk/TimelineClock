@@ -1,10 +1,12 @@
-# Todos — Product Requirements (draft v0.6, 2026-11-21)
+# Todos — Product Requirements (draft v0.7, 2026-11-21)
 
 Status: proposal for the owner's review. Nothing here is built. A todo is a **record** that
-ties together the instants, spans and alarms it makes; it holds no times itself. v0.6: **the
-timeline shows only what happened**: a todo's length (its estimate) lives on the record,
-not as a planned span, so Done is just the favorite's ordinary stop. Pausing and switching
-tasks are Phase 2. Runs, breaks, tags and the rest of time tracking are in
+ties together the instants, spans and alarms it makes; it holds no times itself. A todo's
+length (its estimate) lives on the record; once scheduled, the timeline draws it as a
+**planned block** computed from the record, never stored, and what gets saved is only what
+happened, so Done is just the favorite's ordinary stop. v0.7: the next phase is a scheduling
+workflow (unscheduled → a spot on the timeline, Phase 2); pausing and switching tasks are
+Phase 3. Runs, breaks, tags and the rest of time tracking are in
 [explore_time_tracking.md](explore_time_tracking.md).
 
 ## 1. The problem
@@ -31,10 +33,12 @@ A todo keeps to it:
 > the todo's id. The record is the quick way to make them and the thread that ties them
 > together, as a series is for its occurrences.
 
-**The timeline is actuals; the record is the plan** (owner, 2026-11-21). A todo's length is
-a number on the record ("Laundry · 20m"), shown in the Todos tab and on its chip as text. No
-planned span is drawn, stored or hidden. What the timeline gets is what happened: when it
-was due, when it was done, and the span between.
+**The record is the plan; what is saved is what happened** (owner, 2026-11-21). A todo's
+length is a number on the record ("Laundry · 20m"). Once the todo is scheduled, the timeline
+draws the plan from it: a **planned block** from its `at` for its length (§4.2), computed
+like a virtual instant, so nothing is stored and nothing has to be hidden afterwards. What
+gets saved is what happened: when it was due, when it was done, and the span between. Done
+ends the plan, and the saved span is the actual.
 
 So a todo can be:
 - **unscheduled**: just the record ("Book appointment"), in the Todos tab, not in time;
@@ -46,7 +50,7 @@ So a todo can be:
 |---|---|
 | "Book appointment", no time yet | A todo record, nothing in time |
 | "Book appointment at 3p" | + an instant at 3p (role `at`) with an alarm |
-| "Laundry at 4p, 20m" | The same; the record holds `durationMs` 20m. Nothing else in time |
+| "Laundry at 4p, 20m" | The same; the record holds `durationMs` 20m, drawn as a planned block 4:00–4:20 (computed, not stored) |
 | "Feed cats at 7a, every day" | A series marked as todos: each occurrence made gets its own todo record |
 | It rang, she **dismissed** it | Its `at` instant is **favorited**: its span to Now counts on the live side ("Feed cats · 25m"). Silenced, not done, and visible |
 | **✓ Done** (the lane's ■ stop, on a todo) | The favorite's normal stop, unchanged (`act.stopNowSpan`): a `done` instant at Now ("✓ Feed cats"), the span to Now becomes the saved span to it; the record is done |
@@ -62,9 +66,9 @@ that can't vanish, because it is counting on screen until she stops it.
 
 **What changed from v0.5.** v0.5 drew the estimate as a planned span (`at` → an `end`
 instant) and hid it once the actual was saved. The owner's call: the estimate belongs on the
-record only; the timeline reflects actuals. So there is no `end` role, nothing to hide, and
-Later moves one instant. Pausing (several stretches per todo) moved to Phase 2, with no
-automatic pause: a todo pauses only when she switches task (§4.4).
+record; the timeline draws the plan from it while it is a plan and saves only actuals. So
+there is no `end` role, nothing to hide, and Later moves one instant (the block follows).
+Pausing (several stretches per todo) moved to Phase 3, with no automatic pause: a todo pauses only when she switches task (§4.4).
 
 ## 3. Stories
 
@@ -72,14 +76,15 @@ Phase 1:
 - **Recurring chore.** "Feed cats" daily 7a and 6p. It rings; **Done** (it's a minute's job);
   🎉. Dismissed instead, its lane counts "Feed cats · 25m" until she taps ✓ (🎉), or until the
   next feeding comes (then it stops counting and reads "passed").
-- **A chore with a length.** "Laundry 4p · 20m". Its chip reads "☐ Laundry · 20m". It rings;
-  she dismisses it and gets going; the lane counts "Laundry · 3:12". At 4:31 she taps ✓: 🎉,
-  and the timeline has the span 4:00–4:31. The Todos tab reads "31m · planned 20m".
+- **A chore with a length.** "Laundry 4p · 20m". The timeline shows its planned block
+  4:00–4:20. It rings; she dismisses it and gets going; the lane counts "Laundry · 3:12" with
+  the plan still drawn, so she sees where it was meant to end. At 4:31 she taps ✓: 🎉, the
+  plan goes, and the timeline has the span 4:00–4:31. The Todos tab reads "31m · planned 20m".
 - **One-off errand.** "Book appointment", no time. It sits in the Todos tab. When she has a
   gap: **Schedule → In 1h**, and it rings then.
 - **Not now.** It rings at a bad moment: **Later → Tonight**. Name kept, it rings again then.
 
-Phase 2:
+Phase 3:
 - **Interrupted.** Laundry counting at 12m; Dishes rings. The card offers **Switch to
   Dishes**: Laundry pauses (12m saved) and Dishes counts. Dishes done, she resumes Laundry from
   the Todos tab: another 19m. Laundry reads "31m in 2 stretches · planned 20m".
@@ -95,7 +100,7 @@ interface TodoRecord {
   id: string                // "t_…"
   label: string
   createdAt: number
-  /** The estimate: the plan, shown as text; never drawn as a span. Absent: no length. */
+  /** The estimate: the plan. Drawn as a planned block once scheduled; never stored as a span. */
   durationMs?: number
   status: 'open' | 'done' | 'dropped' | 'passed'
   /** Its place in the Unscheduled list (drag to reorder). */
@@ -119,20 +124,29 @@ Each instant it makes carries the todo and its part:
 
 ```ts
 // on InstantRecord
-todo?: { id: string; role: 'at' | 'was' | 'done' | 'pause' | 'resume' }   // pause, resume: Phase 2
+todo?: { id: string; role: 'at' | 'was' | 'done' | 'pause' | 'resume' }   // pause, resume: Phase 3
 ```
 
 | Role | The instant | Drawn as |
 |---|---|---|
-| `at` | When it is to be done; holds the alarms. At most one per todo. | A chip, ☐ (✓ once done), "· 20m" when it has a length |
+| `at` | When it is to be done; holds the alarms. At most one per todo. | A chip, ☐ (✓ once done) |
 | `was` | An earlier `at` that rang before the todo went back to the list: history | A chip, as any instant |
 | `done` | Where it was finished: "✓ ‹name›" (`config/labels`) | A chip (folds into `at` when close, §7.1) |
-| `pause` (Phase 2) | Where a stretch stopped, not done | A Mark (short line, no chip) |
-| `resume` (Phase 2) | Where a later stretch began | A Mark |
+| `pause` (Phase 3) | Where a stretch stopped, not done | A Mark (short line, no chip) |
+| `resume` (Phase 3) | Where a later stretch began | A Mark |
+
+**The planned block** (a todo with an `at` and a length): drawn from `at` for `durationMs`
+on the saved side, like a span lane but in a planned look (hollow or dashed, a theme token),
+named after the todo with its length ("Laundry · 20m"). Computed from the record each time it
+is laid out, like a virtual instant: never stored, never in backups, nothing to hide. It shows
+while the todo is scheduled, waiting, counting or (Phase 3) paused, and goes when the todo is
+done, dropped, passed or back on the list: a plan that is over isn't history, the saved
+stretches are. Later moves it with its `at`. A tap selects the todo's `at` instant. Phase 2
+builds its scheduling workflow on it (§4.6).
 
 Spans need no field: a span whose ends belong to the same todo is that todo's. Every such
 span is a **stretch**, time actually worked, made by the favorite's stop and named after the
-todo. In Phase 1 there is at most one: `at` → `done`. In Phase 2 a stretch runs from `at` or
+todo. In Phase 1 there is at most one: `at` → `done`. In Phase 3 a stretch runs from `at` or
 `resume` to `pause` or `done`, and a todo has as many as she makes: each ▶ Resume starts one,
 each ⏸ or ✓ ends it, with no limit.
 - **Actual time** = the sum of its stretches (+ the one counting now). One stretch reads
@@ -143,9 +157,9 @@ each ⏸ or ✓ ends it, with no limit.
 Derived state (`domain/todos.ts`, pure, tested), from the record and its instants:
 - **Unscheduled**: open, no `at`.
 - **Scheduled**: open, its `at` has an alarm still to ring.
-- **Counting**: open, one of its instants (`at`, or in Phase 2 `resume`) is favorited.
+- **Counting**: open, one of its instants (`at`, or in Phase 3 `resume`) is favorited.
 - **Waiting**: open, its `at` rang, never counted (dismissed then unfavorited).
-- **Paused** (Phase 2): open, has stretches, none counting.
+- **Paused** (Phase 3): open, has stretches, none counting.
 - **Done / dropped / passed**: the record's status.
 
 ### 4.3 The actions (each a quick way to make ordinary things)
@@ -162,7 +176,8 @@ Derived state (`domain/todos.ts`, pure, tested), from the record and its instant
   the new instant: `entities.closeNowSpan`), the new instant taking role `done` and the ✓
   name; the record `done`; the celebration (§7.2). When nothing counts (from the card, a
   waiting todo, an unscheduled one): a `done` instant at Now, the alarm answered, no span.
-- **Later**: moves `at`. Its alarms move with it and re-arm (`rearmAfterMove`).
+- **Later**: moves `at`. Its alarms move with it and re-arm (`rearmAfterMove`); the planned
+  block follows.
 - **Back to the list**: the `at` instant deleted if none of its alarms rang (a plan that
   never happened isn't history); otherwise kept, its role becoming `was`.
 - **Won't do**: the record `dropped`; alarms still to ring cancelled; a counting todo
@@ -177,7 +192,7 @@ Derived state (`domain/todos.ts`, pure, tested), from the record and its instant
 The count runs from `at`, the scheduled time, not from the dismiss: one instant, one rule
 (owner, 2026-11-21). If she really began later, she moves it like any instant.
 
-### 4.4 Pausing and switching tasks (Phase 2, designed now)
+### 4.4 Pausing and switching tasks (Phase 3, designed now)
 
 A todo worked on in pieces is several stretches tied to one record (§4.2), so the data needs
 nothing more than the `pause` and `resume` roles.
@@ -207,6 +222,22 @@ virtual instant. **Passed**: when an occurrence's next one arrives with this one
 its record becomes `passed` and a counting todo stops counting with nothing saved (as
 unfavoriting does). Nothing is moved or carried over (owner's call, 2026-11-20).
 
+### 4.6 Scheduling workflow (Phase 2, its own spec next)
+
+The next phase (owner, 2026-11-21): a good way to take an unscheduled todo to a spot on the
+timeline. Phase 1 has only Schedule's time entry and chips (§5); Phase 2 makes placing it
+visual, built on the planned block. To be specced on its own; what it should cover:
+
+- **Place by seeing**: drag a todo from the Todos tab onto the timeline (or Schedule → at the
+  cursor), its planned block previewing where it lands, its length showing how much room it
+  takes.
+- **Find room**: free gaps between the planned blocks already there (and, with #38, another
+  person's busy times); a suggestion such as "Next free 20m: 3:40p", one tap to take it.
+- **A sequence**: several todos placed one after another, with or without a gap.
+- **Moving one moves what follows?** The runs and push question (explore_time_tracking.md
+  §5): whether a sequence moves together, and how to make that simple to understand.
+- **No length**: placed as an instant; the block appears once a length is given.
+
 ## 5. Making todos (quick ways in, same records)
 
 - **Todos tab Add box**: a name and Enter makes a todo. A time and a length in it are
@@ -228,7 +259,7 @@ Not in Phase 1: turning an existing instant or alarm into a todo (owner's call: 
 New tab after Favorites ("Todos", short "Todo"). Sections, top down:
 
 1. **Now**: rang and not done. The counting one first (name, "25m", ✓), then waiting ones
-   (☐, name, "since 7:00a", **Done**, **Later**), and in Phase 2 paused ones ("12m so far",
+   (☐, name, "since 7:00a", **Done**, **Later**), and in Phase 3 paused ones ("12m so far",
    **▶ Resume**, **Done**, **Later**). This fixes the iPhone problem: nothing silenced is
    lost. Its count is a badge on the tab and a small badge on the ☰ that opens the Agenda
    drawer; todos show nowhere else (owner's call).
@@ -254,19 +285,19 @@ ranks them, and every Done counts the same.
 
 **Ringing card** for a todo's alarm: **Done** and **Dismiss** (big, side by side: finished
 already, or "on it / not yet", which starts the count), **Snooze 5m**, **Later…**, then
-quiet **Won't do** (Phase 2 adds **Switch to ‹name›**, §4.4). Later… offers In 1h · Tonight ·
+quiet **Won't do** (Phase 3 adds **Switch to ‹name›**, §4.4). Later… offers In 1h · Tonight ·
 Tomorrow · Back to the list · Other… (typed). Snooze is "remind me again" (another alarm, the
 instant stays, nothing counts yet); Later is "the plan changed" (the instant moves). Dismiss
 can't make the todo disappear, only start it counting (owner's calls, 2026-11-20 and -21).
 
 **Counting**: the todo's span to Now is a favorite's live lane ("Laundry · 3:12"). **Its
 stopwatch controls become todo controls** (owner, 2026-11-21): the ■ stop is **✓ Done**; the
-lap pin (#28) is not shown on a todo in Phase 1 and becomes **⏸ Pause** in Phase 2. Nothing
+lap pin (#28) is not shown on a todo in Phase 1 and becomes **⏸ Pause** in Phase 3. Nothing
 else on the lane changes. The Todos tab's Now row shows the same.
 
 **Chips**: a todo's `at` chip leads with ☐, ✓ once done, the passed mark once passed
-(`config/labels`), and adds its length as text ("☐ Laundry · 20m"). Its tools add **✓ Done**
-first (Phase 2: **▶ Resume** when paused). The stretch's lane, named after the todo, is the
+(`config/labels`); its length reads on the planned block. Its tools add **✓ Done**
+first (Phase 3: **▶ Resume** when paused). The stretch's lane, named after the todo, is the
 record of the time.
 
 **A ✓ close to its todo folds into it**, as a bell folds into its chip (`bellCollapsePx`):
@@ -296,7 +327,7 @@ back out (principle 7).
 - **Phase 1** (web): the todo record and its store, `todo` on instants (`at`, `was`,
   `done`), backups (`data.todos`, by group as instants are); `domain/todos.ts` (derived state,
   actual time, with tests for every role and state); the actions of §4.3; series as todos;
-  the Todos tab (Add, Now / Today / Upcoming / Unscheduled / Done); capture from anywhere
+  the planned block; the Todos tab (Add, Now / Today / Upcoming / Unscheduled / Done); capture from anywhere
   (N); Schedule; the badges; the Alarm picker's Todo and Takes; the ringing card; the lane's
   ✓; chips and the ✓ fold; the celebration (glow, sparks, fanfare, setting); the copy rules
   in `config/labels`; Help.
@@ -304,7 +335,9 @@ back out (principle 7).
   notification's buttons become Done and Snooze; dismissing or swiping it away favorites the
   todo like Dismiss; a counting todo's live notification shows ✓ as its lane does; answers
   reported back like the 'chime' action; maybe the fanfare as a rendered sound.
-- **Phase 2**: pausing and switching (§4.4): the `pause` and `resume` roles, actual time
+- **Phase 2**: the scheduling workflow (§4.6), specced on its own first: placing a todo by
+  dragging, finding room, sequences, and whether moving one moves what follows.
+- **Phase 3**: pausing and switching (§4.4): the `pause` and `resume` roles, actual time
   summed over stretches, ⏸ on the lane, ▶ Resume, Switch to on the ringing card and Switch…
   in the tools; ⏸ in the Android live notification.
 
@@ -322,11 +355,12 @@ hand) and that is the start of the count, from the scheduled time; doing it is t
 favorite's stop, whose control reads ✓ Done on a todo; Done always makes a ✓ instant, folded
 into the chip when close; the celebration is glow, sparks and a fanfare; a todo is a record
 that ties its instants and spans together, in its own store; the estimate lives only on the
-record and the timeline shows actuals (v0.6); pausing is Phase 2, with no automatic pause,
-only an explicit switch; instant notes are their own feature (#36).
+record, drawn as a computed planned block once scheduled, and only actuals are saved (v0.6,
+v0.7); the next phase is the scheduling workflow (Phase 2); pausing is Phase 3, with no
+automatic pause, only an explicit switch; instant notes are their own feature (#36).
 
 Open:
-1. **Switch's shape** (Phase 2): Switch to ‹name› on the ringing card plus Switch… in the
+1. **Switch's shape** (Phase 3): Switch to ‹name› on the ringing card plus Switch… in the
    counting todo's tools (proposed), or only one of them?
 2. **Done straight from the card**: no span (proposed: nothing was timed), or a span from the
    scheduled time to Now, as if it had counted?
@@ -336,10 +370,12 @@ Open:
 - She replaces her seven iPhone timers and, a week later, none got lost by being silenced.
 - Adding an unscheduled todo: the tab, a name, Enter. Scheduling it: 2 taps on a chip.
 - Done from the card, the tab or the notification: 1 tap, and it records when, with a 🎉.
-- A todo with a length shows planned vs actual afterwards, with no extra taps.
+- A scheduled todo with a length shows its plan on the timeline; afterwards, planned vs
+  actual, with no extra taps.
+- Phase 2: an unscheduled todo gets a spot on the timeline by seeing where it fits.
 - Nothing changes for instants and alarms that aren't a todo's.
 - Capturing a todo mid-task takes under 5 seconds and changes nothing else on screen.
-- Phase 2: a todo worked on in pieces adds up its time; switching task is one tap.
+- Phase 3: a todo worked on in pieces adds up its time; switching task is one tap.
 
 ## 11. From a companion prioritization app's notes (2026-11-21)
 
