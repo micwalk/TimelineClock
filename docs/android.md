@@ -232,8 +232,9 @@ Netlify builds for every pull request).
 - **Get it** from the **preview** pre-release: on the phone, open
   https://github.com/micwalk/TimelineClock/releases/download/preview/timeline-clock-preview.apk
   and install it like the real app. CI publishes it for pull requests that change the native
-  side, signed with the same key; each build updates that release in place, at the same link.
-  (Actions › Android app › Run workflow with **preview** ticked builds one from any branch.)
+  side, signed with the same key; each build updates that release in place, at the same link,
+  and comments on the pull request with that link once it is ready. (Actions › Android app ›
+  Run workflow with **preview** ticked builds one from any branch.)
 - **Another release**: to publish TC Preview as a fresh release (say `preview-2`, at
   `…/releases/download/preview-2/timeline-clock-preview.apk`), type that tag in Run workflow's
   **preview_tag** for one build, or set the repository variable `TC_PREVIEW_TAG` (Settings ›
