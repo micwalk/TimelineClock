@@ -24,18 +24,55 @@ describe('the Todos tab', () => {
     expect(screen.getByRole('button', { name: 'Schedule' })).toBeTruthy()
   })
 
-  it('shows what it read as you type', () => {
-    render(<TodosList />)
+  it('shows what it read as you type, its duration with a stopwatch', () => {
+    const { container } = render(<TodosList />)
     fireEvent.change(screen.getByRole('textbox', { name: /Add a todo/ }), { target: { value: 'laundry 20m' } })
-    expect(screen.getByText('laundry · takes 20m')).toBeTruthy()
+    expect(container.querySelector('.todo-add__read')!.textContent).toBe('laundry · 20m')
+    expect(screen.getByLabelText('takes 20m').querySelector('svg')).toBeTruthy()
   })
 
-  it('✓ on a row does it', () => {
+  it("a row's box does it, and a done one's box opens it again", () => {
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)
     fireEvent.click(screen.getByRole('button', { name: 'Done: Dishes' }))
     expect(entities.getTodo('t1')!.status).toBe('done')
     expect(screen.getByText(/1 done today/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Dishes again' }))
+    expect(entities.getTodo('t1')!.status).toBe('open')
+  })
+
+  it('a tap on an unscheduled row opens Schedule (nothing to go to on the timeline)', () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
+    render(<TodosList />)
+    fireEvent.click(screen.getByText('Dishes'))
+    expect(screen.getByRole('button', { name: /In 1h/ })).toBeTruthy()
+  })
+
+  it('its ⋯ sets a duration from a short list, or none', () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.getByRole('textbox', { name: 'Duration' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '30m' }))
+    expect(entities.getTodo('t1')!.durationMs).toBe(30 * MINUTE)
+    expect(screen.getByLabelText('takes 30m')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.getByRole('button', { name: '30m' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'No duration' }))
+    expect(entities.getTodo('t1')!.durationMs).toBeUndefined()
+  })
+})
+
+describe('a plain alarm ringing', () => {
+  it('offers ☐ Todo: it becomes a todo, and its card the todo card', () => {
+    const now = Date.now()
+    useEntities.setState({ instants: [{ id: 'i1', tsEpochMs: now - MINUTE, label: 'Trash out', alarms: [{ id: 'a1', offsetMs: 0 }] }] })
+    useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'a1', label: 'Trash out', tsEpochMs: now - MINUTE, triggeredAt: now }] })
+    render(<RingingAlarms />)
+    expect(screen.queryByRole('button', { name: /Done/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Make it a todo' }))
+    expect(useEntities.getState().todos).toMatchObject([{ label: 'Trash out', status: 'open' }])
+    expect(screen.getByRole('button', { name: /Done/ })).toBeTruthy()
   })
 })
 

@@ -22,9 +22,9 @@ const MAX_WAIT_MS = 1000
 const MIN_WAIT_MS = 50
 
 // Keep one audio manager across HMR reloads so a ringing alarm doesn't cut out (one from before
-// playOnce is replaced).
+// playOnce told when it ends is replaced).
 const hmr = ((globalThis as unknown as { __TC_HMR__?: { audio?: AlarmAudioManager } }).__TC_HMR__ ??= {})
-if (typeof hmr.audio?.playPreset !== 'function') hmr.audio = new AlarmAudioManager()
+if (typeof hmr.audio?.playPreset !== 'function' || hmr.audio.playOnce.length < 2) hmr.audio = new AlarmAudioManager()
 const audio = hmr.audio as AlarmAudioManager
 const notifications = new NotificationService()
 
@@ -257,8 +257,11 @@ export function silence() {
   void silenceNativeAlarms()
 }
 
-/** Plays a sound once to hear what it is (Settings › Alarms); the web presets (the Android app plays its own: services/native). */
-export const previewSound = (sound: AlarmSound) => audio.playOnce(sound)
+/**
+ * Plays a sound once to hear what it is (services/soundPreview); the web presets (the Android app
+ * plays its own: services/native). `onEnded` when it has played out or been cut; returns whether it plays.
+ */
+export const previewSound = (sound: AlarmSound, onEnded?: () => void) => audio.playOnce(sound, onEnded)
 
 /** The Done fanfare (services/tones FANFARE), at `volume` (0–1). Only while the page is on screen. */
 export function playFanfare(volume: number) {

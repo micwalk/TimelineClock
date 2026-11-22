@@ -99,6 +99,16 @@ export async function openNativeSoundSettings(sound: AlarmSound) {
   }
 }
 
+/** Stops a sound's preview (Ringer.stopPreview). */
+export async function stopNativePreview() {
+  if (!isNativeShell()) return
+  try {
+    await (await import('./native/alarmsPlugin.ts')).Alarms.stopPreview()
+  } catch (err) {
+    console.warn('[Native] Could not stop the preview', err)
+  }
+}
+
 /** Plays a sound's channel sound once, as Android has it (stops by itself). */
 export async function previewNativeSound(sound: AlarmSound) {
   if (!isNativeShell()) return

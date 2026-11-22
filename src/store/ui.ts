@@ -70,6 +70,18 @@ export interface UiState {
    * flares). `n` tells one celebration from the next.
    */
   celebrating: { instantId: string; todoId: string; n: number } | null
+  /** A short note over the timeline with one choice (components/common/Toast); gone by itself after TOAST_MS. */
+  toast: Toast | null
+}
+
+/**
+ * What a toast says, and its one choice: "Laundry is back on the list · Delete todo". `n` tells
+ * one from the next. (Phase 2a's Undo, docs/prd_todos_phase2.md, is meant to speak through it.)
+ */
+export interface Toast {
+  n: number
+  text: string
+  action?: { label: string; danger?: boolean; run: () => void }
 }
 
 export const useUi = create<UiState>(() => ({
@@ -96,7 +108,13 @@ export const useUi = create<UiState>(() => ({
   seriesHint: null,
   captureOpen: false,
   celebrating: null,
+  toast: null,
 }))
+
+/** How long a toast stays. */
+export const TOAST_MS = 6000
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+let toasts = 0
 
 /** How long a Done's celebration lasts (its glow; the sparks have their own tunable). */
 export const CELEBRATE_MS = 1600
@@ -148,6 +166,17 @@ export const ui = {
     const n = ++celebrations
     useUi.setState({ celebrating: { instantId, todoId, n } })
     celebrateTimer = setTimeout(() => { celebrateTimer = null; useUi.setState(s => (s.celebrating?.n === n ? { celebrating: null } : s)) }, CELEBRATE_MS)
+  },
+  showToast(text: string, action?: Toast['action']) {
+    if (toastTimer) clearTimeout(toastTimer)
+    const n = ++toasts
+    useUi.setState({ toast: { n, text, ...(action ? { action } : {}) } })
+    toastTimer = setTimeout(() => { toastTimer = null; useUi.setState(s => (s.toast?.n === n ? { toast: null } : s)) }, TOAST_MS)
+  },
+  closeToast() {
+    if (toastTimer) clearTimeout(toastTimer)
+    toastTimer = null
+    useUi.setState({ toast: null })
   },
   showSeriesHint(id: string | null) {
     if (seriesHintTimer) clearTimeout(seriesHintTimer)

@@ -188,10 +188,11 @@ Derived state (`domain/todos.ts`, pure, tested), from the record and its instant
   stops counting as unfavoriting does (nothing saved).
 - **Unfavoriting** a counting todo (the star tool): stop tracking, nothing saved, as today;
   the todo is waiting.
-- **Delete** a todo (its tools, with a second tap): the record goes; its `at` too if it
-  never rang; every other instant stays as history with its `todo` link cleared.
-- Cancelling all alarms (bell-slash) on a scheduled todo reads **Unschedule** and is Back to
-  the list.
+- **Delete** a todo (its ⋯ in the Todos tab, with a second tap): the record goes; its `at`
+  too if it never rang; every other instant stays as history with its `todo` link cleared.
+- The **trash on a scheduled todo's chip** deletes the schedule, not the todo: Back to the
+  list, then a toast offers **Delete todo** too (owner, 2026-11-21). Its bell-slash cancels its
+  alarms as on any instant (it stays planned, ringing nothing).
 
 The count runs from `at`, the scheduled time, not from the dismiss: one instant, one rule
 (owner, 2026-11-21). If she really began later, she moves it like any instant.
@@ -439,9 +440,12 @@ Calls made by Claude while building (for the owner to override):
 | 11 | Schedule and Later: the quick chips, a typed box ("3p", "1h30", "tomorrow 9a") and the hh:mm:ss time entry (for a date) | The typed box matches the ringing card's Other…; the time entry reaches any date |
 | 12 | In a typed "when", "1:30" is a clock time; lengths are "90", "1h30", "45m" | It answers "when", not "how long" |
 | 13 | The Add box reads only words at its end that can't be part of a name: "3p", "at 7", "20m", "daily", "tomorrow"; "buy 2 eggs" stays a name; a repeat needs a time, else its words stay in the name | Capture must never mangle a name |
-| 14 | ✓ and Later/Schedule on every open row (not only Now's), a ⋯ for Rename, Takes (length), Won't do and Delete (a second tap); done rows have an "open again" ↺ | One tap from the tab, whatever the row; a mistaken ✓ is undoable (owner, 2026-11-21: keep it; a global Undo is Phase 2a) |
+| 14 | A row's box is its Done, and a closed row's box opens it again (no separate ✓ or ↺); Later/Schedule on every open row; a ⋯ for Rename, Won't do (boxed), Delete (a second tap) and Duration: quick lengths 5m–2h with "—" for none, or a typed one in a box labelled Duration. A duration reads as a drawn stopwatch and its length, not "takes" | Owner, 2026-11-21: the ✓ was redundant with the box; uncheck is needed now, a global Undo is Phase 2a |
+| 14b | A tap on an unscheduled row opens its Schedule (the drawer stays open); other rows go to their instant (closing the drawer) | Owner, 2026-11-21: it shouldn't hide the drawer; there is nothing on the timeline to go to |
+| 14c | The Todo button: the control bar's way to the Todos tab, left of ＋ (horizontal), under Alarm (vertical), with the Now badge; tapped again while the drawer shows Todos, it closes it. N still adds one from anywhere | Owner, 2026-11-21 |
 | 15 | No ＋ in the Agenda header: the Add box is at the top of the Todos tab, which the ☰ reaches | It would open the same box one tap later |
-| 16 | On a todo's chip, the trash deletes the todo (on a second tap); the bell-slash reads Unschedule (Back to the list) while it is ahead | §4.3 |
+| 16 | On a scheduled todo's chip, the trash is Back to the list, then a toast (components/common/Toast, which Phase 2a's Undo can speak through) offers Delete todo; the bell-slash cancels alarms as everywhere (it no longer reads Unschedule: two tools would mean the same) | Owner, 2026-11-21 |
+| 16b | Any instant becomes a todo: a faint ☐ before a selected chip's name (it lights up as the chip's box), and ☐ Todo on a plain alarm's ringing card (the card becomes the todo card). One ahead gets an alarm at its time if it has none (a todo at a time rings); one past is waiting, or counting if it is a favorite; on an occurrence the series becomes a repeating todo; unnamed, the chip's name box opens; fixed times (sun, clock changes, seasons) never | Owner, 2026-11-21: a way to promote an instant; both places they suggested, one action |
 | 17 | Repeating a todo's `at` with ⟳, or editing a series in the Alarm picker with Todo on, makes a repeating todo (its occurrences ahead get records) | The repeat should keep being a todo |
 | 18 | Renaming the `at` renames the todo, and the other way round | The `at` carries the todo's name |
 | 19 | A group switched off hides its todos from the tab too | As it hides its instants |

@@ -33,7 +33,6 @@ import type { GeoPoint, SunEvent } from '../../domain/sun.ts'
 import { SUN_EVENTS, nextSunEvent, sunEventName, sunEventOnDay } from '../../domain/sun.ts'
 import { formatClockCompact, formatDuration, formatRelativeShort } from '../../domain/format.ts'
 import { parseTimerInput } from '../../domain/quickCreate.ts'
-import { MARKS } from '../../config/labels.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
 import { useSettings } from '../../store/settings.ts'
@@ -43,6 +42,7 @@ import * as act from '../../store/actions.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
+import { StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import type { AlarmSound } from '../../domain/sounds.ts'
 import { CtlButton } from './CtlButton.tsx'
 
@@ -312,11 +312,11 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
       {section('Todo', (
         <div className="alarm-pick__row" role="group" aria-label="A todo">
           <button type="button" className={`repeat-chip glow-box${todo ? ' is-on' : ''}`} aria-pressed={todo} onClick={() => setTodo(t => !t)}
-            title="A todo asks Done when it rings; dismissed, it counts until you tap ✓">{MARKS.todoOpen} Todo</button>
+            title="A todo asks Done when it rings; dismissed, it counts until you tap ✓"><TodoBoxIcon aria-hidden className="alarm-pick__todo-box" /> Todo</button>
           {todo && (
             <label className="alarm-pick__takes">
-              <span>Takes</span>
-              <input className={`repeat-chip alarm-pick__other mono${takes && takesMs === null ? ' is-invalid' : ''}`} aria-label="How long it takes (optional: 20, 1h30)"
+              <StopwatchIcon aria-hidden className="todo-dur__icon" />
+              <input className={`repeat-chip alarm-pick__other mono${takes && takesMs === null ? ' is-invalid' : ''}`} aria-label="Duration (optional: 20, 1h30)"
                 placeholder="20m" value={takes} onChange={e => setTakes(e.target.value)} autoComplete="off" />
             </label>
           )}

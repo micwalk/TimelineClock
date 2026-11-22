@@ -9,7 +9,7 @@ import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewpo
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
 import { DAY, MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
-import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
+import { atClockTimeOnDay, formatClockCompact, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, shownInstants, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
@@ -1468,10 +1468,64 @@ function unscheduleAt(at: InstantRecord, now: number) {
   entities.setInstantTodo(at.id, { id: at.todo!.id, role: 'was' })
 }
 
-/** Back to the list: unscheduled again, name kept (also the bell-slash on a todo's chip: Unschedule). */
+/** Back to the list: unscheduled again, name kept. */
 export function backToList(todoId: string) {
   const at = todoAt(todoInstants(todoId))
   if (at) unscheduleAt(at, nowTime())
+}
+
+/**
+ * The trash on a scheduled todo's chip deletes its schedule, not the todo: Back to the list (its
+ * `at` goes if it never rang, else stays as `was`). Then a toast offers the second step, Delete
+ * todo ("Laundry is back on the list · Delete todo").
+ */
+export function deleteTodoSchedule(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const at = todoAt(todoInstants(todoId))
+  if (!at) return
+  backToList(todoId)
+  ui.showToast(TODO_COPY.backOnList(todo.label || formatClockCompact(at.tsEpochMs, false)), {
+    label: TODO_COPY.deleteTodo, danger: true, run: () => deleteTodo(todoId),
+  })
+}
+
+/**
+ * Makes an instant a todo (the ☐ on a selected chip, a ringing alarm's card): a record named for
+ * it, the instant its `at` (docs/prd_todos.md). A todo at a time rings (dismissing it starts the
+ * count), so one still to come gets an alarm at its time if it has none there; one already past
+ * is waiting (in the Todos tab's Now), or counting if it is a favorite. On an occurrence its
+ * series becomes a repeating todo (each occurrence ahead its own record), as Repeat on a todo
+ * does. `name`: an unnamed one opens its name box (the chip's ☐). Returns the todo's id.
+ */
+export function makeInstantTodo(id: string, opts: { name?: boolean } = {}): string | undefined {
+  let inst = entities.getInstant(id)
+  if (!inst || inst.todo || isFixedTime(inst)) return
+  // A held virtual (a repeat's far occurrence) becomes real.
+  if (inst.virtual) { entities.patchInstant(id, () => ({})); inst = entities.getInstant(id)! }
+  const now = nowTime()
+  const series = entities.getGroup(inst.seriesId)
+  if (series && !series.todo) updateSeries(series.id, { todo: {} })
+  inst = entities.getInstant(id)!
+  // The series gave it its own record already (an occurrence ahead).
+  let todoId = inst.todo?.id
+  if (!todoId) {
+    const todo = makeTodo({
+      label: inst.label ?? '', collectionId: inst.collectionId,
+      ...(series && inst.occurrence ? { seriesId: series.id, occurrence: inst.occurrence } : {}),
+    }, newTodoId(), now, nextOrder(useEntities.getState().todos ?? []))
+    entities.putTodo(todo)
+    entities.setInstantTodo(id, { id: todo.id, role: 'at' })
+    todoId = todo.id
+  }
+  // An occurrence keeps its series' alarms (the rule's, as every other occurrence).
+  const made = entities.getInstant(id)!
+  if (!series && made.tsEpochMs > now && !(made.alarms ?? []).some(a => a.offsetMs === 0 && isArmed(made, a, now))) {
+    entities.addAlarm(id)
+    void primeNotifications()
+  }
+  if (opts.name && !made.label) view.editInstant(id)
+  return todoId
 }
 
 /**
@@ -1633,6 +1687,18 @@ export function passTodos() {
 
 /** Opens the todo capture box (N): a name and Enter, from anywhere. */
 export const openCapture = () => ui.setCapture(true)
+
+/**
+ * The Todo button: the Agenda's Todos tab, opening the drawer when the Agenda is one (tapped
+ * again while the drawer shows it, it closes).
+ */
+export function openTodos() {
+  const drawer = useLayout.getState().agendaPlacement === 'drawer'
+  const { agendaOpen, listTab } = useUi.getState()
+  if (drawer && agendaOpen && listTab === 'todos') { ui.closeAgenda(); return }
+  ui.setListTab('todos')
+  if (drawer) ui.openAgenda()
+}
 
 // ---------------------------------------------------------------------------
 // Backup: export and import

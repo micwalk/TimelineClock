@@ -39,6 +39,12 @@ export const TODO_COPY = {
   doneToday: (n: number) => `${n} done today`,
   /** A ✓ folded into its todo's chip: "+12m" after it. */
   foldAfter: (length: string) => `+${length}`,
+  /** Its schedule deleted from the timeline (the toast): "Laundry is back on the list". */
+  backOnList: (name: string) => `${name} is back on the list`,
+  /** The toast's second step: the todo itself. */
+  deleteTodo: 'Delete todo',
+  /** Making an instant a todo (a selected chip's ☐, a ringing card): "Make it a todo", or every occurrence of a series. */
+  makeTodo: (series: string | null) => (series ? `Make every ${series} a todo` : 'Make it a todo'),
 } as const
 
 /** Names of instants the app computes. */

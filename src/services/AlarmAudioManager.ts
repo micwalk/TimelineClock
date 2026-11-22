@@ -145,10 +145,13 @@ export class AlarmAudioManager {
     }
   }
 
-  /** Plays `sound` once (a chime as it sounds, or a preview), cutting the last one played once. */
-  public playOnce(sound: AlarmSound): void {
+  /**
+   * Plays `sound` once (a chime as it sounds, or a preview), cutting the last one played once.
+   * `onEnded` is called when it has played out or been cut. Returns whether it plays.
+   */
+  public playOnce(sound: AlarmSound, onEnded?: () => void): boolean {
     const ctx = this.ready()
-    if (!ctx) return
+    if (!ctx) return false
     this.stopOnce()
     try {
       const gain = ctx.createGain()
@@ -157,9 +160,11 @@ export class AlarmAudioManager {
       const sources = TONE_PRESETS[sound].play(ctx, gain, ctx.currentTime)
       this.onceSources = sources
       let left = sources.length
-      for (const s of sources) s.addEventListener('ended', () => { if (--left === 0) gain.disconnect() })
+      for (const s of sources) s.addEventListener('ended', () => { if (--left === 0) { gain.disconnect(); onEnded?.() } })
+      return true
     } catch (error) {
       console.warn('Could not play sound:', error)
+      return false
     }
   }
 

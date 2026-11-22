@@ -17,26 +17,38 @@ notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
   "laundry 4p 20m" or "feed cats 7a daily", and lists what rang and isn't done (Now), today's,
   upcoming, unscheduled (drag to reorder; **Schedule**: In 15m, In 1h, Tonight, Tomorrow, a typed
   time or the time entry) and the last day's done, with how long each took ("31m · planned 20m").
-  **N** adds one from anywhere without moving anything else.
+  A row's box is its Done (a checked one opens it again); a tap on an unscheduled row opens
+  Schedule (the drawer stays). Its ⋯ sets a **Duration** from a short list ("—" for none, 5m … 2h)
+  or typed; a duration shows as a stopwatch and its length. **N** adds one from anywhere without
+  moving anything else, and the new **Todo** button (left of ＋; under Alarm in vertical) goes to
+  the tab.
 - **When a todo rings**: **Done** (already did it) or **Dismiss** ("on it" / "not yet"). Dismissed,
   it doesn't disappear: its instant is favorited and counts on the timeline from its time until you
   tap the lane's **✓** (the stop, on a todo), which saves the time it took. **Snooze 5m**, **Later…**
-  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and a quiet **Won't do**. A
+  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and **Won't do**. A
   warning before it reads "in 10m · get ready" and asks **▶ Start now** (it moves to Now and
   counts) or **OK** (it rings again at its time).
-- **On the timeline**: a todo's chip leads with ☐ (✓ done, ↷ passed); its tools start with ✓ Done,
-  the bell-slash reads Unschedule, and the trash deletes the todo on a second tap. A todo with a
+- **Any instant can become a todo**: a selected chip shows a faint ☐ before its name (tap it), and
+  a plain alarm's ringing card has **☐ Todo** (the card becomes the todo's); a repeating one makes
+  its series a repeating todo.
+- **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when
+  passed); its tools start with ✓ Done. Its trash deletes only the schedule: the todo goes back to
+  the list, and a toast offers **Delete todo** too. A todo with a
   length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
   once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
   you zoom in.
 - **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a herald's
   trumpet call plays (as for royal news) (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
   times; sparks follow reduced motion, and their count, spread and length are in Advanced).
-- **Repeating todos**: the Alarm picker's **Todo** switch (with an optional **Takes** length), or
+- **Repeating todos**: the Alarm picker's **Todo** switch (with an optional duration), or
   "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next
   arrives is simply passed.
-- Badges: the Todos tab and the ☰ count what rang and isn't done. Todos are in backups
-  (`data.todos`) and follow their group, as instants do.
+- Badges: the Todos tab, the ☰ and the Todo button count what rang and isn't done. Todos are in
+  backups (`data.todos`) and follow their group, as instants do.
+- **Sound previews** have a ■ to stop them while they play, and picking a sound (or closing the
+  picker) stops the preview.
+- Fixed: a selected bell's background was see-through (an invalid colour mix), so the instant's
+  line showed through it.
 
 ## 0.7.2 — 2026-11-21
 

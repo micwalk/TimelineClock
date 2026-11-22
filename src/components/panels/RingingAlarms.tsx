@@ -13,10 +13,11 @@
 //
 // A todo's alarm (docs/prd_todos.md §7.1) asks Done or Dismiss, big, side by side (finished
 // already, or "on it / not yet", which starts it counting), then Snooze 5m and Later… (In 1h ·
-// Tonight · Tomorrow · Back to the list · Other…, typed), then a quiet Won't do. Snooze is "remind
+// Tonight · Tomorrow · Back to the list · Other…, typed), then Won't do (a quieter box). Snooze is "remind
 // me again"; Later is "the plan changed" (the instant moves). A warning before it ("in 10m · get
 // ready") asks Start now (the plan moves to Now and counts) or OK (it rings again at its time)
-// instead; Done is a quiet link there.
+// instead; Done is a quiet link there. A plain alarm's card offers ☐ Todo at its top: it becomes
+// a todo (act.makeInstantTodo) and the card its todo card.
 import { useRef, useState } from 'react'
 import { BellAlertIcon, BellIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
 import { PencilIcon } from '@heroicons/react/20/solid'
@@ -25,6 +26,7 @@ import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import type { RingingAlarm } from '../../domain/alarms.ts'
 import { ringKey } from '../../domain/alarms.ts'
 import { displayName } from '../../domain/entities.ts'
+import { isFixedTime } from '../../domain/dst.ts'
 import { parseTimerInput } from '../../domain/quickCreate.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useEntities } from '../../store/entities.ts'
@@ -32,6 +34,7 @@ import { getTodoTimes } from '../../store/settings.ts'
 import * as act from '../../store/actions.ts'
 import { parseWhen, quickChoices } from '../../domain/todos.ts'
 import { MARKS, TODO_COPY } from '../../config/labels.ts'
+import { TodoBoxIcon } from '../common/TodoIcons.tsx'
 
 const clock = (ts: number) => formatClockCompact(ts, false)
 const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
@@ -82,7 +85,7 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
   return (
     <div className="alarm-card alarm-card--todo">
       <div className="alarm-card__head">
-        <span className="alarm-card__label"><span className="alarm-card__todo" aria-hidden>{MARKS.todoOpen}</span>{name}</span>
+        <span className="alarm-card__label"><TodoBoxIcon className="alarm-card__todo" aria-hidden />{name}</span>
         <span className="alarm-card__time mono">{clock(ts)}</span>
       </div>
       <LiveText className="alarm-card__rel" watch={bySecond} compute={f => `${formatRelativeShort(ts - f.now)}${warning && ts > f.now ? ` · ${TODO_COPY.getReady}` : ''}`} />
@@ -128,7 +131,7 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
           ) : (
             <>
               {warning && <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done already</button>}
-              <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
+              <button type="button" className="alarm-link alarm-link--wont glow-box" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
             </>
           )}
         </div>
@@ -186,10 +189,20 @@ function PlainAlarmCard({ alarm }: { alarm: RingingAlarm }) {
       : null
   const untilStartLink = choices?.snooze && choices.untilStart ? choices.untilStart : null
 
+  // Something to do, not just a reminder: make it a todo, and this card becomes its card (Done, or Dismiss to start counting).
+  const canTodo = !!inst && !inst.todo && !isFixedTime(inst)
+  const series = inst?.seriesId ? name : null
+
   return (
     <div className="alarm-card">
       <div className="alarm-card__head">
         <span className="alarm-card__label">{name}</span>
+        {canTodo && (
+          <button type="button" className="alarm-card__make-todo glow-box" onClick={() => act.makeInstantTodo(alarm.instantId)}
+            aria-label={TODO_COPY.makeTodo(series)} title={TODO_COPY.makeTodo(series)}>
+            <TodoBoxIcon aria-hidden /> Todo
+          </button>
+        )}
         <span className="alarm-card__time mono">{clock(ts)}</span>
       </div>
       <LiveText className="alarm-card__rel" watch={bySecond} compute={f => formatRelativeShort(ts - f.now)} />

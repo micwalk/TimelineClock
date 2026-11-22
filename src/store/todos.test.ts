@@ -13,6 +13,7 @@ import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
 import { DAY, HOUR, MINUTE } from '../domain/time.ts'
 import { dateKey } from '../domain/series.ts'
+import { nextSeasonEvent, seasonVirtualId } from '../domain/seasons.ts'
 
 beforeEach(() => {
   engine.cancelTransition()
@@ -246,5 +247,81 @@ describe('backups', () => {
     if (parsed.ok) act.importBackup(parsed.backup, { settings: false, data: true, mode: 'replace' })
     expect(entities.getTodo(id)).toBeDefined()
     expect(atOf(id)).toBeDefined()
+  })
+})
+
+describe('making an instant a todo', () => {
+  it('an instant ahead becomes its `at`, named for it, with an alarm at its time', () => {
+    const iid = entities.createInstant(Date.now() + HOUR, 'Water plants')
+    const id = act.makeInstantTodo(iid)!
+    expect(entities.getTodo(id)).toMatchObject({ label: 'Water plants', status: 'open' })
+    expect(entities.getInstant(iid)).toMatchObject({ todo: { id, role: 'at' }, alarms: [{ offsetMs: 0 }] })
+    expect(stateOf(id)).toBe('scheduled')
+    expect(act.makeInstantTodo(iid)).toBeUndefined()
+  })
+
+  it('a past one is waiting, or counting if it is a favorite; no alarm is added', () => {
+    const plain = entities.createInstant(Date.now() - HOUR, 'Rice on')
+    const fav = entities.createInstant(Date.now() - HOUR, 'Laundry on')
+    act.toggleFavorite(fav)
+    expect(stateOf(act.makeInstantTodo(plain)!)).toBe('waiting')
+    expect(stateOf(act.makeInstantTodo(fav)!)).toBe('counting')
+    expect(entities.getInstant(plain)!.alarms).toBeUndefined()
+  })
+
+  it('a ringing alarm made a todo: Dismiss then starts it counting', () => {
+    const iid = entities.createInstant(Date.now() - MINUTE, 'Take out trash')
+    const alarmId = entities.addAlarm(iid)
+    useAlarms.setState({ ringing: [{ instantId: iid, alarmId, label: 'Take out trash', tsEpochMs: Date.now() - MINUTE, triggeredAt: Date.now() }] })
+    const id = act.makeInstantTodo(iid)!
+    act.dismissAlarm(ringKey(iid, alarmId))
+    expect(stateOf(id)).toBe('counting')
+  })
+
+  it('an unnamed one opens its name box (from the chip); its name becomes the todo name', () => {
+    const iid = entities.createInstant(Date.now() + HOUR, '')
+    const id = act.makeInstantTodo(iid, { name: true })!
+    expect(useView.getState().editingInstantId).toBe(iid)
+    act.renameInstant(iid, 'Stretch')
+    expect(entities.getTodo(id)!.label).toBe('Stretch')
+  })
+
+  it("an occurrence makes its series a repeating todo: each occurrence ahead a todo of its own", () => {
+    const at = act.setAlarm({ time: '7:00', at: Date.now() + HOUR, repeat: { kind: 'interval', every: 1 }, warnings: [], label: 'Meds' })!
+    const first = entities.getInstant(at)!
+    act.makeInstantTodo(first.id)
+    const series = entities.getGroup(first.seriesId)!
+    expect(series.todo).toEqual({})
+    const ahead = useEntities.getState().instants.filter(i => i.seriesId === series.id)
+    expect(ahead.length).toBeGreaterThan(1)
+    expect(ahead.every(i => i.todo?.role === 'at')).toBe(true)
+  })
+
+  it('a fixed time (a sunrise, a clock change, a season) never becomes one', () => {
+    const season = nextSeasonEvent(Date.now())
+    const id = seasonVirtualId(season.kind, season.ts)
+    useEntities.setState({ instants: [{ id, tsEpochMs: season.ts, label: 'Solstice', favorite: false }] })
+    expect(act.makeInstantTodo(id)).toBeUndefined()
+  })
+})
+
+describe("a scheduled todo's trash", () => {
+  it('deletes the schedule, not the todo, and a toast offers to delete the todo too', () => {
+    const id = act.addTodo('Laundry')!
+    act.scheduleTodo(id, Date.now() + HOUR)
+    act.deleteTodoSchedule(id)
+    expect(atOf(id)).toBeUndefined()
+    expect(stateOf(id)).toBe('unscheduled')
+    const toast = useUi.getState().toast!
+    expect(toast.text).toBe('Laundry is back on the list')
+    toast.action!.run()
+    expect(entities.getTodo(id)).toBeUndefined()
+  })
+
+  it('one that rang stays as history (`was`)', () => {
+    const { id, atId } = ringingTodo()
+    act.deleteTodoSchedule(id)
+    expect(entities.getInstant(atId)!.todo).toEqual({ id, role: 'was' })
+    expect(stateOf(id)).toBe('unscheduled')
   })
 })

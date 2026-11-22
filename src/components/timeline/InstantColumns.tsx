@@ -25,6 +25,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
+import { TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -183,16 +184,17 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
       {openTodo && <IconButton icon={CheckIcon} label={`Done: ${displayName(inst.label, 'todo')}`} color="var(--c-ok)" bare onClick={() => act.doneTodo(openTodo)} />}
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
-      {openAlarms(inst).length > 0 && <CancelTool inst={inst} todoId={openTodo && !isPast ? openTodo : null} />}
+      {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
       {/* A sunrise or sunset never moves. */}
       {focused && !fixed && <IconButton icon={ArrowsRightLeftIcon} label="Move instant" color="var(--c-cursor)" bare onClick={() => act.enterMove(inst.id)} />}
       {/* A sunrise or sunset already shows every day: repeating one only means something with an alarm on it. */}
       {(inst.seriesId || (!atShift && !atSeason && (!atSun || openAlarms(inst).length > 0))) && <RepeatTool inst={inst} />}
       {/* The eye: how far out it stays (chip, mark, gone), or hidden everywhere. */}
       <VisibilityTool inst={inst} />
-      {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
-      {openTodo && !inst.seriesId
-        ? <DeleteTodoTool todoId={openTodo} />
+      {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye.
+          A todo's schedule is deleted, not the todo: it goes back to the list, and a toast offers the rest. */}
+      {openTodo && !inst.seriesId && inst.todo?.role === 'at'
+        ? <IconButton icon={TrashIcon} label="Delete the schedule: back to the todo list" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteTodoSchedule(openTodo)} />
         : inst.seriesId
         ? <DeleteOccurrenceTool inst={inst} />
         : !fixed && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
@@ -246,6 +248,12 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           />
         ) : (
           <>
+          {/* Make it a todo: a faint ☐ while selected; a tap lights it (the chip's own ☐ from then on). */}
+          {selected && !inst.todo && !fixed && !moving && (
+            <button type="button" className="chip__todo-hint" aria-label={TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)}
+              title={TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)}
+              onClick={() => act.makeInstantTodo(inst.id, { name: true })}><TodoBoxIcon aria-hidden /></button>
+          )}
           {unnamed && selected && (
             <button type="button" className="chip__name-hint" aria-label="Name this instant" onClick={() => view.editInstant(inst.id)}>name…</button>
           )}
@@ -257,7 +265,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
-            {todoStatus && <span className="chip__todo" aria-label={TODO_STATUS_TEXT[todoStatus]}>{TODO_MARK[doneFolded ? 'done' : todoStatus]}</span>}
+            {todoStatus && <TodoBoxIcon className="chip__todo" state={doneFolded ? 'done' : todoStatus} role="img" aria-label={TODO_STATUS_TEXT[todoStatus]} />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
@@ -305,35 +313,17 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
 
 /**
  * Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap
- * too. On a scheduled todo it reads Unschedule: back to the list (docs/prd_todos.md §4.3).
+ * too. On a scheduled todo too: it stays planned, ringing nothing (its trash puts it back on the list).
  */
-function CancelTool({ inst, todoId }: { inst: InstantRecord; todoId: string | null }) {
+function CancelTool({ inst }: { inst: InstantRecord }) {
   const all = openAlarms(inst).length
-  if (todoId) return <IconButton icon={BellSlashIcon} label="Unschedule: back to the todo list" color={bellColor} bare onClick={() => act.backToList(todoId)} />
   return (
     <IconButton icon={BellSlashIcon} label={all > 1 ? `Cancel all ${all} alarms` : 'Cancel this alarm'} color={bellColor} bare
       onClick={() => act.cancelAlarms(inst.id)} />
   )
 }
 
-/** How long a first tap on a todo's trash waits for the second, ms. */
-const CONFIRM_MS = 3000
-
-/** Delete, on a todo's chip: a second tap deletes the todo (what happened stays as history). */
-function DeleteTodoTool({ todoId }: { todoId: string }) {
-  const [armed, setArmed] = useState(false)
-  useEffect(() => {
-    if (!armed) return
-    const t = setTimeout(() => setArmed(false), CONFIRM_MS)
-    return () => clearTimeout(t)
-  }, [armed])
-  return armed
-    ? <button type="button" className="tl-col__confirm glow-box" onClick={() => act.deleteTodo(todoId)}>Delete todo</button>
-    : <IconButton icon={TrashIcon} label="Delete todo (tap again)" color="var(--c-danger)" className="glow-box" onClick={() => setArmed(true)} />
-}
-
-/** A todo's state on its chip (config/labels). */
-const TODO_MARK = { open: MARKS.todoOpen, done: MARKS.todoDone, passed: MARKS.todoPassed, dropped: MARKS.todoDropped } as const
+/** A todo's state on its chip, for screen readers (its box draws it). */
 const TODO_STATUS_TEXT = { open: 'todo', done: 'done', passed: TODO_COPY.passed, dropped: TODO_COPY.dropped } as const
 
 /**

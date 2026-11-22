@@ -119,6 +119,28 @@
 .controls--horizontal > .controls__now { grid-area: 1 / 2 / span 2; }
 .controls--horizontal > .controls__side.is-after { grid-area: 1 / 3; }
 .controls--horizontal > .controls__quick { container: ctl-quick / inline-size; grid-area: 2 / 3; align-self: end; justify-content: flex-start; flex-wrap: nowrap; min-width: 0; }
+/* Todo, left of ＋ and level with it. */
+.controls--horizontal > .controls__todo { container: ctl-todo / inline-size; grid-area: 2 / 1; align-self: end; display: flex; justify-content: flex-end; min-width: 0; }
+@container ctl-todo (max-width: 90px) {
+  .controls--horizontal > .controls__todo .ctl-btn--quick .ctl-btn__text { display: none; }
+}
+/* Todo takes the todo colour; its badge counts those that rang and aren't done (as on ☰). */
+.ctl-btn--quick.ctl-btn--todo { --accent: var(--c-todo); --halo: var(--c-todo); }
+.ctl-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--c-todo);
+  color: #0b1020;
+  font: 800 10.5px/16px var(--font-ui);
+  text-align: center;
+  box-shadow: 0 0 calc(6px * var(--glow)) var(--c-todo);
+  pointer-events: none;
+}
 /* Too narrow for their labels there, they keep their icons (and the stopwatch its readings). */
 @container ctl-quick (max-width: 330px) {
   .controls--horizontal > .controls__quick .ctl-btn--quick .ctl-btn__text { display: none; }
@@ -875,7 +897,8 @@
 }
 
 /* Vertical timeline: the bar stays at the bottom as a two-row grid that follows the screen.
-   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. Column 4: NOW over ＋.
+   Row 1: zoom out, up, step up. Row 2: zoom in, down, step down. Column 4: NOW over ＋; then
+   Stopwatch over Timer, Alarm over Todo.
    Cells are placed inline (ControlBar.tsx); the screen is narrow, so labels are icons and compact steps. */
 .controls--vertical {
   display: grid;
@@ -1117,10 +1140,7 @@
 .todo-row:hover { background: var(--box-bg-raised); }
 .todo-row.is-counting { --accent: var(--c-ok); --halo: var(--c-ok); }
 .todo-row.is-done, .todo-row.is-passed, .todo-row.is-dropped { --accent: color-mix(in srgb, var(--ink-faint) 40%, transparent); --halo: transparent; }
-.todo-row__mark { width: 18px; text-align: center; color: var(--c-todo); font: 800 15px/1 var(--font-ui); text-shadow: 0 0 calc(4px * var(--glow)) var(--c-todo); }
-.todo-row.is-done .todo-row__mark { color: var(--c-ok); text-shadow: 0 0 calc(4px * var(--glow)) var(--c-ok); }
-.todo-row.is-passed .todo-row__mark, .todo-row.is-dropped .todo-row__mark { color: var(--ink-faint); text-shadow: none; }
-.todo-row__grip { display: grid; place-items: center; width: 18px; height: 26px; color: var(--ink-faint); cursor: grab; touch-action: none; }
+.todo-row__grip { display: grid; place-items: center; width: 22px; height: 32px; margin-right: -4px; color: var(--ink-faint); cursor: grab; touch-action: none; }
 .todo-row__grip svg { width: 16px; height: 16px; }
 .todo-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .todo-row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 15px/1.2 var(--font-ui); }
@@ -1139,7 +1159,39 @@
   white-space: nowrap;
 }
 .todo-btn.is-on { background: color-mix(in srgb, var(--c-todo) 45%, transparent); }
-.todo-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
+/* A row's box: Done (a checked one opens it again). Big, a heavy line, with a touch target past it. */
+.todo-check {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -4px -4px -4px -6px;
+  border-radius: 8px;
+  color: var(--c-todo);
+  filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo));
+  transition: transform 120ms ease, color 120ms ease;
+}
+.todo-check > svg { width: 24px; height: 24px; }
+.todo-check::after { content: ''; position: absolute; inset: -6px; }
+.todo-check:hover { transform: scale(1.1); }
+.todo-check.is-open:hover { color: var(--c-ok); filter: drop-shadow(0 0 calc(5px * var(--glow)) var(--c-ok)); }
+.todo-check.is-done { color: var(--c-ok); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-ok)); }
+.todo-check.is-passed, .todo-check.is-dropped { color: var(--ink-faint); filter: none; }
+.todo-row.is-counting .todo-check { color: var(--c-ok); }
+@media (prefers-reduced-motion: reduce) { .todo-check { transition: none; } }
+/* How long it takes: a stopwatch and the length. */
+.todo-dur { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.todo-dur__icon { flex: none; width: 13px; height: 13px; color: var(--c-todo); }
+/* The ⋯ menu's Duration: quick lengths ("—" is none), then a typed one. */
+.todo-dur-pick { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
+.todo-dur-pick__label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; }
+.todo-dur-pick__label .todo-dur__icon { width: 14px; height: 14px; }
+.todo-dur-pick .alarm-link { min-width: 40px; justify-content: center; }
+.todo-dur-pick .alarm-link.is-on { background: color-mix(in srgb, var(--c-todo) 50%, transparent); color: #fff; }
+.todo-dur-pick__typed { display: contents; }
+.todo-dur-pick__typed > span { color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
+.todo-dur-pick .todo-when__typed { grid-template-columns: auto minmax(0, 1fr) auto; }
 .todo-row.is-celebrating { animation: todo-flare 1200ms ease-out 1; }
 @keyframes todo-flare {
   0% { box-shadow: 0 0 calc(26px * var(--glow)) var(--c-ok); filter: brightness(1.8); }
@@ -1171,8 +1223,28 @@
 .alarm-btn--later { --accent: var(--c-todo); background: color-mix(in srgb, var(--c-todo) 40%, transparent); }
 .alarm-btn--later.is-open { background: color-mix(in srgb, var(--c-todo) 65%, transparent); }
 .alarm-card__actions--second { margin-top: 8px; }
-.alarm-card__todo { margin-right: 6px; color: var(--c-todo); }
+.alarm-card__todo { display: inline-block; width: 17px; height: 17px; margin-right: 6px; vertical-align: -2px; color: var(--c-todo); }
+/* A plain alarm's ☐ Todo: makes it a todo (its card becomes the todo card). */
+.alarm-card__make-todo {
+  --accent: var(--c-todo);
+  flex: none;
+  margin-left: auto;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--c-todo) 22%, transparent);
+  color: var(--ink);
+  font: 700 12px/1 var(--font-ui);
+}
+.alarm-card__make-todo > svg { width: 14px; height: 14px; color: var(--c-todo); }
+.alarm-pick__todo-box { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; }
 
 /* Settings › Alarms › Todos. */
 .settings__sub { margin: 14px 0 4px; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
 .alarm-pick__takes { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
+
+/* Won't do (the Todos ⋯ menu, a todo's ringing card): a box of its own, quieter than the rest. */
+.todo-when .alarm-link.alarm-link--wont, .alarm-card .alarm-link.alarm-link--wont { --accent: color-mix(in srgb, var(--ink) 45%, transparent); color: var(--ink-dim); }
