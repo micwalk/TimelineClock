@@ -301,26 +301,25 @@ function PlainChimeCard({ chime }: { chime: RingingAlarm }) {
 export function RingingAlarms() {
   const ringing = useAlarms(s => s.ringing)
   const chimes = useAlarms(s => s.chimes)
-  // Every card a todo's: each has its own Silence (it stops and waits), so the panel's (sound off, cards kept) would be a second one.
-  const allTodos = useEntities(s => ringing.every(r => {
-    const link = s.instants.find(i => i.id === r.instantId)?.todo
-    return link?.role === 'at' && s.todos?.find(t => t.id === link.id)?.status === 'open'
-  }))
+  const muted = useAlarms(s => s.muted)
   if (ringing.length === 0 && chimes.length === 0) return null
   const ringingNow = ringing.length > 0
   return (
-    <aside className={`alarm-panel glow-box${ringingNow ? '' : ' is-chime'}`} role={ringingNow ? 'alertdialog' : 'status'} aria-label={ringingNow ? 'Alarm ringing' : 'Chime'}>
+    <aside className={`alarm-panel glow-box${ringingNow ? '' : ' is-chime'}${muted ? ' is-muted' : ''}`} role={ringingNow ? 'alertdialog' : 'status'} aria-label={ringingNow ? 'Alarm ringing' : 'Chime'}>
       <header className="alarm-panel__header glow-text">
         {ringingNow ? <BellAlertIcon className="alarm-panel__bell" aria-hidden /> : <BellIcon className="alarm-panel__bell" aria-hidden />}
         <span>{ringingNow ? 'Alarm' : 'Chime'}</span>
+        {/* Mute every ringing alarm (in the Android app, its sound and vibration): the cards stay, to answer. */}
+        {ringingNow && (
+          <button type="button" className={`alarm-panel__mute glow-box${muted ? ' is-on' : ''}`} aria-pressed={muted}
+            aria-label={muted ? 'Muted (until another alarm rings)' : 'Mute'} title={muted ? 'Muted until another alarm rings; answer them below' : 'Mute: the alarms stay here to answer'}
+            onClick={act.silenceAlarms} disabled={muted}>
+            <SpeakerXMarkIcon aria-hidden />
+          </button>
+        )}
       </header>
       {ringing.map(alarm => <AlarmCard key={ringKey(alarm.instantId, alarm.alarmId)} alarm={alarm} />)}
       {chimes.map(c => <ChimeCard key={ringKey(c.instantId, c.alarmId)} chime={c} />)}
-      {ringingNow && !allTodos && (
-        <button type="button" className="alarm-btn alarm-btn--silence glow-box" onClick={act.silenceAlarms}>
-          <SpeakerXMarkIcon aria-hidden /> Silence
-        </button>
-      )}
     </aside>
   )
 }

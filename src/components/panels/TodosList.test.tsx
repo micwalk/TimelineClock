@@ -86,8 +86,11 @@ describe('a todo ringing', () => {
     useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'a1', label: 'Feed cats', tsEpochMs: now - MINUTE, triggeredAt: now }] })
     render(<RingingAlarms />)
     for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Later/, /Silence/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
-    // Only the card's Silence: the panel's (sound off, cards kept) is for plain alarms.
     expect(screen.getAllByRole('button', { name: /Silence/ })).toHaveLength(1)
+    // The panel's mute (sound off, cards kept) is a small 🔇 by its title.
+    fireEvent.click(screen.getByRole('button', { name: 'Mute' }))
+    expect(useAlarms.getState().muted).toBe(true)
+    expect(screen.getByRole('button', { name: /Muted/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Later/ }))
     expect(screen.getByRole('button', { name: 'Back to the list' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Start$/ }))

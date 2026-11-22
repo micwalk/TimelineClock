@@ -49,6 +49,8 @@ there is Phase 1b).
   arrives is simply passed.
 - Badges: the Todos tab, the ☰ and the Todo button count what rang and isn't done. Todos are in
   backups (`data.todos`) and follow their group, as instants do.
+- **Mute** is a small 🔇 by the alarm panel's title (it lights once muted, and the bell stops
+  shaking), in place of the big Silence button under the cards.
 - **Sound previews** have a ■ to stop them while they play, and picking a sound (or closing the
   picker) stops the preview.
 - Fixed (Android app): Silence, dismissing or moving a ringing alarm stopped its sound but not its

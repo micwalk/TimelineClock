@@ -583,6 +583,22 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+/* Mute, by the title (every ringing alarm; the cards stay): lit once muted, and the bell stops shaking. */
+.alarm-panel__mute {
+  --accent: rgba(255, 255, 255, 0.45);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: -4px -4px -4px auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+}
+.alarm-panel__mute > svg { width: 18px; height: 18px; }
+.alarm-panel__mute:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+.alarm-panel__mute.is-on { --accent: var(--c-alarm); color: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 22%, transparent); cursor: default; }
+.alarm-panel.is-muted .alarm-panel__bell { animation: none; }
 .alarm-panel__bell { width: 26px; height: 26px; color: var(--c-alarm); animation: bell-shake 0.6s ease-in-out infinite; filter: drop-shadow(0 0 6px var(--c-alarm)); }
 @keyframes bell-shake {
   0%, 100% { rotate: 0deg; }
@@ -607,16 +623,6 @@
 }
 .alarm-btn--dismiss { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 55%, transparent); }
 .alarm-btn--snooze { --accent: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 45%, transparent); }
-.alarm-btn--silence {
-  --accent: rgba(255, 255, 255, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-}
-.alarm-btn--silence svg { width: 18px; height: 18px; }
 /* The card: name and time, the live time to its instant, Dismiss / Snooze, then a row of quieter
    choices that turns into the custom snooze box in place (the two cross-fade in one grid cell). */
 .alarm-card { position: relative; }
