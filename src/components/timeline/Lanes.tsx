@@ -18,6 +18,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
+import { doneOrigin } from '../common/doneOrigin.ts'
 import type { EndTarget, LaneVariant } from './SpanLane.tsx'
 import { SpanLane } from './SpanLane.tsx'
 import { TimeEntry } from './TimeEntryPopover.tsx'
@@ -206,7 +207,7 @@ function DoneButton({ instant, name }: { instant: InstantRecord; name: string })
       className="span-chip__end-btn span-chip__end-btn--done"
       aria-label={label}
       title={label}
-      onClick={e => { e.stopPropagation(); act.stopNowSpan(instant.id) }}
+      onClick={e => { e.stopPropagation(); if (instant.todo) act.completeTodo(instant.todo.id, doneOrigin(e.currentTarget)); else act.stopNowSpan(instant.id) }}
       onDoubleClick={e => e.stopPropagation()}
     >
       <span className="span-chip__done" aria-hidden>{MARKS.todoDone}</span>

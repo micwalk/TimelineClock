@@ -1,5 +1,6 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
+import type { DoneOrigin } from '../domain/doneBurst.ts'
 
 export type ListTab = 'instants' | 'favorites' | 'todos' | 'spans' | 'alarms' | 'groups'
 
@@ -66,10 +67,13 @@ export interface UiState {
   /** The todo capture box (N, or the Todos tab's ＋): a name and Enter, over whatever is on screen. */
   captureOpen: boolean
   /**
-   * A todo just done: the ✓ instant (its chip flares, sparks fly from it) and the todo (its row
-   * flares). `n` tells one celebration from the next.
+   * A todo just done: the ✓ instant (its chip flares) and the todo (its row flares); `origin`, the
+   * box that was tapped (its ✓ springs out there and the confetti flies from it). `n` tells one
+   * celebration from the next.
    */
-  celebrating: { instantId: string; todoId: string; n: number } | null
+  celebrating: { instantId: string; todoId: string; n: number; origin?: DoneOrigin } | null
+  /** A Done box charging (domain/doneBurst: the tap's anticipation), before act.completeTodo makes it done. */
+  charging: { todoId: string; origin: DoneOrigin; n: number } | null
   /** A todo to find in the Todos tab (a long-press on its chip's box): its row scrolls into view and lights up. */
   foundTodo: { id: string; n: number } | null
   /** A short note over the timeline with one choice (components/common/Toast); gone by itself after TOAST_MS. */
@@ -110,6 +114,7 @@ export const useUi = create<UiState>(() => ({
   seriesHint: null,
   captureOpen: false,
   celebrating: null,
+  charging: null,
   foundTodo: null,
   toast: null,
 }))
@@ -169,10 +174,17 @@ export const ui = {
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
   setCapture: (captureOpen: boolean) => useUi.setState({ captureOpen }),
-  celebrate(instantId: string, todoId: string) {
+  /** A Done box starts charging (act.completeTodo); `celebrate` (the pop) or `endCharge` ends it. */
+  charge(todoId: string, origin: DoneOrigin) {
+    useUi.setState({ charging: { todoId, origin, n: ++celebrations } })
+  },
+  endCharge(todoId: string) {
+    useUi.setState(s => (s.charging?.todoId === todoId ? { charging: null } : s))
+  },
+  celebrate(instantId: string, todoId: string, origin?: DoneOrigin) {
     if (celebrateTimer) clearTimeout(celebrateTimer)
     const n = ++celebrations
-    useUi.setState({ celebrating: { instantId, todoId, n } })
+    useUi.setState(s => ({ celebrating: { instantId, todoId, n, ...(origin ? { origin } : {}) }, charging: s.charging?.todoId === todoId ? null : s.charging }))
     celebrateTimer = setTimeout(() => { celebrateTimer = null; useUi.setState(s => (s.celebrating?.n === n ? { celebrating: null } : s)) }, CELEBRATE_MS)
   },
   findTodo(id: string) {

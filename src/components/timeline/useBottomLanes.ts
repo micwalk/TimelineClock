@@ -7,9 +7,6 @@ import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, resolveSpan, resolveTimeRef, savedSpanLanes, spanEndName, spanGeometry, spanHeader } from '../../domain/spans.ts'
 import { useEntities, useShownInstants } from '../../store/entities.ts'
-import { useSettings } from '../../store/settings.ts'
-import { useQuick } from '../../store/quick.ts'
-import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
@@ -62,23 +59,13 @@ export function useVisibleLanes(): BottomLane[] {
     inMove: !!s.moveMode,
   })))
 
-  const favoriteLanes = useSettings(s => s.favoriteLanes)
   const cursorHidden = useUi(s => s.cursorHidden)
-  // A running stopwatch's lanes to Now (its start, when kept favorited, and the latest lap) always show.
-  const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
-  const startId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[0] : null))
-  const keepStart = useSettings(s => s.stopwatchKeepStart)
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
     const ref = (i: InstantRecord): TimeRef => (i.id === v.moving ? 'center' : i.tsEpochMs)
     const byId = new Map(instants.map(i => [i.id, i]))
     const resolved = spans.map(sp => resolveSpan(sp, byId)).filter((r): r is ResolvedSpan => !!r)
-    // A counting todo's lane to Now always shows (docs/prd_todos.md: silenced, not done, and
-    // visible), as a running stopwatch's does.
-    const openTodos = new Set((todos ?? []).filter(t => t.status === 'open').map(t => t.id))
-    const counting = instants.filter(i => i.favorite && i.todo && (i.todo.role === 'at' || i.todo.role === 'start') && openTodos.has(i.todo.id)).map(i => i.id)
-    const tracked = new Set([...(trackedId ? [trackedId, ...(keepStart && startId ? [startId] : [])] : []), ...counting])
     const saved = savedSpanLanes({
       resolved,
       focusMode: v.mode,
@@ -86,8 +73,6 @@ export function useVisibleLanes(): BottomLane[] {
       focusedSpanId: v.focusedSpanId,
       selectedInstantId: v.selectedId,
       now: Date.now(),
-      favoriteLanes,
-      trackedIds: tracked.size > 0 ? tracked : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -126,7 +111,7 @@ export function useVisibleLanes(): BottomLane[] {
       }
     }
     return out
-  }, [instants, spans, todos, v, favoriteLanes, cursorHidden, trackedId, startId, keepStart])
+  }, [instants, spans, todos, v, cursorHidden])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)

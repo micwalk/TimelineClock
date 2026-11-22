@@ -13,7 +13,7 @@ import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
 import { view } from '../store/view.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
-import { FANFARE } from './tones.ts'
+import { DONE_DING, doneCharge } from './tones.ts'
 import { isNativeShell, requestNativeNotifications, silenceNativeAlarms } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
 
@@ -240,10 +240,13 @@ export function silence() {
  */
 export const previewSound = (sound: AlarmSound, onEnded?: () => void) => audio.playOnce(sound, onEnded)
 
-/** The Done fanfare (services/tones FANFARE), at `volume` (0–1). Only while the page is on screen. */
-export function playFanfare(volume: number) {
+/**
+ * The Done sounds (services/tones), at `volume` (0–1): the charge's swoosh (`seconds` long) and
+ * the ding on the pop. Only while the page is on screen.
+ */
+export function playDoneSound(kind: 'charge' | 'ding', volume: number, seconds = 0) {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-  audio.playPreset(FANFARE, volume)
+  if (kind === 'charge') { if (seconds > 0) audio.playPreset(doneCharge(seconds), volume) } else audio.playPreset(DONE_DING, volume)
 }
 
 /** Stops a preview. */

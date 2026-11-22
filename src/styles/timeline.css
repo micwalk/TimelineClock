@@ -1460,6 +1460,7 @@
   40% { filter: brightness(1.8); box-shadow: 0 0 calc(22px * var(--glow)) var(--c-ok); }
 }
 .chip--saved.is-celebrating { --accent: var(--c-ok); --halo: var(--c-ok); animation: done-flare 1200ms ease-out 1; }
+.chip.is-done-popping .chip__todo { animation: done-box-return 1050ms linear 1; }
 .sparks { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 305; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .chip--saved.is-celebrating { animation: done-flare-still 1200ms ease-out 1; }

@@ -26,6 +26,7 @@ import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { doneOrigin } from '../common/doneOrigin.ts'
 import { useLongPress } from '../../hooks/useLongPress.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
@@ -104,6 +105,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const todoCounting = useEntities(s => !!openTodo && s.instants.some(i => i.todo?.id === openTodo && !!i.favorite && (i.todo.role === 'at' || i.todo.role === 'start')))
   const doneFoldTs = useEntities(s => (doneFolded ? s.instants.find(i => i.id === doneFolded)?.tsEpochMs : undefined))
   const celebrating = useUi(s => s.celebrating?.instantId === inst.id || (!!doneFolded && s.celebrating?.instantId === doneFolded))
+  // Its todo's ✓ is springing out of a box drawn over this chip's (components/timeline/Celebration).
+  const popping = useUi(s => !!inst.todo && s.celebrating?.todoId === inst.todo.id && !!s.celebrating.origin?.box)
   // Only alarms and a selected chip's tools care whether it is past: others don't watch the clock.
   const isPast = useFrameValueWhile(!!inst.alarms || selected, f => ts < f.now, false)
   const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
@@ -237,7 +240,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           <BellAlertIcon aria-hidden />
         </button>
       )}
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -318,9 +321,10 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
 
 /** A selected open todo's box: a tap is Done; a long-press opens the Todos tab at its row (act.findTodo). */
 function TodoBoxButton({ todoId, name }: { todoId: string; name: string }) {
-  const press = useLongPress(() => act.findTodo(todoId), () => act.doneTodo(todoId))
+  const ref = useRef<HTMLButtonElement>(null)
+  const press = useLongPress(() => act.findTodo(todoId), () => act.completeTodo(todoId, ref.current ? doneOrigin(ref.current) : undefined))
   return (
-    <button type="button" className="chip__todo-btn" aria-label={`Done: ${name} (long-press: show it in the Todos tab)`} title="Done (long-press: show it in the Todos tab)"
+    <button ref={ref} type="button" className="chip__todo-btn" aria-label={`Done: ${name} (long-press: show it in the Todos tab)`} title="Done (long-press: show it in the Todos tab)"
       {...press}><TodoBoxIcon aria-hidden /></button>
   )
 }

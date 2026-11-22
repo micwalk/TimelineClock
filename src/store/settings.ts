@@ -14,9 +14,6 @@ import { sanitizeRingDefaults } from '../domain/alarmPicker.ts'
 import type { TodoTimes } from '../domain/todos.ts'
 import { DEFAULT_TODO_TIMES, parseClockSetting } from '../domain/todos.ts'
 
-/** When favorites get their lane to Now: only while selected (default), or always. */
-export type FavoriteLanes = 'selected' | 'always'
-
 export type VerticalDir = 'down' | 'up'
 
 /** The timeline's sky shading: Auto follows the sun at the location (else a fixed 6a–6p day), Fixed always uses 6a–6p. */
@@ -51,7 +48,6 @@ export interface SettingsState {
   glow: number
   /** The user's changes to behavior tunables; missing keys use the defaults. */
   tunables: Partial<Tunables>
-  favoriteLanes: FavoriteLanes
   /** Which way the timeline runs; Auto follows the window's longer side. */
   orientation: OrientationSetting
   /** Vertical only: 'down' puts the future below Now. */
@@ -81,7 +77,7 @@ export interface SettingsState {
   /** Todos' quick times (domain/todos quickChoices): Tonight and Tomorrow, "HH:MM". */
   todoTonight: string
   todoTomorrow: string
-  /** The short fanfare on ✓ Done (services/tones), and how loud (0–1). */
+  /** The Done sound on ✓ (services/tones: a charge and a ding), and how loud (0–1); stored under their first names (a fanfare). */
   doneFanfare: boolean
   fanfareVolume: number
   /** Last layout version whose one-time migrations ran (see store/migrations.ts). */
@@ -94,7 +90,6 @@ export function sanitizeSettings(raw: unknown): SettingsState {
   return {
     glow: typeof r.glow === 'number' && Number.isFinite(r.glow) ? Math.min(2, Math.max(0, r.glow)) : 1,
     tunables: sanitizeTunableOverrides(r.tunables),
-    favoriteLanes: r.favoriteLanes === 'always' ? 'always' : 'selected',
     orientation: r.orientation === 'horizontal' || r.orientation === 'vertical' ? r.orientation : 'auto',
     verticalDir: r.verticalDir === 'up' ? 'up' : 'down',
     tickSnap: r.tickSnap !== false,
@@ -120,7 +115,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 
 export const useSettings = create<SettingsState>(() => sanitizeSettings(loadJson<unknown>(SETTINGS_KEY, {})))
 
-useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, favoriteLanes: s.favoriteLanes, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, todoTonight: s.todoTonight, todoTomorrow: s.todoTomorrow, doneFanfare: s.doneFanfare, fanfareVolume: s.fanfareVolume, layoutVersion: s.layoutVersion }))
+useSettings.subscribe(s => saveJson(SETTINGS_KEY, { glow: s.glow, tunables: s.tunables, orientation: s.orientation, verticalDir: s.verticalDir, tickSnap: s.tickSnap, stopwatchKeepStart: s.stopwatchKeepStart, agendaPlacement: s.agendaPlacement, alarmRings: s.alarmRings, sky: s.sky, skyStyle: s.skyStyle, skyLocation: s.skyLocation, sunEvents: s.sunEvents, dstShifts: s.dstShifts, seasons: s.seasons, groupVisibility: s.groupVisibility, stripSnap: s.stripSnap, todoTonight: s.todoTonight, todoTomorrow: s.todoTomorrow, doneFanfare: s.doneFanfare, fanfareVolume: s.fanfareVolume, layoutVersion: s.layoutVersion }))
 
 /** Mirrors appearance settings onto the document root. */
 export function applySettingsToDocument() {
@@ -145,7 +140,6 @@ export const getTunables = (): Tunables => resolveTunables(useSettings.getState(
 
 export const settings = {
   setGlow: (glow: number) => useSettings.setState({ glow }),
-  setFavoriteLanes: (favoriteLanes: FavoriteLanes) => useSettings.setState({ favoriteLanes }),
   setOrientation: (orientation: OrientationSetting) => useSettings.setState({ orientation }),
   setVerticalDir: (verticalDir: VerticalDir) => useSettings.setState({ verticalDir }),
   setTickSnap: (tickSnap: boolean) => useSettings.setState({ tickSnap }),

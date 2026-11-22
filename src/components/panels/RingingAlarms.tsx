@@ -37,6 +37,7 @@ import * as act from '../../store/actions.ts'
 import { parseWhen, quickChoices } from '../../domain/todos.ts'
 import { MARKS, TODO_COPY } from '../../config/labels.ts'
 import { TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { doneOrigin } from '../common/doneOrigin.ts'
 
 const clock = (ts: number) => formatClockCompact(ts, false)
 const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
@@ -113,7 +114,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
           <>
             <button type="button" className="alarm-btn alarm-btn--start glow-box" onClick={() => act.startTodo(todoId, { fromAlarm: true })}
               title="On it: it counts on the timeline from its time until you tap ✓"><PlayIcon aria-hidden /> Start</button>
-            <button type="button" className="alarm-btn alarm-btn--todo-done glow-box" onClick={() => act.doneTodo(todoId)}
+            <button type="button" className="alarm-btn alarm-btn--todo-done glow-box" onClick={e => act.completeTodo(todoId, doneOrigin(e.currentTarget, { box: false }))}
               title="Done already">{MARKS.todoDone} Done</button>
           </>
         )}

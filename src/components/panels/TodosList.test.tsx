@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { TodosList } from './TodosList.tsx'
 import { RingingAlarms } from './RingingAlarms.tsx'
@@ -7,6 +7,7 @@ import { useAlarms } from '../../store/alarms.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { MINUTE } from '../../domain/time.ts'
 import { useUi } from '../../store/ui.ts'
+import { getTunables } from '../../store/settings.ts'
 import * as actions from '../../store/actions.ts'
 
 beforeEach(() => {
@@ -33,10 +34,14 @@ describe('the Todos tab', () => {
     expect(screen.getByLabelText('takes 20m').querySelector('svg')).toBeTruthy()
   })
 
-  it("a row's box does it, and a done one's box opens it again", () => {
+  it("a row's box does it (after its charge), and a done one's box opens it again", () => {
+    vi.useFakeTimers()
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)
     fireEvent.click(screen.getByRole('button', { name: 'Done: Dishes' }))
+    expect(entities.getTodo('t1')!.status).toBe('open')
+    act(() => { vi.advanceTimersByTime(getTunables().doneChargeMs) })
+    vi.useRealTimers()
     expect(entities.getTodo('t1')!.status).toBe('done')
     expect(screen.getByText(/1 done today/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Open Dishes again' }))

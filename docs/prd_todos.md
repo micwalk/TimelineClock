@@ -317,18 +317,23 @@ back out (principle 7).
 
 - **Glow pulse**: the ✓ chip, the lane chip it came from and the Todos row flare in a short
   glow burst (the drop pulse's family, `--accent`/`--halo` × `--glow`).
-- **Sparks**: glowing e-confetti bursts from the ✓: a few dozen small sparks in the theme's
-  accent colours, flung out, falling and fading over about a second and a half. Drawn on one
-  short-lived canvas over the timeline from engine frames (`f.perf`), gone when done, so
-  the timeline's DOM and its 60fps budget are untouched. Count, spread and length are
-  tunables.
-- **Fanfare**: a short "ta-da-daaa" brass call, synthesized like the alarm tones (Web Audio,
-  `services/tones.ts`; an original phrase, not a recording). Settings › Alarms: "Done
-  fanfare" on/off and its own volume. Plays only when the page is on screen; a Done from the
-  Android notification with the app closed is silent (Phase 1b: maybe the native side plays
-  a rendered `fanfare.ogg`, as the tones are rendered).
-- `reducedMotion()`: the glow fades in and out, no sparks; the fanfare still follows its
-  setting.
+- **Charge and pop** (owner, 2026-11-22; domain/doneBurst): a tap on a Done box (a Todos row,
+  a selected chip, the lane's ✓) charges it first (`doneChargeMs`, 600 ms): glowing motes rush
+  in from outside onto its border, brighter as they near it; the border glows harder, the
+  middle fills until opaque, and the box shrinks a little and turns green. Then it pops, and
+  only then is the todo done (dated at the tap): the box is green, its fill becomes a green ✓
+  that springs out past the box and back, and green confetti is thrown out as fast, tumbling,
+  falling and fading. Drawn on one short-lived canvas over everything from engine frames
+  (`f.perf`), gone when done, so the timeline's DOM and its 60fps budget are untouched. Motes,
+  confetti count, spread and length are tunables. A Done with no box (the ringing card) pops at
+  once where it was tapped.
+- **Sound**: a sci-fi swoosh of air sucked in through the charge, then one ding on the pop
+  (Web Audio, `services/tones.ts` `doneCharge`, `DONE_DING`; the earlier trumpet call,
+  `FANFARE`, is shelved). Settings › Alarms › Todos: "Done sound" on/off and its own volume.
+  Plays only when the page is on screen; a Done from the Android notification with the app
+  closed is silent (Phase 1b: maybe a rendered sound, as the tones are rendered).
+- `reducedMotion()`: done at once; the glow fades in and out, no charge or confetti; the ding
+  still follows its setting.
 
 ## 8. Phases
 
@@ -435,7 +440,7 @@ Calls made by Claude while building (for the owner to override):
 | 5 | Only ▶ Start starts a todo. Its card asks ▶ Start (green, first: from its time) or ✓ Done; Silence answers it without starting (it waits in Now); so does an alarm nobody answered, a chime (whose card is the full todo card, without Silence) and Dismiss on the Android notification. Waiting, ▶ Start (its row, its chip) counts from Now: a `start` instant ("▶ Laundry", Phase 3's role), so the plan stays where it was and history shows the gap | Owner, 2026-11-21: Dismiss reads as Start; Silence hides without starting (replaces "a chime and an unanswered alarm start the count") |
 | 5b | Snooze 5m on a todo's card at its time moves the todo itself 5 minutes on (as Later does), with no bell added; a warning's snooze stays a reminder before its time | Owner, 2026-11-21 |
 | 5c | The panel's Silence (sound off, cards kept) is a small 🔇 by its title, for every alarm, lit once muted; the big button under the cards is gone | Owner, 2026-11-21; it no longer reads like the todo card's Silence |
-| 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says | Otherwise a dismissed todo would be invisible unless selected |
+| 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says (owner, 2026-11-22: that setting is gone; every favorite's lane shows) | Otherwise a dismissed todo would be invisible unless selected |
 | 7 | Done before its time, or Won't do before it rang: an `at` none of whose alarms rang is deleted | §4.3's "a plan that never happened isn't history" (said for Back to the list) |
 | 8 | Later also drops pending snoozes, stops a count (nothing saved), and adds an alarm at the time if none is left to ring | Later is "the plan changed": it should ring at the new time, once |
 | 9 | A folded ✓ draws as a Mark (a stub from the axis), not as nothing | Its line stays visible: history isn't hidden, only its chip folds |

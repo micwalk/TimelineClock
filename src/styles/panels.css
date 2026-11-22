@@ -1189,6 +1189,9 @@
   transition: transform 120ms ease, color 120ms ease;
 }
 .todo-check > svg { width: 24px; height: 24px; }
+/* A Done's ✓ springs out of a box drawn over this one (Celebration): this one waits until it fades. */
+.todo-check.is-popping > svg { animation: done-box-return 1050ms linear 1; }
+@keyframes done-box-return { 0%, 80% { opacity: 0; } 100% { opacity: 1; } }
 .todo-check::after { content: ''; position: absolute; inset: -6px; }
 .todo-check:hover { transform: scale(1.1); }
 .todo-check.is-open:hover { color: var(--c-ok); filter: drop-shadow(0 0 calc(5px * var(--glow)) var(--c-ok)); }
@@ -1204,6 +1207,9 @@
 .todo-dur-pick__label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; }
 .todo-dur-pick__label .todo-dur__icon { width: 14px; height: 14px; }
 .todo-dur-pick .alarm-link { min-width: 40px; justify-content: center; }
+/* The quick lengths are one line: none, 5m, 15m, 30m, 1h. */
+.todo-dur-pick .todo-when__chips { flex-wrap: nowrap; }
+.todo-dur-pick .todo-when__chips .alarm-link { flex: 1 1 0; }
 .todo-dur-pick .alarm-link.is-on { background: color-mix(in srgb, var(--c-todo) 50%, transparent); color: #fff; }
 .todo-dur-pick__typed { display: contents; }
 .todo-dur-pick__typed > span { color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }

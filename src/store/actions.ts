@@ -1,6 +1,6 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
-import { engine } from '../engine/viewportEngine.ts'
+import { engine, reducedMotion } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
 import { noteLaneFlow } from '../engine/laneFlow.ts'
 import type { NavTarget } from '../domain/navigation.ts'
@@ -37,6 +37,7 @@ import {
 import { newAlarmId, newInstantId, storedInstants } from '../domain/entities.ts'
 import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
+import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
   countingInstant, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
 } from '../domain/todos.ts'
@@ -1534,12 +1535,13 @@ export function makeInstantTodo(id: string, opts: { name?: boolean } = {}): stri
  * `done` instant at Now ("✓ Feed cats"). Counting, the span to Now becomes the saved span to it
  * (the favorite's ordinary stop: entities.closeNowSpan), its stretch; otherwise nothing was timed
  * and no span is made. Its alarms answered or cancelled; done before its time, a plan that never
- * rang is let go. The record is done, and it is celebrated (glow, sparks, fanfare).
+ * rang is let go. The record is done, and it is celebrated (glow, confetti, a ding): at `origin`,
+ * the box that was tapped, when given. `at`: when it was done (a charged tap's moment), else Now.
  */
-export function doneTodo(todoId: string): string | undefined {
+export function doneTodo(todoId: string, opts: { at?: number; origin?: DoneOrigin } = {}): string | undefined {
   const todo = entities.getTodo(todoId)
   if (!todo || todo.status !== 'open') return
-  const now = nowTime()
+  const now = opts.at ?? nowTime()
   const mine = todoInstants(todoId)
   const at = todoAt(mine)
   const counting = countingInstant(mine, now)
@@ -1562,8 +1564,34 @@ export function doneTodo(todoId: string): string | undefined {
   }
   entities.patchTodo(todoId, { status: 'done', closedAt: now })
   ui.markDropped(doneId)
-  ui.celebrate(doneId, todoId)
+  ui.celebrate(doneId, todoId, opts.origin)
   return doneId
+}
+
+/** Done boxes charging (completeTodo), by todo: a second tap while one charges does nothing. */
+const charging = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * A tap on a todo's Done box (its Todos row, its selected chip, its lane's ✓): the box charges
+ * for the `doneChargeMs` tunable (domain/doneBurst: motes rush in, it fills and greens), then
+ * pops, and only then is the todo done (doneTodo), dated at the tap. With reduced motion, no
+ * charge, or no box to charge, it is done at once.
+ */
+export function completeTodo(todoId: string, origin?: DoneOrigin) {
+  if (charging.has(todoId)) return
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const ms = getTunables().doneChargeMs
+  if (!origin || !origin.box || ms <= 0 || reducedMotion()) {
+    doneTodo(todoId, { origin })
+    return
+  }
+  const at = nowTime()
+  ui.charge(todoId, origin)
+  charging.set(todoId, setTimeout(() => {
+    charging.delete(todoId)
+    if (!doneTodo(todoId, { at, origin })) ui.endCharge(todoId)
+  }, ms))
 }
 
 /** Won't do: the record is dropped; it stops counting (nothing saved) and alarms still to ring are cancelled. */

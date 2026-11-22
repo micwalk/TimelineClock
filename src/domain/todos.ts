@@ -443,7 +443,7 @@ function repeatWords(words: readonly string[], k: number): { repeat: Repeat; at:
 }
 
 /** The Todos tab's quick durations (its ⋯ menu), minutes; "—" before them is none. */
-export const TODO_DURATIONS_MIN: readonly number[] = [5, 10, 15, 20, 30, 45, 60, 90, 120]
+export const TODO_DURATIONS_MIN: readonly number[] = [5, 15, 30, 60]
 
 /** Times the quick choices use: Tonight and Tomorrow (Settings), as hours and minutes. */
 export interface TodoTimes { tonight: { h: number; m: number }; tomorrow: { h: number; m: number } }

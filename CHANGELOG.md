@@ -7,7 +7,7 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
-## 0.8.0 — 2026-11-21
+## 0.8.0 — 2026-11-22
 
 **Android app: install again** (the vibration fix below is native; the rest is web. A todo's
 notification still offers Dismiss / Snooze: Dismiss there leaves it waiting, and Start / Done
@@ -19,8 +19,8 @@ there is Phase 1b).
   upcoming, unscheduled (drag to reorder; **Schedule**: In 15m, In 1h, Tonight, Tomorrow, a typed
   time or the time entry) and the last day's done, with how long each took ("31m · planned 20m").
   A row's box is its Done (a checked one opens it again); a tap on an unscheduled row opens
-  Schedule (the drawer stays). Its ⋯ sets a **Duration** from a short list ("—" for none, 5m … 2h)
-  or typed; a duration shows as a stopwatch and its length. **N** adds one from anywhere without
+  Schedule (the drawer stays). Its ⋯ sets a **Duration** from one row ("—" for none, 5m, 15m,
+  30m, 1h) or typed; a duration shows as a stopwatch and its length. **N** adds one from anywhere without
   moving anything else, and the new **Todo** button (left of ＋; under Alarm in vertical) goes to
   the tab.
 - **When a todo rings**: **▶ Start** (green, first) or **✓ Done** (already did it). Started, it
@@ -44,14 +44,21 @@ there is Phase 1b).
   length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
   once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
   you zoom in.
-- **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a herald's
-  trumpet call plays (as for royal news: a quick pickup into a held chord) (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
-  times; sparks follow reduced motion, and their count, spread and length are in Advanced).
+- **Done is celebrated**: tapping a todo's box (its row, its selected chip, or the lane's ✓)
+  charges it: glowing motes rush in onto its border, it glows harder, fills, shrinks a little and
+  turns green, over a sci-fi swoosh of air sucked in. Then it pops, and the todo is done (dated at
+  the tap): its fill becomes a green ✓ that springs out past the box and back, green confetti
+  flies out and falls, and it dings. The ✓ chip and the row flare too. Settings › Alarms › Todos:
+  the Done sound on/off and its volume, with Tonight and Tomorrow's times. With reduced motion it
+  is done at once, with the flare and the ding; the charge's length (0: pop at once), the motes and
+  the confetti are in Advanced.
 - **Repeating todos**: the Alarm picker's **Todo** switch (with an optional duration), or
   "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next
   arrives is simply passed.
 - Badges: the Todos tab, the ☰ and the Todo button count what rang and isn't done. Todos are in
   backups (`data.todos`) and follow their group, as instants do.
+- **Favorites' lanes** to Now always show: the "Lanes for favorites" setting (When selected /
+  Always) is gone, until showing them by zoom, as instants are.
 - **Mute** is a small 🔇 by the alarm panel's title (it lights once muted, and the bell stops
   shaking), in place of the big Silence button under the cards.
 - **Sound previews** have a ■ to stop them while they play, and picking a sound (or closing the

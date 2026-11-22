@@ -218,6 +218,7 @@ const E5 = midi(76)
 const G5 = midi(79)
 
 /**
+ * Shelved (owner, 2026-11-22: Done plays the sci-fi charge and ding instead; kept to try again).
  * The Done fanfare (docs/prd_todos.md §7.2): a herald's trumpet call, as for royal news (an
  * original call on the natural trumpet's notes): a quick pickup up the C major arpeggio (G, C, E)
  * landing on a held C major chord in three trumpets, in a little hall (owner, 2026-11-21: the
@@ -245,5 +246,102 @@ export const FANFARE: TonePreset = {
     tail.stop(t + 0.43 + hold + 1.4)
     tail.onended = () => { tail.disconnect(); room.disconnect() }
     return [...sources, tail]
+  },
+}
+
+/** `seconds` of white noise, as a source started at `t` (stopped at its end). */
+function noise(ctx: BaseAudioContext, t: number, seconds: number): AudioBufferSourceNode {
+  const n = Math.max(1, Math.floor(ctx.sampleRate * seconds))
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
+  const src = ctx.createBufferSource()
+  src.buffer = buf
+  src.start(t)
+  src.stop(t + seconds)
+  return src
+}
+
+/**
+ * The Done box charging (owner, 2026-11-22: a sci-fi swoosh, air sucked in, before the ding):
+ * noise through a band that sweeps up, swelling the way a sound played backwards does and cut
+ * short at the pop, over a faint power-up whine gliding up. `seconds`: the charge's length.
+ */
+export function doneCharge(seconds: number): TonePreset {
+  return {
+    name: 'Charge',
+    cycle: seconds,
+    play(ctx, out, t) {
+      const end = t + seconds
+      const air = noise(ctx, t, seconds + 0.03)
+      const band = ctx.createBiquadFilter()
+      band.type = 'bandpass'
+      band.frequency.setValueAtTime(350, t)
+      band.frequency.exponentialRampToValueAtTime(4200, end)
+      band.Q.setValueAtTime(0.9, t)
+      band.Q.linearRampToValueAtTime(3.5, end)
+      const airGain = ctx.createGain()
+      airGain.gain.setValueAtTime(0.0001, t)
+      airGain.gain.exponentialRampToValueAtTime(0.9, end)
+      airGain.gain.linearRampToValueAtTime(0.0001, end + 0.025)
+      air.connect(band)
+      band.connect(airGain)
+      airGain.connect(out)
+      const whine = ctx.createOscillator()
+      const whineGain = ctx.createGain()
+      whine.type = 'sine'
+      whine.frequency.setValueAtTime(420, t)
+      whine.frequency.exponentialRampToValueAtTime(1650, end)
+      whineGain.gain.setValueAtTime(0.0001, t)
+      whineGain.gain.exponentialRampToValueAtTime(0.1, end)
+      whineGain.gain.linearRampToValueAtTime(0.0001, end + 0.025)
+      whine.connect(whineGain)
+      whineGain.connect(out)
+      whine.start(t)
+      whine.stop(end + 0.03)
+      whine.onended = () => { whine.disconnect(); whineGain.disconnect() }
+      air.onended = () => { air.disconnect(); band.disconnect(); airGain.disconnect() }
+      return [air, whine]
+    },
+  }
+}
+
+const E6 = midi(88)
+
+/**
+ * The Done ding (owner, 2026-11-22): one bright, glassy strike on the pop. A bell on E6 with
+ * near-harmonic partials (glass more than iron), a twin a few cents off for a shimmer, a quick
+ * glide down onto the note for a sci-fi edge, in a little hall.
+ */
+export const DONE_DING: TonePreset = {
+  name: 'Ding',
+  cycle: 1.8,
+  play(ctx, out, t) {
+    const room = hall(ctx, out, 1.3, 0.35)
+    const ratios = [1, 2, 3.01, 4.2] as const
+    const weights = [0.5, 0.2, 0.08, 0.04] as const
+    const sources: AudioScheduledSourceNode[] = [
+      ...struck(ctx, room, t, E6, 1.4, 1, ratios, weights),
+      ...struck(ctx, room, t, E6 * 2 ** (6 / 1200), 1.1, 0.5, ratios, weights),
+    ]
+    // The edge: a short sine falling an octave onto the note.
+    const zap = ctx.createOscillator()
+    const zapGain = ctx.createGain()
+    zap.frequency.setValueAtTime(E6 * 2, t)
+    zap.frequency.exponentialRampToValueAtTime(E6, t + 0.05)
+    zapGain.gain.setValueAtTime(0.18, t)
+    zapGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09)
+    zap.connect(zapGain)
+    zapGain.connect(room)
+    zap.start(t)
+    zap.stop(t + 0.1)
+    zap.onended = () => { zap.disconnect(); zapGain.disconnect() }
+    const tail = ctx.createConstantSource()
+    tail.offset.value = 0
+    tail.connect(room)
+    tail.start(t)
+    tail.stop(t + 1.4 + 1.3)
+    tail.onended = () => { tail.disconnect(); room.disconnect() }
+    return [...sources, zap, tail]
   },
 }

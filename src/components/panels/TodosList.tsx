@@ -19,6 +19,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY } from '../../config/labels.ts'
 import type { TodoRow } from '../../domain/todos.ts'
+import { doneOrigin } from '../common/doneOrigin.ts'
 import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parseWhen, quickChoices, todoActual, todoInputAt, todoReading } from '../../domain/todos.ts'
 import { todoIndex, useTodoSections } from '../../hooks/useTodos.ts'
 import { describeRepeatShort } from '../../domain/series.ts'
@@ -206,6 +207,9 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   const instants = useEntities(s => s.instants)
   const mine = instantsOf(todoIndex(instants), todo.id)
   const flare = useUi(s => s.celebrating?.todoId === todo.id)
+  // Its ✓ is springing out of a box drawn over this one (components/timeline/Celebration): this
+  // one keeps out of it until that fades.
+  const popping = useUi(s => s.celebrating?.todoId === todo.id && !!s.celebrating.origin?.box)
   const found = useUi(s => s.foundTodo?.id === todo.id)
   const open = todo.status === 'open'
   // Made from an unnamed instant: it reads as its time, as the instant does.
@@ -228,9 +232,9 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
       <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
         onClick={tap} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) tap() }}>
         {/* Its box: Done (a closed one's opens it again). */}
-        <button type="button" className={`todo-check is-${open ? 'open' : todo.status}`}
+        <button type="button" className={`todo-check is-${open ? 'open' : todo.status}${popping ? ' is-popping' : ''}`}
           aria-label={open ? `Done: ${name}` : `Open ${name} again`} title={open ? 'Done' : 'Open it again'}
-          onClick={e => { e.stopPropagation(); if (open) act.doneTodo(todo.id); else act.reopenTodo(todo.id) }}>
+          onClick={e => { e.stopPropagation(); if (open) act.completeTodo(todo.id, doneOrigin(e.currentTarget)); else act.reopenTodo(todo.id) }}>
           <TodoBoxIcon state={open ? 'open' : (todo.status as 'done' | 'passed' | 'dropped')} aria-hidden />
         </button>
         <span className="todo-row__main">

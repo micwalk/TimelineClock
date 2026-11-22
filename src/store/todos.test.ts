@@ -1,10 +1,10 @@
 // Todos end to end through the stores (docs/prd_todos.md Phase 1).
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { entities, useEntities } from './entities.ts'
 import { initialViewState, useView } from './view.ts'
 import { useAlarms } from './alarms.ts'
 import { useUi } from './ui.ts'
-import { useSettings } from './settings.ts'
+import { getTunables, useSettings } from './settings.ts'
 import { DEFAULT_RING_DEFAULTS } from '../domain/alarmPicker.ts'
 import { ringKey } from '../domain/alarms.ts'
 import { instantsByTodo, todoState } from '../domain/todos.ts'
@@ -168,6 +168,38 @@ describe('when its alarm rings', () => {
     expect(entities.getInstant(atId)!.favorite).toBe(false)
     expect(entities.getTodo(id)).toMatchObject({ status: 'done' })
     expect(useUi.getState().celebrating).toMatchObject({ instantId: done.id, todoId: id })
+  })
+
+  it('a tap on a Done box charges it first: done at the pop, dated at the tap; a second tap does nothing', () => {
+    vi.useFakeTimers()
+    try {
+      const { id, atId } = ringingTodo()
+      act.startTodo(id, { fromAlarm: true })
+      const origin = { x: 10, y: 10, size: 15, radius: 3, color: '#fff', box: true }
+      const tapped = Date.now()
+      act.completeTodo(id, origin)
+      act.completeTodo(id, origin)
+      expect(useUi.getState().charging).toMatchObject({ todoId: id, origin })
+      expect(entities.getTodo(id)!.status).toBe('open')
+      vi.advanceTimersByTime(getTunables().doneChargeMs)
+      const dones = instantsOf(id).filter(i => i.todo?.role === 'done')
+      expect(dones).toHaveLength(1)
+      expect(dones[0].tsEpochMs).toBe(tapped)
+      expect(entities.getTodo(id)!.status).toBe('done')
+      expect(entities.getInstant(atId)!.favorite).toBe(false)
+      expect(useUi.getState().charging).toBeNull()
+      expect(useUi.getState().celebrating).toMatchObject({ todoId: id, origin })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a Done without a box (the ringing card) is done at once, its ✓ popping where it was tapped', () => {
+    const { id } = ringingTodo()
+    const origin = { x: 10, y: 10, size: 30, radius: 0, color: '#fff', box: false }
+    act.completeTodo(id, origin)
+    expect(entities.getTodo(id)!.status).toBe('done')
+    expect(useUi.getState().celebrating).toMatchObject({ todoId: id, origin })
   })
 
   it('Done from the ringing card: a ✓ at Now, no span, and no count starts', () => {
