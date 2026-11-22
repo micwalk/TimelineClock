@@ -101,7 +101,9 @@ describe('todoSections', () => {
   ]
   const s = todoSections(todos, instantsByTodo(instants), NOW)
   it('sorts each section', () => {
-    expect(s.now.map(r => r.todo.id)).toEqual(['count', 'wait'])
+    // Counting is Active; what rang and waits is Now.
+    expect(s.active.map(r => r.todo.id)).toEqual(['count'])
+    expect(s.now.map(r => r.todo.id)).toEqual(['wait'])
     expect(s.today.map(r => r.todo.id)).toEqual(['later'])
     expect(s.upcoming.map(r => r.todo.id)).toEqual(['tomorrow'])
     expect(s.unscheduled.map(r => r.todo.id)).toEqual(['list1', 'list2'])
@@ -213,13 +215,14 @@ describe('stretches and pause (domain)', () => {
     expect(todoActual(mine, [], 10, 'a')).toEqual({ ms: 10, stretches: 1, counting: true })
   })
 
-  it('a ⏸ makes it paused; its stretches are listed in time order, the counting one last', () => {
-    const mine = [inst('a', 0, 'at'), inst('p', 10, 'pause'), inst('s', 20, 'start', true)]
+  it('a ⏸ (its `at` now history) makes it paused, on the list; its stretches are listed in time order, the counting one last', () => {
+    const mine = [inst('a', 0, 'was'), inst('p', 10, 'pause'), inst('s', 20, 'start', true)]
     const spans = [
       { id: 'live', startInstantId: 's', endInstantId: '__NOW__', label: '', endIsNow: true },
       { id: 'one', startInstantId: 'a', endInstantId: 'p', label: '', endIsNow: false },
     ]
     expect(todoState(todo(), mine.slice(0, 2), 15)).toBe('paused')
+    expect(todoSections([todo()], new Map([['t', mine.slice(0, 2)]]), 15).unscheduled).toHaveLength(1)
     expect(todoStretches(mine, spans, 30, 's')).toEqual([{ spanId: 'one', start: 0, end: 10 }, { spanId: 'live', start: 20, end: null }])
     expect(todoActual(mine, spans, 30, 's')).toEqual({ ms: 20, stretches: 2, counting: true })
   })

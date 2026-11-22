@@ -7,7 +7,7 @@ import { useUi } from './ui.ts'
 import { getTunables, useSettings } from './settings.ts'
 import { DEFAULT_RING_DEFAULTS } from '../domain/alarmPicker.ts'
 import { ringKey } from '../domain/alarms.ts'
-import { instantsByTodo, todoState } from '../domain/todos.ts'
+import { instantsByTodo, todoSections, todoState } from '../domain/todos.ts'
 import { parseBackup } from '../domain/backup.ts'
 import * as act from './actions.ts'
 import { engine } from '../engine/viewportEngine.ts'
@@ -215,7 +215,7 @@ describe('when its alarm rings', () => {
   it('Later moves its at and re-arms its alarm; nothing counts', () => {
     const { id, atId } = ringingTodo('Laundry')
     const later = Date.now() + 3 * HOUR
-    act.laterTodo(id, later)
+    act.rescheduleTodo(id, later)
     const at = entities.getInstant(atId)!
     expect(at.tsEpochMs).toBe(later)
     expect(at.favorite).toBeFalsy()
@@ -444,7 +444,8 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     expect(entities.getTodo(id)!.startedId).toBeUndefined()
   })
 
-  it('⏸ saves the stretch to a ⏸ instant and the todo stays open, paused; ▶ counts a new stretch', () => {
+  it('⏸ saves the stretch to a ⏸ instant and puts the todo back at the top of the list, paused; ▶ counts a new stretch', () => {
+    const other = act.addTodo('Book appointment')!
     const { id, atId } = ringingTodo()
     act.startTodo(id, { fromAlarm: true })
     act.pauseTodo(id)
@@ -454,6 +455,10 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     expect(entities.getInstant(atId)!.favorite).toBe(false)
     expect(entities.getTodo(id)).toMatchObject({ status: 'open' })
     expect(stateOf(id)).toBe('paused')
+    // Back on the list: its `at` is history, and it comes before the other unscheduled ones.
+    expect(entities.getInstant(atId)!.todo).toEqual({ id, role: 'was' })
+    expect(entities.getTodo(id)!.order).toBeLessThan(entities.getTodo(other)!.order)
+    expect(todoSections(todos() ?? [], instantsByTodo(useEntities.getState().instants), Date.now()).unscheduled.map(r => r.todo.id)).toEqual([id, other])
     expect(useUi.getState().celebrating?.todoId).not.toBe(id)
     act.startTodo(id)
     const start = instantsOf(id).find(i => i.todo?.role === 'start')!
@@ -470,6 +475,17 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     const last = stretchSpans(id)[0]
     act.showTodo(id)
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: last.id })
+  })
+
+  it('Not a todo does nothing once it was worked on (a stretch saved, or counting)', () => {
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.untodo(atId)
+    expect(entities.getTodo(id)).toBeTruthy()
+    act.pauseTodo(id)
+    act.untodo(atId)
+    expect(entities.getTodo(id)).toBeTruthy()
+    expect(entities.getInstant(atId)!.todo?.id).toBe(id)
   })
 
   it('opened again after ✓, its instant is its todo again (not back on the list)', () => {

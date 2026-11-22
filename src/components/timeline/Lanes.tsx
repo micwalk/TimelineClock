@@ -7,7 +7,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { durationStep, formatDuration, formatDurationTo, truncateText } from '../../domain/format.ts'
 import type { TimeBlock } from '../../domain/blocks.ts'
-import { MARKS } from '../../config/labels.ts'
+import { MARKS, TODO_UI } from '../../config/labels.ts'
 import { useEntities } from '../../store/entities.ts'
 import { SECOND } from '../../domain/time.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
@@ -200,8 +200,8 @@ const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i
  * reads ✓ (the same stop: the new instant is its `done`).
  */
 function DoneButton({ instant, name }: { instant: InstantRecord; name: string }) {
-  const label = `Done: ${name}`
-  const pauseLabel = `Pause: ${name} (save this stretch)`
+  const label = `${TODO_UI.done}: ${name}`
+  const pauseLabel = `${TODO_UI.pause}: ${name} (save this stretch)`
   return (
     <>
       <button

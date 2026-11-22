@@ -60,6 +60,71 @@ export const TODO_COPY = {
   makeTodo: (series: string | null) => (series ? `Make every ${series} a todo` : 'Make it a todo'),
 } as const
 
+/**
+ * Words on the todo controls (the Todos tab, a todo's chip and lane, its ringing card), so they
+ * are changed in one place.
+ */
+export const TODO_UI = {
+  schedule: 'Schedule',
+  /** Moving a todo that has a time to another (act.rescheduleTodo). */
+  reschedule: 'Move',
+  unschedule: 'Unschedule',
+  start: 'Start',
+  startNow: 'Start now',
+  pause: 'Pause',
+  done: 'Done',
+  doneAlready: 'Done already',
+  /** A todo's ringing card: answer it without starting (it waits in Now). */
+  ignore: 'Ignore',
+  wontDo: "Won't do",
+  rename: 'Rename',
+  notTodo: 'Not a todo',
+  deleteTodo: 'Delete todo',
+  duration: 'Duration',
+  noDuration: 'No duration',
+  more: 'More',
+  openAgain: 'Open it again',
+  set: 'Set',
+  ok: 'OK',
+  fewer: 'Fewer',
+  laterCount: (n: number) => `${n} later`,
+  /** The Todos tab's sections. */
+  sections: { active: 'Active', now: 'Now', today: 'Today', upcoming: 'Upcoming', unscheduled: 'Unscheduled', done: 'Done' },
+  addPlaceholder: 'Add a todo… (laundry 4p 20m)',
+  addLabel: 'Add a todo: a name, and maybe a time, a length or a repeat',
+  whenPlaceholder: 'When… 3p, 1h30, tomorrow 9a',
+  pickTime: 'Pick a time and date',
+  /** Tooltips. */
+  startTitle: 'Start: it counts from now until you tap ✓',
+  startAgainTitle: 'Start again: it counts from now',
+  pauseTitle: 'Pause: save this stretch; ▶ goes on later',
+  startCardTitle: 'On it: it counts on the timeline from its time until you tap ✓',
+  startNowTitle: 'Start it now: it moves to Now and counts until you tap ✓',
+  okTitle: 'Got it: it rings again at its time',
+  ignoreTitle: 'Ignore it for now, not started: it waits in the Todos tab’s Now',
+  notTodoTitle: 'Keep it on the timeline as a plain instant, with its alarms',
+} as const
+
+/** Words on a ringing alarm's card (components/panels/RingingAlarms, SnoozeRow). */
+export const ALARM_UI = {
+  dismiss: 'Dismiss',
+  snooze: (minutes: number) => `Snooze ${minutes}m`,
+  untilStart: 'Until start',
+  dismissAll: (n: number) => `Dismiss all ${n}`,
+  dismissAllTitle: "Dismiss this and cancel the instant's other alarms",
+  /** The Snooze row's box says what it does: "Snooze for 20m", or "Snooze until 4p" once a time is typed. */
+  snoozeFor: 'Snooze for',
+  snoozeUntil: 'Snooze until',
+  /** Once typing, the shorter word. */
+  for: 'for',
+  until: 'until',
+  snoozePlaceholder: '20m',
+  /** Its submit, the landing: "→ 1:35p". */
+  snoozeGo: (at: string) => `→ ${at}`,
+  snoozeGoLabel: (at: string) => `Snooze until ${at}`,
+  mute: 'Mute',
+} as const
+
 /** Names of instants the app computes. */
 export const LABELS = {
   sunrise: 'Sunrise',

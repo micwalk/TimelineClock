@@ -71,20 +71,25 @@ describe('the Todos tab', () => {
 })
 
 describe('a plain alarm ringing', () => {
-  it('offers ☐ Todo: it becomes a todo, and its card the todo card', () => {
+  it('has no Todo on its card (that is in the bell\'s tools, before it rings), and one Snooze row', () => {
     const now = Date.now()
     useEntities.setState({ instants: [{ id: 'i1', tsEpochMs: now - MINUTE, label: 'Trash out', alarms: [{ id: 'a1', offsetMs: 0 }] }] })
     useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'a1', label: 'Trash out', tsEpochMs: now - MINUTE, triggeredAt: now }] })
     render(<RingingAlarms />)
-    expect(screen.queryByRole('button', { name: /Done/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Make it a todo' }))
-    expect(useEntities.getState().todos).toMatchObject([{ label: 'Trash out', status: 'open' }])
-    expect(screen.getByRole('button', { name: /Done/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /todo/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Snooze 5m/ })).toBeTruthy()
+    // The box says what it does, and its submit is where it lands.
+    const box = screen.getByRole('textbox', { name: 'Snooze for' })
+    fireEvent.change(box, { target: { value: '20' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Snooze until/ }))
+    expect(useAlarms.getState().ringing).toEqual([])
+    const snoozed = entities.getInstant('i1')!.alarms!.find(a => a.snoozeOf)!
+    expect(now - MINUTE - snoozed.offsetMs).toBeGreaterThan(now + 19 * MINUTE)
   })
 })
 
 describe('a todo ringing', () => {
-  it('asks ▶ Start or Done, Snooze or Delay, Hide or Won\'t do', () => {
+  it('asks ▶ Start or Done, then Snooze (5m, or for / until what you type), then Ignore, Unschedule or Won\'t do', () => {
     const now = Date.now()
     useEntities.setState({
       todos: [{ id: 't1', label: 'Feed cats', createdAt: 0, status: 'open', order: 0 }],
@@ -92,19 +97,22 @@ describe('a todo ringing', () => {
     })
     useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'a1', label: 'Feed cats', tsEpochMs: now - MINUTE, triggeredAt: now }] })
     render(<RingingAlarms />)
-    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Delay/, /^Hide$/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /^Ignore$/, /^Unschedule$/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Move/ })).toBeNull()
+    // A time reads "until"; the todo moves there.
+    const box = screen.getByRole('textbox', { name: 'Snooze for' })
+    fireEvent.change(box, { target: { value: '11:59pm' } })
+    expect(screen.getByRole('textbox', { name: 'Snooze until' })).toBeTruthy()
     // The panel's mute (sound off, cards kept) is a small 🔇 by its title.
     fireEvent.click(screen.getByRole('button', { name: 'Mute' }))
     expect(useAlarms.getState().muted).toBe(true)
     expect(screen.getByRole('button', { name: /Muted/ })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Delay/ }))
-    expect(screen.getByRole('button', { name: 'Unschedule' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Start$/ }))
     expect(entities.getInstant('i1')!.favorite).toBe(true)
     expect(useAlarms.getState().ringing).toEqual([])
   })
 
-  it('a todo chime shows the same card, without Hide', () => {
+  it('a todo chime shows the same card, without Ignore', () => {
     const now = Date.now()
     useEntities.setState({
       todos: [{ id: 't1', label: 'Feed cats', createdAt: 0, status: 'open', order: 0 }],
@@ -112,8 +120,8 @@ describe('a todo ringing', () => {
     })
     useAlarms.setState({ chimes: [{ instantId: 'i1', alarmId: 'a1', label: 'Feed cats', tsEpochMs: now - MINUTE, triggeredAt: now }] })
     render(<RingingAlarms />)
-    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Delay/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^Hide$/ })).toBeNull()
+    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Ignore$/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Snooze 5m/ }))
     expect(useAlarms.getState().chimes).toEqual([])
     expect(entities.getInstant('i1')!.tsEpochMs).toBeGreaterThan(now + 4 * MINUTE)

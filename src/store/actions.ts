@@ -39,7 +39,7 @@ import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  countingInstant, todoStretches, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -1440,7 +1440,7 @@ export function addTodo(text: string): string | undefined {
 export function scheduleTodo(todoId: string, ts: number) {
   const todo = entities.getTodo(todoId)
   if (!todo || todo.status !== 'open') return
-  if (todoAt(todoInstants(todoId))) { laterTodo(todoId, ts); return }
+  if (todoAt(todoInstants(todoId))) { rescheduleTodo(todoId, ts); return }
   createTodoAt(todo, ts)
 }
 
@@ -1450,7 +1450,7 @@ export function scheduleTodo(todoId: string, ts: number) {
  * and its alarms re-arm at the new time (domain/alarms rearmAfterMove), with one at its time
  * if none is left; the planned block follows.
  */
-export function laterTodo(todoId: string, ts: number) {
+export function rescheduleTodo(todoId: string, ts: number) {
   const todo = entities.getTodo(todoId)
   const at = todoAt(todoInstants(todoId))
   if (!todo || todo.status !== 'open') return
@@ -1651,8 +1651,10 @@ export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
       entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'start' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
     }
   } else {
-    id = entities.createInstant(now, todo.label)
-    entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+    // Back on the list: a paused one (it has stretches) goes on from a ▶ instant; a new one's `at` is at Now.
+    const resumed = todoInstants(todoId).length > 0
+    id = entities.createInstant(now, resumed ? TODO_COPY.startName(todo.label) : todo.label)
+    entities.patchInstant(id, () => ({ todo: { id: todoId, role: resumed ? 'start' as const : 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
   }
   setFavorite(id, true)
   entities.patchTodo(todoId, { startedId: id })
@@ -1661,8 +1663,10 @@ export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
 
 /**
  * ⏸ Pause (docs/prd_todos.md §4.4): the stretch counting now is saved, ending at a ⏸ instant at
- * Now ("⏸ Laundry", a Mark), and the todo stays open, paused (▶ Start counts a new stretch). No
- * celebration. Not counting: nothing.
+ * Now ("⏸ Laundry", a Mark), and the todo goes back on the list, paused, at its top (owner,
+ * 2026-11-22: not a todo waiting in Now): its `at` stays as history (`was`), its alarms still to
+ * ring cancelled. ▶ Start counts a new stretch; Schedule gives it a time again. No celebration.
+ * Not counting: nothing.
  */
 export function pauseTodo(todoId: string) {
   const todo = entities.getTodo(todoId)
@@ -1675,11 +1679,20 @@ export function pauseTodo(todoId: string) {
   const id = entities.createInstant(now, TODO_COPY.pauseName(todo.label || formatClockCompact(counting.tsEpochMs, false)))
   entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'pause' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
   endStretch(todoId, counting, id, todo.label)
+  const at = todoAt(todoInstants(todoId))
+  if (at) {
+    quietTodoAlarms(at.id)
+    const kept = entities.getInstant(at.id)
+    if (kept) dropArmedAlarms(kept, now)
+    entities.setInstantTodo(at.id, { id: todoId, role: 'was' })
+  }
+  entities.patchTodo(todoId, { order: firstOrder(useEntities.getState().todos ?? []) })
 }
 
 /**
  * Not a todo (the struck-through box in a todo chip's tools, a Todos row's ⋯): the opposite of
- * makeInstantTodo. The instant stays as it is (time, name, alarms, favorite), no longer a todo,
+ * makeInstantTodo. Not once it was worked on (a stretch saved, or counting): that time is the todo's.
+ * Otherwise: The instant stays as it is (time, name, alarms, favorite), no longer a todo,
  * and its record goes; instants the todo made (✓ done, ▶ start) stay as history, their links
  * cleared. On an occurrence its series stops being a repeating todo, and its occurrences ahead
  * become plain too.
@@ -1688,6 +1701,7 @@ export function untodo(instantId: string) {
   const inst = entities.getInstant(instantId)
   const todoId = inst?.todo?.id
   if (!inst || !todoId) return
+  if (hasStretches(todoInstants(todoId), useEntities.getState().spans, nowTime(), entities.getTodo(todoId)?.startedId)) return
   const ids = [todoId]
   const series = entities.getGroup(inst.seriesId)
   if (series?.todo) {
@@ -1705,13 +1719,13 @@ export function untodo(instantId: string) {
 
 /**
  * Snooze on a todo's card at its time: the todo itself moves to 5 minutes from now (its plan,
- * alarms and block with it: laterTodo), rather than a bell added (owner, 2026-11-21). A warning's
+ * alarms and block with it: rescheduleTodo), rather than a bell added (owner, 2026-11-21). A warning's
  * snooze stays a reminder (snoozeAlarm).
  */
 export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
   const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
   if (!todo) return
-  laterTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+  rescheduleTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
 }
 
 /**

@@ -34,5 +34,6 @@ const byMinute = (f: { now: number }) => Math.floor(f.now / 60_000)
 
 /** How many todos rang and aren't done (the Todos tab's badge, and the ☰'s). */
 export function useTodoNowCount(): number {
-  return useTodoSections(useFrameValue(byMinute)).now.length
+  const s = useTodoSections(useFrameValue(byMinute))
+  return s.active.length + s.now.length
 }

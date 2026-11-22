@@ -623,8 +623,8 @@
 }
 .alarm-btn--dismiss { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 55%, transparent); }
 .alarm-btn--snooze { --accent: var(--c-alarm); background: color-mix(in srgb, var(--c-alarm) 45%, transparent); }
-/* The card: name and time, the live time to its instant, Dismiss / Snooze, then a row of quieter
-   choices that turns into the custom snooze box in place (the two cross-fade in one grid cell). */
+/* The card: name and time, the live time to its instant, Dismiss (or Start / Done), the Snooze
+   row (SnoozeRow), then a row of quieter choices. */
 .alarm-card { position: relative; }
 .alarm-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .alarm-card__head .alarm-card__time { margin: 0; }
@@ -637,21 +637,33 @@
 .alarm-card--chime:last-child { margin-bottom: 0; }
 .alarm-card__rel { display: block; margin: 3px 0 10px; color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
 .alarm-btn__at { font-weight: 600; opacity: 0.8; }
-.alarm-card__more { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 8px; }
-.alarm-card__links,
-.alarm-card__custom {
-  grid-area: 1 / 1;
+.alarm-card__links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+/* The Snooze row: the quick snooze, and beside it a box that says what it does ("Snooze for
+   [20m]", "Snooze until [4p]"), its submit where it lands ("→ 10:41p"). */
+/* One row: the quick snooze, its landing under its name so the box has room beside it. */
+.snooze-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.snooze-row__quick { flex: 0 1 auto; display: inline-grid; place-content: center; gap: 2px; min-width: 84px; padding: 0 10px; line-height: 1; }
+.snooze-row__quick .alarm-btn__at { font-size: 11px; }
+.snooze-box {
+  --accent: var(--c-alarm);
+  flex: 1 1 170px;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 34px;
-  transition: opacity 180ms ease, transform 180ms ease;
+  height: 36px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 9px;
+  /* The Snooze 5m button's colours (alarm-btn--snooze), a shade darker where you type. */
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  overflow: hidden;
 }
-.alarm-card__links { flex-wrap: wrap; gap: 6px; }
-.alarm-card__custom { opacity: 0; transform: translateY(6px); pointer-events: none; }
-.alarm-card__more.is-custom .alarm-card__links { opacity: 0; transform: translateY(-6px); pointer-events: none; }
-.alarm-card__more.is-custom .alarm-card__custom { opacity: 1; transform: none; pointer-events: auto; }
+.snooze-box:focus-within { border-color: var(--accent); }
+.snooze-box:has([aria-invalid='true']) { border-color: var(--c-danger); }
+.snooze-box__field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 100%; padding-left: 10px; cursor: text; }
+.snooze-box__word { flex: none; color: #fff; font: 700 13px/1 var(--font-ui); white-space: nowrap; }
+.snooze-box__input { flex: 1; min-width: 2.5em; height: 100%; padding: 0 6px 0 0; border: 0; background: transparent; caret-color: #fff; color: #fff; font: 700 14px/1 var(--font-mono); outline: none; }
+.snooze-box__input::placeholder { color: rgba(255, 255, 255, 0.55); font-weight: 600; }
+.snooze-box__go { flex: none; height: 100%; padding: 0 10px; border: 0; border-left: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 70%, transparent); color: #fff; font: 700 13px/1 var(--font-mono); white-space: nowrap; cursor: pointer; }
 /* The quieter choices are still buttons: outlined boxes, each in its action's colour. */
 .alarm-link {
   --accent: var(--c-alarm);
@@ -668,26 +680,6 @@
   white-space: nowrap;
 }
 .alarm-link:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
-/* "Other…": drawn as a box you type into, so it reads as the way to a custom length. */
-.alarm-other {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 1 1 96px;
-  min-width: 96px;
-  height: 32px;
-  padding: 0 9px;
-  border: 1.5px solid color-mix(in srgb, var(--c-alarm) 55%, transparent);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  color: var(--ink-dim);
-  font: 600 13px/1 var(--font-ui);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-  cursor: text;
-}
-.alarm-other > svg { width: 13px; height: 13px; color: var(--c-alarm); }
-.alarm-other:hover { border-color: var(--c-alarm); }
 .alarm-link__at { color: color-mix(in srgb, var(--accent) 70%, #fff); font-weight: 600; opacity: 0.85; }
 .alarm-link--all { --accent: var(--c-danger); margin-left: auto; }
 .alarm-link--danger { --accent: var(--c-danger); }
@@ -718,9 +710,6 @@
 .alarm-custom__input::placeholder { color: var(--ink-faint); font-weight: 600; }
 .alarm-custom__input[aria-invalid='true'] { border-color: var(--c-danger); }
 .alarm-custom__at { flex: none; min-width: 0; color: var(--c-alarm); font-size: 13px; font-weight: 700; }
-@media (prefers-reduced-motion: reduce) {
-  .alarm-card__links, .alarm-card__custom { transition: none; }
-}
 
 /* Bell icon on the timeline while ringing */
 .icon-btn.is-ringing svg { animation: bell-shake 0.6s ease-in-out infinite; }
@@ -1240,7 +1229,7 @@
 .todo-more-btn { align-self: flex-start; }
 .alarm-link--quiet { border-color: transparent; color: var(--ink-dim); background: transparent; box-shadow: none; }
 /* Todo choices take the todo colour, not the alarm's. */
-.todo-when .alarm-custom__input:not([aria-invalid='true']), .alarm-card--todo .alarm-custom__input:not([aria-invalid='true']) { border-color: var(--c-todo); }
+.todo-when .alarm-custom__input:not([aria-invalid='true']) { border-color: var(--c-todo); }
 .todo-when .alarm-link:not(.alarm-link--danger), .alarm-card--todo .alarm-link:not(.alarm-link--quiet) { --accent: var(--c-todo); }
 .alarm-link--danger { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 40%, transparent); color: #fff; }
 
@@ -1256,26 +1245,7 @@
 .alarm-btn--todo-done { --accent: var(--c-todo); background: color-mix(in srgb, var(--c-todo) 45%, transparent); }
 .alarm-link > svg { width: 14px; height: 14px; flex: none; }
 .alarm-card--todo .alarm-btn--dismiss { --accent: var(--c-cursor); background: color-mix(in srgb, var(--c-cursor) 35%, transparent); }
-.alarm-btn--later { --accent: var(--c-todo); background: color-mix(in srgb, var(--c-todo) 40%, transparent); }
-.alarm-btn--later.is-open { background: color-mix(in srgb, var(--c-todo) 65%, transparent); }
-.alarm-card__actions--second { margin-top: 8px; }
 .alarm-card__todo { display: inline-block; width: 17px; height: 17px; margin-right: 6px; vertical-align: -2px; color: var(--c-todo); }
-/* A plain alarm's ☐ Todo: makes it a todo (its card becomes the todo card). */
-.alarm-card__make-todo {
-  --accent: var(--c-todo);
-  flex: none;
-  margin-left: auto;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: color-mix(in srgb, var(--c-todo) 22%, transparent);
-  color: var(--ink);
-  font: 700 12px/1 var(--font-ui);
-}
-.alarm-card__make-todo > svg { width: 14px; height: 14px; color: var(--c-todo); }
 .alarm-pick__todo-box { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; }
 
 /* Settings › Alarms › Todos. */

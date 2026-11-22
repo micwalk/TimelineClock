@@ -25,25 +25,33 @@ there is Phase 1b).
   the tab.
 - **When a todo rings**: **▶ Start** (green, first) or **✓ Done** (already did it). Started, it
   counts on the timeline from its time until you tap the lane's **✓** (the stop, on a todo), which
-  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; **Delay…** moves it
+  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; the box beside it moves it
   further (In 1h, Tonight, Tomorrow, Unschedule, or a typed time). **Hide** stops it without
   starting: it waits under Now, where its row's green **▶** counts from then on (a "▶ Laundry"
   instant; the plan stays where it was). **Won't do** lets it go. Only Start starts a todo. A todo's
   chime shows the same card, without Hide. A warning before it reads "in 10m · get ready" and
   asks **▶ Start now** (it moves to Now and counts) or **OK** (it rings again at its time).
 - **Any instant can become a todo**: a selected chip shows a faint ☐ before its name (tap it), and
-  a plain alarm's ringing card has **☐ Todo** (the card becomes the todo's); a repeating one makes
+  a bell's tools have **☐** (make it a todo, before it rings); a repeating one makes
   its series a repeating todo.
-- **Todos rows**: Schedule (or **Delay**) then a green **▶** to start it, on every open row that
+- **Todos rows**: Schedule (or **Move**) then a green **▶** to start it, on every open row that
   isn't counting. A counting row has **⏸ Pause** and **Done** instead (Done is sucked into the
   row's box, which charges and pops as a tap on it does).
 - **Pause and stretches**: ⏸ (on a counting row, and on its lane beside ✓) saves the stretch so
-  far ("⏸ Laundry", a mark) and the todo stays open, paused under Now ("12m so far"); ▶ counts a
-  new stretch. A tap on a row with stretches goes to the latest; its ⋯ lists them all (newest
+  far ("⏸ Laundry", a mark) and puts the todo back at the top of Unscheduled, paused ("12m so
+  far"); ▶ counts a new stretch. A tap on a row with stretches goes to the latest; its ⋯ lists them all (newest
   first, the one counting live), and a tap goes to one.
 - Taking a counting todo's star off only hides its lane: it still counts, and ✓ or ⏸ saves the
   stretch. Opening a done todo again (its box) makes its instant its todo again, where it was,
   rather than sending it back to the list.
+- **Snooze row** on every ringing card: **Snooze 5m** (where it lands under it) and beside it a box
+  that says what it does ("Snooze for 20m"; "until" once a time is typed), its submit where it
+  lands ("→ 1:56p"), in place of the Other… row. On a todo it takes a length, a time or
+  "tomorrow", so Delay is gone from the card (snoozing and moving a todo are one thing);
+  **Unschedule** sits with **Ignore** (was Hide) and Won't do. Delay is now **Move** in the Todos tab.
+- **Not a todo** is gone once a todo has a stretch saved (or counts): that time is the todo's.
+- **Make it a todo** moved from the ringing card (too late there) to a bell's tools (☐).
+- The todo and alarm-card words are in `src/config/labels.ts` (`TODO_UI`, `ALARM_UI`).
 - Fixed: a todo started this minute showed as scheduled ("Today") in the Todos tab, without its
   Pause and Done.
 - **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when

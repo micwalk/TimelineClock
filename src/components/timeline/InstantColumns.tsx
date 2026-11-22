@@ -1,6 +1,6 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
-import { MARKS, TODO_COPY } from '../../config/labels.ts'
+import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -27,7 +27,7 @@ import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { doneOrigin } from '../common/doneOrigin.ts'
-import { countingInstant } from '../../domain/todos.ts'
+import { hasStretches } from '../../domain/todos.ts'
 import { useLongPress } from '../../hooks/useLongPress.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
@@ -46,7 +46,7 @@ import { describeRepeat } from '../../domain/series.ts'
 import { sunEventName } from '../../domain/sun.ts'
 import { isAtSun } from '../../domain/sunEvents.ts'
 import { VisibilityEditor } from '../panels/VisibilityEditor.tsx'
-import { isAtDstShift } from '../../domain/dst.ts'
+import { isAtDstShift, isFixedTime } from '../../domain/dst.ts'
 import { isAtSeason } from '../../domain/seasons.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
@@ -103,7 +103,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
   const openTodo = todoStatus === 'open' ? inst.todo!.id : null
   // Counting already (its `at`, or a ▶ start, a favorite): no ▶ Start.
-  const todoCounting = useEntities(s => !!openTodo && !!countingInstant(s.instants.filter(i => i.todo?.id === openTodo), Date.now(), s.todos?.find(t => t.id === openTodo)?.startedId))
+  // Worked on (a stretch saved, or counting now): it can't stop being a todo.
+  const todoWorked = useEntities(s => !!openTodo && hasStretches(s.instants.filter(i => i.todo?.id === openTodo), s.spans, Date.now(), s.todos?.find(t => t.id === openTodo)?.startedId))
   const doneFoldTs = useEntities(s => (doneFolded ? s.instants.find(i => i.id === doneFolded)?.tsEpochMs : undefined))
   const celebrating = useUi(s => s.celebrating?.instantId === inst.id || (!!doneFolded && s.celebrating?.instantId === doneFolded))
   // Its todo's ✓ is springing out of a box drawn over this chip's (components/timeline/Celebration).
@@ -187,8 +188,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
     <BellTools inst={inst} alarm={toolAlarm} />
   ) : selected && !moving ? (
     <>
-      {/* A todo: Not a todo (its box is its Done; Start is in the Todos tab, a long-press on the box away), not while it counts. */}
-      {openTodo && !todoCounting && <IconButton icon={NotTodoIcon} label="Not a todo: keep it as a plain instant" color="var(--c-todo)" bare onClick={() => act.untodo(inst.id)} />}
+      {/* A todo: Not a todo (its box is its Done; Start is in the Todos tab, a long-press on the box away), not once it was worked on. */}
+      {openTodo && !todoWorked && <IconButton icon={NotTodoIcon} label={`${TODO_UI.notTodo}: keep it as a plain instant`} color="var(--c-todo)" bare onClick={() => act.untodo(inst.id)} />}
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
@@ -325,7 +326,7 @@ function TodoBoxButton({ todoId, name }: { todoId: string; name: string }) {
   const ref = useRef<HTMLButtonElement>(null)
   const press = useLongPress(() => act.findTodo(todoId), () => act.completeTodo(todoId, ref.current ? doneOrigin(ref.current) : undefined))
   return (
-    <button ref={ref} type="button" className="chip__todo-btn" aria-label={`Done: ${name} (long-press: show it in the Todos tab)`} title="Done (long-press: show it in the Todos tab)"
+    <button ref={ref} type="button" className="chip__todo-btn" aria-label={`${TODO_UI.done}: ${name} (long-press: show it in the Todos tab)`} title={`${TODO_UI.done} (long-press: show it in the Todos tab)`}
       {...press}><TodoBoxIcon aria-hidden /></button>
   )
 }
@@ -467,13 +468,20 @@ function FoldedBells({ inst, alarms, selected, ringing }: { inst: InstantRecord;
   )
 }
 
-/** A selected bell's tools: type how long before its instant it rings, pick its sound, or delete it. */
+/**
+ * A selected bell's tools: type how long before its instant it rings, pick its sound, make its
+ * instant a todo (a reminder that is something to do: owner, 2026-11-22, here before it rings,
+ * not on the ringing card), or delete it.
+ */
 function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
   const [typing, setTyping] = useState(false)
+  const canTodo = !inst.todo && !alarm.answered && !isFixedTime(inst)
+  const makeTodo = TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)
   return (
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
       {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
+      {canTodo && <IconButton icon={TodoBoxIcon} label={makeTodo} color="var(--c-todo)" bare onClick={() => act.makeInstantTodo(inst.id, { name: true })} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
         <TimeEntry
