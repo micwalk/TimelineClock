@@ -27,5 +27,15 @@ export function TodoBoxIcon({ state = 'open', ...props }: { state?: TodoBoxState
   )
 }
 
+/** Not a todo (un-todo): the box struck through. */
+export function NotTodoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2.6" y="2.6" width="14.8" height="14.8" rx="3.6" />
+      <path d="M1.6 18.4L18.4 1.6" />
+    </svg>
+  )
+}
+
 /** The Todo button's icon: a checked box. */
 export const TodoIcon = (props: SVGProps<SVGSVGElement>) => <TodoBoxIcon state="done" {...props} />

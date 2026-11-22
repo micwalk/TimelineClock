@@ -28,7 +28,7 @@ import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, dismissQuietly, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, clearChime as clearChimeCard, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
 import type { AlarmSound } from '../domain/sounds.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
@@ -1338,8 +1338,8 @@ export function ringingChoicesFor(key: string): RingingChoices | null {
 
 // ---------------------------------------------------------------------------
 // Todos (docs/prd_todos.md; domain/todos): a record of a thing to do, and quick ways to make the
-// ordinary instants, spans and alarms it ties together. Dismissing a todo's alarm starts it
-// counting (services/AlarmScheduler startTodoCount); everything else is here.
+// ordinary instants, spans and alarms it ties together. Only ▶ Start starts one counting
+// (startTodo): its alarm answered any other way (Silence, unanswered, a chime) leaves it waiting.
 
 /** A todo's instants, in time order. */
 const todoInstants = (todoId: string): InstantRecord[] =>
@@ -1355,9 +1355,10 @@ export function openTodoOf(inst: InstantRecord | undefined): TodoRecord | undefi
 const hasRung = (inst: InstantRecord, now: number) =>
   (inst.alarms ?? []).some(a => !!a.answered || isAlarmRinging(ringKey(inst.id, a.id)) || !isArmed(inst, a, now))
 
-/** Stops a todo's ringing alarms without starting its count (it is about to be moved, done or put back). */
+/** Answers a todo's ringing alarms and takes its chimes' cards away (it is about to be started, moved, done or put back). */
 function quietTodoAlarms(instantId: string) {
-  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismissQuietly(ringKey(r.instantId, r.alarmId))
+  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismiss(ringKey(r.instantId, r.alarmId))
+  for (const c of useAlarms.getState().chimes) if (c.instantId === instantId) clearChimeCard(ringKey(c.instantId, c.alarmId))
 }
 
 /** Deletes an instant's alarms still to ring, as if never set (those that rang stay as history). */
@@ -1584,31 +1585,76 @@ export function wontDoTodo(todoId: string) {
 }
 
 /**
- * Start now (a warning's card: "in 10m · get ready"): the plan moves to Now (docs/prd_todos.md
- * §4.4). Its `at` moves to Now and is favorited, so it counts from here; its alarms still to ring
- * are cancelled (she is on it), and its planned block follows. An unscheduled one gets an `at`
- * at Now, counting.
+ * ▶ Start: it counts on the timeline until its ✓ (docs/prd_todos.md §4.4), the only way a todo
+ * starts. `fromAlarm` (its ringing card at its time, or its chime's): it counts from its time,
+ * the scheduled one (its `at` is favorited). Its plan still ahead (a warning's Start now, its
+ * chip's ▶ early) moves to Now. Its time gone by (its alarm silenced, unanswered, or none) counts
+ * from Now: a ▶ instant at Now (role `start`), so the plan stays where it was. Unscheduled, an
+ * `at` at Now. Its ringing alarms are answered and those still to ring cancelled (she is on it).
  */
-export function startTodoNow(todoId: string) {
+export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
   const todo = entities.getTodo(todoId)
   if (!todo || todo.status !== 'open') return
   const now = nowTime()
   const at = todoAt(todoInstants(todoId))
-  if (at && countingInstant(todoInstants(todoId), now)) return
+  if (countingInstant(todoInstants(todoId), now)) return
   let id: string
   if (at) {
     quietTodoAlarms(at.id)
     const kept = entities.getInstant(at.id)
     if (kept) dropArmedAlarms(kept, now)
-    entities.setInstantTime(at.id, now)
-    if (kept?.seriesId && !kept.seriesEdited) entities.patchInstant(at.id, () => ({ seriesEdited: true }))
-    id = at.id
+    if (at.tsEpochMs > now) {
+      entities.setInstantTime(at.id, now)
+      if (kept?.seriesId && !kept.seriesEdited) entities.patchInstant(at.id, () => ({ seriesEdited: true }))
+      id = at.id
+    } else if (opts.fromAlarm) id = at.id
+    else {
+      id = entities.createInstant(now, TODO_COPY.startName(todo.label || formatClockCompact(at.tsEpochMs, false)))
+      entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'start' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+    }
   } else {
     id = entities.createInstant(now, todo.label)
     entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
   }
   setFavorite(id, true)
   ui.markDropped(id)
+}
+
+/**
+ * Not a todo (the struck-through box in a todo chip's tools, a Todos row's ⋯): the opposite of
+ * makeInstantTodo. The instant stays as it is (time, name, alarms, favorite), no longer a todo,
+ * and its record goes; instants the todo made (✓ done, ▶ start) stay as history, their links
+ * cleared. On an occurrence its series stops being a repeating todo, and its occurrences ahead
+ * become plain too.
+ */
+export function untodo(instantId: string) {
+  const inst = entities.getInstant(instantId)
+  const todoId = inst?.todo?.id
+  if (!inst || !todoId) return
+  const ids = [todoId]
+  const series = entities.getGroup(inst.seriesId)
+  if (series?.todo) {
+    updateSeries(series.id, { todo: undefined })
+    const now = Date.now()
+    for (const i of storedInstants(useEntities.getState().instants)) {
+      if (i.seriesId === series.id && i.todo?.role === 'at' && i.tsEpochMs > now && entities.getTodo(i.todo.id)?.status === 'open' && !ids.includes(i.todo.id)) ids.push(i.todo.id)
+    }
+  }
+  for (const id of ids) {
+    for (const i of todoInstants(id)) entities.setInstantTodo(i.id, null)
+    entities.removeTodo(id)
+  }
+}
+
+/**
+ * Snooze on a todo's card at its time: the todo itself moves to 5 minutes from now (its plan,
+ * alarms and block with it: laterTodo), rather than a bell added (owner, 2026-11-21). A warning's
+ * snooze stays a reminder (snoozeAlarm).
+ */
+export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
+  const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
+  if (!todo) return
+  laterTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
 }
 
 /** Opens a done, dropped or passed todo again (a mistaken tap): unscheduled, its history kept. */

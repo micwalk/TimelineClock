@@ -77,7 +77,7 @@ describe('a plain alarm ringing', () => {
 })
 
 describe('a todo ringing', () => {
-  it('asks Done or Dismiss, Snooze or Later, and Won\'t do', () => {
+  it('asks ▶ Start or Done, Snooze or Later, Silence or Won\'t do', () => {
     const now = Date.now()
     useEntities.setState({
       todos: [{ id: 't1', label: 'Feed cats', createdAt: 0, status: 'open', order: 0 }],
@@ -85,12 +85,40 @@ describe('a todo ringing', () => {
     })
     useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'a1', label: 'Feed cats', tsEpochMs: now - MINUTE, triggeredAt: now }] })
     render(<RingingAlarms />)
-    for (const name of [/Done/, /^Dismiss$/, /Snooze 5m/, /Later/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Later/, /Silence/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    // Only the card's Silence: the panel's (sound off, cards kept) is for plain alarms.
+    expect(screen.getAllByRole('button', { name: /Silence/ })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: /Later/ }))
     expect(screen.getByRole('button', { name: 'Back to the list' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /^Dismiss$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Start$/ }))
     expect(entities.getInstant('i1')!.favorite).toBe(true)
     expect(useAlarms.getState().ringing).toEqual([])
+  })
+
+  it('a todo chime shows the same card, without Silence', () => {
+    const now = Date.now()
+    useEntities.setState({
+      todos: [{ id: 't1', label: 'Feed cats', createdAt: 0, status: 'open', order: 0 }],
+      instants: [{ id: 'i1', tsEpochMs: now - MINUTE, label: 'Feed cats', todo: { id: 't1', role: 'at' }, alarms: [{ id: 'a1', offsetMs: 0, answered: 'chimed' }] }],
+    })
+    useAlarms.setState({ chimes: [{ instantId: 'i1', alarmId: 'a1', label: 'Feed cats', tsEpochMs: now - MINUTE, triggeredAt: now }] })
+    render(<RingingAlarms />)
+    for (const name of [/^Start$/, /Done/, /Snooze 5m/, /Later/, /Won't do/]) expect(screen.getByRole('button', { name })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Silence/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Snooze 5m/ }))
+    expect(useAlarms.getState().chimes).toEqual([])
+    expect(entities.getInstant('i1')!.tsEpochMs).toBeGreaterThan(now + 4 * MINUTE)
+  })
+
+  it("a waiting row's ▶ Start counts from now", () => {
+    const now = Date.now()
+    useEntities.setState({
+      todos: [{ id: 't1', label: 'Feed cats', createdAt: 0, status: 'open', order: 0 }],
+      instants: [{ id: 'i1', tsEpochMs: now - 20 * MINUTE, label: 'Feed cats', todo: { id: 't1', role: 'at' }, alarms: [{ id: 'a1', offsetMs: 0, answered: 'dismissed' }] }],
+    })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'Start: Feed cats' }))
+    expect(useEntities.getState().instants.find(i => i.todo?.role === 'start')).toMatchObject({ favorite: true })
   })
 })
 

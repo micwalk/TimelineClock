@@ -6,6 +6,7 @@
 //   Upcoming:     after today (folded past a week, as the Alarms tab's are).
 //   Unscheduled:  drag to reorder; Schedule on each.
 //   Done:         the last day's done, won't do and passed, newest first, "4 done today".
+// A waiting row (its time came, not started) has ▶ Start; the ⋯ has Start now for one not due yet.
 // A row's box is its Done (a done one's box opens it again); a tap on the row goes to its instant
 // on the timeline, or, unscheduled, opens Schedule (the drawer stays). Its ⋯ has Rename, Won't do,
 // Delete and its Duration (quick lengths, "—" for none, or typed). Copy states facts, never
@@ -13,7 +14,7 @@
 // open todos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { Bars2Icon, ClockIcon, EllipsisHorizontalIcon, PencilIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
+import { Bars2Icon, ClockIcon, EllipsisHorizontalIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY } from '../../config/labels.ts'
@@ -31,7 +32,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
 import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
-import { StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { NotTodoIcon, StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
 
 const byMinute = (f: { now: number }) => Math.floor(f.now / 60_000)
@@ -142,7 +143,7 @@ function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule'
   )
 }
 
-/** A row's other tools: rename, won't do, delete (a second tap), and its duration. */
+/** A row's other tools: rename, start now, not a todo, won't do, delete (a second tap), and its duration. */
 function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => void; onRename: () => void }) {
   const [lengthText, setLengthText] = useState('')
   const [confirm, setConfirm] = useState(false)
@@ -154,6 +155,15 @@ function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => voi
     <div className="todo-when todo-more" onClick={e => e.stopPropagation()}>
       <div className="todo-when__chips">
         <button type="button" className="alarm-link glow-box" onClick={() => { onRename(); onClose() }}><PencilIcon aria-hidden /> Rename</button>
+        {/* Start it early (a waiting one has ▶ Start on its row). */}
+        {(row.state === 'scheduled' || row.state === 'unscheduled') && (
+          <button type="button" className="alarm-link alarm-link--start glow-box" onClick={() => { act.startTodo(id); onClose() }}><PlayIcon aria-hidden /> Start now</button>
+        )}
+        {/* Not a todo: its instant stays on the timeline as a plain one (alarms and all). */}
+        {row.todo.status === 'open' && row.at && (
+          <button type="button" className="alarm-link glow-box" onClick={() => { act.untodo(row.at!.id); onClose() }}
+            title="Keep it on the timeline as a plain instant, with its alarms"><NotTodoIcon aria-hidden /> Not a todo</button>
+        )}
         {row.todo.status === 'open' && <button type="button" className="alarm-link alarm-link--wont glow-box" onClick={() => { act.wontDoTodo(id); onClose() }}>{TODO_COPY.dropped[0].toUpperCase() + TODO_COPY.dropped.slice(1)}</button>}
         {confirm
           ? <button type="button" className="alarm-link alarm-link--danger glow-box" onClick={() => act.deleteTodo(id)}>Delete todo</button>
@@ -241,6 +251,11 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           )}
         </span>
         <span className="todo-row__tools" onClick={e => e.stopPropagation()}>
+          {/* Its time came and it isn't counting (silenced, unanswered, or no alarm): ▶ Start counts from now. */}
+          {state === 'waiting' && (
+            <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`Start: ${name}`} title="Start: it counts from now until you tap ✓"
+              onClick={() => act.startTodo(todo.id)}><PlayIcon aria-hidden /> Start</button>
+          )}
           {open && state !== 'counting' && (
             <button type="button" className={`todo-btn glow-box${panel === 'when' ? ' is-on' : ''}`} onClick={() => setPanel(p => (p === 'when' ? null : 'when'))}>
               {state === 'unscheduled' ? 'Schedule' : 'Later'}

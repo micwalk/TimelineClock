@@ -9,8 +9,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 ## 0.8.0 — 2026-11-21
 
-**Android app: web only** (nothing native changed; the app picks this up by itself. Its
-notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
+**Android app: install again** (the vibration fix below is native; the rest is web. A todo's
+notification still offers Dismiss / Snooze: Dismiss there leaves it waiting, and Start / Done
+there is Phase 1b).
 
 - **Todos** (docs/prd_todos.md, Phase 1). A todo is a thing to do: a name, maybe a time and how
   long it takes. A new **Todos** tab (after Favorites) has an Add box that reads "book appt",
@@ -22,17 +23,20 @@ notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
   or typed; a duration shows as a stopwatch and its length. **N** adds one from anywhere without
   moving anything else, and the new **Todo** button (left of ＋; under Alarm in vertical) goes to
   the tab.
-- **When a todo rings**: **Done** (already did it) or **Dismiss** ("on it" / "not yet"). Dismissed,
-  it doesn't disappear: its instant is favorited and counts on the timeline from its time until you
-  tap the lane's **✓** (the stop, on a todo), which saves the time it took. **Snooze 5m**, **Later…**
-  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and **Won't do**. A
-  warning before it reads "in 10m · get ready" and asks **▶ Start now** (it moves to Now and
-  counts) or **OK** (it rings again at its time).
+- **When a todo rings**: **▶ Start** (green, first) or **✓ Done** (already did it). Started, it
+  counts on the timeline from its time until you tap the lane's **✓** (the stop, on a todo), which
+  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; **Later…** moves it
+  further (In 1h, Tonight, Tomorrow, Back to the list, or a typed time). **Silence** stops it
+  without starting: it waits under Now, where **▶ Start** counts from then on (a "▶ Laundry"
+  instant; the plan stays where it was). **Won't do** lets it go. Only Start starts a todo. A todo's
+  chime shows the same card, without Silence. A warning before it reads "in 10m · get ready" and
+  asks **▶ Start now** (it moves to Now and counts) or **OK** (it rings again at its time).
 - **Any instant can become a todo**: a selected chip shows a faint ☐ before its name (tap it), and
   a plain alarm's ringing card has **☐ Todo** (the card becomes the todo's); a repeating one makes
   its series a repeating todo.
 - **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when
-  passed); its tools start with ✓ Done. Its trash deletes only the schedule: the todo goes back to
+  passed); selected, its box is its Done, and its tools start with ▶ Start and **Not a todo** (a
+  struck-through box: it stays a plain instant, alarms and all; also in a row's ⋯). Its trash deletes only the schedule: the todo goes back to
   the list, and a toast offers **Delete todo** too. A todo with a
   length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
   once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
@@ -47,6 +51,11 @@ notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
   backups (`data.todos`) and follow their group, as instants do.
 - **Sound previews** have a ■ to stop them while they play, and picking a sound (or closing the
   picker) stops the preview.
+- Fixed (Android app): Silence, dismissing or moving a ringing alarm stopped its sound but not its
+  vibration. Android only lets a vibration be cancelled through the Context that started it, and
+  the ring started from the alarm's receiver while the stop came through the app's screen; the
+  vibration now starts and stops through the application's Context, and an alarm with no sound
+  (only vibration) stops too.
 - Fixed: a selected bell's background was see-through (an invalid colour mix), so the instant's
   line showed through it.
 

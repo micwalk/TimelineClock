@@ -14,6 +14,8 @@ export const MARKS = {
   todoDone: '✓',
   todoPassed: '↷',
   todoDropped: '–',
+  /** A todo started after its time (its ▶ instant: "▶ Laundry"). */
+  todoStart: '▶',
 } as const
 
 /**
@@ -23,6 +25,8 @@ export const MARKS = {
 export const TODO_COPY = {
   /** The instant where a todo was done: "✓ Feed cats". */
   doneName: (name: string) => `${MARKS.todoDone} ${name}`,
+  /** The instant where a todo was started after its time: "▶ Feed cats". */
+  startName: (name: string) => `${MARKS.todoStart} ${name}`,
   /** A waiting todo's row: "since 7:00a". */
   since: (clock: string) => `since ${clock}`,
   /** What it took, with its length: "31m · planned 20m". */

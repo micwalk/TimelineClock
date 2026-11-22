@@ -419,8 +419,9 @@ scheduling, tracking time. Its addendum's requirements, sorted for this app:
 ## 12. Phase 1 as built (0.8.0, branch `todo`), and the calls made building it
 
 Built: everything in §8's Phase 1 (web). Not built: Phase 1b (Android: the notification still
-offers Dismiss / Snooze; dismissing there replays as a Dismiss, so the todo starts counting, as
-§8 wants), Phase 2 (needs its own spec), Phase 3. Where things live: AGENTS.md › UX Patterns ›
+offers Dismiss / Snooze; dismissing there replays as a Dismiss, which now leaves the todo
+waiting, not counting (call 5): Phase 1b should give it ▶ Start and ✓ Done), Phase 2 (its own
+spec: prd_todos_phase2.md), Phase 3. Where things live: AGENTS.md › UX Patterns ›
 Todos.
 
 Calls made by Claude while building (for the owner to override):
@@ -431,7 +432,9 @@ Calls made by Claude while building (for the owner to override):
 | 2 | Records live in the entities store, under their own key `timeline.todos.v1` | One place for data: backups, imports and groups handle them with the rest |
 | 3 | The record has a `closedAt` (when it stopped being open) | The Done section lists "the last day's" done, won't do and passed; won't do and passed have no instant to date them |
 | 4 | Only an alarm at (or after) its time starts the count. A warning's card says "in 10m · get ready" and asks **▶ Start now** (the plan moves to Now and counts, §4.4's Start, brought forward from Phase 3) or **OK** (it rings again at its time), with Done as a quiet link | Owner, 2026-11-21: a warning is "get ready", never a start by default |
-| 5 | A chime at a todo's time, and an alarm nobody answered (auto-dismissed after Ring for), start the count too | Silenced either way: nothing silenced is lost |
+| 5 | Only ▶ Start starts a todo. Its card asks ▶ Start (green, first: from its time) or ✓ Done; Silence answers it without starting (it waits in Now); so does an alarm nobody answered, a chime (whose card is the full todo card, without Silence) and Dismiss on the Android notification. Waiting, ▶ Start (its row, its chip) counts from Now: a `start` instant ("▶ Laundry", Phase 3's role), so the plan stays where it was and history shows the gap | Owner, 2026-11-21: Dismiss reads as Start; Silence hides without starting (replaces "a chime and an unanswered alarm start the count") |
+| 5b | Snooze 5m on a todo's card at its time moves the todo itself 5 minutes on (as Later does), with no bell added; a warning's snooze stays a reminder before its time | Owner, 2026-11-21 |
+| 5c | The panel's Silence (sound off, cards kept) shows only when a plain alarm rings too: every todo card has its own | Two Silences side by side would mean different things |
 | 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says | Otherwise a dismissed todo would be invisible unless selected |
 | 7 | Done before its time, or Won't do before it rang: an `at` none of whose alarms rang is deleted | §4.3's "a plan that never happened isn't history" (said for Back to the list) |
 | 8 | Later also drops pending snoozes, stops a count (nothing saved), and adds an alarm at the time if none is left to ring | Later is "the plan changed": it should ring at the new time, once |
@@ -445,6 +448,7 @@ Calls made by Claude while building (for the owner to override):
 | 14c | The Todo button: the control bar's way to the Todos tab, left of ＋ (horizontal), under Alarm (vertical), with the Now badge; tapped again while the drawer shows Todos, it closes it. N still adds one from anywhere | Owner, 2026-11-21 |
 | 15 | No ＋ in the Agenda header: the Add box is at the top of the Todos tab, which the ☰ reaches | It would open the same box one tap later |
 | 16 | On a scheduled todo's chip, the trash is Back to the list, then a toast (components/common/Toast, which Phase 2a's Undo can speak through) offers Delete todo; the bell-slash cancels alarms as everywhere (it no longer reads Unschedule: two tools would mean the same) | Owner, 2026-11-21 |
+| 16c | A selected todo chip's box is its Done (the ✓ tool was redundant); in its place, Not a todo (a struck-through box) un-todoes it: the instant stays (alarms, favorite), the record goes; on an occurrence the series stops being a todo, its occurrences ahead plain. Also in a row's ⋯ | Owner, 2026-11-21 |
 | 16b | Any instant becomes a todo: a faint ☐ before a selected chip's name (it lights up as the chip's box), and ☐ Todo on a plain alarm's ringing card (the card becomes the todo card). One ahead gets an alarm at its time if it has none (a todo at a time rings); one past is waiting, or counting if it is a favorite; on an occurrence the series becomes a repeating todo; unnamed, the chip's name box opens; fixed times (sun, clock changes, seasons) never | Owner, 2026-11-21: a way to promote an instant; both places they suggested, one action |
 | 17 | Repeating a todo's `at` with ⟳, or editing a series in the Alarm picker with Todo on, makes a repeating todo (its occurrences ahead get records) | The repeat should keep being a todo |
 | 18 | Renaming the `at` renames the todo, and the other way round | The `at` carries the todo's name |

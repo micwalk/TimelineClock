@@ -1388,7 +1388,20 @@
   cursor: pointer;
 }
 .chip__todo-hint > svg { width: 15px; height: 15px; }
-.chip__todo-hint::after { content: ''; position: absolute; inset: -6px -3px; }
+.chip__todo-hint::after, .chip__todo-btn::after { content: ''; position: absolute; inset: -6px -3px; }
+/* A selected open todo's box: its Done (it turns green under the pointer). */
+.chip__todo-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0 1px 0 4px;
+  color: var(--c-todo);
+  filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo));
+  cursor: pointer;
+}
+.chip__todo-btn > svg { width: 16px; height: 16px; }
+.chip__todo-btn:hover, .chip__todo-btn:focus-visible { color: var(--c-ok); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-ok)); }
 .chip__todo-hint:hover, .chip__todo-hint:focus-visible { color: var(--c-todo); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo)); }
 
 /* A toast (components/common/Toast): over the bottom of the timeline, one choice, gone by itself. */

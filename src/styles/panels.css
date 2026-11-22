@@ -1159,6 +1159,10 @@
   white-space: nowrap;
 }
 .todo-btn.is-on { background: color-mix(in srgb, var(--c-todo) 45%, transparent); }
+/* ▶ Start on a waiting row (and Start now in its ⋯): green, as on its ringing card. */
+.todo-btn--start { --accent: var(--c-ok); display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
+.todo-btn--start > svg { width: 14px; height: 14px; }
+.todo-when .alarm-link.alarm-link--start { --accent: var(--c-ok); }
 /* A row's box: Done (a checked one opens it again). Big, a heavy line, with a touch target past it. */
 .todo-check {
   position: relative;
@@ -1217,8 +1221,12 @@
 .todo-capture { --accent: var(--c-todo); --halo: var(--c-todo); width: min(520px, calc(100vw - 24px)); padding: 10px; border-radius: var(--radius-card); background: var(--box-bg-strong); animation: popover-in 140ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .todo-capture { animation: none; } .todo-drag { transition: none; } }
 
-/* The ringing card of a todo: Done (green) and Dismiss (on it / not yet: not red), then Snooze and Later. */
-.alarm-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 50%, transparent); }
+/* The ringing card of a todo: ▶ Start (green) and ✓ Done (the todo's colour), then Snooze and Later. */
+.alarm-btn--done, .alarm-btn--start { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 50%, transparent); }
+.alarm-btn--start { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.alarm-btn--start > svg { width: 16px; height: 16px; flex: none; }
+.alarm-btn--todo-done { --accent: var(--c-todo); background: color-mix(in srgb, var(--c-todo) 45%, transparent); }
+.alarm-link > svg { width: 14px; height: 14px; flex: none; }
 .alarm-card--todo .alarm-btn--dismiss { --accent: var(--c-cursor); background: color-mix(in srgb, var(--c-cursor) 35%, transparent); }
 .alarm-btn--later { --accent: var(--c-todo); background: color-mix(in srgb, var(--c-todo) 40%, transparent); }
 .alarm-btn--later.is-open { background: color-mix(in srgb, var(--c-todo) 65%, transparent); }

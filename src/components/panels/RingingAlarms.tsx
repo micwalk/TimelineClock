@@ -11,16 +11,17 @@
 // A chime that just sounded (it needs no answer) is a quieter card of its own with an OK, gone by
 // itself after the alarms' "Ring for" time.
 //
-// A todo's alarm (docs/prd_todos.md §7.1) asks Done or Dismiss, big, side by side (finished
-// already, or "on it / not yet", which starts it counting), then Snooze 5m and Later… (In 1h ·
-// Tonight · Tomorrow · Back to the list · Other…, typed), then Won't do (a quieter box). Snooze is "remind
-// me again"; Later is "the plan changed" (the instant moves). A warning before it ("in 10m · get
-// ready") asks Start now (the plan moves to Now and counts) or OK (it rings again at its time)
-// instead; Done is a quiet link there. A plain alarm's card offers ☐ Todo at its top: it becomes
+// A todo's alarm (docs/prd_todos.md §7.1) asks ▶ Start (green, first: it counts from its time
+// until its ✓) or ✓ Done (finished already), then Snooze 5m (the todo moves 5 minutes on) and
+// Later… (In 1h · Tonight · Tomorrow · Back to the list · Other…, typed), then Silence (it stops
+// and waits in the Todos tab's Now, not started) and Won't do, quieter boxes. A todo's chime shows
+// the same card, without Silence (there is nothing to stop; it goes by itself after the Ring for
+// time). A warning before it ("in 10m · get ready") asks ▶ Start now (the plan moves to Now and
+// counts) or OK (it rings again at its time) instead; Done is a quiet link there. A plain alarm's card offers ☐ Todo at its top: it becomes
 // a todo (act.makeInstantTodo) and the card its todo card.
 import { useRef, useState } from 'react'
 import { BellAlertIcon, BellIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
-import { PencilIcon } from '@heroicons/react/20/solid'
+import { BellSlashIcon, PencilIcon, PlayIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import type { RingingAlarm } from '../../domain/alarms.ts'
@@ -28,6 +29,8 @@ import { ringKey } from '../../domain/alarms.ts'
 import { displayName } from '../../domain/entities.ts'
 import { isFixedTime } from '../../domain/dst.ts'
 import { parseTimerInput } from '../../domain/quickCreate.ts'
+import { MINUTE } from '../../domain/time.ts'
+import { SNOOZE_MINUTES } from '../../services/AlarmScheduler.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { useEntities } from '../../store/entities.ts'
 import { getTodoTimes } from '../../store/settings.ts'
@@ -39,20 +42,24 @@ import { TodoBoxIcon } from '../common/TodoIcons.tsx'
 const clock = (ts: number) => formatClockCompact(ts, false)
 const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
 
+/** The open todo whose `at` an instant is, if any (its alarms get the todo card). */
+const useOpenTodoAt = (instantId: string) => useEntities(s => {
+  const link = s.instants.find(i => i.id === instantId)?.todo
+  return link?.role === 'at' && s.todos?.find(t => t.id === link.id)?.status === 'open' ? link.id : null
+})
+
 function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
-  // Re-render when the instant changes (renamed, other alarms answered).
-  const inst = useEntities(s => s.instants.find(i => i.id === alarm.instantId))
   // A todo's `at` (still open): its own card.
-  const todoId = useEntities(s => {
-    const link = inst?.todo?.role === 'at' ? inst.todo : undefined
-    return link && s.todos?.find(t => t.id === link.id)?.status === 'open' ? link.id : null
-  })
+  const todoId = useOpenTodoAt(alarm.instantId)
   if (todoId) return <TodoCard alarm={alarm} todoId={todoId} />
   return <PlainAlarmCard alarm={alarm} />
 }
 
-/** A todo's ringing alarm: Done or Dismiss, Snooze or Later, Won't do. */
-function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
+/**
+ * A todo's ringing alarm: Start or Done, Snooze or Later, Silence or Won't do. `chime`: its
+ * chime sounded (answered already): the same card without Silence.
+ */
+function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoId: string; chime?: boolean }) {
   const key = ringKey(alarm.instantId, alarm.alarmId)
   const inst = useEntities(s => s.instants.find(i => i.id === alarm.instantId))
   const choices = act.ringingChoicesFor(key)
@@ -67,11 +74,19 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
   // Later offers what Snooze doesn't: further off.
   const later = quickChoices(now, times).filter(c => c.key !== 'in15')
   const typedAt = parseWhen(text, now, times)
-  const snooze = choices?.snooze
+  // A warning: it isn't time yet ("in 10m · get ready").
+  const warning = (inst?.alarms?.find(a => a.id === alarm.alarmId)?.offsetMs ?? 0) > 0
+  // At its time, Snooze moves the todo itself; a warning's snoozes are reminders before it.
+  const snooze = !warning
+    ? { text: 'Snooze 5m', at: now + SNOOZE_MINUTES * MINUTE, run: () => act.snoozeTodo(key) }
+    : chime ? null
+    : choices?.snooze
     ? { text: 'Snooze 5m', at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, 5) }
     : choices?.untilStart
       ? { text: 'Until start', at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
       : null
+  // OK on a warning: it rings again at its time (a chime's card just goes).
+  const ok = () => (chime ? act.clearChime(key) : act.dismissAlarm(key))
   const openCustom = () => {
     setCustom(true)
     // Focus in the tap itself, so phones bring the keyboard up.
@@ -79,8 +94,6 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
   }
   const closeCustom = () => { setCustom(false); setText('') }
   const off = (on: boolean) => (on ? 0 : -1)
-  // A warning: it isn't time yet ("in 10m · get ready").
-  const warning = (inst?.alarms?.find(a => a.id === alarm.alarmId)?.offsetMs ?? 0) > 0
 
   return (
     <div className="alarm-card alarm-card--todo">
@@ -92,16 +105,17 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
       <div className="alarm-card__actions">
         {warning ? (
           <>
-            <button type="button" className="alarm-btn alarm-btn--done glow-box" onClick={() => act.startTodoNow(todoId)}
-              title="Start it now: it moves to Now and counts until you tap ✓">▶ Start now</button>
-            <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}
+            <button type="button" className="alarm-btn alarm-btn--start glow-box" onClick={() => act.startTodo(todoId)}
+              title="Start it now: it moves to Now and counts until you tap ✓"><PlayIcon aria-hidden /> Start now</button>
+            <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={ok}
               title="Got it: it rings again at its time">OK</button>
           </>
         ) : (
           <>
-            <button type="button" className="alarm-btn alarm-btn--done glow-box" onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done</button>
-            <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}
-              title="On it, or not yet: it counts on the timeline until you tap ✓">Dismiss</button>
+            <button type="button" className="alarm-btn alarm-btn--start glow-box" onClick={() => act.startTodo(todoId, { fromAlarm: true })}
+              title="On it: it counts on the timeline from its time until you tap ✓"><PlayIcon aria-hidden /> Start</button>
+            <button type="button" className="alarm-btn alarm-btn--todo-done glow-box" onClick={() => act.doneTodo(todoId)}
+              title="Done already">{MARKS.todoDone} Done</button>
           </>
         )}
       </div>
@@ -131,6 +145,10 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
           ) : (
             <>
               {warning && <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done already</button>}
+              {!warning && !chime && (
+                <button type="button" className="alarm-link alarm-link--wont glow-box" tabIndex={off(!custom)} onClick={() => act.dismissAlarm(key)}
+                  title="Stop it ringing without starting: it waits in the Todos tab’s Now"><BellSlashIcon aria-hidden /> Silence</button>
+              )}
               <button type="button" className="alarm-link alarm-link--wont glow-box" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
             </>
           )}
@@ -256,6 +274,13 @@ function PlainAlarmCard({ alarm }: { alarm: RingingAlarm }) {
 
 /** A chime that sounded: its name and time, how long ago, and OK. */
 function ChimeCard({ chime }: { chime: RingingAlarm }) {
+  // A todo's chime: its full card (Start, Done, Snooze, Later, Won't do).
+  const todoId = useOpenTodoAt(chime.instantId)
+  if (todoId) return <TodoCard alarm={chime} todoId={todoId} chime />
+  return <PlainChimeCard chime={chime} />
+}
+
+function PlainChimeCard({ chime }: { chime: RingingAlarm }) {
   const key = ringKey(chime.instantId, chime.alarmId)
   const inst = useEntities(s => s.instants.find(i => i.id === chime.instantId))
   const ts = inst?.tsEpochMs ?? chime.tsEpochMs
@@ -276,6 +301,11 @@ function ChimeCard({ chime }: { chime: RingingAlarm }) {
 export function RingingAlarms() {
   const ringing = useAlarms(s => s.ringing)
   const chimes = useAlarms(s => s.chimes)
+  // Every card a todo's: each has its own Silence (it stops and waits), so the panel's (sound off, cards kept) would be a second one.
+  const allTodos = useEntities(s => ringing.every(r => {
+    const link = s.instants.find(i => i.id === r.instantId)?.todo
+    return link?.role === 'at' && s.todos?.find(t => t.id === link.id)?.status === 'open'
+  }))
   if (ringing.length === 0 && chimes.length === 0) return null
   const ringingNow = ringing.length > 0
   return (
@@ -286,7 +316,7 @@ export function RingingAlarms() {
       </header>
       {ringing.map(alarm => <AlarmCard key={ringKey(alarm.instantId, alarm.alarmId)} alarm={alarm} />)}
       {chimes.map(c => <ChimeCard key={ringKey(c.instantId, c.alarmId)} chime={c} />)}
-      {ringingNow && (
+      {ringingNow && !allTodos && (
         <button type="button" className="alarm-btn alarm-btn--silence glow-box" onClick={act.silenceAlarms}>
           <SpeakerXMarkIcon aria-hidden /> Silence
         </button>

@@ -163,16 +163,15 @@ export function clearChime(key: string) {
 }
 
 /**
- * Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). `todo`: a
- * todo's alarm at its time starts it counting (startTodoCount); the app's own stops (Later, Done,
- * Unschedule: store/actions) pass false.
+ * Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). A todo's
+ * alarm answered doesn't start it: only ▶ Start does (store/actions startTodo), so a todo whose
+ * alarm was silenced, went unanswered or chimed waits in the Todos tab's Now.
  */
-function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>, todo = true) {
+function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {
   const { instantId, alarmId } = parseRingKey(key)
   const alarm = findAlarm(entities.getInstant(instantId), alarmId)
   if (alarm) entities.answerAlarms(instantId, [alarmId], how)
   stopRinging(instantId, [alarmId])
-  if (todo && alarm) startTodoCount(instantId, alarm)
   const inst = entities.getInstant(instantId)
   const { instants, spans } = useEntities.getState()
   const stillDue = inst?.alarms?.some(a => !a.answered && a.offsetMs <= 0)
@@ -183,30 +182,9 @@ function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>, todo = true) 
   }
 }
 
-/**
- * A todo's alarm at (or after) its time was dismissed, or chimed: it can't disappear, it starts
- * counting (docs/prd_todos.md §4.3). Its `at` instant is favorited, so its span to Now counts on
- * the live side from the scheduled time, and its other alarms still to ring are cancelled (it is
- * under way). A warning before its time only answers the warning.
- */
-function startTodoCount(instantId: string, alarm: AlarmRecord) {
-  const inst = entities.getInstant(instantId)
-  if (inst?.todo?.role !== 'at' || alarm.offsetMs > 0) return
-  if (entities.getTodo(inst.todo.id)?.status !== 'open') return
-  const now = Date.now()
-  for (const a of inst.alarms ?? []) if (!a.answered && a.id !== alarm.id && ringTime(inst, a) > now) entities.removeAlarm(instantId, a.id)
-  if (!inst.favorite && inst.tsEpochMs <= now) entities.setFavorite(instantId, true)
-}
-
-/**
- * Stops an alarm ringing without starting a todo's count: the app's own answers, when it is about
- * to do something else with the todo (Later moves it, Done finishes it, Unschedule puts it back).
- */
-export const dismissQuietly = (key: string) => answer(key, 'dismissed', false)
-
 /** Answers every ringing alarm of an instant (it is going away). */
 export function dismissInstant(instantId: string) {
-  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismissQuietly(ringKey(r.instantId, r.alarmId))
+  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismiss(ringKey(r.instantId, r.alarmId))
 }
 
 /** Snooze length (minutes); the Android app's Snooze button uses it too. */
@@ -244,8 +222,7 @@ export function cancelAlarms(instantId: string) {
   const now = Date.now()
   const ringing = new Set(useAlarms.getState().ringing.filter(r => r.instantId === instantId).map(r => r.alarmId))
   for (const a of alarmsToCancel(inst)) {
-    // Cancelling isn't answering it to get on with a todo: no count starts.
-    if (ringing.has(a.id) || ringTime(inst, a) <= now) dismissQuietly(ringKey(instantId, a.id))
+    if (ringing.has(a.id) || ringTime(inst, a) <= now) dismiss(ringKey(instantId, a.id))
     else entities.removeAlarm(instantId, a.id)
   }
 }

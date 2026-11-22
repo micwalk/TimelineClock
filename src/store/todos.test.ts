@@ -77,13 +77,58 @@ describe('adding todos', () => {
 })
 
 describe('when its alarm rings', () => {
-  it('Dismiss starts it counting from its time: its at is favorited', () => {
-    const { id, atId, key } = ringingTodo()
-    act.dismissAlarm(key)
+  it('▶ Start on its card counts from its time: its at is favorited', () => {
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
     expect(entities.getInstant(atId)!.favorite).toBe(true)
     expect(entities.nowSpanOf(atId)).toBeDefined()
     expect(stateOf(id)).toBe('counting')
     expect(useAlarms.getState().ringing).toEqual([])
+  })
+
+  it('Silence (its alarm answered any other way) starts nothing: it waits', () => {
+    const { id, atId, key } = ringingTodo()
+    act.dismissAlarm(key)
+    expect(entities.getInstant(atId)!.favorite).toBeFalsy()
+    expect(stateOf(id)).toBe('waiting')
+    expect(useAlarms.getState().ringing).toEqual([])
+  })
+
+  it('▶ Start later counts from Now: a ▶ instant, the plan left where it was', () => {
+    const { id, atId, key } = ringingTodo('Laundry', 40 * MINUTE)
+    act.dismissAlarm(key)
+    const planned = entities.getInstant(atId)!.tsEpochMs
+    act.startTodo(id)
+    const start = instantsOf(id).find(i => i.todo?.role === 'start')!
+    expect(start).toMatchObject({ label: '▶ Laundry', favorite: true })
+    expect(Math.abs(start.tsEpochMs - Date.now())).toBeLessThan(1000)
+    expect(entities.getInstant(atId)!.tsEpochMs).toBe(planned)
+    expect(stateOf(id)).toBe('counting')
+    act.doneTodo(id)
+    const done = instantsOf(id).find(i => i.todo?.role === 'done')!
+    expect(useEntities.getState().spans).toMatchObject([{ startInstantId: start.id, endInstantId: done.id, endIsNow: false }])
+  })
+
+  it('Snooze on its card moves the todo itself 5 minutes on, not a bell added', () => {
+    const { id, atId, key } = ringingTodo('Laundry')
+    const before = entities.getInstant(atId)!.alarms!.length
+    act.snoozeTodo(key)
+    const at = entities.getInstant(atId)!
+    expect(Math.abs(at.tsEpochMs - (Date.now() + 5 * MINUTE))).toBeLessThan(1000)
+    expect(at.alarms!.some(a => a.snoozeOf)).toBe(false)
+    expect(at.alarms!.filter(a => !a.answered && a.offsetMs === 0)).toHaveLength(1)
+    expect(at.alarms!.length).toBe(before)
+    expect(useAlarms.getState().ringing).toEqual([])
+    expect(stateOf(id)).toBe('scheduled')
+  })
+
+  it("a chime's card goes with Start, Later and the rest", () => {
+    const { id, atId, key } = ringingTodo()
+    const alarmId = key.split('|')[1]
+    useAlarms.setState({ ringing: [], chimes: [{ instantId: atId, alarmId, label: 'Feed cats', tsEpochMs: Date.now(), triggeredAt: Date.now() }] })
+    act.startTodo(id, { fromAlarm: true })
+    expect(useAlarms.getState().chimes).toEqual([])
+    expect(stateOf(id)).toBe('counting')
   })
 
   it('a warning before its time only answers the warning', () => {
@@ -103,7 +148,7 @@ describe('when its alarm rings', () => {
     const at = atOf(id)!
     const warn = entities.addAlarm(at.id, { offsetMs: 15 * MINUTE })
     useAlarms.setState({ ringing: [{ instantId: at.id, alarmId: warn, label: 'Laundry in 15m', tsEpochMs: at.tsEpochMs, triggeredAt: Date.now() }] })
-    act.startTodoNow(id)
+    act.startTodo(id)
     const moved = entities.getInstant(at.id)!
     expect(Math.abs(moved.tsEpochMs - Date.now())).toBeLessThan(1000)
     expect(moved.favorite).toBe(true)
@@ -113,8 +158,8 @@ describe('when its alarm rings', () => {
   })
 
   it('✓ Done on the lane (the favorite\'s stop) saves the stretch to a ✓ instant and celebrates', () => {
-    const { id, atId, key } = ringingTodo()
-    act.dismissAlarm(key)
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
     const spanId = entities.nowSpanOf(atId)!.id
     act.stopNowSpan(atId)
     const done = instantsOf(id).find(i => i.todo?.role === 'done')!
@@ -148,8 +193,8 @@ describe('when its alarm rings', () => {
   })
 
   it('a lap does nothing on a todo (Phase 3 makes it Pause)', () => {
-    const { atId, key } = ringingTodo()
-    act.dismissAlarm(key)
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
     act.lapNowSpan(atId)
     expect(entities.getInstant(atId)!.favorite).toBe(true)
   })
@@ -195,8 +240,8 @@ describe('not now', () => {
   })
 
   it('deleting a todo keeps what happened, its links cleared', () => {
-    const { id, atId, key } = ringingTodo()
-    act.dismissAlarm(key)
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
     act.stopNowSpan(atId)
     const doneId = instantsOf(id).find(i => i.todo?.role === 'done')!.id
     act.deleteTodo(id)
@@ -269,13 +314,14 @@ describe('making an instant a todo', () => {
     expect(entities.getInstant(plain)!.alarms).toBeUndefined()
   })
 
-  it('a ringing alarm made a todo: Dismiss then starts it counting', () => {
+  it('a ringing alarm made a todo: its card\'s ▶ Start then counts it', () => {
     const iid = entities.createInstant(Date.now() - MINUTE, 'Take out trash')
     const alarmId = entities.addAlarm(iid)
     useAlarms.setState({ ringing: [{ instantId: iid, alarmId, label: 'Take out trash', tsEpochMs: Date.now() - MINUTE, triggeredAt: Date.now() }] })
     const id = act.makeInstantTodo(iid)!
-    act.dismissAlarm(ringKey(iid, alarmId))
+    act.startTodo(id, { fromAlarm: true })
     expect(stateOf(id)).toBe('counting')
+    expect(useAlarms.getState().ringing).toEqual([])
   })
 
   it('an unnamed one opens its name box (from the chip); its name becomes the todo name', () => {
@@ -323,5 +369,27 @@ describe("a scheduled todo's trash", () => {
     act.deleteTodoSchedule(id)
     expect(entities.getInstant(atId)!.todo).toEqual({ id, role: 'was' })
     expect(stateOf(id)).toBe('unscheduled')
+  })
+})
+
+describe('not a todo (un-todo)', () => {
+  it('the instant stays as it was, alarms and all; the record goes', () => {
+    const iid = entities.createInstant(Date.now() + HOUR, 'Water plants')
+    const id = act.makeInstantTodo(iid)!
+    act.untodo(iid)
+    expect(entities.getTodo(id)).toBeUndefined()
+    const inst = entities.getInstant(iid)!
+    expect(inst.todo).toBeUndefined()
+    expect(inst).toMatchObject({ label: 'Water plants', alarms: [{ offsetMs: 0 }] })
+  })
+
+  it('on an occurrence, its series stops being a repeating todo, and its occurrences ahead become plain', () => {
+    act.addTodo('feed cats 7a daily')
+    const series = useEntities.getState().groups[0]
+    const first = useEntities.getState().instants.filter(i => i.seriesId === series.id).sort((a, b) => a.tsEpochMs - b.tsEpochMs)[0]
+    act.untodo(first.id)
+    expect(entities.getGroup(series.id)!.todo).toBeUndefined()
+    expect(useEntities.getState().instants.filter(i => i.seriesId === series.id).some(i => i.todo)).toBe(false)
+    expect(todos()).toEqual([])
   })
 })
