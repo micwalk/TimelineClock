@@ -1529,6 +1529,34 @@ export function wontDoTodo(todoId: string) {
   entities.patchTodo(todoId, { status: 'dropped', closedAt: now })
 }
 
+/**
+ * Start now (a warning's card: "in 10m · get ready"): the plan moves to Now (docs/prd_todos.md
+ * §4.4). Its `at` moves to Now and is favorited, so it counts from here; its alarms still to ring
+ * are cancelled (she is on it), and its planned block follows. An unscheduled one gets an `at`
+ * at Now, counting.
+ */
+export function startTodoNow(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = nowTime()
+  const at = todoAt(todoInstants(todoId))
+  if (at && countingInstant(todoInstants(todoId), now)) return
+  let id: string
+  if (at) {
+    quietTodoAlarms(at.id)
+    const kept = entities.getInstant(at.id)
+    if (kept) dropArmedAlarms(kept, now)
+    entities.setInstantTime(at.id, now)
+    if (kept?.seriesId && !kept.seriesEdited) entities.patchInstant(at.id, () => ({ seriesEdited: true }))
+    id = at.id
+  } else {
+    id = entities.createInstant(now, todo.label)
+    entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+  }
+  setFavorite(id, true)
+  ui.markDropped(id)
+}
+
 /** Opens a done, dropped or passed todo again (a mistaken tap): unscheduled, its history kept. */
 export function reopenTodo(todoId: string) {
   const todo = entities.getTodo(todoId)

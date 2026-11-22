@@ -96,6 +96,21 @@ describe('when its alarm rings', () => {
     expect(stateOf(id)).toBe('scheduled')
   })
 
+  it('Start now on a warning moves the plan to Now and counts; its alarms still to ring go', () => {
+    const id = act.addTodo('Laundry')!
+    act.scheduleTodo(id, Date.now() + 10 * MINUTE)
+    const at = atOf(id)!
+    const warn = entities.addAlarm(at.id, { offsetMs: 15 * MINUTE })
+    useAlarms.setState({ ringing: [{ instantId: at.id, alarmId: warn, label: 'Laundry in 15m', tsEpochMs: at.tsEpochMs, triggeredAt: Date.now() }] })
+    act.startTodoNow(id)
+    const moved = entities.getInstant(at.id)!
+    expect(Math.abs(moved.tsEpochMs - Date.now())).toBeLessThan(1000)
+    expect(moved.favorite).toBe(true)
+    expect(moved.alarms!.every(a => a.answered)).toBe(true)
+    expect(useAlarms.getState().ringing).toEqual([])
+    expect(stateOf(id)).toBe('counting')
+  })
+
   it('✓ Done on the lane (the favorite\'s stop) saves the stretch to a ✓ instant and celebrates', () => {
     const { id, atId, key } = ringingTodo()
     act.dismissAlarm(key)

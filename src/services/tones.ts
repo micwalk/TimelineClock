@@ -136,43 +136,50 @@ export const TONE_PRESETS: Record<AlarmSound, TonePreset> = {
 }
 
 /**
- * A brass note: two slightly detuned saws through a low-pass that opens on the attack (the
- * "blat" of a horn) and settles, a little vibrato on long notes, and a soft octave below for body.
+ * A natural trumpet note: bright (two saws and a square through a low-pass that flares open on
+ * the attack), a lip "scoop" up into the pitch, tongued (a crisp start, a short clean release),
+ * and a slow vibrato that grows on held notes.
  */
-function brass(ctx: BaseAudioContext, out: AudioNode, t: number, freq: number, len: number, peak: number): AudioScheduledSourceNode[] {
+function trumpet(ctx: BaseAudioContext, out: AudioNode, t: number, freq: number, len: number, peak: number): AudioScheduledSourceNode[] {
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
-  filter.Q.value = 1.2
-  filter.frequency.setValueAtTime(freq * 1.5, t)
-  filter.frequency.linearRampToValueAtTime(freq * 6, t + 0.05)
-  filter.frequency.exponentialRampToValueAtTime(freq * 3.2, t + Math.min(0.3, len))
+  filter.Q.value = 0.9
+  filter.frequency.setValueAtTime(freq * 3, t)
+  filter.frequency.linearRampToValueAtTime(freq * 11, t + 0.03)
+  filter.frequency.exponentialRampToValueAtTime(freq * 6, t + Math.min(0.25, len))
   const gain = ctx.createGain()
+  const release = Math.min(0.07, len * 0.35)
   gain.gain.setValueAtTime(0, t)
-  gain.gain.linearRampToValueAtTime(peak, t + 0.035)
-  gain.gain.setValueAtTime(peak * 0.85, t + Math.max(0.05, len - 0.12))
+  gain.gain.linearRampToValueAtTime(peak, t + 0.018)
+  gain.gain.linearRampToValueAtTime(peak * 0.82, t + Math.min(0.12, len - release))
+  gain.gain.setValueAtTime(peak * 0.82, t + len - release)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + len)
   filter.connect(gain)
   gain.connect(out)
   const sources: AudioScheduledSourceNode[] = []
-  const vib = len > 0.4 ? ctx.createOscillator() : null
-  const vibDepth = vib ? ctx.createGain() : null
+  const held = len > 0.5
+  const vib = held ? ctx.createOscillator() : null
+  const vibDepth = held ? ctx.createGain() : null
   if (vib && vibDepth) {
-    vib.frequency.value = 5.5
+    vib.frequency.value = 5.2
     vibDepth.gain.setValueAtTime(0, t)
-    vibDepth.gain.linearRampToValueAtTime(12, t + len * 0.6) // cents
+    vibDepth.gain.setValueAtTime(0, t + 0.25)
+    vibDepth.gain.linearRampToValueAtTime(16, t + len) // cents
     vib.connect(vibDepth)
     vib.start(t)
     vib.stop(t + len + 0.05)
     sources.push(vib)
   }
-  for (const [ratio, detune, level] of [[1, -6, 1], [1, 6, 1], [0.5, 0, 0.35]] as const) {
+  for (const [type, detune, level] of [['sawtooth', -5, 0.34], ['sawtooth', 5, 0.34], ['square', 0, 0.14]] as const) {
     const osc = ctx.createOscillator()
     const g = ctx.createGain()
-    osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(freq * ratio, t)
+    osc.type = type
+    // The scoop: from a little under the note up onto it.
+    osc.frequency.setValueAtTime(freq * 2 ** (-45 / 1200), t)
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.035)
     osc.detune.setValueAtTime(detune, t)
     if (vibDepth) vibDepth.connect(osc.detune)
-    g.gain.value = level * 0.5
+    g.gain.value = level
     osc.connect(g)
     g.connect(filter)
     osc.start(t)
@@ -180,23 +187,61 @@ function brass(ctx: BaseAudioContext, out: AudioNode, t: number, freq: number, l
     osc.onended = () => { osc.disconnect(); g.disconnect() }
     sources.push(osc)
   }
-  const last = sources[sources.length - 1]
-  last.addEventListener('ended', () => { filter.disconnect(); gain.disconnect(); vibDepth?.disconnect() })
+  sources[sources.length - 1].addEventListener('ended', () => { filter.disconnect(); gain.disconnect(); vibDepth?.disconnect() })
   return sources
 }
 
+/** A hall to play in: a short reverb from decaying noise (stereo), mixed in at `wet`. Returns the node to play into. */
+function hall(ctx: BaseAudioContext, out: AudioNode, seconds: number, wet: number): AudioNode {
+  const input = ctx.createGain()
+  const verb = ctx.createConvolver()
+  const n = Math.floor(ctx.sampleRate * seconds)
+  const ir = ctx.createBuffer(2, n, ctx.sampleRate)
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c)
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3
+  }
+  verb.buffer = ir
+  const wetGain = ctx.createGain()
+  wetGain.gain.value = wet
+  input.connect(out)
+  input.connect(verb)
+  verb.connect(wetGain)
+  wetGain.connect(out)
+  return input
+}
+
+/** Natural trumpet notes (the harmonics of C): no valves, so it sounds like a herald's. */
+const G4 = midi(67)
+const C5 = midi(72)
+const E5 = midi(76)
+const G5 = midi(79)
+
 /**
- * The Done fanfare (docs/prd_todos.md §7.2): a short "ta-da-daaa" brass call, an original
- * rising arpeggio (C, E, then a held G), played once when a todo is done.
+ * The Done fanfare (docs/prd_todos.md §7.2): a herald's trumpet call, as for royal news (an
+ * original call on the natural trumpet's notes): tongued triplets on G rising to C, a quick
+ * C–E arpeggio, then a held C major chord in three trumpets, in a little hall.
  */
 export const FANFARE: TonePreset = {
   name: 'Fanfare',
-  cycle: 1.4,
+  cycle: 3.2,
   play(ctx, out, t) {
-    return [
-      ...brass(ctx, out, t, midi(72), 0.13, 0.5),
-      ...brass(ctx, out, t + 0.15, midi(76), 0.13, 0.5),
-      ...brass(ctx, out, t + 0.3, midi(79), 0.95, 0.55),
+    const room = hall(ctx, out, 1.4, 0.3)
+    const lead = (at: number, f: number, len: number) => trumpet(ctx, room, t + at, f, len, 0.42)
+    const second = (at: number, f: number, len: number) => trumpet(ctx, room, t + at, f, len, 0.24)
+    const sources = [
+      ...lead(0, G4, 0.1), ...lead(0.12, G4, 0.1), ...lead(0.24, G4, 0.1),
+      ...lead(0.36, C5, 0.4), ...second(0.36, G4, 0.4),
+      ...lead(0.82, G4, 0.12), ...lead(0.96, C5, 0.12), ...lead(1.1, E5, 0.12),
+      ...lead(1.24, G5, 1.15), ...second(1.24, E5, 1.15), ...second(1.24, C5, 1.15),
     ]
+    // Keeps the hall's tail from being cut when the last note ends (playPreset lets go once every source has).
+    const tail = ctx.createConstantSource()
+    tail.offset.value = 0
+    tail.connect(room)
+    tail.start(t)
+    tail.stop(t + 1.24 + 1.15 + 1.4)
+    tail.onended = () => { tail.disconnect(); room.disconnect() }
+    return [...sources, tail]
   },
 }

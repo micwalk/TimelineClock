@@ -14,7 +14,9 @@
 // A todo's alarm (docs/prd_todos.md §7.1) asks Done or Dismiss, big, side by side (finished
 // already, or "on it / not yet", which starts it counting), then Snooze 5m and Later… (In 1h ·
 // Tonight · Tomorrow · Back to the list · Other…, typed), then a quiet Won't do. Snooze is "remind
-// me again"; Later is "the plan changed" (the instant moves).
+// me again"; Later is "the plan changed" (the instant moves). A warning before it ("in 10m · get
+// ready") asks Start now (the plan moves to Now and counts) or OK (it rings again at its time)
+// instead; Done is a quiet link there.
 import { useRef, useState } from 'react'
 import { BellAlertIcon, BellIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
 import { PencilIcon } from '@heroicons/react/20/solid'
@@ -29,7 +31,7 @@ import { useEntities } from '../../store/entities.ts'
 import { getTodoTimes } from '../../store/settings.ts'
 import * as act from '../../store/actions.ts'
 import { parseWhen, quickChoices } from '../../domain/todos.ts'
-import { MARKS } from '../../config/labels.ts'
+import { MARKS, TODO_COPY } from '../../config/labels.ts'
 
 const clock = (ts: number) => formatClockCompact(ts, false)
 const bySecond = (f: { now: number }) => Math.floor(f.now / 1000)
@@ -74,6 +76,8 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
   }
   const closeCustom = () => { setCustom(false); setText('') }
   const off = (on: boolean) => (on ? 0 : -1)
+  // A warning: it isn't time yet ("in 10m · get ready").
+  const warning = (inst?.alarms?.find(a => a.id === alarm.alarmId)?.offsetMs ?? 0) > 0
 
   return (
     <div className="alarm-card alarm-card--todo">
@@ -81,11 +85,22 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
         <span className="alarm-card__label"><span className="alarm-card__todo" aria-hidden>{MARKS.todoOpen}</span>{name}</span>
         <span className="alarm-card__time mono">{clock(ts)}</span>
       </div>
-      <LiveText className="alarm-card__rel" watch={bySecond} compute={f => formatRelativeShort(ts - f.now)} />
+      <LiveText className="alarm-card__rel" watch={bySecond} compute={f => `${formatRelativeShort(ts - f.now)}${warning && ts > f.now ? ` · ${TODO_COPY.getReady}` : ''}`} />
       <div className="alarm-card__actions">
-        <button type="button" className="alarm-btn alarm-btn--done glow-box" onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done</button>
-        <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}
-          title="On it, or not yet: it counts on the timeline until you tap ✓">Dismiss</button>
+        {warning ? (
+          <>
+            <button type="button" className="alarm-btn alarm-btn--done glow-box" onClick={() => act.startTodoNow(todoId)}
+              title="Start it now: it moves to Now and counts until you tap ✓">▶ Start now</button>
+            <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}
+              title="Got it: it rings again at its time">OK</button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="alarm-btn alarm-btn--done glow-box" onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done</button>
+            <button type="button" className="alarm-btn alarm-btn--dismiss glow-box" onClick={() => act.dismissAlarm(key)}
+              title="On it, or not yet: it counts on the timeline until you tap ✓">Dismiss</button>
+          </>
+        )}
       </div>
       <div className="alarm-card__actions alarm-card__actions--second">
         {snooze && (
@@ -111,7 +126,10 @@ function TodoCard({ alarm, todoId }: { alarm: RingingAlarm; todoId: string }) {
               </button>
             </>
           ) : (
-            <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
+            <>
+              {warning && <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done already</button>}
+              <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
+            </>
           )}
         </div>
         <form className="alarm-card__custom" aria-hidden={!custom} onSubmit={e => { e.preventDefault(); if (typedAt !== null) act.laterTodo(todoId, typedAt) }}>

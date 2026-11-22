@@ -229,7 +229,7 @@ virtual instant. **Passed**: when an occurrence's next one arrives with this one
 its record becomes `passed` and a counting todo stops counting with nothing saved (as
 unfavoriting does). Nothing is moved or carried over (owner's call, 2026-11-20).
 
-### 4.6 Scheduling workflow (Phase 2, its own spec next)
+### 4.6 Scheduling workflow (Phase 2, its own spec: [prd_todos_phase2.md](prd_todos_phase2.md))
 
 The next phase (owner, 2026-11-21): a good way to take an unscheduled todo to a spot on the
 timeline. Phase 1 has only Schedule's time entry and chips (§5); Phase 2 makes placing it
@@ -429,7 +429,7 @@ Calls made by Claude while building (for the owner to override):
 | 1 | The branch starts from `minor-0.7.2` (0.7.2 plus this PRD): there is no v0.7.3 yet | Rebase onto 0.7.3 once it exists |
 | 2 | Records live in the entities store, under their own key `timeline.todos.v1` | One place for data: backups, imports and groups handle them with the rest |
 | 3 | The record has a `closedAt` (when it stopped being open) | The Done section lists "the last day's" done, won't do and passed; won't do and passed have no instant to date them |
-| 4 | Only an alarm at (or after) its time starts the count; dismissing a warning before it just answers the warning | Dismissing "Laundry in 15m" isn't starting the laundry |
+| 4 | Only an alarm at (or after) its time starts the count. A warning's card says "in 10m · get ready" and asks **▶ Start now** (the plan moves to Now and counts, §4.4's Start, brought forward from Phase 3) or **OK** (it rings again at its time), with Done as a quiet link | Owner, 2026-11-21: a warning is "get ready", never a start by default |
 | 5 | A chime at a todo's time, and an alarm nobody answered (auto-dismissed after Ring for), start the count too | Silenced either way: nothing silenced is lost |
 | 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says | Otherwise a dismissed todo would be invisible unless selected |
 | 7 | Done before its time, or Won't do before it rang: an `at` none of whose alarms rang is deleted | §4.3's "a plan that never happened isn't history" (said for Back to the list) |
@@ -439,11 +439,11 @@ Calls made by Claude while building (for the owner to override):
 | 11 | Schedule and Later: the quick chips, a typed box ("3p", "1h30", "tomorrow 9a") and the hh:mm:ss time entry (for a date) | The typed box matches the ringing card's Other…; the time entry reaches any date |
 | 12 | In a typed "when", "1:30" is a clock time; lengths are "90", "1h30", "45m" | It answers "when", not "how long" |
 | 13 | The Add box reads only words at its end that can't be part of a name: "3p", "at 7", "20m", "daily", "tomorrow"; "buy 2 eggs" stays a name; a repeat needs a time, else its words stay in the name | Capture must never mangle a name |
-| 14 | ✓ and Later/Schedule on every open row (not only Now's), a ⋯ for Rename, Takes (length), Won't do and Delete (a second tap); done rows have an "open again" ↺ | One tap from the tab, whatever the row; a mistaken ✓ is undoable (↺ was not in the PRD) |
+| 14 | ✓ and Later/Schedule on every open row (not only Now's), a ⋯ for Rename, Takes (length), Won't do and Delete (a second tap); done rows have an "open again" ↺ | One tap from the tab, whatever the row; a mistaken ✓ is undoable (owner, 2026-11-21: keep it; a global Undo is Phase 2a) |
 | 15 | No ＋ in the Agenda header: the Add box is at the top of the Todos tab, which the ☰ reaches | It would open the same box one tap later |
 | 16 | On a todo's chip, the trash deletes the todo (on a second tap); the bell-slash reads Unschedule (Back to the list) while it is ahead | §4.3 |
 | 17 | Repeating a todo's `at` with ⟳, or editing a series in the Alarm picker with Todo on, makes a repeating todo (its occurrences ahead get records) | The repeat should keep being a todo |
 | 18 | Renaming the `at` renames the todo, and the other way round | The `at` carries the todo's name |
 | 19 | A group switched off hides its todos from the tab too | As it hides its instants |
 | 20 | Todo colour `--c-todo` (violet); the todo card's Dismiss is cyan, not red; Done is green | §6: no red for open todos |
-| 21 | The fanfare is an original C–E–G brass arpeggio (synthesized), only while the page is on screen; the volume slider plays it when let go | §7.2 |
+| 21 | The fanfare is a herald's trumpet call, as for royal news (owner's reference, 2026-11-21): an original call on the natural trumpet's notes, tongued triplets rising to a held C major chord in three trumpets, in a little hall, synthesized; only while the page is on screen; the volume slider plays it when let go | §7.2 |

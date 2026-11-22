@@ -56,3 +56,19 @@ describe('a todo ringing', () => {
     expect(useAlarms.getState().ringing).toEqual([])
   })
 })
+
+describe('a todo warning ringing', () => {
+  it('says get ready, and asks Start now or OK', () => {
+    const now = Date.now()
+    useEntities.setState({
+      todos: [{ id: 't1', label: 'Laundry', createdAt: 0, status: 'open', order: 0 }],
+      instants: [{ id: 'i1', tsEpochMs: now + 10 * MINUTE, label: 'Laundry', todo: { id: 't1', role: 'at' }, alarms: [{ id: 'w', offsetMs: 10 * MINUTE }, { id: 'a1', offsetMs: 0 }] }],
+    })
+    useAlarms.setState({ ringing: [{ instantId: 'i1', alarmId: 'w', label: 'Laundry in 10m', tsEpochMs: now + 10 * MINUTE, triggeredAt: now }] })
+    render(<RingingAlarms />)
+    expect(screen.getByText(/get ready/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^OK$/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Start now/ }))
+    expect(entities.getInstant('i1')!.favorite).toBe(true)
+  })
+})

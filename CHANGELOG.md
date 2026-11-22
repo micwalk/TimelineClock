@@ -21,14 +21,16 @@ notifications still offer Dismiss / Snooze for a todo: Done there is Phase 1b).
 - **When a todo rings**: **Done** (already did it) or **Dismiss** ("on it" / "not yet"). Dismissed,
   it doesn't disappear: its instant is favorited and counts on the timeline from its time until you
   tap the lane's **✓** (the stop, on a todo), which saves the time it took. **Snooze 5m**, **Later…**
-  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and a quiet **Won't do**.
+  (In 1h, Tonight, Tomorrow, Back to the list, or a typed time) and a quiet **Won't do**. A
+  warning before it reads "in 10m · get ready" and asks **▶ Start now** (it moves to Now and
+  counts) or **OK** (it rings again at its time).
 - **On the timeline**: a todo's chip leads with ☐ (✓ done, ↷ passed); its tools start with ✓ Done,
   the bell-slash reads Unschedule, and the trash deletes the todo on a second tap. A todo with a
   length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
   once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
   you zoom in.
-- **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a short
-  brass fanfare plays (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
+- **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a herald's
+  trumpet call plays (as for royal news) (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
   times; sparks follow reduced motion, and their count, spread and length are in Advanced).
 - **Repeating todos**: the Alarm picker's **Todo** switch (with an optional **Takes** length), or
   "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next

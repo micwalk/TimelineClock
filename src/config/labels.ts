@@ -29,6 +29,8 @@ export const TODO_COPY = {
   planned: (length: string) => `planned ${length}`,
   /** Worked on in pieces: "31m in 2 stretches". */
   stretches: (n: number) => `in ${n} stretches`,
+  /** A warning's card: it isn't time yet. */
+  getReady: 'get ready',
   /** Done straight away (nothing was timed). */
   done: 'done',
   passed: 'passed',
