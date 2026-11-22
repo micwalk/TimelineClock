@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, PlayIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
@@ -26,6 +26,7 @@ import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { useLongPress } from '../../hooks/useLongPress.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -182,9 +183,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
     <BellTools inst={inst} alarm={toolAlarm} />
   ) : selected && !moving ? (
     <>
-      {/* A todo: ▶ Start (from now, or early: its plan moves to Now), and Not a todo (its box is its Done). */}
-      {openTodo && !todoCounting && <IconButton icon={PlayIcon} label={`Start: ${displayName(inst.label, 'todo')}`} color="var(--c-ok)" bare onClick={() => act.startTodo(openTodo)} />}
-      {openTodo && <IconButton icon={NotTodoIcon} label="Not a todo: keep it as a plain instant" color="var(--c-todo)" bare onClick={() => act.untodo(inst.id)} />}
+      {/* A todo: Not a todo (its box is its Done; Start is in the Todos tab, a long-press on the box away), not while it counts. */}
+      {openTodo && !todoCounting && <IconButton icon={NotTodoIcon} label="Not a todo: keep it as a plain instant" color="var(--c-todo)" bare onClick={() => act.untodo(inst.id)} />}
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
@@ -251,11 +251,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           />
         ) : (
           <>
-          {/* A selected open todo's box is its Done, as on its Todos row. */}
-          {selected && openTodo && !moving && (
-            <button type="button" className="chip__todo-btn" aria-label={`Done: ${displayName(inst.label, 'todo')}`} title="Done"
-              onClick={() => act.doneTodo(openTodo)}><TodoBoxIcon aria-hidden /></button>
-          )}
+          {/* A selected open todo's box is its Done, as on its Todos row; a long-press finds it there. */}
+          {selected && openTodo && !moving && <TodoBoxButton todoId={openTodo} name={displayName(inst.label, 'todo')} />}
           {/* Make it a todo: a faint ☐ while selected; a tap lights it (the chip's own ☐ from then on). */}
           {selected && !inst.todo && !fixed && !moving && (
             <button type="button" className="chip__todo-hint" aria-label={TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)}
@@ -316,6 +313,15 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
         />
       )}
     </div>
+  )
+}
+
+/** A selected open todo's box: a tap is Done; a long-press opens the Todos tab at its row (act.findTodo). */
+function TodoBoxButton({ todoId, name }: { todoId: string; name: string }) {
+  const press = useLongPress(() => act.findTodo(todoId), () => act.doneTodo(todoId))
+  return (
+    <button type="button" className="chip__todo-btn" aria-label={`Done: ${name} (long-press: show it in the Todos tab)`} title="Done (long-press: show it in the Todos tab)"
+      {...press}><TodoBoxIcon aria-hidden /></button>
   )
 }
 

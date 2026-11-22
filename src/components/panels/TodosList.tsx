@@ -6,7 +6,7 @@
 //   Upcoming:     after today (folded past a week, as the Alarms tab's are).
 //   Unscheduled:  drag to reorder; Schedule on each.
 //   Done:         the last day's done, won't do and passed, newest first, "4 done today".
-// A waiting row (its time came, not started) has ▶ Start; the ⋯ has Start now for one not due yet.
+// An open row has Schedule (or Delay) and a green ▶ Start; a long-press on a todo chip's box finds its row here.
 // A row's box is its Done (a done one's box opens it again); a tap on the row goes to its instant
 // on the timeline, or, unscheduled, opens Schedule (the drawer stays). Its ⋯ has Rename, Won't do,
 // Delete and its Duration (quick lengths, "—" for none, or typed). Copy states facts, never
@@ -34,6 +34,7 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { NotTodoIcon, StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
+import { reducedMotion } from '../../engine/viewportEngine.ts'
 
 const byMinute = (f: { now: number }) => Math.floor(f.now / 60_000)
 /** When, plainly: the clock time today, else with its date ("Nov 22 9:00a"). */
@@ -102,10 +103,10 @@ export function AddBox({ autoFocus, onAdded, onCancel }: { autoFocus?: boolean; 
 }
 
 // ---------------------------------------------------------------------------
-// When: Schedule (an unscheduled one) and Later (one with a time)
+// When: Schedule (an unscheduled one) and Delay (one with a time)
 
 /** Quick times (In 15m, In 1h, Tonight, Tomorrow), a typed "when" ("3p", "1h30", "tomorrow 9a"), or the time entry (a date). */
-function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule' | 'Later'; onClose: () => void }) {
+function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule' | 'Delay'; onClose: () => void }) {
   const [text, setText] = useState('')
   const [picking, setPicking] = useState(false)
   const now = Date.now()
@@ -121,7 +122,7 @@ function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule'
           </button>
         ))}
         <IconButton icon={ClockIcon} label="Pick a time and date" color="var(--c-cursor)" bare pressed={picking} onClick={() => setPicking(p => !p)} />
-        {verb === 'Later' && <button type="button" className="alarm-link glow-box" onClick={() => { act.backToList(todoId); onClose() }}>Back to the list</button>}
+        {verb === 'Delay' && <button type="button" className="alarm-link glow-box" onClick={() => { act.backToList(todoId); onClose() }}>Unschedule</button>}
       </div>
       <form className="todo-when__typed" onSubmit={e => { e.preventDefault(); if (typed !== null) put(typed) }}>
         <input className="alarm-custom__input mono" value={text} onChange={e => setText(e.target.value)}
@@ -143,7 +144,7 @@ function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule'
   )
 }
 
-/** A row's other tools: rename, start now, not a todo, won't do, delete (a second tap), and its duration. */
+/** A row's other tools: rename, not a todo (not while it counts), won't do, delete (a second tap), and its duration. */
 function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => void; onRename: () => void }) {
   const [lengthText, setLengthText] = useState('')
   const [confirm, setConfirm] = useState(false)
@@ -155,12 +156,8 @@ function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => voi
     <div className="todo-when todo-more" onClick={e => e.stopPropagation()}>
       <div className="todo-when__chips">
         <button type="button" className="alarm-link glow-box" onClick={() => { onRename(); onClose() }}><PencilIcon aria-hidden /> Rename</button>
-        {/* Start it early (a waiting one has ▶ Start on its row). */}
-        {(row.state === 'scheduled' || row.state === 'unscheduled') && (
-          <button type="button" className="alarm-link alarm-link--start glow-box" onClick={() => { act.startTodo(id); onClose() }}><PlayIcon aria-hidden /> Start now</button>
-        )}
         {/* Not a todo: its instant stays on the timeline as a plain one (alarms and all). */}
-        {row.todo.status === 'open' && row.at && (
+        {row.todo.status === 'open' && row.at && row.state !== 'counting' && (
           <button type="button" className="alarm-link glow-box" onClick={() => { act.untodo(row.at!.id); onClose() }}
             title="Keep it on the timeline as a plain instant, with its alarms"><NotTodoIcon aria-hidden /> Not a todo</button>
         )}
@@ -209,6 +206,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   const instants = useEntities(s => s.instants)
   const mine = instantsOf(todoIndex(instants), todo.id)
   const flare = useUi(s => s.celebrating?.todoId === todo.id)
+  const found = useUi(s => s.foundTodo?.id === todo.id)
   const open = todo.status === 'open'
   // Made from an unnamed instant: it reads as its time, as the instant does.
   const name = todo.label || (at ? clock(at.tsEpochMs) : '')
@@ -227,7 +225,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   }
   return (
     <>
-      <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
+      <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
         onClick={tap} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) tap() }}>
         {/* Its box: Done (a closed one's opens it again). */}
         <button type="button" className={`todo-check is-${open ? 'open' : todo.status}`}
@@ -251,21 +249,21 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           )}
         </span>
         <span className="todo-row__tools" onClick={e => e.stopPropagation()}>
-          {/* Its time came and it isn't counting (silenced, unanswered, or no alarm): ▶ Start counts from now. */}
-          {state === 'waiting' && (
-            <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`Start: ${name}`} title="Start: it counts from now until you tap ✓"
-              onClick={() => act.startTodo(todo.id)}><PlayIcon aria-hidden /> Start</button>
-          )}
           {open && state !== 'counting' && (
             <button type="button" className={`todo-btn glow-box${panel === 'when' ? ' is-on' : ''}`} onClick={() => setPanel(p => (p === 'when' ? null : 'when'))}>
-              {state === 'unscheduled' ? 'Schedule' : 'Later'}
+              {state === 'unscheduled' ? 'Schedule' : 'Delay'}
             </button>
+          )}
+          {/* ▶ Start: it counts until its ✓ (from now; one not due yet moves to Now). */}
+          {open && state !== 'counting' && (
+            <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`Start: ${name}`} title="Start: it counts from now until you tap ✓"
+              onClick={() => act.startTodo(todo.id)}><PlayIcon aria-hidden /></button>
           )}
           <IconButton icon={EllipsisHorizontalIcon} label="More" color="var(--ink-dim)" bare pressed={panel === 'more'} onClick={() => setPanel(p => (p === 'more' ? null : 'more'))} />
           {drag && <span className="todo-row__grip" aria-label="Drag to reorder" onPointerDown={drag} data-no-pan><Bars2Icon aria-hidden /></span>}
         </span>
       </div>
-      {panel === 'when' && <WhenPanel todoId={todo.id} verb={state === 'unscheduled' ? 'Schedule' : 'Later'} onClose={() => setPanel(null)} />}
+      {panel === 'when' && <WhenPanel todoId={todo.id} verb={state === 'unscheduled' ? 'Schedule' : 'Delay'} onClose={() => setPanel(null)} />}
       {panel === 'more' && <MoreMenu row={row} onClose={() => setPanel(null)} onRename={() => setRenaming(true)} />}
     </>
   )
@@ -338,11 +336,24 @@ export function TodosList() {
   const s = useTodoSections(minute)
   const [showAll, setShowAll] = useState(false)
   const now = minute * 60_000
+  // A todo to find (a long-press on its chip's box): unfold the far ones if it is there, then scroll its row into view.
+  const found = useUi(st => st.foundTodo)
+  const listRef = useRef<HTMLDivElement>(null)
+  const foundFar = !!found && s.upcoming.some(r => r.todo.id === found.id && (r.at?.tsEpochMs ?? 0) - now > UPCOMING_SHOWN_MS)
+  if (foundFar && !showAll) setShowAll(true)
+  useEffect(() => {
+    if (!found) return
+    const id = requestAnimationFrame(() => {
+      const row = [...(listRef.current?.querySelectorAll<HTMLElement>('.todo-row') ?? [])].find(el => el.dataset.todo === found.id)
+      row?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [found])
   const near = s.upcoming.filter(r => (r.at?.tsEpochMs ?? 0) - now <= UPCOMING_SHOWN_MS)
   const upcoming = showAll ? s.upcoming : near
   const empty = s.now.length + s.today.length + s.upcoming.length + s.unscheduled.length + s.done.length === 0
   return (
-    <div className="todos-list alarms-list">
+    <div ref={listRef} className="todos-list alarms-list">
       <AddBox />
       {empty && <p className="alarms-empty">No todos yet. Type one above and press Enter, or press <b>N</b> anywhere. Add a time ("3p") to be reminded, a length ("20m") to plan it.</p>}
       {s.now.length > 0 && <h3 className="alarms-list__head">Now</h3>}

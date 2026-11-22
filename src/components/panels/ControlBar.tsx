@@ -11,6 +11,7 @@ import {
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
+import { LONG_PRESS_MS, useLongPress } from '../../hooks/useLongPress.ts'
 import { CtlButton } from './CtlButton.tsx'
 import { StopwatchButton, TimerButton, TodoButton } from './QuickButtons.tsx'
 import { AlarmButton } from './AlarmButton.tsx'
@@ -25,7 +26,6 @@ import { openAlarms } from '../../domain/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
 
-const LONG_PRESS_MS = 500
 
 /** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes" (horizontal picks by room: panels.css). */
 function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell?: CSSProperties; compact?: boolean }) {
@@ -88,26 +88,6 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
   )
 }
 
-/** A tap, or a long-press (also a right-click) that swallows the click after it. */
-function useLongPress(onLong: () => void, onTap: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressed = useRef(false)
-  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null }
-  return {
-    onPointerDown: () => {
-      longPressed.current = false
-      clear()
-      timer.current = setTimeout(() => { longPressed.current = true; onLong() }, LONG_PRESS_MS)
-    },
-    onPointerUp: clear,
-    onPointerLeave: clear,
-    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); clear(); onLong() },
-    onClick: () => {
-      if (longPressed.current) { longPressed.current = false; return }
-      onTap()
-    },
-  }
-}
 
 /**
  * The top button: NOW with the clock under it. A tap goes to Now; a long-press zooms out until

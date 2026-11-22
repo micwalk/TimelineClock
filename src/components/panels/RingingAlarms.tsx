@@ -13,15 +13,14 @@
 //
 // A todo's alarm (docs/prd_todos.md §7.1) asks ▶ Start (green, first: it counts from its time
 // until its ✓) or ✓ Done (finished already), then Snooze 5m (the todo moves 5 minutes on) and
-// Later… (In 1h · Tonight · Tomorrow · Back to the list · Other…, typed), then Silence (it stops
-// and waits in the Todos tab's Now, not started) and Won't do, quieter boxes. A todo's chime shows
-// the same card, without Silence (there is nothing to stop; it goes by itself after the Ring for
-// time). A warning before it ("in 10m · get ready") asks ▶ Start now (the plan moves to Now and
+// Delay… (In 1h · Tonight · Tomorrow · Unschedule · Other…, typed), then Hide (it stops and waits
+// in the Todos tab's Now, not started) and Won't do, quieter boxes. A todo's chime shows the same
+// card, without Hide (it goes by itself after the Ring for time). A warning before it ("in 10m · get ready") asks ▶ Start now (the plan moves to Now and
 // counts) or OK (it rings again at its time) instead; Done is a quiet link there. A plain alarm's card offers ☐ Todo at its top: it becomes
 // a todo (act.makeInstantTodo) and the card its todo card.
 import { useRef, useState } from 'react'
 import { BellAlertIcon, BellIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid'
-import { BellSlashIcon, PencilIcon, PlayIcon } from '@heroicons/react/20/solid'
+import { EyeSlashIcon, PencilIcon, PlayIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
 import type { RingingAlarm } from '../../domain/alarms.ts'
@@ -56,8 +55,8 @@ function AlarmCard({ alarm }: { alarm: RingingAlarm }) {
 }
 
 /**
- * A todo's ringing alarm: Start or Done, Snooze or Later, Silence or Won't do. `chime`: its
- * chime sounded (answered already): the same card without Silence.
+ * A todo's ringing alarm: Start or Done, Snooze or Delay, Hide or Won't do. `chime`: its chime
+ * sounded (answered already): the same card without Hide.
  */
 function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoId: string; chime?: boolean }) {
   const key = ringKey(alarm.instantId, alarm.alarmId)
@@ -71,7 +70,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
   const name = displayName(inst?.label, clock(ts))
   const now = act.nowTime()
   const times = getTodoTimes()
-  // Later offers what Snooze doesn't: further off.
+  // Delay offers what Snooze doesn't: further off.
   const later = quickChoices(now, times).filter(c => c.key !== 'in15')
   const typedAt = parseWhen(text, now, times)
   // A warning: it isn't time yet ("in 10m · get ready").
@@ -126,7 +125,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
           </button>
         )}
         <button type="button" className={`alarm-btn alarm-btn--later glow-box${mode === 'later' ? ' is-open' : ''}`} aria-expanded={mode === 'later'}
-          onClick={() => { setMode(m => (m === 'later' ? 'more' : 'later')); closeCustom() }}>Later…</button>
+          onClick={() => { setMode(m => (m === 'later' ? 'more' : 'later')); closeCustom() }}>Delay…</button>
       </div>
       <div className={`alarm-card__more${custom ? ' is-custom' : ''}`}>
         <div className="alarm-card__links" aria-hidden={custom}>
@@ -137,8 +136,8 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
                   {c.label} <span className="alarm-link__at">{clock(c.ts)}</span>
                 </button>
               ))}
-              <button type="button" className="alarm-link glow-box" tabIndex={off(!custom)} onClick={() => act.backToList(todoId)}>Back to the list</button>
-              <button type="button" className="alarm-other" tabIndex={off(!custom)} onClick={openCustom} aria-label="Later: type when">
+              <button type="button" className="alarm-link glow-box" tabIndex={off(!custom)} onClick={() => act.backToList(todoId)}>Unschedule</button>
+              <button type="button" className="alarm-other" tabIndex={off(!custom)} onClick={openCustom} aria-label="Delay: type when">
                 <span>Other…</span><PencilIcon aria-hidden />
               </button>
             </>
@@ -147,7 +146,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
               {warning && <button type="button" className="alarm-link alarm-link--quiet" tabIndex={off(!custom)} onClick={() => act.doneTodo(todoId)}>{MARKS.todoDone} Done already</button>}
               {!warning && !chime && (
                 <button type="button" className="alarm-link alarm-link--wont glow-box" tabIndex={off(!custom)} onClick={() => act.dismissAlarm(key)}
-                  title="Stop it ringing without starting: it waits in the Todos tab’s Now"><BellSlashIcon aria-hidden /> Silence</button>
+                  title="Hide it without starting: it waits in the Todos tab’s Now"><EyeSlashIcon aria-hidden /> Hide</button>
               )}
               <button type="button" className="alarm-link alarm-link--wont glow-box" tabIndex={off(!custom)} onClick={() => act.wontDoTodo(todoId)}>Won't do</button>
             </>
@@ -162,7 +161,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
             onKeyDown={e => { if (e.key === 'Escape') closeCustom() }}
             onBlur={() => { if (!text) closeCustom() }}
             placeholder="When… 3p, 1h30, tomorrow"
-            aria-label="Later: when (a time, a length from now, or tomorrow)"
+            aria-label="Delay: when (a time, a length from now, or tomorrow)"
             aria-invalid={text !== '' && typedAt === null}
             enterKeyHint="done"
             autoComplete="off"

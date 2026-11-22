@@ -1734,6 +1734,13 @@ export function passTodos() {
 /** Opens the todo capture box (N): a name and Enter, from anywhere. */
 export const openCapture = () => ui.setCapture(true)
 
+/** Its todo in the Todos tab (a long-press on a todo chip's box): the tab opens (the drawer too) and its row scrolls into view, lit. */
+export function findTodo(todoId: string) {
+  ui.setListTab('todos')
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
+  ui.findTodo(todoId)
+}
+
 /**
  * The Todo button: the Agenda's Todos tab, opening the drawer when the Agenda is one (tapped
  * again while the drawer shows it, it closes).

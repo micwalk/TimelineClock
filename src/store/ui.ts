@@ -70,6 +70,8 @@ export interface UiState {
    * flares). `n` tells one celebration from the next.
    */
   celebrating: { instantId: string; todoId: string; n: number } | null
+  /** A todo to find in the Todos tab (a long-press on its chip's box): its row scrolls into view and lights up. */
+  foundTodo: { id: string; n: number } | null
   /** A short note over the timeline with one choice (components/common/Toast); gone by itself after TOAST_MS. */
   toast: Toast | null
 }
@@ -108,6 +110,7 @@ export const useUi = create<UiState>(() => ({
   seriesHint: null,
   captureOpen: false,
   celebrating: null,
+  foundTodo: null,
   toast: null,
 }))
 
@@ -115,6 +118,11 @@ export const useUi = create<UiState>(() => ({
 export const TOAST_MS = 6000
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 let toasts = 0
+
+/** How long a found todo's row stays lit. */
+export const FOUND_MS = 1600
+let foundTimer: ReturnType<typeof setTimeout> | null = null
+let founds = 0
 
 /** How long a Done's celebration lasts (its glow; the sparks have their own tunable). */
 export const CELEBRATE_MS = 1600
@@ -166,6 +174,12 @@ export const ui = {
     const n = ++celebrations
     useUi.setState({ celebrating: { instantId, todoId, n } })
     celebrateTimer = setTimeout(() => { celebrateTimer = null; useUi.setState(s => (s.celebrating?.n === n ? { celebrating: null } : s)) }, CELEBRATE_MS)
+  },
+  findTodo(id: string) {
+    if (foundTimer) clearTimeout(foundTimer)
+    const n = ++founds
+    useUi.setState({ foundTodo: { id, n } })
+    foundTimer = setTimeout(() => { foundTimer = null; useUi.setState(s => (s.foundTodo?.n === n ? { foundTodo: null } : s)) }, FOUND_MS)
   },
   showToast(text: string, action?: Toast['action']) {
     if (toastTimer) clearTimeout(toastTimer)

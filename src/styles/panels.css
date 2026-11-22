@@ -1166,8 +1166,14 @@
 }
 .todo-btn.is-on { background: color-mix(in srgb, var(--c-todo) 45%, transparent); }
 /* ▶ Start on a waiting row (and Start now in its ⋯): green, as on its ringing card. */
-.todo-btn--start { --accent: var(--c-ok); display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
-.todo-btn--start > svg { width: 14px; height: 14px; }
+.todo-btn--start { --accent: var(--c-ok); display: inline-grid; place-items: center; width: 32px; padding: 0; background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
+.todo-btn--start > svg { width: 15px; height: 15px; }
+/* Found (a long-press on its chip's box): the row lights up in the todo colour. */
+.todo-row.is-found { animation: todo-found 1600ms ease-out 1; }
+@keyframes todo-found {
+  0%, 30% { background: color-mix(in srgb, var(--c-todo) 32%, var(--surface-solid)); box-shadow: 0 0 0 2px var(--c-todo), 0 0 calc(18px * var(--glow)) var(--c-todo); }
+}
+@media (prefers-reduced-motion: reduce) { .todo-row.is-found { animation: none; box-shadow: 0 0 0 2px var(--c-todo); } }
 .todo-when .alarm-link.alarm-link--start { --accent: var(--c-ok); }
 /* A row's box: Done (a checked one opens it again). Big, a heavy line, with a touch target past it. */
 .todo-check {

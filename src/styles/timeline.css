@@ -191,7 +191,7 @@
 .chip--saved .icon-btn > svg { width: 15px; height: 15px; }
 .chip__main {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   padding: 0 5px;
   max-width: 300px;
@@ -1374,7 +1374,7 @@
 .tl-lane--planned .span-chip { border-style: dashed; background: var(--box-bg); color: var(--ink-dim); }
 
 /* A todo's ☐ / ✓ / ↷ / – before its name. */
-.chip__todo { flex: none; width: 15px; height: 15px; margin-right: 1px; color: var(--c-todo); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo)); }
+.chip__todo { flex: none; width: 18px; height: 18px; margin-right: 1px; color: var(--c-todo); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo)); }
 .chip.is-todo-done .chip__todo { color: var(--c-ok); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-ok)); }
 .chip.is-todo-passed .chip__todo, .chip.is-todo-dropped .chip__todo { color: var(--ink-faint); filter: none; }
 /* Make it a todo: a faint ☐ on a selected chip that isn't one (a bigger touch target than the glyph). */
@@ -1387,7 +1387,7 @@
   color: color-mix(in srgb, var(--c-todo) 50%, transparent);
   cursor: pointer;
 }
-.chip__todo-hint > svg { width: 15px; height: 15px; }
+.chip__todo-hint > svg { width: 18px; height: 18px; }
 .chip__todo-hint::after, .chip__todo-btn::after { content: ''; position: absolute; inset: -6px -3px; }
 /* A selected open todo's box: its Done (it turns green under the pointer). */
 .chip__todo-btn {
@@ -1400,8 +1400,13 @@
   filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo));
   cursor: pointer;
 }
-.chip__todo-btn > svg { width: 16px; height: 16px; }
-.chip__todo-btn:hover, .chip__todo-btn:focus-visible { color: var(--c-ok); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-ok)); }
+.chip__todo-btn > svg { width: 18px; height: 18px; }
+/* Green under a mouse only (a touch's long-press would leave it lit). */
+@media (hover: hover) {
+  .chip__todo-btn:hover { color: var(--c-ok); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--c-ok)); }
+}
+.chip__todo-btn:focus-visible { color: var(--c-ok); }
+.chip__todo-btn { -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
 .chip__todo-hint:hover, .chip__todo-hint:focus-visible { color: var(--c-todo); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo)); }
 
 /* A toast (components/common/Toast): over the bottom of the timeline, one choice, gone by itself. */

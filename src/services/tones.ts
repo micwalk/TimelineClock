@@ -219,28 +219,30 @@ const G5 = midi(79)
 
 /**
  * The Done fanfare (docs/prd_todos.md §7.2): a herald's trumpet call, as for royal news (an
- * original call on the natural trumpet's notes): tongued triplets on G rising to C, a quick
- * C–E arpeggio, then a held C major chord in three trumpets, in a little hall.
+ * original call on the natural trumpet's notes): a quick pickup up the C major arpeggio (G, C, E)
+ * landing on a held C major chord in three trumpets, in a little hall (owner, 2026-11-21: the
+ * call's second half alone).
  */
 export const FANFARE: TonePreset = {
   name: 'Fanfare',
-  cycle: 3.2,
+  cycle: 2.2,
   play(ctx, out, t) {
     const room = hall(ctx, out, 1.4, 0.3)
     const lead = (at: number, f: number, len: number) => trumpet(ctx, room, t + at, f, len, 0.42)
     const second = (at: number, f: number, len: number) => trumpet(ctx, room, t + at, f, len, 0.24)
+    const hold = 1.05
     const sources = [
-      ...lead(0, G4, 0.1), ...lead(0.12, G4, 0.1), ...lead(0.24, G4, 0.1),
-      ...lead(0.36, C5, 0.4), ...second(0.36, G4, 0.4),
-      ...lead(0.82, G4, 0.12), ...lead(0.96, C5, 0.12), ...lead(1.1, E5, 0.12),
-      ...lead(1.24, G5, 1.15), ...second(1.24, E5, 1.15), ...second(1.24, C5, 1.15),
+      // A pickup up the C major arpeggio, a touch broader into the top note…
+      ...lead(0, G4, 0.11), ...lead(0.13, C5, 0.11), ...lead(0.27, E5, 0.13),
+      // …which lands on a held C major chord in three trumpets: G on top, E and C under it.
+      ...lead(0.43, G5, hold), ...second(0.43, E5, hold), ...second(0.43, C5, hold),
     ]
     // Keeps the hall's tail from being cut when the last note ends (playPreset lets go once every source has).
     const tail = ctx.createConstantSource()
     tail.offset.value = 0
     tail.connect(room)
     tail.start(t)
-    tail.stop(t + 1.24 + 1.15 + 1.4)
+    tail.stop(t + 0.43 + hold + 1.4)
     tail.onended = () => { tail.disconnect(); room.disconnect() }
     return [...sources, tail]
   },

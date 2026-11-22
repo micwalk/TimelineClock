@@ -25,24 +25,27 @@ there is Phase 1b).
   the tab.
 - **When a todo rings**: **▶ Start** (green, first) or **✓ Done** (already did it). Started, it
   counts on the timeline from its time until you tap the lane's **✓** (the stop, on a todo), which
-  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; **Later…** moves it
-  further (In 1h, Tonight, Tomorrow, Back to the list, or a typed time). **Silence** stops it
-  without starting: it waits under Now, where **▶ Start** counts from then on (a "▶ Laundry"
+  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; **Delay…** moves it
+  further (In 1h, Tonight, Tomorrow, Unschedule, or a typed time). **Hide** stops it without
+  starting: it waits under Now, where its row's green **▶** counts from then on (a "▶ Laundry"
   instant; the plan stays where it was). **Won't do** lets it go. Only Start starts a todo. A todo's
-  chime shows the same card, without Silence. A warning before it reads "in 10m · get ready" and
+  chime shows the same card, without Hide. A warning before it reads "in 10m · get ready" and
   asks **▶ Start now** (it moves to Now and counts) or **OK** (it rings again at its time).
 - **Any instant can become a todo**: a selected chip shows a faint ☐ before its name (tap it), and
   a plain alarm's ringing card has **☐ Todo** (the card becomes the todo's); a repeating one makes
   its series a repeating todo.
+- **Todos rows**: Schedule (or **Delay**) then a green **▶** to start it, on every open row that
+  isn't counting.
 - **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when
-  passed); selected, its box is its Done, and its tools start with ▶ Start and **Not a todo** (a
-  struck-through box: it stays a plain instant, alarms and all; also in a row's ⋯). Its trash deletes only the schedule: the todo goes back to
-  the list, and a toast offers **Delete todo** too. A todo with a
+  passed), its contents centered; selected, its box is its Done (a long-press opens the Todos tab
+  at its row), and its tools start with **Not a todo** (a struck-through box: it stays a plain
+  instant, alarms and all; also in a row's ⋯; not while it counts). Its trash deletes only the
+  schedule: the todo goes back to the list, and a toast offers **Delete todo** too. A todo with a
   length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
   once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
   you zoom in.
 - **Done is celebrated**: the chip and row flare, glowing sparks fly from the ✓, and a herald's
-  trumpet call plays (as for royal news) (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
+  trumpet call plays (as for royal news: a quick pickup into a held chord) (Settings › Alarms › Todos: on/off and volume, with Tonight and Tomorrow's
   times; sparks follow reduced motion, and their count, spread and length are in Advanced).
 - **Repeating todos**: the Alarm picker's **Todo** switch (with an optional duration), or
   "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next
