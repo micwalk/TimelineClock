@@ -14,13 +14,14 @@
 // open todos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { Bars2Icon, ClockIcon, EllipsisHorizontalIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
+import { Bars2Icon, ClockIcon, EllipsisHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY } from '../../config/labels.ts'
 import type { TodoRow } from '../../domain/todos.ts'
 import { doneOrigin } from '../common/doneOrigin.ts'
-import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parseWhen, quickChoices, todoActual, todoInputAt, todoReading } from '../../domain/todos.ts'
+import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parseWhen, quickChoices, todoActual, todoInputAt, todoReading, todoStretches } from '../../domain/todos.ts'
+import { genieKeyframes, genieMs } from '../../domain/genie.ts'
 import { todoIndex, useTodoSections } from '../../hooks/useTodos.ts'
 import { describeRepeatShort } from '../../domain/series.ts'
 import { formatClockCompact, formatDuration, formatDurationShort, formatMonthDay } from '../../domain/format.ts'
@@ -146,6 +147,46 @@ function WhenPanel({ todoId, verb, onClose }: { todoId: string; verb: 'Schedule'
 }
 
 /** A row's other tools: rename, not a todo (not while it counts), won't do, delete (a second tap), and its duration. */
+/** Sucks `el` into `target` (domain/genie): a counting todo's Done going into its checkbox. It stays gone (the row changes as the todo is done). */
+function genieInto(el: HTMLElement, target: Element) {
+  if (reducedMotion() || typeof el.animate !== 'function') return
+  const a = el.getBoundingClientRect()
+  const b = target.getBoundingClientRect()
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2)
+  const dy = b.top + b.height / 2 - (a.top + a.height / 2)
+  el.classList.add('is-genie')
+  el.animate(genieKeyframes(dx, dy, { w: a.width, h: a.height }, { w: b.width, h: b.height }),
+    { duration: genieMs(dx, dy), easing: 'cubic-bezier(0.4, 0, 0.75, 0.6)', fill: 'forwards' })
+}
+
+/** A todo's stretches (its ⋯): when each ran and how long; a tap goes to it on the timeline. */
+function StretchList({ todoId, startedId }: { todoId: string; startedId?: string }) {
+  const instants = useEntities(s => s.instants)
+  const spans = useEntities(s => s.spans)
+  const list = todoStretches(instantsOf(todoIndex(instants), todoId), spans, Date.now(), startedId)
+  if (list.length === 0) return null
+  const today = new Date().toDateString()
+  // Seconds for a short one ("1:09:12p – 1:09:40p"), else to the minute; the date if not today.
+  const when = (ts: number, short: boolean) => {
+    const c = formatClockCompact(ts, short)
+    return new Date(ts).toDateString() === today ? c : `${formatMonthDay(ts, Date.now())} ${c}`
+  }
+  return (
+    <div className="todo-stretches" role="list" aria-label="Stretches">
+      <span className="todo-dur-pick__label">{TODO_COPY.stretchesHead(list.length)}</span>
+      {[...list].reverse().map((s, k) => (
+        <button key={s.spanId ?? `live-${k}`} type="button" role="listitem" className="todo-stretch glow-box"
+          onClick={() => { if (s.spanId) act.showStretch(s.spanId); else act.showTodo(todoId); if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda() }}>
+          <span className="mono">{when(s.start, (s.end ?? Date.now()) - s.start < 10 * MINUTE)} – {s.end === null ? TODO_COPY.now : formatClockCompact(s.end, s.end - s.start < 10 * MINUTE)}</span>
+          {s.end === null
+            ? <LiveText className="todo-stretch__len mono" watch={bySecond} compute={f => length(f.now - s.start)} />
+            : <span className="todo-stretch__len mono">{length(s.end - s.start)}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => void; onRename: () => void }) {
   const [lengthText, setLengthText] = useState('')
   const [confirm, setConfirm] = useState(false)
@@ -167,6 +208,7 @@ function MoreMenu({ row, onClose, onRename }: { row: TodoRow; onClose: () => voi
           ? <button type="button" className="alarm-link alarm-link--danger glow-box" onClick={() => act.deleteTodo(id)}>Delete todo</button>
           : <IconButton icon={TrashIcon} label="Delete todo (tap again)" color="var(--c-danger)" bare onClick={() => setConfirm(true)} />}
       </div>
+      <StretchList todoId={id} startedId={row.todo.startedId} />
       {row.todo.status === 'open' && (
         <div className="todo-dur-pick" role="group" aria-labelledby={`dur-${id}`}>
           <span className="todo-dur-pick__label" id={`dur-${id}`}><StopwatchIcon aria-hidden className="todo-dur__icon" />Duration</span>
@@ -212,11 +254,19 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   const popping = useUi(s => s.celebrating?.todoId === todo.id && !!s.celebrating.origin?.box)
   const found = useUi(s => s.foundTodo?.id === todo.id)
   const open = todo.status === 'open'
+  const checkRef = useRef<HTMLButtonElement>(null)
+  // Done on a counting row: the button goes into the box, which charges and pops (as a tap on it does).
+  const doneFromButton = (el: HTMLElement) => {
+    const box = checkRef.current
+    if (box) genieInto(el, box)
+    act.completeTodo(todo.id, box ? doneOrigin(box) : undefined)
+  }
   // Made from an unnamed instant: it reads as its time, as the instant does.
   const name = todo.label || (at ? clock(at.tsEpochMs) : '')
   const dur = todo.durationMs ? <Duration ms={todo.durationMs} /> : null
   const sub: ReactNode = (() => {
     if (state === 'waiting' && at) return dotted([TODO_COPY.since(clock(at.tsEpochMs)), dur])
+    if (state === 'paused') return dotted([TODO_COPY.soFar(length(todoActual(mine, spans, Date.now()).ms)), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''])
     if (state === 'scheduled' && at) return dotted([whenText(at.tsEpochMs, Date.now()), dur, series ? `${MARKS.repeat} ${describeRepeatShort(series.repeat)}` : ''])
     if (state === 'unscheduled') return dur ?? ''
     return null
@@ -232,7 +282,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
       <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
         onClick={tap} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) tap() }}>
         {/* Its box: Done (a closed one's opens it again). */}
-        <button type="button" className={`todo-check is-${open ? 'open' : todo.status}${popping ? ' is-popping' : ''}`}
+        <button ref={checkRef} type="button" className={`todo-check is-${open ? 'open' : todo.status}${popping ? ' is-popping' : ''}`}
           aria-label={open ? `Done: ${name}` : `Open ${name} again`} title={open ? 'Done' : 'Open it again'}
           onClick={e => { e.stopPropagation(); if (open) act.completeTodo(todo.id, doneOrigin(e.currentTarget)); else act.reopenTodo(todo.id) }}>
           <TodoBoxIcon state={open ? 'open' : (todo.status as 'done' | 'passed' | 'dropped')} aria-hidden />
@@ -245,7 +295,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           ) : <span className="todo-row__name">{name}</span>}
           {state === 'counting' ? (
             <LiveText className="todo-row__sub mono" watch={bySecond}
-              compute={f => [length(todoActual(mine, spans, f.now).ms), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''].filter(Boolean).join(' · ')} />
+              compute={f => [length(todoActual(mine, spans, f.now, todo.startedId).ms), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''].filter(Boolean).join(' · ')} />
           ) : sub !== null ? (
             sub && <span className="todo-row__sub">{sub}</span>
           ) : (
@@ -258,10 +308,18 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
               {state === 'unscheduled' ? 'Schedule' : 'Delay'}
             </button>
           )}
-          {/* ▶ Start: it counts until its ✓ (from now; one not due yet moves to Now). */}
+          {/* ▶ Start: it counts until its ⏸ or ✓ (from now; one not due yet moves to Now; a paused one goes on). */}
           {open && state !== 'counting' && (
-            <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`Start: ${name}`} title="Start: it counts from now until you tap ✓"
+            <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`Start: ${name}`} title={state === 'paused' ? 'Start again: it counts from now' : 'Start: it counts from now until you tap ✓'}
               onClick={() => act.startTodo(todo.id)}><PlayIcon aria-hidden /></button>
+          )}
+          {/* Counting: ⏸ Pause (the stretch saved, it stays open) and Done (as its box). */}
+          {state === 'counting' && (
+            <button type="button" className="todo-btn todo-btn--pause glow-box" aria-label={`Pause: ${name}`} title="Pause: save this stretch; ▶ goes on later"
+              onClick={() => act.pauseTodo(todo.id)}><PauseIcon aria-hidden /></button>
+          )}
+          {state === 'counting' && (
+            <button type="button" className="todo-btn todo-btn--done glow-box" onClick={e => doneFromButton(e.currentTarget)}>Done</button>
           )}
           <IconButton icon={EllipsisHorizontalIcon} label="More" color="var(--ink-dim)" bare pressed={panel === 'more'} onClick={() => setPanel(p => (p === 'more' ? null : 'more'))} />
           {drag && <span className="todo-row__grip" aria-label="Drag to reorder" onPointerDown={drag} data-no-pan><Bars2Icon aria-hidden /></span>}

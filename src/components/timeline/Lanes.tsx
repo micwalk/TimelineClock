@@ -2,7 +2,7 @@
 import { isFixedTime } from '../../domain/dst.ts'
 import { useLayoutEffect, useState } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
-import { StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
+import { PauseIcon, StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { durationStep, formatDuration, formatDurationTo, truncateText } from '../../domain/format.ts'
@@ -196,22 +196,35 @@ const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i
 
 /**
  * ✓ Done on a counting todo's lane (docs/prd_todos.md §7.1): its stopwatch controls become the
- * todo's, so the stop reads ✓ (the same stop: the new instant is its `done`) and there is no lap
- * (Phase 3 makes it ⏸ Pause).
+ * todo's: the lap is ⏸ Pause (the stretch saved, the todo open: act.pauseTodo) and the stop
+ * reads ✓ (the same stop: the new instant is its `done`).
  */
 function DoneButton({ instant, name }: { instant: InstantRecord; name: string }) {
   const label = `Done: ${name}`
+  const pauseLabel = `Pause: ${name} (save this stretch)`
   return (
-    <button
-      type="button"
-      className="span-chip__end-btn span-chip__end-btn--done"
-      aria-label={label}
-      title={label}
-      onClick={e => { e.stopPropagation(); if (instant.todo) act.completeTodo(instant.todo.id, doneOrigin(e.currentTarget)); else act.stopNowSpan(instant.id) }}
-      onDoubleClick={e => e.stopPropagation()}
-    >
-      <span className="span-chip__done" aria-hidden>{MARKS.todoDone}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        className="span-chip__end-btn"
+        aria-label={pauseLabel}
+        title={pauseLabel}
+        onClick={e => { e.stopPropagation(); if (instant.todo) act.pauseTodo(instant.todo.id) }}
+        onDoubleClick={e => e.stopPropagation()}
+      >
+        <PauseIcon className="span-chip__stop" aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="span-chip__end-btn span-chip__end-btn--done"
+        aria-label={label}
+        title={label}
+        onClick={e => { e.stopPropagation(); if (instant.todo) act.completeTodo(instant.todo.id, doneOrigin(e.currentTarget)); else act.stopNowSpan(instant.id) }}
+        onDoubleClick={e => e.stopPropagation()}
+      >
+        <span className="span-chip__done" aria-hidden>{MARKS.todoDone}</span>
+      </button>
+    </>
   )
 }
 

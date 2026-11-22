@@ -199,6 +199,10 @@ The count runs from `at`, the scheduled time, not from the dismiss: one instant,
 
 ### 4.4 Time tracking: start, pause, switch (Phase 3, its own push)
 
+> Built ahead of Phase 3 (owner, 2026-11-22): ⏸ Pause (lane and counting row), stretches listed
+> in a row's ⋯, a row's tap going to its latest stretch, and counting held by the record
+> (`startedId`) so an unfavorited todo still counts. Switch is still to come.
+
 A todo worked on in pieces is several stretches tied to one record (§4.2), so the data needs
 nothing more than the `start` and `pause` roles. Phase 1's only way to count is dismissing
 the alarm; Phase 3 adds counting by choice (owner, 2026-11-21).

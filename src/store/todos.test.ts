@@ -425,3 +425,60 @@ describe('not a todo (un-todo)', () => {
     expect(todos()).toEqual([])
   })
 })
+
+describe('stretches: pause, a hidden lane, opening one again', () => {
+  const stretchSpans = (todoId: string) => {
+    const mine = new Set(instantsOf(todoId).map(i => i.id))
+    return useEntities.getState().spans.filter(sp => mine.has(sp.startInstantId) && mine.has(sp.endInstantId) && !sp.endIsNow)
+  }
+
+  it('unfavorited while it counts (its lane hidden), it still counts, and ✓ saves the stretch', () => {
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.setFavorite(atId, false)
+    expect(entities.nowSpanOf(atId)).toBeUndefined()
+    expect(stateOf(id)).toBe('counting')
+    act.doneTodo(id)
+    const done = instantsOf(id).find(i => i.todo?.role === 'done')!
+    expect(stretchSpans(id)).toMatchObject([{ startInstantId: atId, endInstantId: done.id, label: 'Feed cats' }])
+    expect(entities.getTodo(id)!.startedId).toBeUndefined()
+  })
+
+  it('⏸ saves the stretch to a ⏸ instant and the todo stays open, paused; ▶ counts a new stretch', () => {
+    const { id, atId } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.pauseTodo(id)
+    const pause = instantsOf(id).find(i => i.todo?.role === 'pause')!
+    expect(pause.label).toBe('⏸ Feed cats')
+    expect(stretchSpans(id)).toMatchObject([{ startInstantId: atId, endInstantId: pause.id }])
+    expect(entities.getInstant(atId)!.favorite).toBe(false)
+    expect(entities.getTodo(id)).toMatchObject({ status: 'open' })
+    expect(stateOf(id)).toBe('paused')
+    expect(useUi.getState().celebrating?.todoId).not.toBe(id)
+    act.startTodo(id)
+    const start = instantsOf(id).find(i => i.todo?.role === 'start')!
+    expect(entities.getTodo(id)!.startedId).toBe(start.id)
+    expect(stateOf(id)).toBe('counting')
+    act.doneTodo(id)
+    expect(stretchSpans(id)).toHaveLength(2)
+  })
+
+  it('a tap on its row goes to its latest stretch', () => {
+    const { id } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.pauseTodo(id)
+    const last = stretchSpans(id)[0]
+    act.showTodo(id)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: last.id })
+  })
+
+  it('opened again after ✓, its instant is its todo again (not back on the list)', () => {
+    const { id, atId } = ringingTodo()
+    act.doneTodo(id)
+    act.reopenTodo(id)
+    expect(entities.getInstant(atId)!.todo).toEqual({ id, role: 'at' })
+    expect(entities.getTodo(id)).toMatchObject({ status: 'open' })
+    // Its time has come: it waits under Now (its ✓ stays as history), and ▶ Start goes on.
+    expect(stateOf(id)).toBe('waiting')
+  })
+})

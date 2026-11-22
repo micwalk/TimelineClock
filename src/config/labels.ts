@@ -16,6 +16,8 @@ export const MARKS = {
   todoDropped: '–',
   /** A todo started after its time (its ▶ instant: "▶ Laundry"). */
   todoStart: '▶',
+  /** Where a todo was paused (its ⏸ instant: "⏸ Laundry"). */
+  todoPause: '⏸',
 } as const
 
 /**
@@ -27,6 +29,13 @@ export const TODO_COPY = {
   doneName: (name: string) => `${MARKS.todoDone} ${name}`,
   /** The instant where a todo was started after its time: "▶ Feed cats". */
   startName: (name: string) => `${MARKS.todoStart} ${name}`,
+  /** The instant where a todo was paused: "⏸ Feed cats". */
+  pauseName: (name: string) => `${MARKS.todoPause} ${name}`,
+  /** A todo's ⋯: its stretches' head, and where one counting now ends. */
+  stretchesHead: (n: number) => (n === 1 ? '1 stretch' : `${n} stretches`),
+  now: 'now',
+  /** A paused todo's row: "12m so far". */
+  soFar: (length: string) => `${length} so far`,
   /** A waiting todo's row: "since 7:00a". */
   since: (clock: string) => `since ${clock}`,
   /** What it took, with its length: "31m · planned 20m". */

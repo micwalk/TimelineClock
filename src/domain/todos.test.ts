@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants } from './entities.ts'
-import type { TodoRecord } from './todos.ts'
+import type { TodoRecord, TodoRole } from './todos.ts'
 import {
-  doneFolds, instantsByTodo, makeTodo, nextOrder, nextPassTime, nowCount, parseTodoInput, passedTodos, plannedBlocks, quickChoices,
-  sanitizeTodos, todoActual, todoInputAt, todoOccurrences, todoReading, todoSections, todoState,
+  countingInstant, doneFolds, instantsByTodo, makeTodo, nextOrder, nextPassTime, nowCount, parseTodoInput, passedTodos, plannedBlocks, quickChoices,
+  sanitizeTodos, todoActual, todoInputAt, todoOccurrences, todoReading, todoSections, todoState, todoStretches,
 } from './todos.ts'
 import type { SeriesRecord } from './series.ts'
 import { formatDurationShort } from './format.ts'
@@ -198,5 +198,29 @@ describe('a typed when', () => {
     expect(parseWhen('tomorrow 10a', NOW)).toBe(at(10, 0, 22))
     expect(parseWhen('soon', NOW)).toBeNull()
     expect(parseWhen('', NOW)).toBeNull()
+  })
+})
+
+describe('stretches and pause (domain)', () => {
+  const todo = (startedId?: string): TodoRecord => ({ id: 't', label: 'Laundry', createdAt: 0, status: 'open', order: 0, ...(startedId ? { startedId } : {}) })
+  const inst = (id: string, ts: number, role: TodoRole, favorite = false): InstantRecord => ({ id, tsEpochMs: ts, label: '', todo: { id: 't', role }, ...(favorite ? { favorite } : {}) })
+
+  it('counts from its startedId even when that instant is not a favorite (its lane hidden)', () => {
+    const mine = [inst('a', 0, 'at')]
+    expect(countingInstant(mine, 10)).toBeUndefined()
+    expect(countingInstant(mine, 10, 'a')?.id).toBe('a')
+    expect(todoState(todo('a'), mine, 10)).toBe('counting')
+    expect(todoActual(mine, [], 10, 'a')).toEqual({ ms: 10, stretches: 1, counting: true })
+  })
+
+  it('a ⏸ makes it paused; its stretches are listed in time order, the counting one last', () => {
+    const mine = [inst('a', 0, 'at'), inst('p', 10, 'pause'), inst('s', 20, 'start', true)]
+    const spans = [
+      { id: 'live', startInstantId: 's', endInstantId: '__NOW__', label: '', endIsNow: true },
+      { id: 'one', startInstantId: 'a', endInstantId: 'p', label: '', endIsNow: false },
+    ]
+    expect(todoState(todo(), mine.slice(0, 2), 15)).toBe('paused')
+    expect(todoStretches(mine, spans, 30, 's')).toEqual([{ spanId: 'one', start: 0, end: 10 }, { spanId: 'live', start: 20, end: null }])
+    expect(todoActual(mine, spans, 30, 's')).toEqual({ ms: 20, stretches: 2, counting: true })
   })
 })

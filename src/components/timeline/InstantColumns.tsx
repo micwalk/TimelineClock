@@ -27,6 +27,7 @@ import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
 import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { doneOrigin } from '../common/doneOrigin.ts'
+import { countingInstant } from '../../domain/todos.ts'
 import { useLongPress } from '../../hooks/useLongPress.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
@@ -102,7 +103,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
   const openTodo = todoStatus === 'open' ? inst.todo!.id : null
   // Counting already (its `at`, or a ▶ start, a favorite): no ▶ Start.
-  const todoCounting = useEntities(s => !!openTodo && s.instants.some(i => i.todo?.id === openTodo && !!i.favorite && (i.todo.role === 'at' || i.todo.role === 'start')))
+  const todoCounting = useEntities(s => !!openTodo && !!countingInstant(s.instants.filter(i => i.todo?.id === openTodo), Date.now(), s.todos?.find(t => t.id === openTodo)?.startedId))
   const doneFoldTs = useEntities(s => (doneFolded ? s.instants.find(i => i.id === doneFolded)?.tsEpochMs : undefined))
   const celebrating = useUi(s => s.celebrating?.instantId === inst.id || (!!doneFolded && s.celebrating?.instantId === doneFolded))
   // Its todo's ✓ is springing out of a box drawn over this chip's (components/timeline/Celebration).
@@ -273,7 +274,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
-            {todoStatus && !(selected && openTodo && !moving) && <TodoBoxIcon className="chip__todo" state={doneFolded ? 'done' : todoStatus} role="img" aria-label={TODO_STATUS_TEXT[todoStatus]} />}
+            {todoStatus && !(selected && openTodo && !moving) && <TodoBoxIcon className="chip__todo" state={doneFolded && todoStatus === 'done' ? 'done' : todoStatus} role="img" aria-label={TODO_STATUS_TEXT[todoStatus]} />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">

@@ -43,6 +43,12 @@ export interface TodoRecord {
   /** An occurrence of a repeating todo: the series and its date. */
   seriesId?: string
   occurrence?: string
+  /**
+   * The instant it counts from (its `at` or a ▶ `start`; act.startTodo), until ⏸ or ✓. It counts
+   * on if that instant's favorite is taken off (its lane hidden; owner, 2026-11-22), so ✓ or ⏸
+   * still saves the stretch.
+   */
+  startedId?: string
 }
 
 const randomId = () => Math.random().toString(36).slice(2, 11)
@@ -76,6 +82,7 @@ export function sanitizeTodos(data: unknown): TodoRecord[] {
       ...(closedAt !== undefined ? { closedAt } : {}),
       ...(typeof r.collectionId === 'string' && r.collectionId && r.collectionId !== 'default' ? { collectionId: r.collectionId } : {}),
       ...(series ? { seriesId: r.seriesId as string, occurrence: r.occurrence as string } : {}),
+      ...(typeof r.startedId === 'string' && r.startedId ? { startedId: r.startedId } : {}),
     }]
   })
 }
@@ -123,56 +130,78 @@ export const todoAt = (mine: readonly InstantRecord[]) => mine.find(i => i.todo?
 /** Where it was done. */
 export const todoDoneInstant = (mine: readonly InstantRecord[]) => [...mine].reverse().find(i => i.todo?.role === 'done')
 
-/** The instant whose span to Now is counting the todo (favorited, its time come), if any. */
-export const countingInstant = (mine: readonly InstantRecord[], now: number) =>
-  mine.find(i => (i.todo?.role === 'at' || i.todo?.role === 'start') && !!i.favorite && i.tsEpochMs <= now)
+/**
+ * The instant the todo is counting from, if any: its `startedId` (favorited or not), else (a
+ * todo started before `startedId` was kept) its favorited `at` or `start`, its time come.
+ */
+export function countingInstant(mine: readonly InstantRecord[], now: number, startedId?: string): InstantRecord | undefined {
+  const role = (i: InstantRecord) => i.todo?.role === 'at' || i.todo?.role === 'start'
+  // Started counts whatever the clock says (the Todos tab reads the time to the minute, and a
+  // start is made at Now).
+  const started = startedId ? mine.find(i => i.id === startedId) : undefined
+  if (started && role(started)) return started
+  return mine.find(i => role(i) && !!i.favorite && i.tsEpochMs <= now)
+}
 
 /**
  * Where a todo stands, from the record and its instants:
  * - unscheduled: open, no `at`;
  * - scheduled: open, its `at` still ahead;
  * - counting: open, its `at` favorited (dismissed: its span to Now counts);
+ * - paused: open, ⏸ paused (and not counting again, nor scheduled ahead);
  * - waiting: open, its `at` has come, not counting (rang and silenced, or unfavorited);
  * - done / dropped / passed: the record's status.
  */
-export type TodoState = 'unscheduled' | 'scheduled' | 'counting' | 'waiting' | 'done' | 'dropped' | 'passed'
+export type TodoState = 'unscheduled' | 'scheduled' | 'counting' | 'paused' | 'waiting' | 'done' | 'dropped' | 'passed'
 
 export function todoState(todo: TodoRecord, mine: readonly InstantRecord[], now: number): TodoState {
   if (todo.status !== 'open') return todo.status
-  if (countingInstant(mine, now)) return 'counting'
+  if (countingInstant(mine, now, todo.startedId)) return 'counting'
   const at = todoAt(mine)
-  if (!at) return 'unscheduled'
-  return at.tsEpochMs > now ? 'scheduled' : 'waiting'
+  if (at && at.tsEpochMs > now) return 'scheduled'
+  if (mine.some(i => i.todo?.role === 'pause')) return 'paused'
+  return at ? 'waiting' : 'unscheduled'
 }
 
-/** Open todos that rang and aren't done: counting or waiting (the Todos tab's Now, and its badge). */
-export const isNowState = (s: TodoState) => s === 'counting' || s === 'waiting'
+/** Open todos on the go: counting, paused or waiting (the Todos tab's Now, and its badge). */
+export const isNowState = (s: TodoState) => s === 'counting' || s === 'paused' || s === 'waiting'
+
+/**
+ * One stretch of time worked on a todo: a span between two of its own instants (▶ or its `at`
+ * to ⏸ or ✓), or the one counting now (`end` null, `spanId` its span to Now if it has one).
+ */
+export interface TodoStretch { spanId?: string; start: number; end: number | null }
+
+/** Its stretches, in time order (the one counting now last). */
+export function todoStretches(mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number, startedId?: string): TodoStretch[] {
+  const byId = new Map(mine.map(i => [i.id, i]))
+  const counting = countingInstant(mine, now, startedId)
+  const out: TodoStretch[] = []
+  for (const sp of spans) {
+    const a = byId.get(sp.startInstantId)
+    if (!a || sp.endIsNow) continue
+    const b = byId.get(sp.endInstantId)
+    if (!b) continue
+    out.push({ spanId: sp.id, start: Math.min(a.tsEpochMs, b.tsEpochMs), end: Math.max(a.tsEpochMs, b.tsEpochMs) })
+  }
+  out.sort((x, y) => x.start - y.start)
+  if (counting) {
+    const live = spans.find(sp => sp.endIsNow && sp.startInstantId === counting.id)
+    out.push({ ...(live ? { spanId: live.id } : {}), start: counting.tsEpochMs, end: null })
+  }
+  return out
+}
 
 /** Time actually worked: its stretches (spans between its own instants) and the one counting now. */
 export interface TodoActual { ms: number; stretches: number; counting: boolean }
 
-export function todoActual(mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number): TodoActual {
-  const byId = new Map(mine.map(i => [i.id, i]))
-  let ms = 0
-  let stretches = 0
-  let counting = false
-  for (const sp of spans) {
-    const a = byId.get(sp.startInstantId)
-    if (!a) continue
-    if (sp.endIsNow) {
-      if (a.favorite && a.tsEpochMs <= now && (a.todo?.role === 'at' || a.todo?.role === 'start')) {
-        ms += now - a.tsEpochMs
-        stretches++
-        counting = true
-      }
-      continue
-    }
-    const b = byId.get(sp.endInstantId)
-    if (!b) continue
-    ms += Math.abs(b.tsEpochMs - a.tsEpochMs)
-    stretches++
+export function todoActual(mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number, startedId?: string): TodoActual {
+  const list = todoStretches(mine, spans, now, startedId)
+  return {
+    ms: list.reduce((sum, s) => sum + Math.max(0, (s.end ?? now) - s.start), 0),
+    stretches: list.length,
+    counting: list.some(s => s.end === null),
   }
-  return { ms, stretches, counting }
 }
 
 /**
@@ -199,7 +228,7 @@ export interface TodoRow {
 }
 
 export interface TodoSections {
-  /** Rang and not done: the counting ones first, then the waiting ones. */
+  /** On the go: counting first, then paused, then those that rang and wait. */
   now: TodoRow[]
   /** Scheduled later today, in time order. */
   today: TodoRow[]
@@ -222,7 +251,7 @@ export function todoSections(todos: readonly TodoRecord[], byTodo: ReadonlyMap<s
     const state = todoState(todo, mine, now)
     const at = todoAt(mine)
     const row: TodoRow = { todo, state, ...(at ? { at } : {}) }
-    if (state === 'counting' || state === 'waiting') out.now.push(row)
+    if (isNowState(state)) out.now.push(row)
     else if (state === 'scheduled') (at && dateKey(at.tsEpochMs) === today ? out.today : out.upcoming).push(row)
     else if (state === 'unscheduled') out.unscheduled.push(row)
     else {
@@ -232,7 +261,9 @@ export function todoSections(todos: readonly TodoRecord[], byTodo: ReadonlyMap<s
     }
   }
   const atTs = (r: TodoRow) => r.at?.tsEpochMs ?? Infinity
-  out.now.sort((a, b) => (a.state === b.state ? atTs(a) - atTs(b) : a.state === 'counting' ? -1 : 1))
+  // Counting first, then paused, then waiting.
+  const rank = (r: TodoRow) => (r.state === 'counting' ? 0 : r.state === 'paused' ? 1 : 2)
+  out.now.sort((a, b) => rank(a) - rank(b) || atTs(a) - atTs(b))
   out.today.sort((a, b) => atTs(a) - atTs(b))
   out.upcoming.sort((a, b) => atTs(a) - atTs(b))
   out.unscheduled.sort((a, b) => a.todo.order - b.todo.order)
@@ -317,7 +348,7 @@ export function nextPassTime(todos: readonly TodoRecord[], instants: readonly In
 // On the timeline
 
 /** A plan still to come or under way: scheduled, waiting or counting (a plan that is over isn't history). */
-const planShows = (s: TodoState) => s === 'scheduled' || s === 'waiting' || s === 'counting'
+const planShows = (s: TodoState) => s === 'scheduled' || s === 'waiting' || s === 'counting' || s === 'paused'
 
 /** Each open todo with a length and a time: its planned block, from `at` for its length (computed, never stored). */
 export function plannedBlocks(todos: readonly TodoRecord[], byTodo: ReadonlyMap<string, readonly InstantRecord[]>, now: number): TimeBlock[] {

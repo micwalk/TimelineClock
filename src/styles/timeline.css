@@ -1443,10 +1443,9 @@
 .toast__action.is-danger { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 45%, transparent); }
 @keyframes toast-in { from { opacity: 0; translate: 0 10px; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
-/* ✓ Done on a counting todo's lane, in the stop's place. */
+/* ✓ Done on a counting todo's lane, in the stop's place (⏸ Pause in the lap's: the same room). */
 .span-chip__end-btn--done { --accent: var(--c-ok); }
 .span-chip__done { color: var(--c-ok); font: 900 15px/1 var(--font-ui); text-shadow: 0 0 calc(5px * var(--glow)) var(--c-ok); }
-.tl-lane__chip-row:has(.span-chip__end-btn--done) .span-chip.has-end { padding-right: 34px; }
 
 /* ✓ Done: the chip it made (or the chip it folded into) flares in a short glow burst, the drop
    pulse's family; the sparks are a canvas over everything (Celebration). */

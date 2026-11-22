@@ -24,7 +24,9 @@ export function useTodoSections(minute: number): TodoSections {
   return useMemo(() => {
     const off = new Set((collections ?? []).filter(c => c.hidden).map(c => c.id))
     const shown = off.size === 0 ? todos ?? [] : (todos ?? []).filter(t => !off.has(t.collectionId ?? DEFAULT_COLLECTION))
-    return todoSections(shown, todoIndex(instants), minute * 60_000)
+    // Worked out again each minute and on every change, then at the real time: something made at
+    // Now this minute (a ▶ start, a plan moved to Now) has come, not ahead.
+    return todoSections(shown, todoIndex(instants), Math.max(minute * 60_000, Date.now()))
   }, [todos, instants, collections, minute])
 }
 

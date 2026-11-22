@@ -1168,6 +1168,16 @@
 /* ▶ Start on a waiting row (and Start now in its ⋯): green, as on its ringing card. */
 .todo-btn--start { --accent: var(--c-ok); display: inline-grid; place-items: center; width: 32px; padding: 0; background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
 .todo-btn--start > svg { width: 15px; height: 15px; }
+/* Counting: ⏸ Pause (the todo colour) and Done (green, as its box goes). */
+.todo-btn--pause { --accent: var(--c-todo); display: inline-grid; place-items: center; width: 32px; padding: 0; background: color-mix(in srgb, var(--c-todo) 35%, transparent); color: #fff; }
+.todo-btn--pause > svg { width: 15px; height: 15px; }
+.todo-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
+/* Going into its box (domain/genie): over the row's name as it passes. */
+.todo-btn.is-genie { position: relative; z-index: 2; pointer-events: none; transform-origin: center; }
+/* A todo's stretches (its ⋯): newest first, a tap goes to one. */
+.todo-stretches { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
+.todo-stretch { --accent: var(--c-todo); display: flex; justify-content: space-between; gap: 10px; padding: 5px 9px; border-radius: 8px; background: transparent; color: var(--ink); font: 600 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+.todo-stretch__len { color: var(--ink-dim); }
 /* Found (a long-press on its chip's box): the row lights up in the todo colour. */
 .todo-row.is-found { animation: todo-found 1600ms ease-out 1; }
 @keyframes todo-found {

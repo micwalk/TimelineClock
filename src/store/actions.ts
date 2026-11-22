@@ -39,7 +39,7 @@ import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  countingInstant, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  countingInstant, todoStretches, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -1370,6 +1370,19 @@ function dropArmedAlarms(inst: InstantRecord, now: number) {
 /** Stops a todo counting, saving nothing (as unfavoriting does). */
 function stopCounting(todoId: string) {
   for (const i of todoInstants(todoId)) if (i.favorite) setFavorite(i.id, false)
+  if (entities.getTodo(todoId)?.startedId) entities.patchTodo(todoId, { startedId: undefined })
+}
+
+/**
+ * Ends the stretch a todo is counting at `endId` (its ⏸ or ✓): the span to Now becomes the saved
+ * span to it (the favorite's stop), or, its lane hidden (unfavorited while it counted), a span is
+ * saved from where it started. It stops counting.
+ */
+function endStretch(todoId: string, counting: InstantRecord, endId: string, label: string) {
+  if (entities.nowSpanOf(counting.id)) closeNowSpan(counting.id, endId, label)
+  else entities.createSpan(counting.id, endId, label, { visible: true })
+  if (entities.getInstant(counting.id)?.favorite) setFavorite(counting.id, false)
+  entities.patchTodo(todoId, { startedId: undefined })
 }
 
 /**
@@ -1544,16 +1557,13 @@ export function doneTodo(todoId: string, opts: { at?: number; origin?: DoneOrigi
   const now = opts.at ?? nowTime()
   const mine = todoInstants(todoId)
   const at = todoAt(mine)
-  const counting = countingInstant(mine, now)
+  const counting = countingInstant(mine, now, todo.startedId)
   endNaming()
   ui.closeLaneTools()
   if (at) quietTodoAlarms(at.id)
   const doneId = entities.createInstant(now, TODO_COPY.doneName(todo.label))
   entities.patchInstant(doneId, () => ({ todo: { id: todoId, role: 'done' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
-  if (counting) {
-    closeNowSpan(counting.id, doneId, todo.label)
-    setFavorite(counting.id, false)
-  }
+  if (counting) endStretch(todoId, counting, doneId, todo.label)
   const after = at ? entities.getInstant(at.id) : undefined
   if (after && !counting) {
     if (after.tsEpochMs > now && !hasRung(after, now)) {
@@ -1562,7 +1572,7 @@ export function doneTodo(todoId: string, opts: { at?: number; origin?: DoneOrigi
       deleteInstant(after.id)
     } else dropArmedAlarms(after, now)
   }
-  entities.patchTodo(todoId, { status: 'done', closedAt: now })
+  entities.patchTodo(todoId, { status: 'done', closedAt: now, startedId: undefined })
   ui.markDropped(doneId)
   ui.celebrate(doneId, todoId, opts.origin)
   return doneId
@@ -1625,7 +1635,7 @@ export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
   if (!todo || todo.status !== 'open') return
   const now = nowTime()
   const at = todoAt(todoInstants(todoId))
-  if (countingInstant(todoInstants(todoId), now)) return
+  if (countingInstant(todoInstants(todoId), now, todo.startedId)) return
   let id: string
   if (at) {
     quietTodoAlarms(at.id)
@@ -1645,7 +1655,26 @@ export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
     entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
   }
   setFavorite(id, true)
+  entities.patchTodo(todoId, { startedId: id })
   ui.markDropped(id)
+}
+
+/**
+ * ⏸ Pause (docs/prd_todos.md §4.4): the stretch counting now is saved, ending at a ⏸ instant at
+ * Now ("⏸ Laundry", a Mark), and the todo stays open, paused (▶ Start counts a new stretch). No
+ * celebration. Not counting: nothing.
+ */
+export function pauseTodo(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = nowTime()
+  const counting = countingInstant(todoInstants(todoId), now, todo.startedId)
+  if (!counting) return
+  endNaming()
+  ui.closeLaneTools()
+  const id = entities.createInstant(now, TODO_COPY.pauseName(todo.label || formatClockCompact(counting.tsEpochMs, false)))
+  entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'pause' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+  endStretch(todoId, counting, id, todo.label)
 }
 
 /**
@@ -1685,13 +1714,16 @@ export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
   laterTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
 }
 
-/** Opens a done, dropped or passed todo again (a mistaken tap): unscheduled, its history kept. */
+/**
+ * Opens a done, dropped or passed todo again (a mistaken tap): its instant is its todo again,
+ * where it was (owner, 2026-11-22), so it waits (or is paused, if it was), or is scheduled if
+ * its time is still ahead; ▶ Start goes on. With none, it is back on the list. Its ✓ and
+ * stretches stay as history.
+ */
 export function reopenTodo(todoId: string) {
   const todo = entities.getTodo(todoId)
   if (!todo || todo.status === 'open') return
-  entities.patchTodo(todoId, { status: 'open', closedAt: undefined, order: nextOrder(useEntities.getState().todos ?? []) })
-  const at = todoAt(todoInstants(todoId))
-  if (at) entities.setInstantTodo(at.id, { id: todoId, role: 'was' })
+  entities.patchTodo(todoId, { status: 'open', closedAt: undefined, startedId: undefined, order: nextOrder(useEntities.getState().todos ?? []) })
 }
 
 /**
@@ -1739,8 +1771,18 @@ export function reorderTodo(todoId: string, beforeId: string | null) {
 /** Goes to a todo's `at` on the timeline (a Todos row), or its ✓ once done. */
 export function showTodo(todoId: string) {
   const mine = todoInstants(todoId)
-  const target = todoAt(mine) ?? mine.filter(i => i.todo?.role === 'done').pop() ?? mine[mine.length - 1]
+  // Worked on: its latest stretch (the one counting, if one is).
+  const todo = entities.getTodo(todoId)
+  const last = todoStretches(mine, useEntities.getState().spans, nowTime(), todo?.startedId).pop()
+  if (last?.spanId) { showStretch(last.spanId); return }
+  const counting = countingInstant(mine, nowTime(), todo?.startedId)
+  const target = counting ?? todoAt(mine) ?? mine.filter(i => i.todo?.role === 'done').pop() ?? mine[mine.length - 1]
   if (target) focusInstant(target.id)
+}
+
+/** Goes to one of a todo's stretches (the latest, from its row; any, from its ⋯): focused, the view fit to it. */
+export function showStretch(spanId: string) {
+  focusSpan(spanId)
 }
 
 /**

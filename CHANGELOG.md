@@ -35,7 +35,17 @@ there is Phase 1b).
   a plain alarm's ringing card has **☐ Todo** (the card becomes the todo's); a repeating one makes
   its series a repeating todo.
 - **Todos rows**: Schedule (or **Delay**) then a green **▶** to start it, on every open row that
-  isn't counting.
+  isn't counting. A counting row has **⏸ Pause** and **Done** instead (Done is sucked into the
+  row's box, which charges and pops as a tap on it does).
+- **Pause and stretches**: ⏸ (on a counting row, and on its lane beside ✓) saves the stretch so
+  far ("⏸ Laundry", a mark) and the todo stays open, paused under Now ("12m so far"); ▶ counts a
+  new stretch. A tap on a row with stretches goes to the latest; its ⋯ lists them all (newest
+  first, the one counting live), and a tap goes to one.
+- Taking a counting todo's star off only hides its lane: it still counts, and ✓ or ⏸ saves the
+  stretch. Opening a done todo again (its box) makes its instant its todo again, where it was,
+  rather than sending it back to the list.
+- Fixed: a todo started this minute showed as scheduled ("Today") in the Todos tab, without its
+  Pause and Done.
 - **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when
   passed), its contents centered; selected, its box is its Done (a long-press opens the Todos tab
   at its row), and its tools start with **Not a todo** (a struck-through box: it stays a plain
