@@ -11,6 +11,15 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 **Android app: web only.**
 
+- **Opening offline, more reliably** (in the Android app and as an installed web app): the app
+  opens without the internet from a copy its service worker saves. If saving that copy failed
+  once (the network dropped, or the app went to the background mid-download), the worker was
+  gone, and an app that is resumed rather than reloaded never tried again, so it showed "Can't
+  reach the site" offline. Now each update check (coming back to the app, and every hour)
+  registers it again when it is missing, and the app asks the browser to keep its storage.
+  Settings says under the version whether this copy opens offline; the diagnostics log says so
+  too.
+
 - **Long names in the Todos tab** wrap (up to three lines) instead of being cut off. A name too
   long to sit beside its buttons takes the whole row and the buttons go on a line under it, so on
   a phone it never squeezes into a narrow column; short ones stay on one line.

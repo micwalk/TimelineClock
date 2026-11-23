@@ -12,7 +12,7 @@ See docs/ARCHITECTURE.md before changing the timeline.
 - **Styling**: CSS custom-property theme in src/styles/theme.css. Components set --accent / --halo; .glow-box / .glow-text add the glow; --glow scales all glow. Everything glows.
 - **State Management**: Zustand stores in src/store; every user operation lives in src/store/actions.ts
 - **Storage**: localStorage (same keys/format as before; sky location in settings; series in `timeline.groups.v1`, also in backups as `data.groups`; your groups in `timeline.collections.v1`, in backups as `data.collections`; todos in `timeline.todos.v1`, in backups as `data.todos`); IndexedDB via idb is planned
-- **PWA**: Vite PWA plugin with Workbox, installable manifest
+- **PWA**: Vite PWA plugin with Workbox, installable manifest. The worker's precache is how the app opens offline, in a browser and in the Android app; services/pwaUpdate registers it again when a failed first install deleted it (each update check: resume and hourly; `needsRegistration`), asks for persistent storage, and keeps store/offline current for Settings' "Opens offline" line (`offlineState`, copy in config/labels `OFFLINE_UI`)
 - **Icons**: @heroicons/react
 - **Testing**: Vitest (jsdom) + React Testing Library
 - **Android app** (docs/android.md): a Capacitor 8 shell that loads the live Netlify site, for alarms that ring with the app closed and live timer/stopwatch notifications. Native code in android/; its JS in src/services/native, loaded with a dynamic import only inside the app (src/services/nativeShell.ts), decisions in src/domain/nativeNotifications.ts. Android 16+ only, sideloaded from GitHub Releases

@@ -118,6 +118,14 @@ export const TODO_UI = {
   notTodoTitle: 'Keep it on the timeline as a plain instant, with its alarms',
 } as const
 
+/** Settings: whether this copy of the app opens without the internet (domain/pwaUpdate offlineState). */
+export const OFFLINE_UI = {
+  ready: 'Opens offline: a copy is saved on this device',
+  saving: 'Saving a copy to open offline…',
+  missing: 'Not saved for offline yet: it saves a copy while online',
+  unsupported: 'Can’t open offline in this browser',
+} as const
+
 /** Words on a ringing alarm's card (components/panels/RingingAlarms, SnoozeRow). */
 export const ALARM_UI = {
   dismiss: 'Dismiss',
