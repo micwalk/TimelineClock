@@ -1252,7 +1252,13 @@
 .todo-when__line > .alarm-link { flex: 1 1 0; min-width: 0; justify-content: center; padding-inline: 4px; }
 .todo-when__line > .icon-btn { flex: none; align-self: center; }
 .todo-when__line svg { width: 14px; height: 14px; }
-.todo-when__line > .icon-btn > svg { width: 20px; height: 20px; }
+/* The time entry's button, then the box. */
+.todo-when__typed-row { display: flex; align-items: center; gap: 6px; }
+.todo-when .todo-when__typed-row > .snooze-box { flex: 1 1 0; min-width: 0; }
+.todo-when__typed-row > .icon-btn { flex: none; }
+.todo-when__typed-row > .icon-btn > svg { width: 20px; height: 20px; }
+/* Schedule is the panel's first section: no rule above it. */
+.todo-when-pick { padding-top: 0; border-top: 0; }
 .todo-when__quick { display: inline-grid; place-content: center; gap: 2px; height: auto; min-height: 36px; padding-block: 4px; line-height: 1; white-space: nowrap; }
 .todo-when__quick .alarm-link__at { font-size: 11px; }
 /* Its boxes say what they do ("Schedule [3p]", "Takes [25m]"), as the ringing card's snooze box, in the todo colour. */

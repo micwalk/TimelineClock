@@ -14,7 +14,7 @@
 // open todos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { Bars2Icon, ClockIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
+import { Bars2Icon, CalendarDaysIcon, ClockIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
@@ -112,7 +112,7 @@ export function AddBox({ autoFocus, onAdded, onCancel }: { autoFocus?: boolean; 
 // one line of presets and under it a box that says what it does (components/common/PhraseBox,
 // styled as the ringing card's snooze box).
 
-/** Quick times on one line (In 15m, In 1h, Tonight, Tomorrow; each its time under it) and the time entry; under them "Schedule [3p]" ("in" / "at" once typed). */
+/** Titled Schedule (or Move): quick times on one line (In 15m, In 1h, Tonight, Tomorrow; each its time under it); under them the time entry's button and "Schedule [3p]" ("in" / "at" once typed). */
 function WhenPick({ todoId, verb: verbKey, onClose }: { todoId: string; verb: 'schedule' | 'reschedule'; onClose: () => void }) {
   const verb = TODO_UI[verbKey]
   const [picking, setPicking] = useState(false)
@@ -120,16 +120,19 @@ function WhenPick({ todoId, verb: verbKey, onClose }: { todoId: string; verb: 's
   const times = getTodoTimes()
   const put = (ts: number) => { act.scheduleTodo(todoId, ts); onClose() }
   return (
-    <>
+    <div className="todo-dur-pick todo-when-pick" role="group" aria-labelledby={`when-${todoId}`}>
+      <span className="todo-dur-pick__label" id={`when-${todoId}`}><CalendarDaysIcon aria-hidden className="todo-dur__icon" />{verb}</span>
       <div className="todo-when__line">
         {quickChoices(now, times).map(c => (
           <button key={c.key} type="button" className="alarm-link todo-when__quick glow-box" onClick={() => put(c.ts)}>
             {c.label} <span className="alarm-link__at">{clock(c.ts)}</span>
           </button>
         ))}
-        <IconButton icon={ClockIcon} label={TODO_UI.pickTime} color="var(--c-cursor)" bare pressed={picking} onClick={() => setPicking(p => !p)} />
       </div>
-      <PhraseBox<{ ts: number; kind: 'in' | 'at' }>
+      <div className="todo-when__typed-row">
+        {/* The time entry (a time and date, or from Now), left of the box. */}
+        <IconButton icon={ClockIcon} label={TODO_UI.pickTime} color="var(--c-cursor)" bare pressed={picking} onClick={() => setPicking(p => !p)} />
+        <PhraseBox<{ ts: number; kind: 'in' | 'at' }>
         word={(typing, read) => (typing ? (read?.kind === 'at' ? TODO_UI.whenAt : TODO_UI.whenIn) : verb)}
         name={read => (read ? `${verb} ${read.kind === 'at' ? TODO_UI.whenAt : TODO_UI.whenIn}` : verb)}
         placeholder={TODO_UI.whenPlaceholder}
@@ -142,6 +145,7 @@ function WhenPick({ todoId, verb: verbKey, onClose }: { todoId: string; verb: 's
         onSubmit={read => put(read.ts)}
         onEscape={onClose}
       />
+      </div>
       {picking && (
         <TimeEntry
           title={`${verb}: when`}
@@ -151,7 +155,7 @@ function WhenPick({ todoId, verb: verbKey, onClose }: { todoId: string; verb: 's
           onCancel={() => setPicking(false)}
         />
       )}
-    </>
+    </div>
   )
 }
 
