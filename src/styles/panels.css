@@ -1245,6 +1245,12 @@
 
 /* A row's panel (its stopwatch button), under the row: Schedule or Move, Duration, stretches, the rest. */
 .todo-when { --accent: var(--c-todo); display: flex; flex-direction: column; gap: 6px; max-width: 520px; margin: -2px 6px 4px; padding: 8px; border-radius: 10px; background: var(--box-bg-strong); }
+/* Open, a row and its panel are one box: the item's purple border runs round both (the row's own
+   gives way), and the row takes a slight purple tint. */
+.todo-item.is-open { --accent: color-mix(in srgb, var(--c-todo) 55%, transparent); --halo: var(--c-todo); border-radius: 12px; background: var(--box-bg-strong); }
+.todo-item.is-open > .todo-row { border-color: transparent; box-shadow: none; border-radius: 10.5px 10.5px 0 0; /* A tint layered over the box (--box-bg is a background, not a colour). */ background: linear-gradient(color-mix(in srgb, var(--c-todo) 16%, transparent), color-mix(in srgb, var(--c-todo) 16%, transparent)), var(--box-bg); }
+.todo-item.is-open > .todo-row:hover { background: linear-gradient(color-mix(in srgb, var(--c-todo) 22%, transparent), color-mix(in srgb, var(--c-todo) 22%, transparent)), var(--box-bg-raised); }
+.todo-item.is-open > .todo-when { margin: 0; padding-top: 10px; border-radius: 0 0 10.5px 10.5px; background: transparent; }
 .todo-when__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .todo-when__chips svg { width: 14px; height: 14px; }
 /* A pick's presets: always one line, sharing it evenly (a quick time's own time under its name). */

@@ -303,7 +303,8 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
     else go(todo.id)
   }
   return (
-    <>
+    // Open, its panel joins it: one purple box around the row and its options, the row tinted.
+    <div className={`todo-item${panel ? ' is-open glow-box' : ''}`}>
       <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}${renaming ? ' is-renaming' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
         onClick={tap} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) tap() }}>
         {/* Its box: Done (a closed one's opens it again). */}
@@ -349,7 +350,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
         </span>
       </div>
       {panel && <TodoPanel row={row} verb={verb} onClose={() => setPanel(false)} onRename={() => setRenaming(true)} />}
-    </>
+    </div>
   )
 })
 
