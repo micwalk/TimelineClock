@@ -33,6 +33,9 @@ export const TODO_COPY = {
   pauseName: (name: string) => `${MARKS.todoPause} ${name}`,
   /** A todo's ⋯: its stretches' head, and where one counting now ends. */
   stretchesHead: (n: number) => (n === 1 ? '1 stretch' : `${n} stretches`),
+  /** A done todo's panel: its ✓ instant, after its stretches ("✓ Done 3:42p"). */
+  doneAt: (when: string) => `${MARKS.todoDone} Done ${when}`,
+  doneAtTitle: 'Show when it was done on the timeline',
   now: 'now',
   /** A paused todo's row: "12m so far". */
   soFar: (length: string) => `${length} so far`,

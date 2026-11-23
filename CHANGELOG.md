@@ -16,6 +16,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   at once, and says it can't reach the site only when that fails too (a retry within 15
   seconds that brings it back), so it never loops.
 
+- **A done todo's panel shows when it was done**: "✓ Done 3:42p" after its stretches (listed
+  oldest first now), or alone when it has none; a tap goes to it on the timeline.
+- **A snooze shows where it lands**: snoozing from a ringing card (an alarm, or a todo's Snooze 5m
+  or box) zooms out, if need be, until the new ring time and Now both show.
+- **Done ahead of time travels to Now**: ✓ on a todo still ahead and not started sends its chip
+  along the timeline to Now (it winds up, then swooshes onto the Now line) before it pops there.
 - **A favorite's lane chip** has its two buttons apart: the lap (or a todo's ⏸) left of the time,
   the stop (or ✓) at the right end ("★ Rice on 📍 12:03 ■").
 - **A selected chip's tools draw over the chips under them** instead of pushing them aside.

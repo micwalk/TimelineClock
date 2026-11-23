@@ -90,6 +90,36 @@ describe('the Todos tab', () => {
     expect(pencil).not.toHaveClass('is-shown')
   })
 
+  it("a done todo's panel shows when it was done, after its stretches, and goes there", () => {
+    const now = Date.now()
+    useEntities.setState({
+      todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'done', order: 0, closedAt: now - MINUTE }],
+      instants: [
+        { id: 'p1', tsEpochMs: now - 30 * MINUTE, label: '▶ Dishes', todo: { id: 't1', role: 'start' } },
+        { id: 'p2', tsEpochMs: now - 20 * MINUTE, label: '⏸ Dishes', todo: { id: 't1', role: 'pause' } },
+        { id: 'd1', tsEpochMs: now - MINUTE, label: '✓ Dishes', todo: { id: 't1', role: 'done' } },
+      ],
+      spans: [{ id: 's1', startInstantId: 'p1', endInstantId: 'p2', label: '', visible: true }],
+    })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    const items = screen.getAllByRole('listitem').map(e => e.textContent ?? '')
+    expect(items).toHaveLength(2)
+    expect(items[1]).toMatch(/^✓ Done /)
+    fireEvent.click(screen.getAllByRole('listitem')[1])
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: 'd1' })
+  })
+
+  it('a done todo with no stretches still shows when it was done', () => {
+    useEntities.setState({
+      todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'done', order: 0, closedAt: Date.now() }],
+      instants: [{ id: 'd1', tsEpochMs: Date.now(), label: '✓ Dishes', todo: { id: 't1', role: 'done' } }],
+    })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.getAllByRole('listitem').map(e => e.textContent)).toEqual([expect.stringMatching(/^✓ Done /)])
+  })
+
   it('its panel sets a duration from a short list, or none', () => {
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)

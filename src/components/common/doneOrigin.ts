@@ -8,7 +8,8 @@ const BOX_SHARE = 14.8 / 20
 const RADIUS_SHARE = 3.6 / 20
 
 export function doneOrigin(el: Element, opts: { box?: boolean } = {}): DoneOrigin {
-  const svg = el.querySelector('svg')
+  // An element, or a todo box's SVG itself.
+  const svg = el instanceof SVGSVGElement ? el : el.querySelector('svg')
   const css = getComputedStyle(el)
   // The todo's own colour (not a hover's green): the box greens from it.
   const color = css.getPropertyValue('--c-todo').trim() || css.color || 'currentColor'

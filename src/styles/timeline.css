@@ -1518,3 +1518,6 @@
   font: 800 10.5px/16px var(--font-ui);
   box-shadow: 0 0 calc(6px * var(--glow)) var(--c-todo);
 }
+
+/* Done ahead of its time: a copy of the todo's chip travelling to Now (components/timeline/doneTravel), over everything. */
+.done-travel { position: fixed; z-index: 400; margin: 0; transform-origin: center; pointer-events: none; will-change: transform; }

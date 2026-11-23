@@ -19,6 +19,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import type { TodoRow } from '../../domain/todos.ts'
+import type { InstantRecord } from '../../domain/entities.ts'
 import { doneOrigin } from '../common/doneOrigin.ts'
 import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parseWhen, quickChoices, todoActual, todoInputAt, todoReading, todoStretches, hasStretches } from '../../domain/todos.ts'
 import { genieKeyframes, genieMs } from '../../domain/genie.ts'
@@ -200,12 +201,20 @@ function genieInto(el: HTMLElement, target: Element) {
     { duration: genieMs(dx, dy), easing: 'cubic-bezier(0.4, 0, 0.75, 0.6)', fill: 'forwards' })
 }
 
-/** A todo's stretches (its ⋯): when each ran and how long; a tap goes to it on the timeline. */
-function StretchList({ todoId, startedId }: { todoId: string; startedId?: string }) {
+/**
+ * A todo's history (its panel): its stretches, oldest first, when each ran and how long, then,
+ * once it is done, its ✓ instant ("✓ Done 3:42p"; owner 2026-11-23). A tap on one goes to it on
+ * the timeline.
+ */
+function StretchList({ todoId, startedId, done }: { todoId: string; startedId?: string; done: boolean }) {
   const instants = useEntities(s => s.instants)
   const spans = useEntities(s => s.spans)
-  const list = todoStretches(instantsOf(todoIndex(instants), todoId), spans, Date.now(), startedId)
-  if (list.length === 0) return null
+  const mine = instantsOf(todoIndex(instants), todoId)
+  const list = todoStretches(mine, spans, Date.now(), startedId)
+  // Its last ✓ (a todo opened again and done again has more than one).
+  const doneAt = done ? mine.filter(i => i.todo?.role === 'done').reduce<InstantRecord | null>((a, i) => (!a || i.tsEpochMs > a.tsEpochMs ? i : a), null) : null
+  if (list.length === 0 && !doneAt) return null
+  const leave = () => { if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda() }
   const today = new Date().toDateString()
   // Seconds for a short one ("1:09:12p – 1:09:40p"), else to the minute; the date if not today.
   const when = (ts: number, short: boolean) => {
@@ -214,16 +223,22 @@ function StretchList({ todoId, startedId }: { todoId: string; startedId?: string
   }
   return (
     <div className="todo-stretches" role="list" aria-label="Stretches">
-      <span className="todo-dur-pick__label">{TODO_COPY.stretchesHead(list.length)}</span>
-      {[...list].reverse().map((s, k) => (
+      {list.length > 0 && <span className="todo-dur-pick__label">{TODO_COPY.stretchesHead(list.length)}</span>}
+      {list.map((s, k) => (
         <button key={s.spanId ?? `live-${k}`} type="button" role="listitem" className="todo-stretch glow-box"
-          onClick={() => { if (s.spanId) act.showStretch(s.spanId); else act.showTodo(todoId); if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda() }}>
+          onClick={() => { if (s.spanId) act.showStretch(s.spanId); else act.showTodo(todoId); leave() }}>
           <span className="mono">{when(s.start, (s.end ?? Date.now()) - s.start < 10 * MINUTE)} – {s.end === null ? TODO_COPY.now : formatClockCompact(s.end, s.end - s.start < 10 * MINUTE)}</span>
           {s.end === null
             ? <LiveText className="todo-stretch__len mono" watch={bySecond} compute={f => length(f.now - s.start)} />
             : <span className="todo-stretch__len mono">{length(s.end - s.start)}</span>}
         </button>
       ))}
+      {doneAt && (
+        <button type="button" role="listitem" className="todo-stretch todo-stretch--done glow-box" title={TODO_COPY.doneAtTitle}
+          onClick={() => { act.revealInstant(doneAt.id); leave() }}>
+          <span>{TODO_COPY.doneAt(when(doneAt.tsEpochMs, false))}</span>
+        </button>
+      )}
     </div>
   )
 }
@@ -238,7 +253,7 @@ function TodoPanel({ row, verb, onClose }: { row: TodoRow; verb: 'schedule' | 'r
     <div className="todo-when" onClick={e => e.stopPropagation()}>
       {verb && <WhenPick todoId={id} verb={verb} onClose={onClose} />}
       {open && <LengthPick todoId={id} current={row.todo.durationMs ?? null} onClose={onClose} />}
-      <StretchList todoId={id} startedId={row.todo.startedId} />
+      <StretchList todoId={id} startedId={row.todo.startedId} done={row.todo.status === 'done'} />
       <div className="todo-when__chips todo-when__actions">
         {/* Not a todo: its instant stays on the timeline as a plain one (alarms and all). */}
         {open && row.at && !worked && (

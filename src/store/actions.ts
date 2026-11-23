@@ -197,6 +197,21 @@ export function zoomToNow() {
   view.setTimeWidth(width)
 }
 
+/**
+ * Zooms out (never in) around where the view is going until every time in `times` shows, the
+ * farthest most of the way to the edge (domain/viewport widthToShow); nothing when they all
+ * show already. A snooze shows where it lands and Now this way. Returns whether it zoomed.
+ */
+export function revealTimes(times: readonly number[]): boolean {
+  const s = v()
+  const center = s.viewFocusMode === 'now' ? nowTime() : s.timeCenter
+  const width = widthToShow(center, times, 0)
+  if (width <= s.timeWidth) return false
+  engine.beginTransition()
+  view.setTimeWidth(width)
+  return true
+}
+
 /** Shows an instant in the Agenda: its row (focused, so highlighted and scrolled to), opening the drawer if that is where the Agenda is. */
 export function showInAgenda(id: string) {
   revealInstant(id)
@@ -1022,7 +1037,14 @@ export function snoozeAlarm(key: string, minutes = SNOOZE_MINUTES): string | und
  */
 export function snoozeAlarmUntil(key: string, at: number, exact = false): string | undefined {
   const next = snoozeUntil(key, at, exact)
-  if (next) revealInstant(parseRingKey(key).instantId)
+  if (next) {
+    const { instantId, alarmId } = parseRingKey(next)
+    revealInstant(instantId)
+    // Zoomed out, if need be, until where it rings now and Now both show.
+    const inst = entities.getInstant(instantId)
+    const alarm = inst?.alarms?.find(a => a.id === alarmId)
+    if (inst && alarm) revealTimes([nowTime(), inst.tsEpochMs - alarm.offsetMs])
+  }
   return next
 }
 
@@ -1578,8 +1600,18 @@ export function doneTodo(todoId: string, opts: { at?: number; origin?: DoneOrigi
   return doneId
 }
 
-/** Done boxes charging (completeTodo), by todo: a second tap while one charges does nothing. */
-const charging = new Map<string, ReturnType<typeof setTimeout>>()
+/** Done boxes charging (completeTodo), by todo: a second tap while one charges does nothing (`true`: travelling to Now). */
+const charging = new Map<string, ReturnType<typeof setTimeout> | true>()
+
+/**
+ * Done ahead of its time, never started: its chip travels along the timeline to Now first
+ * (components/timeline/doneTravel: a wind-up, then a swoosh to the Now line), and it pops there.
+ * Resolves to where it landed (the pop's origin), or null when its chip isn't on screen to travel
+ * (then it charges where it was tapped, as any Done). Registered by the timeline.
+ */
+type DoneTravel = (todoId: string, atId: string, zoomed: boolean) => Promise<DoneOrigin | null>
+let doneTravel: DoneTravel | null = null
+export function setDoneTravel(fn: DoneTravel | null) { doneTravel = fn }
 
 /**
  * A tap on a todo's Done box (its Todos row, its selected chip, its lane's ✓): the box charges
@@ -1597,6 +1629,18 @@ export function completeTodo(todoId: string, origin?: DoneOrigin) {
     return
   }
   const at = nowTime()
+  const mine = todoInstants(todoId)
+  const plan = todoAt(mine)
+  if (doneTravel && plan && plan.tsEpochMs > at + SECOND && !countingInstant(mine, at, todo.startedId) && !hasRung(plan, at)) {
+    charging.set(todoId, true)
+    const zoomed = revealTimes([at, plan.tsEpochMs])
+    void doneTravel(todoId, plan.id, zoomed).then(landed => {
+      charging.delete(todoId)
+      if (landed) { doneTodo(todoId, { at, origin: landed }); return }
+      completeTodo(todoId, origin)
+    }, () => { charging.delete(todoId); doneTodo(todoId, { at, origin }) })
+    return
+  }
   ui.charge(todoId, origin)
   charging.set(todoId, setTimeout(() => {
     charging.delete(todoId)
@@ -1725,7 +1769,16 @@ export function untodo(instantId: string) {
 export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
   const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
   if (!todo) return
-  rescheduleTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+  snoozeTodoUntil(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+}
+
+/** A todo's ringing card's box (a length, a time, "tomorrow"): it moves there, shown with Now as a snooze is. */
+export function snoozeTodoUntil(todoId: string, ts: number) {
+  rescheduleTodo(todoId, ts)
+  const at = todoAt(todoInstants(todoId))
+  if (!at) return
+  revealInstant(at.id)
+  revealTimes([nowTime(), at.tsEpochMs])
 }
 
 /**

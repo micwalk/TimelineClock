@@ -94,7 +94,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
       return at === null ? null : { ts: at, kind: parseTimerInput(text) !== null ? 'for' : 'until' }
     }
     : typedLength(now)
-  const onTyped = (at: number) => (!warning ? act.rescheduleTodo(todoId, at) : act.snoozeAlarmUntil(key, at, true))
+  const onTyped = (at: number) => (!warning ? act.snoozeTodoUntil(todoId, at) : act.snoozeAlarmUntil(key, at, true))
   // OK on a warning: it rings again at its time (a chime's card just goes).
   const ok = () => (chime ? act.clearChime(key) : act.dismissAlarm(key))
 
