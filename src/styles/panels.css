@@ -641,60 +641,51 @@
 /* The Snooze row: the quick snooze, and beside it a box that says what it does ("Snooze for
    [20m]", "Snooze until [4p]"), its submit where it lands ("→ 10:41p"). */
 /* One row: the quick snooze, its landing under its name so the box has room beside it. */
-/* One control that reads as one sentence: "Snooze · 5m · or 20m, 4p… · → 10:41p". A soft pill
-   track holding its parts as inner pieces, no ruled lines: "Snooze" a light cap on the left (the
-   verb, flat), the quick snooze a raised amber key, the box the see-through track itself, and its
-   submit the right cap, raised like the key, once what's typed reads. */
+/* One box that reads as one sentence: "Snooze [5m] or 20m, 4p… [→ 10:41p]". The box has the card
+   buttons' corners (9px, as Dismiss); inside it "Snooze" is plain text, the quick snooze an inner
+   box right after it (a key, the Snooze 5m button's colours), the rest the see-through track to
+   type in, and its submit a matching inner key once what's typed reads. Inner corners are the
+   box's less its padding (6px), so the curves run together. */
 .snooze-row {
   --accent: var(--c-alarm);
   --halo: var(--c-alarm);
-  /* The light cap and the keys' ink (dark on amber reads better than white). */
-  --snooze-light: color-mix(in srgb, var(--accent) 28%, #fffaf0);
-  --snooze-ink: #2e1d00;
+  --snooze-pad: 3px;
   display: flex;
   align-items: stretch;
-  gap: 3px;
-  height: 44px;
+  gap: 6px;
+  height: 42px;
   margin-top: 8px;
-  padding: 3px;
-  border-radius: 22px;
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  padding: var(--snooze-pad);
+  padding-left: 12px;
+  border-radius: 9px;
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   transition: border-color 150ms ease;
 }
 .snooze-row:focus-within { border-color: var(--accent); }
 .snooze-row.is-invalid { border-color: var(--c-danger); }
-.snooze-row__label {
-  flex: none;
-  display: grid;
-  place-items: center;
-  padding: 0 13px 0 14px;
-  border-radius: 19px 7px 7px 19px;
-  background: var(--snooze-light);
-  color: var(--snooze-ink);
-  font: 700 14px/1 var(--font-ui);
-}
-/* The quick snooze and the submit: raised amber keys (a lit top, a soft drop shadow); pressed, they sink. */
+.snooze-row__label { flex: none; align-self: center; color: #fff; font: 700 14px/1 var(--font-ui); }
+/* The quick snooze and the submit: inner keys. */
 .snooze-row__quick, .snooze-row__go {
   flex: none;
-  border: 0;
-  border-radius: 7px;
-  background: linear-gradient(color-mix(in srgb, var(--accent) 82%, #fff), var(--accent));
-  color: var(--snooze-ink);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 85%, transparent);
+  border-radius: calc(9px - var(--snooze-pad));
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: #fff;
+  box-shadow: 0 0 calc(6px * var(--glow)) color-mix(in srgb, var(--accent) 45%, transparent);
   cursor: pointer;
-  transition: filter 120ms ease, transform 80ms ease, box-shadow 80ms ease;
+  transition: background 120ms ease, transform 80ms ease;
 }
-.snooze-row__quick:hover, .snooze-row__go:hover { filter: brightness(1.08); }
-.snooze-row__quick:active, .snooze-row__go:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3); }
+.snooze-row__quick:hover, .snooze-row__go:hover { background: color-mix(in srgb, var(--accent) 62%, transparent); }
+.snooze-row__quick:active, .snooze-row__go:active { transform: scale(0.96); }
 .snooze-row__quick:focus-visible, .snooze-row__go:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .snooze-row__quick { display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 50px; padding: 0 9px; }
-.snooze-row__quick-text { font: 800 15px/1 var(--font-ui); white-space: nowrap; }
-.snooze-row__at { font: 650 10.5px/1 var(--font-mono); opacity: 0.7; }
-.snooze-row__go { padding: 0 12px 0 10px; border-radius: 7px 19px 19px 7px; font: 750 13px/1 var(--font-mono); white-space: nowrap; animation: snooze-go-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.snooze-row__quick-text { font: 800 14px/1 var(--font-ui); white-space: nowrap; }
+.snooze-row__at { font: 600 10.5px/1 var(--font-mono); opacity: 0.8; }
+.snooze-row__go { padding: 0 10px; font: 700 13px/1 var(--font-mono); white-space: nowrap; animation: snooze-go-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes snooze-go-in { from { opacity: 0; transform: translateX(6px); } }
 @media (prefers-reduced-motion: reduce) { .snooze-row__go { animation: none; } }
-.snooze-row__field { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0 8px 0 9px; overflow: hidden; cursor: text; }
+.snooze-row__field { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0 2px; overflow: hidden; cursor: text; }
 .snooze-row__word { flex: none; color: var(--accent); font: 700 13px/1 var(--font-ui); }
 .snooze-row__input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: #fff; caret-color: var(--accent); font: 700 14px/1 var(--font-mono); outline: none; }
 .snooze-row__input::placeholder { color: color-mix(in srgb, var(--ink) 45%, transparent); font: 600 13px/1 var(--font-ui); }

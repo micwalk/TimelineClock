@@ -1,8 +1,8 @@
-// The ringing card's snooze row (owner, 2026-11-22): one segmented control that reads as one
-// sentence, its parts divided by vertical lines:
-//   [ Snooze | 5m      | or 20m, 4p…  | → 10:41p ]
-//              10:26p     (typed)       (once it reads)
-// "Snooze" is the verb for the row; the quick snooze is a filled button, its landing under it
+// The ringing card's snooze row (owner, 2026-11-22): one box that reads as one sentence, with keys
+// inside it:
+//   [ Snooze [5m    ] or 20m, 4p…  [→ 10:41p] ]
+//             10:26p   (typed)      (once it reads)
+// "Snooze" is the verb for the row; the quick snooze is an inner key, its landing under it
 // ("until start" in its place for a warning 5m would take past its instant); the box takes a
 // length ("Snooze 20m") or a time ("Snooze until 4p": the word shows once a time is typed), and
 // its submit says where it lands. Plain alarms and todos share it: a todo's box takes what Move
