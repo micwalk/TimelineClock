@@ -363,6 +363,20 @@ describe('favorites and alarms', () => {
     expect(view()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: id })
   })
 
+  it('a snooze zooms out (never in) until where it rings and Now both show', () => {
+    const id = entities.createInstant(Date.now() - 1000, 'Wake', { alarm: true })
+    const alarmId = instant(id).alarms![0].id
+    useView.setState({ timeWidth: 2 * MINUTE })
+    act.snoozeAlarmUntil(ringKey(id, alarmId), Date.now() + 30 * MINUTE, true)
+    // Centered on the instant: the ring 30m on sits most of the way to the edge.
+    expect(view().timeWidth).toBeGreaterThan(60 * MINUTE)
+    // Shown already: no change.
+    useView.setState({ timeWidth: 6 * HOUR })
+    const again = instant(id).alarms!.find(a => !a.answered)!
+    act.snoozeAlarmUntil(ringKey(id, again.id), Date.now() + 10 * MINUTE, true)
+    expect(view().timeWidth).toBe(6 * HOUR)
+  })
+
   it('a timer finishes when the last alarm of its snooze chain is dismissed, not when it is snoozed', () => {
     const end = act.startTimer(MINUTE)
     const alarmId = instant(end).alarms![0].id

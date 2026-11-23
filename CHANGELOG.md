@@ -7,6 +7,55 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.8.1 — 2026-11-22
+
+**Android app: install again** (only for its offline page, below; the rest is web).
+
+- **No false "Can't reach the site"** (Android app): the app's first load at startup could fail
+  offline even with a copy saved, which Retry then opened. The page now retries once by itself
+  at once, and says it can't reach the site only when that fails too (a retry within 15
+  seconds that brings it back), so it never loops.
+
+- **A done todo's panel shows when it was done**: "✓ Done 3:42p" after its stretches (listed
+  oldest first now), or alone when it has none; a tap goes to it on the timeline.
+- **A snooze shows where it lands**: snoozing from a ringing card (an alarm, or a todo's Snooze 5m
+  or box) zooms out, if need be, until the new ring time and Now both show.
+- **Done ahead of time travels to Now**: ✓ on a todo still ahead and not started sends its chip
+  along the timeline to Now (it winds up, then swooshes onto the Now line) before it pops there.
+- **A favorite's lane chip** has its two buttons apart: the lap (or a todo's ⏸) left of the time,
+  the stop (or ✓) at the right end ("★ Rice on 📍 12:03 ■").
+- **A selected chip's tools draw over the chips under them** instead of pushing them aside.
+- **The Snooze row is one control** on a ringing card, one box that reads as one sentence:
+  "[Snooze 5m] or 20m, 4p… [→ 11:30p]". Snooze 5m is one key inside it with where it lands under
+  it; type a length or a time after it ("until" shows before a time), and a matching key at the
+  end says where it lands.
+- **Opening offline, more reliably** (in the Android app and as an installed web app): the app
+  opens without the internet from a copy its service worker saves. If saving that copy failed
+  once (the network dropped, or the app went to the background mid-download), the worker was
+  gone, and an app that is resumed rather than reloaded never tried again, so it showed "Can't
+  reach the site" offline. Now each update check (coming back to the app, and every hour)
+  registers it again when it is missing, and the app asks the browser to keep its storage.
+  Settings says under the version whether this copy opens offline; the diagnostics log says so
+  too.
+
+- **Long names in the Todos tab** wrap (up to three lines) instead of being cut off. A name too
+  long to sit beside its buttons takes the whole row and the buttons go on a line under it, so on
+  a phone it never squeezes into a narrow column; short ones stay on one line.
+- **Renaming a todo**: the name box fills the row and grows taller as the name wraps, instead of
+  a one-line field running off the side.
+- **A focused instant shows its whole name**: a long one wraps into a taller chip (up to six
+  lines) instead of ending in "…"; the chips around it, and its tools, keep clear of it.
+  Renaming an instant's chip wraps the same way. Under its time it shows how far it is from Now
+  ("20m ago", "in 1h 5m").
+- **One button for a todo's time and the rest**: a Todos row's **Schedule** (or **Move**) and its
+  **⋯** are now one stopwatch button. Its panel has Schedule (or Move) on top, titled as Duration is: the quick times on
+  one line (each with its time under it) and, under them, the time entry's button and a box that says what it does, like the
+  ringing card's snooze box ("Schedule [3p]", reading "at"/"in" as you type, its submit where it
+  lands). Then the duration: lengths on one line and a "Takes [25m]" box. Then its stretches, and
+  Unschedule, with Won't do and the trash (in a red box) at the right. While it is open, a ✎ Rename
+  unfolds beside the green ▶, a vertical line widening to the left into the button. Open, one purple border runs round the row and its options,
+  and the row takes a slight purple tint.
+
 ## 0.8.0 — 2026-11-22
 
 **Android app: install again** (the vibration fix below is native; the rest is web. A todo's

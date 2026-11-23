@@ -1,6 +1,6 @@
 // Span lanes below the timeline: implied spans for the selection, then saved spans (the focused one first).
 import { isFixedTime } from '../../domain/dst.ts'
-import { useLayoutEffect, useState } from 'react'
+import { useLayoutEffect, useState, type ReactNode } from 'react'
 import { ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/20/solid'
 import { PauseIcon, StarIcon as StarSolid, StopIcon } from '@heroicons/react/24/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
@@ -113,12 +113,14 @@ function SavedSpanTools({ spanId, visible, onTypeLength, favoriteOf }: {
   )
 }
 
-function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
+function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick, beforeLength }: {
   r: ResolvedSpan
   a: TimeRef
   b: TimeRef
   editing: boolean
   short?: boolean
+  /** A live chip's lap (or a todo's ⏸): left of the time, apart from the stop at the right end. */
+  beforeLength?: ReactNode
   /** Double-tap on the length (a focused span): type it, rather than rename the span. */
   onLengthDoubleClick?: () => void
 }) {
@@ -149,25 +151,26 @@ function SavedSpanChip({ r, a, b, editing, short, onLengthDoubleClick }: {
       {nameBox ?? (name ? (
         <>
           <span className="span-chip__name" title={liveName}>{name}</span>
-          <span className="span-chip__sep" aria-hidden>·</span>
+          {!beforeLength && <span className="span-chip__sep" aria-hidden>·</span>}
         </>
       ) : null)}
+      {beforeLength}
       <Duration a={a} b={b} />
     </span>
   )
 }
 
 /**
- * A favorite's span to Now, counting up, ends in a lap and a stop (the chip's only buttons, so a
- * tap near them can't hit anything worse than the chip). Stop: an instant at Now ends the span,
- * which is saved and flows to the saved side; the instant stops being a favorite. Lap (a pin,
- * #28): the same, and the new instant is tracked instead, so a span to Now runs on from it.
+ * A favorite's span to Now, counting up, has a lap and a stop (the chip's only buttons, so a tap
+ * near them can't hit anything worse than the chip), apart so neither is hit for the other
+ * (owner 2026-11-22): the lap left of the time, the stop at the chip's right end. Stop: an instant
+ * at Now ends the span, which is saved and flows to the saved side; the instant stops being a
+ * favorite. Lap (a pin, #28): the same, and the new instant is tracked instead, so a span to Now
+ * runs on from it.
  */
-function EndButtons({ instant }: { instant: InstantRecord }) {
-  const label = `Stop ${endpointName(instant)} here: save its span`
+function LapButton({ instant }: { instant: InstantRecord }) {
   const lapLabel = `Lap: save ${endpointName(instant)}'s span here and go on from Now`
   return (
-    <>
       <button
         type="button"
         className="span-chip__end-btn"
@@ -178,6 +181,12 @@ function EndButtons({ instant }: { instant: InstantRecord }) {
       >
         <MapPinIcon className="span-chip__stop" aria-hidden />
       </button>
+  )
+}
+
+function StopButton({ instant }: { instant: InstantRecord }) {
+  const label = `Stop ${endpointName(instant)} here: save its span`
+  return (
       <button
         type="button"
         className="span-chip__end-btn"
@@ -188,22 +197,19 @@ function EndButtons({ instant }: { instant: InstantRecord }) {
       >
         <StopIcon className="span-chip__stop" aria-hidden />
       </button>
-    </>
   )
 }
 
 const instantTarget = (i: InstantRecord): EndTarget => ({ kind: 'instant', id: i.id })
 
 /**
- * ✓ Done on a counting todo's lane (docs/prd_todos.md §7.1): its stopwatch controls become the
- * todo's: the lap is ⏸ Pause (the stretch saved, the todo open: act.pauseTodo) and the stop
- * reads ✓ (the same stop: the new instant is its `done`).
+ * A counting todo's lane (docs/prd_todos.md §7.1): its stopwatch controls become the todo's: the
+ * lap is ⏸ Pause (the stretch saved, the todo open: act.pauseTodo), left of the time, and the stop
+ * reads ✓ Done (the same stop: the new instant is its `done`), at the right end.
  */
-function DoneButton({ instant, name }: { instant: InstantRecord; name: string }) {
-  const label = `${TODO_UI.done}: ${name}`
+function PauseButton({ instant, name }: { instant: InstantRecord; name: string }) {
   const pauseLabel = `${TODO_UI.pause}: ${name} (save this stretch)`
   return (
-    <>
       <button
         type="button"
         className="span-chip__end-btn"
@@ -214,6 +220,12 @@ function DoneButton({ instant, name }: { instant: InstantRecord; name: string })
       >
         <PauseIcon className="span-chip__stop" aria-hidden />
       </button>
+  )
+}
+
+function DoneButton({ instant, name }: { instant: InstantRecord; name: string }) {
+  const label = `${TODO_UI.done}: ${name}`
+  return (
       <button
         type="button"
         className="span-chip__end-btn span-chip__end-btn--done"
@@ -224,7 +236,6 @@ function DoneButton({ instant, name }: { instant: InstantRecord; name: string })
       >
         <span className="span-chip__done" aria-hidden>{MARKS.todoDone}</span>
       </button>
-    </>
   )
 }
 
@@ -300,8 +311,9 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       bTarget={r.end ? instantTarget(r.end) : { kind: 'now' }}
       arrows={controls}
       barOnly={!controls}
-      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined} />}
-      chipEnd={stoppable ? (todoName !== null ? <DoneButton instant={r.start} name={todoName} /> : <EndButtons instant={r.start} />) : undefined}
+      chip={<SavedSpanChip r={r} a={a} b={b} editing={editing} short={live} onLengthDoubleClick={focused ? typeLength : undefined}
+        beforeLength={stoppable ? (todoName !== null ? <PauseButton instant={r.start} name={todoName} /> : <LapButton instant={r.start} />) : undefined} />}
+      chipEnd={stoppable ? (todoName !== null ? <DoneButton instant={r.start} name={todoName} /> : <StopButton instant={r.start} />) : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength}

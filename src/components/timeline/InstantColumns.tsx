@@ -152,7 +152,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const foldedBells = (alarms: AlarmRecord[]) => alarms.length > 0 && (
     <FoldedBells inst={inst} alarms={alarms} selected={alarms.some(a => a.id === selectedBell)} ringing={alarms.find(a => ringingIds.includes(a.id))} />
   )
-  // The Cursor tag carries the focused instant's relative time, so the focused chip omits it.
+  // Focused, its distance to Now goes under its time (chipWhen below), not "· ago" beside it.
   // Zoomed out past hours (ticks an hour or coarser), "· in 3d 8h" is noise: only a selected chip keeps it.
   const coarse = useFrameValue(f => pickTickTiers(f.pxPerMs, labelSpacingPx(f.orientation))[0].ms >= HOUR)
   const showRelative = !focused && (selected || (!coarse && (!!inst.favorite || showBell)))
@@ -242,7 +242,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           <BellAlertIcon aria-hidden />
         </button>
       )}
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${focused && !editing ? ' chip--full' : ''}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -250,6 +250,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           <InlineInput
             initial={inst.label}
             ariaLabel="Instant name"
+            multiline
             placeholder="Name"
             onCommit={v => act.renameInstant(inst.id, v)}
             onCancel={() => view.editInstant(null)}
@@ -278,9 +279,17 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
             {todoStatus && !(selected && openTodo && !moving) && <TodoBoxIcon className="chip__todo" state={doneFolded && todoStatus === 'done' ? 'done' : todoStatus} role="img" aria-label={TODO_STATUS_TEXT[todoStatus]} />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
-            <span className="chip__time">
-              {moving ? <LiveText compute={f => formatChipTime(f.center, f.now, f.end - f.start, true)} /> : <LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} />}
-            </span>
+            {focused && !moving ? (
+              // Focused: how far it is from Now under its time ("20m ago", "in 1h 5m").
+              <span className="chip__when">
+                <span className="chip__time"><LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} /></span>
+                <LiveText className="chip__rel" watch={bySecond} compute={f => formatRelativeShort(ts - f.now)} />
+              </span>
+            ) : (
+              <span className="chip__time">
+                {moving ? <LiveText compute={f => formatChipTime(f.center, f.now, f.end - f.start, true)} /> : <LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} />}
+              </span>
+            )}
             {showRelative && !moving && <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
             {/* Its ✓, folded in: when it was done, "· +12m". */}
             {doneFoldTs !== undefined && <span className="chip__rel">· {TODO_COPY.foldAfter(formatDurationShort(doneFoldTs - ts))}</span>}
@@ -671,7 +680,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   const linked = bellLinked && !moving
 
   return (
-    <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined}>
+    <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined} data-instant={inst.id}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
       <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />

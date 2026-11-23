@@ -641,9 +641,54 @@
 /* The Snooze row: the quick snooze, and beside it a box that says what it does ("Snooze for
    [20m]", "Snooze until [4p]"), its submit where it lands ("→ 10:41p"). */
 /* One row: the quick snooze, its landing under its name so the box has room beside it. */
-.snooze-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.snooze-row__quick { flex: 0 1 auto; display: inline-grid; place-content: center; gap: 2px; min-width: 84px; padding: 0 10px; line-height: 1; }
-.snooze-row__quick .alarm-btn__at { font-size: 11px; }
+/* One box that reads as one sentence: "Snooze [5m] or 20m, 4p… [→ 10:41p]". The box has the card
+   buttons' corners (9px, as Dismiss); inside it the quick snooze is one inner key, "Snooze 5m"
+   with its landing under it (the Snooze 5m button's colours), the rest the see-through track to
+   type in, and its submit a matching inner key once what's typed reads. Inner corners are the
+   box's less its padding (6px), so the curves run together. */
+.snooze-row {
+  --accent: var(--c-alarm);
+  --halo: var(--c-alarm);
+  --snooze-pad: 3px;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 42px;
+  margin-top: 8px;
+  padding: var(--snooze-pad);
+  border-radius: 9px;
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  transition: border-color 150ms ease;
+}
+.snooze-row:focus-within { border-color: var(--accent); }
+.snooze-row.is-invalid { border-color: var(--c-danger); }
+/* With no quick snooze, the word stands there as text. */
+.snooze-row__label { flex: none; align-self: center; padding-left: 9px; color: #fff; font: 700 14px/1 var(--font-ui); }
+/* The quick snooze and the submit: inner keys. */
+.snooze-row__quick, .snooze-row__go {
+  flex: none;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 85%, transparent);
+  border-radius: calc(9px - var(--snooze-pad));
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: #fff;
+  box-shadow: 0 0 calc(6px * var(--glow)) color-mix(in srgb, var(--accent) 45%, transparent);
+  cursor: pointer;
+  transition: background 120ms ease, transform 80ms ease;
+}
+.snooze-row__quick:hover, .snooze-row__go:hover { background: color-mix(in srgb, var(--accent) 62%, transparent); }
+.snooze-row__quick:active, .snooze-row__go:active { transform: scale(0.96); }
+.snooze-row__quick:focus-visible, .snooze-row__go:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.snooze-row__quick { display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 84px; padding: 0 10px; }
+.snooze-row__quick-text { font: 800 14px/1 var(--font-ui); white-space: nowrap; }
+.snooze-row__at { font: 600 10.5px/1 var(--font-mono); opacity: 0.8; }
+.snooze-row__go { padding: 0 10px; font: 700 13px/1 var(--font-mono); white-space: nowrap; animation: snooze-go-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes snooze-go-in { from { opacity: 0; transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .snooze-row__go { animation: none; } }
+.snooze-row__field { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0 2px; overflow: hidden; cursor: text; }
+.snooze-row__word { flex: none; color: var(--accent); font: 700 13px/1 var(--font-ui); }
+.snooze-row__input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: #fff; caret-color: var(--accent); font: 700 14px/1 var(--font-mono); outline: none; }
+.snooze-row__input::placeholder { color: color-mix(in srgb, var(--ink) 45%, transparent); font: 600 13px/1 var(--font-ui); }
 .snooze-box {
   --accent: var(--c-alarm);
   flex: 1 1 170px;
@@ -653,8 +698,8 @@
   height: 36px;
   border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 9px;
-  /* The Snooze 5m button's colours (alarm-btn--snooze), a shade darker where you type. */
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  /* The Snooze 5m button's border and colour, but see-through where you type (its submit keeps the full colour). */
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   overflow: hidden;
 }
 .snooze-box:focus-within { border-color: var(--accent); }
@@ -995,6 +1040,9 @@
 .help__credit { color: var(--ink-faint); font-size: 13px; }
 .help__version { margin-top: 4px; }
 .settings__version { margin-top: 10px; color: var(--ink-faint); font-size: 12px; }
+.settings__offline { margin-top: 2px; color: var(--ink-faint); font-size: 12px; }
+.settings__offline.is-ready::before { content: "● "; color: var(--c-ok); }
+.settings__offline.is-missing::before, .settings__offline.is-saving::before { content: "○ "; color: var(--c-alarm); }
 .shell-status { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12px; color: var(--ink-faint); }
 .shell-status .is-off { color: var(--ink); }
 .shell-status .is-off > span { color: var(--c-now); }
@@ -1123,22 +1171,49 @@
 .todo-row {
   --accent: color-mix(in srgb, var(--c-todo) 55%, transparent);
   --halo: var(--c-todo);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Box, name, tools on one line while the name fits beside the tools; a longer one takes the
+     whole line and the tools go on a line under it (at the right), so it never squeezes into a
+     narrow column (phones). */
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 4px;
   padding: 8px 10px;
   border-radius: 12px;
   background: var(--box-bg);
   cursor: pointer;
 }
+.todo-row > .todo-check { flex: none; }
+.todo-row > .todo-row__tools { flex: none; margin-left: auto; }
 .todo-row:hover { background: var(--box-bg-raised); }
 .todo-row.is-counting { --accent: var(--c-ok); --halo: var(--c-ok); }
 .todo-row.is-done, .todo-row.is-passed, .todo-row.is-dropped { --accent: color-mix(in srgb, var(--ink-faint) 40%, transparent); --halo: transparent; }
 .todo-row__grip { display: grid; place-items: center; width: 22px; height: 32px; margin-right: -4px; color: var(--ink-faint); cursor: grab; touch-action: none; }
 .todo-row__grip svg { width: 16px; height: 16px; }
-.todo-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.todo-row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 15px/1.2 var(--font-ui); }
+.todo-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* As wide as its name (so a long one wraps the tools under it), never wider than beside the box (30px with its gap). */
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 30px);
+}
+/* Renaming: the box takes the whole line, the tools under it. */
+.todo-row.is-renaming > .todo-row__main { flex-basis: 100%; }
+.todo-row__name {
+  /* A long name wraps (up to three lines, the rest in its title). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font: 650 15px/1.25 var(--font-ui);
+}
+/* Renaming: the box fills the name's place and grows taller as the name wraps. */
+.todo-row__rename { display: flex; min-width: 0; }
+.todo-row__input.chip-input.is-multiline { width: 100%; max-width: none; min-width: 0; }
 .todo-row.is-done .todo-row__name, .todo-row.is-passed .todo-row__name, .todo-row.is-dropped .todo-row__name { color: var(--ink-dim); }
 .todo-row__sub { color: var(--ink-dim); font-size: 12.5px; }
 .todo-row.is-counting .todo-row__sub { color: var(--c-ok); }
@@ -1160,12 +1235,48 @@
 /* Counting: ⏸ Pause (the todo colour) and Done (green, as its box goes). */
 .todo-btn--pause { --accent: var(--c-todo); display: inline-grid; place-items: center; width: 32px; padding: 0; background: color-mix(in srgb, var(--c-todo) 35%, transparent); color: #fff; }
 .todo-btn--pause > svg { width: 15px; height: 15px; }
+/* Its panel (Schedule or Move, duration and the rest): a stylized stopwatch, square like ▶. */
+.todo-btn--menu { display: inline-grid; place-items: center; width: 32px; padding: 0; color: #fff; }
+.todo-btn--menu > svg { width: 19px; height: 19px; }
+/* ✎ Rename, while the row's panel is open: unfolds from a vertical line at ▶'s left edge, widening
+   to the left (the tools are right-aligned) into a square button, and folds back the same way.
+   Folded it takes no room: no width, no left border, the tools' gap cancelled. */
+.todo-btn--rename {
+  display: inline-grid;
+  place-items: center;
+  width: 0;
+  padding: 0;
+  margin-left: -4px;
+  overflow: hidden;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  color: #fff;
+  /* Folding: narrow back to the line, then the line fades. */
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1), margin-left 180ms cubic-bezier(0.4, 0, 0.2, 1), border-left-width 0s 170ms, opacity 90ms 170ms;
+}
+.todo-btn--rename > svg { flex: none; width: 15px; height: 15px; opacity: 0; transition: opacity 90ms; }
+.todo-btn--rename.is-shown {
+  width: 32px;
+  margin-left: 0;
+  border-left-width: 1.5px;
+  opacity: 1;
+  pointer-events: auto;
+  /* Unfolding: the line shows first, then widens to the left. */
+  transition: opacity 80ms, border-left-width 0s 80ms, width 220ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 220ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.todo-btn--rename.is-shown > svg { opacity: 1; transition: opacity 120ms 220ms; }
+@media (prefers-reduced-motion: reduce) {
+  .todo-btn--rename, .todo-btn--rename.is-shown, .todo-btn--rename > svg, .todo-btn--rename.is-shown > svg { transition: none; }
+}
 .todo-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
 /* Going into its box (domain/genie): over the row's name as it passes. */
 .todo-btn.is-genie { position: relative; z-index: 2; pointer-events: none; transform-origin: center; }
 /* A todo's stretches (its ⋯): newest first, a tap goes to one. */
 .todo-stretches { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 .todo-stretch { --accent: var(--c-todo); display: flex; justify-content: space-between; gap: 10px; padding: 5px 9px; border-radius: 8px; background: transparent; color: var(--ink); font: 600 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+/* Its ✓, after its stretches: green, as Done is. */
+.todo-stretch--done { --accent: var(--c-ok); }
 .todo-stretch__len { color: var(--ink-dim); }
 /* Found (a long-press on its chip's box): the row lights up in the todo colour. */
 .todo-row.is-found { animation: todo-found 1600ms ease-out 1; }
@@ -1201,36 +1312,63 @@
 /* How long it takes: a stopwatch and the length. */
 .todo-dur { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .todo-dur__icon { flex: none; width: 13px; height: 13px; color: var(--c-todo); }
-/* The ⋯ menu's Duration: quick lengths ("—" is none), then a typed one. */
+/* The panel's Duration: quick lengths ("—" is none) on one line, then "Takes [25m]". */
 .todo-dur-pick { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 .todo-dur-pick__label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; }
 .todo-dur-pick__label .todo-dur__icon { width: 14px; height: 14px; }
 .todo-dur-pick .alarm-link { min-width: 40px; justify-content: center; }
-/* The quick lengths are one line: none, 5m, 15m, 30m, 1h. */
-.todo-dur-pick .todo-when__chips { flex-wrap: nowrap; }
-.todo-dur-pick .todo-when__chips .alarm-link { flex: 1 1 0; }
 .todo-dur-pick .alarm-link.is-on { background: color-mix(in srgb, var(--c-todo) 50%, transparent); color: #fff; }
-.todo-dur-pick__typed { display: contents; }
-.todo-dur-pick__typed > span { color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
-.todo-dur-pick .todo-when__typed { grid-template-columns: auto minmax(0, 1fr) auto; }
 .todo-row.is-celebrating { animation: todo-flare 1200ms ease-out 1; }
 @keyframes todo-flare {
   0% { box-shadow: 0 0 calc(26px * var(--glow)) var(--c-ok); filter: brightness(1.8); }
   100% { filter: none; }
 }
 
-/* Schedule / Later and the row's other tools, under the row. */
-.todo-when { --accent: var(--c-todo); display: flex; flex-direction: column; gap: 6px; margin: -2px 6px 4px; padding: 8px; border-radius: 10px; background: var(--box-bg-strong); }
+/* A row's panel (its stopwatch button), under the row: Schedule or Move, Duration, stretches, the rest. */
+.todo-when { --accent: var(--c-todo); display: flex; flex-direction: column; gap: 6px; max-width: 520px; margin: -2px 6px 4px; padding: 8px; border-radius: 10px; background: var(--box-bg-strong); }
+/* Open, a row and its panel are one box: the item's purple border runs round both (the row's own
+   gives way), and the row takes a slight purple tint. */
+.todo-item.is-open { --accent: color-mix(in srgb, var(--c-todo) 55%, transparent); --halo: var(--c-todo); border-radius: 12px; background: var(--box-bg-strong); }
+.todo-item.is-open > .todo-row { border-color: transparent; box-shadow: none; border-radius: 10.5px 10.5px 0 0; /* A tint layered over the box (--box-bg is a background, not a colour). */ background: linear-gradient(color-mix(in srgb, var(--c-todo) 16%, transparent), color-mix(in srgb, var(--c-todo) 16%, transparent)), var(--box-bg); }
+.todo-item.is-open > .todo-row:hover { background: linear-gradient(color-mix(in srgb, var(--c-todo) 22%, transparent), color-mix(in srgb, var(--c-todo) 22%, transparent)), var(--box-bg-raised); }
+.todo-item.is-open > .todo-when { margin: 0; padding-top: 10px; border-radius: 0 0 10.5px 10.5px; background: transparent; }
 .todo-when__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .todo-when__chips svg { width: 14px; height: 14px; }
-.todo-when__typed { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+/* A pick's presets: always one line, sharing it evenly (a quick time's own time under its name). */
+.todo-when__line { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.todo-when__line > .alarm-link { flex: 1 1 0; min-width: 0; justify-content: center; padding-inline: 4px; }
+.todo-when__line > .icon-btn { flex: none; align-self: center; }
+.todo-when__line svg { width: 14px; height: 14px; }
+/* The time entry's button, then the box. */
+.todo-when__typed-row { display: flex; align-items: center; gap: 6px; }
+.todo-when .todo-when__typed-row > .snooze-box { flex: 1 1 0; min-width: 0; }
+.todo-when__typed-row > .icon-btn { flex: none; }
+.todo-when__typed-row > .icon-btn > svg { width: 20px; height: 20px; }
+/* Schedule is the panel's first section: no rule above it. */
+.todo-when-pick { padding-top: 0; border-top: 0; }
+.todo-when__quick { display: inline-grid; place-content: center; gap: 2px; height: auto; min-height: 36px; padding-block: 4px; line-height: 1; white-space: nowrap; }
+.todo-when__quick .alarm-link__at { font-size: 11px; }
+/* Its boxes say what they do ("Schedule [3p]", "Takes [25m]"), as the ringing card's snooze box, in the todo colour. */
+.todo-when .snooze-box { --accent: var(--c-todo); flex: none; }
+/* Quieter than the ringing card's: a darker box, its word dim; the submit keeps the colour. */
+.todo-when .snooze-box { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-solid)); box-shadow: none; }
+.todo-when .snooze-box:focus-within { border-color: var(--accent); }
+.todo-when .snooze-box__word { color: var(--ink-dim); font-weight: 650; }
+.todo-when .snooze-box__input { color: var(--ink); caret-color: var(--ink); }
+.todo-when .snooze-box__input::placeholder { color: var(--ink-faint); }
+.todo-when .snooze-box__go { background: color-mix(in srgb, var(--accent) 45%, transparent); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+/* Won't do and the trash, at the right end of the panel's last line. */
+.todo-when__end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.alarm-link--trash { --accent: var(--c-danger); width: 32px; padding: 0; justify-content: center; }
+.alarm-link--trash > svg { width: 15px; height: 15px; }
+.todo-when__actions { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 /* The time entry, in the panel rather than floating. */
 .todo-when .popover--inline { position: static; transform: none; margin: 0; }
 .todo-more-btn { align-self: flex-start; }
 .alarm-link--quiet { border-color: transparent; color: var(--ink-dim); background: transparent; box-shadow: none; }
 /* Todo choices take the todo colour, not the alarm's. */
 .todo-when .alarm-custom__input:not([aria-invalid='true']) { border-color: var(--c-todo); }
-.todo-when .alarm-link:not(.alarm-link--danger), .alarm-card--todo .alarm-link:not(.alarm-link--quiet) { --accent: var(--c-todo); }
+.todo-when .alarm-link:not(.alarm-link--danger, .alarm-link--trash), .alarm-card--todo .alarm-link:not(.alarm-link--quiet) { --accent: var(--c-todo); }
 .alarm-link--danger { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 40%, transparent); color: #fff; }
 
 /* The capture box (N): over whatever is on screen, near the top, clear of the keyboard. */

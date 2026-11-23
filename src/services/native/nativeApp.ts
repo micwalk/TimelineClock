@@ -13,6 +13,7 @@ import { Alarms } from './alarmsPlugin.ts'
 import { LiveNotifications } from './liveNotificationsPlugin.ts'
 import { syncLive } from './liveSync.ts'
 import { clearPageLog, diag, pageLog, watchPage } from './diagLog.ts'
+import { useOffline } from '../../store/offline.ts'
 import { versionLine } from '../../domain/version.ts'
 
 /** Store changes come in bursts (a timer makes two instants and two spans): sync once after. Short, so an alarm set just before leaving the app is scheduled. */
@@ -58,6 +59,7 @@ export async function diagnosticsText(): Promise<string> {
   return [
     versionLine(__APP_VERSION__, shellVersion),
     `Status: ${JSON.stringify(status)}`,
+    `Offline copy: ${useOffline.getState().state ?? 'not checked'}`,
     `User agent: ${navigator.userAgent}`,
     '',
     '— Android app —',

@@ -3,7 +3,8 @@
 //   Meeting                                 10:24p
 //   in 2:41                                          <- time to its instant, live
 //   [ Dismiss ]
-//   [ Snooze 5m · 10:26 ]  [ Snooze for _20m_ ]      <- components/panels/SnoozeRow
+//   [ [Snooze 5m] or 20m, 4p… [→ 10:41] ]            <- components/panels/SnoozeRow: one box
+//        10:26
 //   Until start · 10:24   ·   Dismiss all 3
 // Snooze 5m shows for a warning only while it still lands before the instant; Until start only
 // for a warning (it then takes the quick snooze's place if 5m doesn't fit); Dismiss all only when
@@ -93,7 +94,7 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
       return at === null ? null : { ts: at, kind: parseTimerInput(text) !== null ? 'for' : 'until' }
     }
     : typedLength(now)
-  const onTyped = (at: number) => (!warning ? act.rescheduleTodo(todoId, at) : act.snoozeAlarmUntil(key, at, true))
+  const onTyped = (at: number) => (!warning ? act.snoozeTodoUntil(todoId, at) : act.snoozeAlarmUntil(key, at, true))
   // OK on a warning: it rings again at its time (a chime's card just goes).
   const ok = () => (chime ? act.clearChime(key) : act.dismissAlarm(key))
 

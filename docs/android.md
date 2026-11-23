@@ -203,9 +203,15 @@ the site the app is running (it updates by itself); Y is the installed Android a
 
 ## If something's wrong
 
-- **"Can't reach the site"**: the first start needs the internet, to load the site. After
-  that the app starts offline too. Tap **Retry** once you're online. Alarms you already set
-  still ring while offline.
+- **"Can't reach the site"**: the app opens offline from a copy it saves on the phone (the
+  site's service worker), so it needs the internet until that copy is saved. Settings, under
+  the version, says whether it is: "Opens offline: a copy is saved on this device", or "Not
+  saved for offline yet". If a save failed (the network dropped, the app went to the background
+  mid-download), the app tries again by itself at its next update check (when you come back to
+  it, and every hour) while online. (The app's first load at startup can fail offline even with
+  the copy saved; the page retries once by itself before showing this, from 0.8.1.) Tap **Retry**
+  once you're online. Alarms you already set
+  still ring while offline. Settings › Copy diagnostics log includes an "Offline copy:" line.
 - **No alarm sound**: check the Settings checklist, the **alarm** volume, and Do Not Disturb
   (it lets alarms through by default).
 - **Something froze or misbehaved**: Settings › **Copy diagnostics log** (at the bottom, under

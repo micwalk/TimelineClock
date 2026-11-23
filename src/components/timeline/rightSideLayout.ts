@@ -147,6 +147,8 @@ export interface RightSideInputs {
   selectedSpanId: string | null
   instants: readonly InstantRecord[]
   widths: Readonly<Record<string, number>>
+  /** Chips taller than CHIP_HEIGHT (a focused chip's wrapped name). Absent = none. */
+  heights?: Readonly<Record<string, number>>
   moving: string | null
   /** The selected and focused instants: their chips (and tools) draw over the lanes, so lane chips keep clear of them. */
   selectedInstantId?: string | null
@@ -206,7 +208,8 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     const selected = id === c.selectedInstantId
     const focused = id === c.focusedInstantId
     const { tail, toolsWidth } = chipToolsExtent(inst, { selected, focused, moving: id === c.moving, editing: false, now: f.now, vertical: true })
-    const box = { lo: mid - CHIP_HEIGHT / 2, hi: mid + CHIP_HEIGHT / 2 + tail, xlo, xhi: xlo + Math.max(c.widths[id] ?? estimateChipWidth(inst.label), toolsWidth) }
+    const half = (c.heights?.[id] ?? CHIP_HEIGHT) / 2
+    const box = { lo: mid - half, hi: mid + half + tail, xlo, xhi: xlo + Math.max(c.widths[id] ?? estimateChipWidth(inst.label), toolsWidth) }
     blockers.push(box)
     if (selected || focused || id === c.moving) onTop.push(box)
   }

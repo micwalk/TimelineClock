@@ -29,6 +29,7 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   const focusedInstantId = useView(s => (s.viewFocusMode === 'instant' ? s.focusedInstantId : null))
   const instants = useEntities(s => s.instants)
   const widths = useChipWidths(s => s.widths)
+  const heights = useChipWidths(s => s.heights)
   const saved = lanes.filter((l): l is SavedLane => l.kind === 'saved' && !isLiveLane(l))
   // Labels that would crowd a bar fold into "N spans" boxes.
   const flagGroups = useFrameValue(f => rightSideLayout(f).flagGroups, sameLabelGroups)
@@ -61,9 +62,9 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   // Hand the lanes to the shared right-side layout (lane chips read it too); it reads the
   // saved chips' positions per frame.
   useLayoutEffect(() => {
-    setRightSideInputs({ lanes, selectedSpanId, instants, widths, moving, selectedInstantId, focusedInstantId })
+    setRightSideInputs({ lanes, selectedSpanId, instants, widths, heights, moving, selectedInstantId, focusedInstantId })
     engine.requestFrame()
-  }, [lanes, selectedSpanId, instants, widths, moving, selectedInstantId, focusedInstantId])
+  }, [lanes, selectedSpanId, instants, widths, heights, moving, selectedInstantId, focusedInstantId])
 
   useFrameListener(f => {
     if (f.orientation !== 'vertical') return

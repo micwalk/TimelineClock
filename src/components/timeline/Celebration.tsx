@@ -6,6 +6,8 @@
 // flare too (CSS `.is-celebrating`). Without a box (a Done from elsewhere) only the ✓ pops, or just
 // the confetti from the ✓ chip. With reduced motion only the flare and the ding.
 import { useEffect, useRef, useState } from 'react'
+import { travelToNow } from './doneTravel.ts'
+import { setDoneTravel } from '../../store/actions.ts'
 import { useFrameListener } from '../../engine/hooks.ts'
 import { engine, reducedMotion } from '../../engine/viewportEngine.ts'
 import type { Spark } from '../../domain/sparks.ts'
@@ -60,6 +62,8 @@ function fallbackOrigin(): DoneOrigin {
 }
 
 export function Celebration() {
+  // Done ahead of its time: its chip travels to Now first (doneTravel).
+  useEffect(() => { setDoneTravel(travelToNow); return () => setDoneTravel(null) }, [])
   const charging = useUi(s => s.charging)
   const celebrating = useUi(s => s.celebrating)
   const canvasRef = useRef<HTMLCanvasElement>(null)

@@ -10,6 +10,7 @@ import { useAlarms } from '../../store/alarms.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
 import { AppVersion } from './AppVersion.tsx'
+import { OfflineStatus } from './OfflineStatus.tsx'
 import { ShellStatus } from './ShellStatus.tsx'
 import { PreviewSwitch } from './PreviewSwitch.tsx'
 import { ShellDiagnostics } from './ShellDiagnostics.tsx'
@@ -197,6 +198,7 @@ export function SettingsPanel() {
           </section>
 
           <AppVersion className="settings__version mono" />
+          <OfflineStatus className="settings__offline" />
           <ShellStatus />
           <ShellDiagnostics />
         </div>,
