@@ -1190,6 +1190,37 @@
 /* Its panel (Schedule or Move, duration and the rest): a stylized stopwatch, square like ▶. */
 .todo-btn--menu { display: inline-grid; place-items: center; width: 32px; padding: 0; color: #fff; }
 .todo-btn--menu > svg { width: 19px; height: 19px; }
+/* ✎ Rename, while the row's panel is open: unfolds from a vertical line at ▶'s left edge, widening
+   to the left (the tools are right-aligned) into a square button, and folds back the same way.
+   Folded it takes no room: no width, no left border, the tools' gap cancelled. */
+.todo-btn--rename {
+  display: inline-grid;
+  place-items: center;
+  width: 0;
+  padding: 0;
+  margin-left: -4px;
+  overflow: hidden;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  color: #fff;
+  /* Folding: narrow back to the line, then the line fades. */
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1), margin-left 180ms cubic-bezier(0.4, 0, 0.2, 1), border-left-width 0s 170ms, opacity 90ms 170ms;
+}
+.todo-btn--rename > svg { flex: none; width: 15px; height: 15px; opacity: 0; transition: opacity 90ms; }
+.todo-btn--rename.is-shown {
+  width: 32px;
+  margin-left: 0;
+  border-left-width: 1.5px;
+  opacity: 1;
+  pointer-events: auto;
+  /* Unfolding: the line shows first, then widens to the left. */
+  transition: opacity 80ms, border-left-width 0s 80ms, width 220ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 220ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.todo-btn--rename.is-shown > svg { opacity: 1; transition: opacity 120ms 220ms; }
+@media (prefers-reduced-motion: reduce) {
+  .todo-btn--rename, .todo-btn--rename.is-shown, .todo-btn--rename > svg, .todo-btn--rename.is-shown > svg { transition: none; }
+}
 .todo-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
 /* Going into its box (domain/genie): over the row's name as it passes. */
 .todo-btn.is-genie { position: relative; z-index: 2; pointer-events: none; transform-origin: center; }

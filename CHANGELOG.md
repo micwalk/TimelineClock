@@ -25,7 +25,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   one line (each with its time under it) and, under them, the time entry's button and a box that says what it does, like the
   ringing card's snooze box ("Schedule [3p]", reading "at"/"in" as you type, its submit where it
   lands). Then the duration: lengths on one line and a "Takes [25m]" box. Then its stretches, and
-  Rename, Unschedule, Won't do, Delete. Open, one purple border runs round the row and its options,
+  Unschedule, with Won't do and the trash (in a red box) at the right. While it is open, a ✎ Rename
+  unfolds beside the green ▶, a vertical line widening to the left into the button. Open, one purple border runs round the row and its options,
   and the row takes a slight purple tint.
 
 ## 0.8.0 — 2026-11-22

@@ -7,7 +7,7 @@
 //   Unscheduled:  drag to reorder; Schedule on each.
 //   Done:         the last day's done, won't do and passed, newest first, "4 done today".
 // An open row has a green ▶ Start and its stopwatch button (its panel: Schedule or Move on top, then
-// its Duration, stretches, Rename, Unschedule, Won't do, Delete); a long-press on a todo chip's box
+// its Duration, stretches, Unschedule, Won't do, Delete; while it is open a ✎ Rename unfolds left of ▶); a long-press on a todo chip's box
 // finds its row here. A row's box is its Done (a done one's box opens it again); a tap on the row
 // goes to its instant on the timeline, or, unscheduled, opens its panel (the drawer stays). Copy states facts, never
 // judgements (config/labels TODO_COPY): "since 7:00a", "passed", "31m · planned 20m"; no red for
@@ -228,7 +228,7 @@ function StretchList({ todoId, startedId }: { todoId: string; startedId?: string
   )
 }
 
-function TodoPanel({ row, verb, onClose, onRename }: { row: TodoRow; verb: 'schedule' | 'reschedule' | null; onClose: () => void; onRename: () => void }) {
+function TodoPanel({ row, verb, onClose }: { row: TodoRow; verb: 'schedule' | 'reschedule' | null; onClose: () => void }) {
   // Worked on (a stretch saved, or counting): it can't stop being a todo.
   const worked = useEntities(s => hasStretches(instantsOf(todoIndex(s.instants), row.todo.id), s.spans, Date.now(), row.todo.startedId))
   const [confirm, setConfirm] = useState(false)
@@ -240,7 +240,6 @@ function TodoPanel({ row, verb, onClose, onRename }: { row: TodoRow; verb: 'sche
       {open && <LengthPick todoId={id} current={row.todo.durationMs ?? null} onClose={onClose} />}
       <StretchList todoId={id} startedId={row.todo.startedId} />
       <div className="todo-when__chips todo-when__actions">
-        <button type="button" className="alarm-link glow-box" onClick={() => { onRename(); onClose() }}><PencilIcon aria-hidden /> {TODO_UI.rename}</button>
         {/* Not a todo: its instant stays on the timeline as a plain one (alarms and all). */}
         {open && row.at && !worked && (
           <button type="button" className="alarm-link glow-box" onClick={() => { act.untodo(row.at!.id); onClose() }}
@@ -333,6 +332,12 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           )}
         </span>
         <span className="todo-row__tools" onClick={e => e.stopPropagation()}>
+          {/* Rename: only while its panel is open, left of ▶ (or Done). Always mounted, so it can
+              unfold: a vertical line that widens to the left into the button, and folds back. */}
+          <button type="button" className={`todo-btn todo-btn--rename glow-box${panel && !renaming ? ' is-shown' : ''}`}
+            aria-label={`${TODO_UI.rename}: ${name}`} title={TODO_UI.rename}
+            aria-hidden={!panel || renaming} tabIndex={panel && !renaming ? 0 : -1}
+            onClick={() => { setRenaming(true); setPanel(false) }}><PencilIcon aria-hidden /></button>
           {/* ▶ Start: it counts until its ⏸ or ✓ (from now; one not due yet moves to Now; a paused one goes on). */}
           {open && state !== 'counting' && (
             <button type="button" className="todo-btn todo-btn--start glow-box" aria-label={`${TODO_UI.start}: ${name}`} title={state === 'paused' ? TODO_UI.startAgainTitle : TODO_UI.startTitle}
@@ -353,7 +358,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           {drag && <span className="todo-row__grip" aria-label="Drag to reorder" onPointerDown={drag} data-no-pan><Bars2Icon aria-hidden /></span>}
         </span>
       </div>
-      {panel && <TodoPanel row={row} verb={verb} onClose={() => setPanel(false)} onRename={() => setRenaming(true)} />}
+      {panel && <TodoPanel row={row} verb={verb} onClose={() => setPanel(false)} />}
     </div>
   )
 })

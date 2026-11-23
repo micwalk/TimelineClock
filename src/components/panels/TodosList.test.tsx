@@ -75,6 +75,21 @@ describe('the Todos tab', () => {
     expect(useEntities.getState().instants.some(i => i.todo?.id === 't1' && i.todo.role === 'at')).toBe(false)
   })
 
+  it('its ✎ Rename shows only while its panel is open (left of ▶) and opens its name box', () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
+    const { container } = render(<TodosList />)
+    const pencil = container.querySelector('.todo-btn--rename')!
+    expect(pencil).not.toHaveClass('is-shown')
+    expect(pencil.getAttribute('aria-hidden')).toBe('true')
+    expect(pencil.nextElementSibling?.getAttribute('aria-label')).toBe('Start: Dishes')
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule and more' }))
+    expect(pencil).toHaveClass('is-shown')
+    expect(screen.queryByRole('button', { name: /^Rename$/ })).toBeNull() // not in the panel any more
+    fireEvent.click(screen.getByRole('button', { name: 'Rename: Dishes' }))
+    expect(screen.getByRole('textbox', { name: 'Todo name' })).toBeTruthy()
+    expect(pencil).not.toHaveClass('is-shown')
+  })
+
   it('its panel sets a duration from a short list, or none', () => {
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)
@@ -188,7 +203,7 @@ describe('Start and finding a todo', () => {
     })
     render(<TodosList />)
     const tools = screen.getByRole('button', { name: 'Start: Dishes' }).parentElement!
-    expect([...tools.children].map(c => c.getAttribute('aria-label') ?? c.textContent)).toEqual(['Start: Dishes', 'Schedule and more'])
+    expect([...tools.children].map(c => c.getAttribute('aria-label') ?? c.textContent)).toEqual(['Rename: Dishes', 'Start: Dishes', 'Schedule and more'])
     expect(screen.queryByRole('button', { name: 'Start: Laundry' })).toBeNull()
     fireEvent.click(screen.getAllByRole('button', { name: 'More' })[0])
     expect(screen.queryByRole('button', { name: /Not a todo/ })).toBeNull()
