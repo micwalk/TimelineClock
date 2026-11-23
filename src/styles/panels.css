@@ -642,8 +642,8 @@
    [20m]", "Snooze until [4p]"), its submit where it lands ("→ 10:41p"). */
 /* One row: the quick snooze, its landing under its name so the box has room beside it. */
 /* One box that reads as one sentence: "Snooze [5m] or 20m, 4p… [→ 10:41p]". The box has the card
-   buttons' corners (9px, as Dismiss); inside it "Snooze" is plain text, the quick snooze an inner
-   box right after it (a key, the Snooze 5m button's colours), the rest the see-through track to
+   buttons' corners (9px, as Dismiss); inside it the quick snooze is one inner key, "Snooze 5m"
+   with its landing under it (the Snooze 5m button's colours), the rest the see-through track to
    type in, and its submit a matching inner key once what's typed reads. Inner corners are the
    box's less its padding (6px), so the curves run together. */
 .snooze-row {
@@ -656,7 +656,6 @@
   height: 42px;
   margin-top: 8px;
   padding: var(--snooze-pad);
-  padding-left: 12px;
   border-radius: 9px;
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -664,7 +663,8 @@
 }
 .snooze-row:focus-within { border-color: var(--accent); }
 .snooze-row.is-invalid { border-color: var(--c-danger); }
-.snooze-row__label { flex: none; align-self: center; color: #fff; font: 700 14px/1 var(--font-ui); }
+/* With no quick snooze, the word stands there as text. */
+.snooze-row__label { flex: none; align-self: center; padding-left: 9px; color: #fff; font: 700 14px/1 var(--font-ui); }
 /* The quick snooze and the submit: inner keys. */
 .snooze-row__quick, .snooze-row__go {
   flex: none;
@@ -679,7 +679,7 @@
 .snooze-row__quick:hover, .snooze-row__go:hover { background: color-mix(in srgb, var(--accent) 62%, transparent); }
 .snooze-row__quick:active, .snooze-row__go:active { transform: scale(0.96); }
 .snooze-row__quick:focus-visible, .snooze-row__go:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
-.snooze-row__quick { display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 50px; padding: 0 9px; }
+.snooze-row__quick { display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 84px; padding: 0 10px; }
 .snooze-row__quick-text { font: 800 14px/1 var(--font-ui); white-space: nowrap; }
 .snooze-row__at { font: 600 10.5px/1 var(--font-mono); opacity: 0.8; }
 .snooze-row__go { padding: 0 10px; font: 700 13px/1 var(--font-mono); white-space: nowrap; animation: snooze-go-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1); }

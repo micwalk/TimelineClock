@@ -3,8 +3,8 @@
 //   Meeting                                 10:24p
 //   in 2:41                                          <- time to its instant, live
 //   [ Dismiss ]
-//   [ Snooze | 5m     | or 20m, 4p… | → 10:41 ]       <- components/panels/SnoozeRow: one control
-//              10:26
+//   [ [Snooze 5m] or 20m, 4p… [→ 10:41] ]            <- components/panels/SnoozeRow: one box
+//        10:26
 //   Until start · 10:24   ·   Dismiss all 3
 // Snooze 5m shows for a warning only while it still lands before the instant; Until start only
 // for a warning (it then takes the quick snooze's place if 5m doesn't fit); Dismiss all only when
@@ -81,12 +81,12 @@ function TodoCard({ alarm, todoId, chime = false }: { alarm: RingingAlarm; todoI
   // At its time, Snooze moves the todo itself (and its box takes a length, a time or "tomorrow");
   // a warning's snoozes are reminders before it (its box, a length).
   const snooze: SnoozeQuick | null = !warning
-    ? { text: ALARM_UI.snoozeQuick(SNOOZE_MINUTES), at: now + SNOOZE_MINUTES * MINUTE, run: () => act.snoozeTodo(key) }
+    ? { text: ALARM_UI.snooze(SNOOZE_MINUTES), at: now + SNOOZE_MINUTES * MINUTE, run: () => act.snoozeTodo(key) }
     : chime ? null
     : choices?.snooze
-    ? { text: ALARM_UI.snoozeQuick(SNOOZE_MINUTES), at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, SNOOZE_MINUTES) }
+    ? { text: ALARM_UI.snooze(SNOOZE_MINUTES), at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, SNOOZE_MINUTES) }
     : choices?.untilStart
-      ? { text: ALARM_UI.snoozeUntilStart, at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
+      ? { text: ALARM_UI.untilStart, at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
       : null
   const parse = !warning
     ? (text: string): SnoozeTyped | null => {
@@ -150,9 +150,9 @@ function PlainAlarmCard({ alarm }: { alarm: RingingAlarm }) {
     return typed && landing ? { ts: landing.ringTs, kind: 'for' } : null
   }
   const quick: SnoozeQuick | null = choices?.snooze
-    ? { text: ALARM_UI.snoozeQuick(SNOOZE_MINUTES), at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, SNOOZE_MINUTES) }
+    ? { text: ALARM_UI.snooze(SNOOZE_MINUTES), at: choices.snooze.ringTs, run: () => act.snoozeAlarm(key, SNOOZE_MINUTES) }
     : choices?.untilStart
-      ? { text: ALARM_UI.snoozeUntilStart, at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
+      ? { text: ALARM_UI.untilStart, at: choices.untilStart.ringTs, run: () => act.snoozeAlarmUntil(key, choices.untilStart!.ringTs) }
       : null
   const untilStartLink = choices?.snooze && choices.untilStart ? choices.untilStart : null
   const links = !!untilStartLink || (!!choices && choices.others > 0)

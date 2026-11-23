@@ -17,9 +17,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   seconds that brings it back), so it never loops.
 
 - **The Snooze row is one control** on a ringing card, one box that reads as one sentence:
-  "Snooze [5m] or 20m, 4p… [→ 11:30p]". 5m is a key inside it with where it lands under it; type
-  a length or a time after it ("until" shows before a time), and a matching key at the end says
-  where it lands.
+  "[Snooze 5m] or 20m, 4p… [→ 11:30p]". Snooze 5m is one key inside it with where it lands under
+  it; type a length or a time after it ("until" shows before a time), and a matching key at the
+  end says where it lands.
 - **Opening offline, more reliably** (in the Android app and as an installed web app): the app
   opens without the internet from a copy its service worker saves. If saving that copy failed
   once (the network dropped, or the app went to the background mid-download), the worker was

@@ -1,9 +1,10 @@
 // The ringing card's snooze row (owner, 2026-11-22): one box that reads as one sentence, with keys
 // inside it:
-//   [ Snooze [5m    ] or 20m, 4p…  [→ 10:41p] ]
-//             10:26p   (typed)      (once it reads)
-// "Snooze" is the verb for the row; the quick snooze is an inner key, its landing under it
-// ("until start" in its place for a warning 5m would take past its instant); the box takes a
+//   [ [Snooze 5m] or 20m, 4p…  [→ 10:41p] ]
+//      10:26p     (typed)      (once it reads)
+// The quick snooze is one inner key, "Snooze 5m" with its landing under it ("Until start" in its
+// place for a warning 5m would take past its instant; with neither, "Snooze" is plain text there);
+// the box takes a
 // length ("Snooze 20m") or a time ("Snooze until 4p": the word shows once a time is typed), and
 // its submit says where it lands. Plain alarms and todos share it: a todo's box takes what Move
 // (reschedule) does (a length, a time, "tomorrow"), so snoozing a todo and moving it are one thing.
@@ -30,14 +31,13 @@ export function SnoozeRow({ quick, parse, onTyped, tabIndex }: {
   return (
     <form className={`snooze-row glow-box${typed ? ' is-ready' : ''}${typing && !typed ? ' is-invalid' : ''}`} role="group" aria-label={ALARM_UI.snoozeLabel}
       onSubmit={e => { e.preventDefault(); if (typed) onTyped(typed.ts) }}>
-      <span className="snooze-row__label" aria-hidden>{ALARM_UI.snoozeLabel}</span>
-      {quick && (
+      {quick ? (
         <button type="button" className="snooze-row__quick" tabIndex={tabIndex} onClick={quick.run}
-          aria-label={`${ALARM_UI.snoozeLabel} ${quick.text}, ${ALARM_UI.lands(clock(quick.at))}`}>
+          aria-label={`${quick.text}, ${ALARM_UI.lands(clock(quick.at))}`}>
           <span className="snooze-row__quick-text">{quick.text}</span>
           <span className="snooze-row__at mono">{clock(quick.at)}</span>
         </button>
-      )}
+      ) : <span className="snooze-row__label" aria-hidden>{ALARM_UI.snoozeLabel}</span>}
       <label className="snooze-row__field">
         {typed?.kind === 'until' && <span className="snooze-row__word" aria-hidden>{ALARM_UI.until}</span>}
         <input
