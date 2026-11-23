@@ -1276,6 +1276,10 @@
 .todo-when .snooze-box__input { color: var(--ink); caret-color: var(--ink); }
 .todo-when .snooze-box__input::placeholder { color: var(--ink-faint); }
 .todo-when .snooze-box__go { background: color-mix(in srgb, var(--accent) 45%, transparent); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+/* Won't do and the trash, at the right end of the panel's last line. */
+.todo-when__end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.alarm-link--trash { --accent: var(--c-danger); width: 32px; padding: 0; justify-content: center; }
+.alarm-link--trash > svg { width: 15px; height: 15px; }
 .todo-when__actions { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 /* The time entry, in the panel rather than floating. */
 .todo-when .popover--inline { position: static; transform: none; margin: 0; }
@@ -1283,7 +1287,7 @@
 .alarm-link--quiet { border-color: transparent; color: var(--ink-dim); background: transparent; box-shadow: none; }
 /* Todo choices take the todo colour, not the alarm's. */
 .todo-when .alarm-custom__input:not([aria-invalid='true']) { border-color: var(--c-todo); }
-.todo-when .alarm-link:not(.alarm-link--danger), .alarm-card--todo .alarm-link:not(.alarm-link--quiet) { --accent: var(--c-todo); }
+.todo-when .alarm-link:not(.alarm-link--danger, .alarm-link--trash), .alarm-card--todo .alarm-link:not(.alarm-link--quiet) { --accent: var(--c-todo); }
 .alarm-link--danger { --accent: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 40%, transparent); color: #fff; }
 
 /* The capture box (N): over whatever is on screen, near the top, clear of the keyboard. */

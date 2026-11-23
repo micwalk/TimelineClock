@@ -247,10 +247,14 @@ function TodoPanel({ row, verb, onClose, onRename }: { row: TodoRow; verb: 'sche
             title={TODO_UI.notTodoTitle}><NotTodoIcon aria-hidden /> {TODO_UI.notTodo}</button>
         )}
         {verb === 'reschedule' && <button type="button" className="alarm-link glow-box" onClick={() => { act.backToList(id); onClose() }}>{TODO_UI.unschedule}</button>}
-        {open && <button type="button" className="alarm-link alarm-link--wont glow-box" onClick={() => { act.wontDoTodo(id); onClose() }}>{TODO_UI.wontDo}</button>}
-        {confirm
-          ? <button type="button" className="alarm-link alarm-link--danger glow-box" onClick={() => act.deleteTodo(id)}>{TODO_UI.deleteTodo}</button>
-          : <IconButton icon={TrashIcon} label={`${TODO_UI.deleteTodo} (tap again)`} color="var(--c-danger)" bare onClick={() => setConfirm(true)} />}
+        {/* Letting it go, at the right: Won't do, and the trash in a red box (a second tap deletes). */}
+        <span className="todo-when__end">
+          {open && <button type="button" className="alarm-link alarm-link--wont glow-box" onClick={() => { act.wontDoTodo(id); onClose() }}>{TODO_UI.wontDo}</button>}
+          {confirm
+            ? <button type="button" className="alarm-link alarm-link--danger glow-box" onClick={() => act.deleteTodo(id)}>{TODO_UI.deleteTodo}</button>
+            : <button type="button" className="alarm-link alarm-link--trash glow-box" aria-label={`${TODO_UI.deleteTodo} (tap again)`} title={TODO_UI.deleteTodo}
+              onClick={() => setConfirm(true)}><TrashIcon aria-hidden /></button>}
+        </span>
       </div>
     </div>
   )
