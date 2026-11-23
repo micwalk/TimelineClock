@@ -24,7 +24,7 @@ describe('the Todos tab', () => {
     fireEvent.submit(box)
     expect(useEntities.getState().todos).toMatchObject([{ label: 'Book appointment', status: 'open' }])
     expect(screen.getByText('Unscheduled')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Schedule' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Schedule and more' })).toBeTruthy()
   })
 
   it('shows what it read as you type, its duration with a stopwatch', () => {
@@ -55,15 +55,35 @@ describe('the Todos tab', () => {
     expect(screen.getByRole('button', { name: /In 1h/ })).toBeTruthy()
   })
 
-  it('its ⋯ sets a duration from a short list, or none', () => {
+  it('its stopwatch button opens one panel: Schedule on top, a box that says what it does, then its duration', () => {
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)
-    fireEvent.click(screen.getByRole('button', { name: 'More' }))
-    expect(screen.getByRole('textbox', { name: 'Duration' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule and more' }))
+    expect(screen.getByRole('button', { name: /In 1h/ })).toBeTruthy()
+    const box = screen.getByRole('textbox', { name: 'Schedule' })
+    fireEvent.change(box, { target: { value: '11:58pm' } })
+    expect(screen.getByRole('textbox', { name: 'Schedule at' })).toBeTruthy()
+    fireEvent.change(box, { target: { value: '20' } })
+    expect(screen.getByRole('textbox', { name: 'Schedule in' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Schedule: / }))
+    const at = useEntities.getState().instants.find(i => i.todo?.id === 't1')!
+    expect(Math.abs(at.tsEpochMs - (Date.now() + 20 * MINUTE))).toBeLessThan(5000)
+    // Scheduled, the same button moves it, and its panel can unschedule it.
+    fireEvent.click(screen.getByRole('button', { name: 'Move and more' }))
+    expect(screen.getByRole('textbox', { name: 'Move' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Unschedule' }))
+    expect(useEntities.getState().instants.some(i => i.todo?.id === 't1' && i.todo.role === 'at')).toBe(false)
+  })
+
+  it('its panel sets a duration from a short list, or none', () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule and more' }))
+    expect(screen.getByRole('textbox', { name: 'Takes' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '30m' }))
     expect(entities.getTodo('t1')!.durationMs).toBe(30 * MINUTE)
     expect(screen.getByLabelText('takes 30m')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule and more' }))
     expect(screen.getByRole('button', { name: '30m' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'No duration' }))
     expect(entities.getTodo('t1')!.durationMs).toBeUndefined()
@@ -168,7 +188,7 @@ describe('Start and finding a todo', () => {
     })
     render(<TodosList />)
     const tools = screen.getByRole('button', { name: 'Start: Dishes' }).parentElement!
-    expect([...tools.children].map(c => c.getAttribute('aria-label') ?? c.textContent)).toEqual(['Schedule', 'Start: Dishes', 'More'])
+    expect([...tools.children].map(c => c.getAttribute('aria-label') ?? c.textContent)).toEqual(['Start: Dishes', 'Schedule and more'])
     expect(screen.queryByRole('button', { name: 'Start: Laundry' })).toBeNull()
     fireEvent.click(screen.getAllByRole('button', { name: 'More' })[0])
     expect(screen.queryByRole('button', { name: /Not a todo/ })).toBeNull()

@@ -19,6 +19,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 - **A focused instant shows its whole name**: a long one wraps into a taller chip (up to six
   lines) instead of ending in "…"; the chips around it, and its tools, keep clear of it.
   Renaming an instant's chip wraps the same way.
+- **One button for a todo's time and the rest**: a Todos row's **Schedule** (or **Move**) and its
+  **⋯** are now one stopwatch button. Its panel has Schedule (or Move) on top: the quick times on
+  one line (each with its time under it) and, under them, a box that says what it does, like the
+  ringing card's snooze box ("Schedule [3p]", reading "at"/"in" as you type, its submit where it
+  lands). Then the duration: lengths on one line and a "Takes [25m]" box. Then its stretches, and
+  Rename, Unschedule, Won't do, Delete.
 
 ## 0.8.0 — 2026-11-22
 

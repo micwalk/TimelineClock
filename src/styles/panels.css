@@ -1187,6 +1187,9 @@
 /* Counting: ⏸ Pause (the todo colour) and Done (green, as its box goes). */
 .todo-btn--pause { --accent: var(--c-todo); display: inline-grid; place-items: center; width: 32px; padding: 0; background: color-mix(in srgb, var(--c-todo) 35%, transparent); color: #fff; }
 .todo-btn--pause > svg { width: 15px; height: 15px; }
+/* Its panel (Schedule or Move, duration and the rest): a stylized stopwatch, square like ▶. */
+.todo-btn--menu { display: inline-grid; place-items: center; width: 32px; padding: 0; color: #fff; }
+.todo-btn--menu > svg { width: 19px; height: 19px; }
 .todo-btn--done { --accent: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 35%, transparent); color: #fff; }
 /* Going into its box (domain/genie): over the row's name as it passes. */
 .todo-btn.is-genie { position: relative; z-index: 2; pointer-events: none; transform-origin: center; }
@@ -1228,29 +1231,33 @@
 /* How long it takes: a stopwatch and the length. */
 .todo-dur { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .todo-dur__icon { flex: none; width: 13px; height: 13px; color: var(--c-todo); }
-/* The ⋯ menu's Duration: quick lengths ("—" is none), then a typed one. */
+/* The panel's Duration: quick lengths ("—" is none) on one line, then "Takes [25m]". */
 .todo-dur-pick { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 .todo-dur-pick__label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-dim); font: 700 12px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; }
 .todo-dur-pick__label .todo-dur__icon { width: 14px; height: 14px; }
 .todo-dur-pick .alarm-link { min-width: 40px; justify-content: center; }
-/* The quick lengths are one line: none, 5m, 15m, 30m, 1h. */
-.todo-dur-pick .todo-when__chips { flex-wrap: nowrap; }
-.todo-dur-pick .todo-when__chips .alarm-link { flex: 1 1 0; }
 .todo-dur-pick .alarm-link.is-on { background: color-mix(in srgb, var(--c-todo) 50%, transparent); color: #fff; }
-.todo-dur-pick__typed { display: contents; }
-.todo-dur-pick__typed > span { color: var(--ink-dim); font: 600 13px/1 var(--font-ui); }
-.todo-dur-pick .todo-when__typed { grid-template-columns: auto minmax(0, 1fr) auto; }
 .todo-row.is-celebrating { animation: todo-flare 1200ms ease-out 1; }
 @keyframes todo-flare {
   0% { box-shadow: 0 0 calc(26px * var(--glow)) var(--c-ok); filter: brightness(1.8); }
   100% { filter: none; }
 }
 
-/* Schedule / Later and the row's other tools, under the row. */
-.todo-when { --accent: var(--c-todo); display: flex; flex-direction: column; gap: 6px; margin: -2px 6px 4px; padding: 8px; border-radius: 10px; background: var(--box-bg-strong); }
+/* A row's panel (its stopwatch button), under the row: Schedule or Move, Duration, stretches, the rest. */
+.todo-when { --accent: var(--c-todo); display: flex; flex-direction: column; gap: 6px; max-width: 520px; margin: -2px 6px 4px; padding: 8px; border-radius: 10px; background: var(--box-bg-strong); }
 .todo-when__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .todo-when__chips svg { width: 14px; height: 14px; }
-.todo-when__typed { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+/* A pick's presets: always one line, sharing it evenly (a quick time's own time under its name). */
+.todo-when__line { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.todo-when__line > .alarm-link { flex: 1 1 0; min-width: 0; justify-content: center; padding-inline: 4px; }
+.todo-when__line > .icon-btn { flex: none; align-self: center; }
+.todo-when__line svg { width: 14px; height: 14px; }
+.todo-when__line > .icon-btn > svg { width: 20px; height: 20px; }
+.todo-when__quick { display: inline-grid; place-content: center; gap: 2px; height: auto; min-height: 36px; padding-block: 4px; line-height: 1; white-space: nowrap; }
+.todo-when__quick .alarm-link__at { font-size: 11px; }
+/* Its boxes say what they do ("Schedule [3p]", "Takes [25m]"), as the ringing card's snooze box, in the todo colour. */
+.todo-when .snooze-box { --accent: var(--c-todo); flex: none; }
+.todo-when__actions { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 /* The time entry, in the panel rather than floating. */
 .todo-when .popover--inline { position: static; transform: none; margin: 0; }
 .todo-more-btn { align-self: flex-start; }

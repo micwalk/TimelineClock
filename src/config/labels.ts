@@ -83,6 +83,19 @@ export const TODO_UI = {
   duration: 'Duration',
   noDuration: 'No duration',
   more: 'More',
+  /** A Todos row's stopwatch button: its panel (Schedule or Move on top, its length, and the rest). */
+  menu: (verb: string) => `${verb} and more`,
+  menuTitle: (verb: string) => `${verb}, duration, rename and more`,
+  /** The panel's when box: "Schedule [3p]", then "in" (a length) or "at" (a time) once typed. */
+  whenIn: 'in',
+  whenAt: 'at',
+  whenGo: (at: string) => `→ ${at}`,
+  whenGoLabel: (verb: string, at: string) => `${verb}: ${at}`,
+  /** The panel's length box: "Takes [25m]". */
+  takes: 'Takes',
+  lengthPlaceholder: '25m, 1h15',
+  lengthGo: (len: string) => `→ ${len}`,
+  lengthGoLabel: (len: string) => `Takes ${len}`,
   openAgain: 'Open it again',
   set: 'Set',
   ok: 'OK',
@@ -92,7 +105,7 @@ export const TODO_UI = {
   sections: { active: 'Active', now: 'Now', today: 'Today', upcoming: 'Upcoming', unscheduled: 'Unscheduled', done: 'Done' },
   addPlaceholder: 'Add a todo… (laundry 4p 20m)',
   addLabel: 'Add a todo: a name, and maybe a time, a length or a repeat',
-  whenPlaceholder: 'When… 3p, 1h30, tomorrow 9a',
+  whenPlaceholder: '3p, 1h30, tomorrow',
   pickTime: 'Pick a time and date',
   /** Tooltips. */
   startTitle: 'Start: it counts from now until you tap ✓',

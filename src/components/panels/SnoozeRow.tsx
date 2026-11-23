@@ -2,9 +2,9 @@
 // beside it a box that says what it does ("Snooze for [20m]", "Snooze until [4p]" once a time is
 // typed), its submit the landing ("→ 10:41p"). Plain alarms and todos share it: a todo's box
 // takes what Move (reschedule) does (a length, a time, "tomorrow"), so snoozing a todo and moving it are one thing.
-import { useState } from 'react'
 import { formatClockCompact } from '../../domain/format.ts'
 import { ALARM_UI } from '../../config/labels.ts'
+import { PhraseBox } from '../common/PhraseBox.tsx'
 
 const clock = (ts: number) => formatClockCompact(ts, false)
 
@@ -18,14 +18,6 @@ export function SnoozeRow({ quick, parse, onTyped, tabIndex }: {
   onTyped: (ts: number) => void
   tabIndex?: number
 }) {
-  const [text, setText] = useState('')
-  const typed = text.trim() ? parse(text) : null
-  // The whole phrase while empty ("Snooze for"); once typing, it has said what it does and gives
-  // the room to the text ("for", "until").
-  const word = text.trim()
-    ? (typed?.kind === 'until' ? ALARM_UI.until : ALARM_UI.for)
-    : ALARM_UI.snoozeFor
-  const name = typed?.kind === 'until' ? ALARM_UI.snoozeUntil : ALARM_UI.snoozeFor
   return (
     <div className="snooze-row">
       {quick && (
@@ -33,28 +25,18 @@ export function SnoozeRow({ quick, parse, onTyped, tabIndex }: {
           {quick.text} <span className="alarm-btn__at">{clock(quick.at)}</span>
         </button>
       )}
-      <form className={`snooze-box glow-box${typed ? ' is-ready' : ''}`} onSubmit={e => { e.preventDefault(); if (typed) onTyped(typed.ts) }}>
-        <label className="snooze-box__field">
-          <span className="snooze-box__word" aria-hidden>{word}</span>
-          <input
-            aria-label={name}
-            className="snooze-box__input mono"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setText('') }}
-            placeholder={ALARM_UI.snoozePlaceholder}
-            aria-invalid={text.trim() !== '' && !typed}
-            enterKeyHint="done"
-            autoComplete="off"
-            tabIndex={tabIndex}
-          />
-        </label>
-        {typed && (
-          <button type="submit" className="snooze-box__go" tabIndex={tabIndex} aria-label={ALARM_UI.snoozeGoLabel(clock(typed.ts))}>
-            {ALARM_UI.snoozeGo(clock(typed.ts))}
-          </button>
-        )}
-      </form>
+      {/* The whole phrase while empty ("Snooze for"); once typing, it has said what it does and
+          gives the room to the text ("for", "until"). */}
+      <PhraseBox<SnoozeTyped>
+        word={(typing, read) => (typing ? (read?.kind === 'until' ? ALARM_UI.until : ALARM_UI.for) : ALARM_UI.snoozeFor)}
+        name={read => (read?.kind === 'until' ? ALARM_UI.snoozeUntil : ALARM_UI.snoozeFor)}
+        placeholder={ALARM_UI.snoozePlaceholder}
+        parse={parse}
+        go={read => ALARM_UI.snoozeGo(clock(read.ts))}
+        goLabel={read => ALARM_UI.snoozeGoLabel(clock(read.ts))}
+        onSubmit={read => onTyped(read.ts)}
+        tabIndex={tabIndex}
+      />
     </div>
   )
 }
