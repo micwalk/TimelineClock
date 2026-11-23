@@ -18,7 +18,8 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   a one-line field running off the side.
 - **A focused instant shows its whole name**: a long one wraps into a taller chip (up to six
   lines) instead of ending in "…"; the chips around it, and its tools, keep clear of it.
-  Renaming an instant's chip wraps the same way.
+  Renaming an instant's chip wraps the same way. Under its time it shows how far it is from Now
+  ("20m ago", "in 1h 5m").
 - **One button for a todo's time and the rest**: a Todos row's **Schedule** (or **Move**) and its
   **⋯** are now one stopwatch button. Its panel has Schedule (or Move) on top: the quick times on
   one line (each with its time under it) and, under them, a box that says what it does, like the

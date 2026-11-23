@@ -218,6 +218,8 @@
 }
 .chip__time { font: 700 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .chip__rel { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); }
+/* A focused chip: its time, and under it how far it is from Now. */
+.chip__when { display: inline-grid; justify-items: start; gap: 3px; }
 /* Tools hang off the chip's right edge, so a selected chip stays centered on its line and the layout measures the chip alone. */
 .tl-col__tools {
   position: absolute;
