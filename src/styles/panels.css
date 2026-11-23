@@ -653,8 +653,8 @@
   height: 36px;
   border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 9px;
-  /* The Snooze 5m button's colours (alarm-btn--snooze), a shade darker where you type. */
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  /* The Snooze 5m button's border and colour, but see-through where you type (its submit keeps the full colour). */
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   overflow: hidden;
 }
 .snooze-box:focus-within { border-color: var(--accent); }
