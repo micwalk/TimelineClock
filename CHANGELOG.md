@@ -9,7 +9,12 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 ## 0.8.1 — 2026-11-22
 
-**Android app: web only.**
+**Android app: install again** (only for its offline page, below; the rest is web).
+
+- **No false "Can't reach the site"** (Android app): the app's first load at startup could fail
+  offline even with a copy saved, which Retry then opened. The page now retries once by itself
+  at once, and says it can't reach the site only when that fails too (a retry within 15
+  seconds that brings it back), so it never loops.
 
 - **Opening offline, more reliably** (in the Android app and as an installed web app): the app
   opens without the internet from a copy its service worker saves. If saving that copy failed

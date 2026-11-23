@@ -26,15 +26,30 @@
   </style>
 </head>
 <body>
-  <main>
+  <!-- Hidden until a retry has failed too: the app's first load at startup can fail where a
+       second one, served by the site's saved copy (its service worker), works. -->
+  <main id="message" hidden>
     <h1>Can't reach the site</h1>
     <p>Timeline Clock loads from timelineclockapp.netlify.app. Check your connection, then try again.
       Alarms you already set still ring.</p>
     <button type="button" id="retry">Retry</button>
   </main>
   <script>
+    var SITE = 'https://timelineclockapp.netlify.app/'
+    var KEY = 'tc.offline.retriedAt'
+    // A retry this recent that brought us back here: it really can't be reached, so say so.
+    var RECENT_MS = 15000
+    var retriedAt = null
+    try { retriedAt = Number(sessionStorage.getItem(KEY) || 0) } catch (e) { /* no storage: never retry by itself */ }
+    if (retriedAt !== null && Date.now() - retriedAt > RECENT_MS) {
+      // Once by itself, at once: the app's first load can fail where the saved copy then opens.
+      try { sessionStorage.setItem(KEY, String(Date.now())) } catch (e) { /* ignore */ }
+      window.location.replace(SITE)
+    } else {
+      document.getElementById('message').hidden = false
+    }
     document.getElementById('retry').addEventListener('click', function () {
-      window.location.href = 'https://timelineclockapp.netlify.app/'
+      window.location.href = SITE
     })
   </script>
 </body>
