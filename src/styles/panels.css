@@ -1269,6 +1269,13 @@
 .todo-when__quick .alarm-link__at { font-size: 11px; }
 /* Its boxes say what they do ("Schedule [3p]", "Takes [25m]"), as the ringing card's snooze box, in the todo colour. */
 .todo-when .snooze-box { --accent: var(--c-todo); flex: none; }
+/* Quieter than the ringing card's: a darker box, its word dim; the submit keeps the colour. */
+.todo-when .snooze-box { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-solid)); box-shadow: none; }
+.todo-when .snooze-box:focus-within { border-color: var(--accent); }
+.todo-when .snooze-box__word { color: var(--ink-dim); font-weight: 650; }
+.todo-when .snooze-box__input { color: var(--ink); caret-color: var(--ink); }
+.todo-when .snooze-box__input::placeholder { color: var(--ink-faint); }
+.todo-when .snooze-box__go { background: color-mix(in srgb, var(--accent) 45%, transparent); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .todo-when__actions { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--c-todo) 25%, transparent); }
 /* The time entry, in the panel rather than floating. */
 .todo-when .popover--inline { position: static; transform: none; margin: 0; }
