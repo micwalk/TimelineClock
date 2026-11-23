@@ -850,8 +850,10 @@
 .span-chip__stop { width: 14px; height: 14px; color: var(--accent); filter: drop-shadow(0 0 calc(4px * var(--glow)) var(--accent)); }
 /* A button at the chip's right end, drawn inside its box (the stop): the chip makes room for it. */
 .tl-lane__chip-row { position: relative; }
-/* The lap (pin) and the stop: the chip makes room for both. */
-.span-chip.has-end { padding-right: 60px; }
+/* The stop (or a todo's ✓) at the right end: the chip makes room for it. The lap (or ⏸) sits
+   inside, left of the time, so the two are apart. */
+.span-chip.has-end { padding-right: 32px; }
+.span-chip__text > .span-chip__end-btn { flex: none; margin: 0 1px; }
 .tl-lane__chip-end { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
 .span-chip__end-btn {
   display: grid;

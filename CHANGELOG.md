@@ -16,6 +16,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   at once, and says it can't reach the site only when that fails too (a retry within 15
   seconds that brings it back), so it never loops.
 
+- **A favorite's lane chip** has its two buttons apart: the lap (or a todo's ⏸) left of the time,
+  the stop (or ✓) at the right end ("★ Rice on 📍 12:03 ■").
+- **A selected chip's tools draw over the chips under them** instead of pushing them aside.
 - **The Snooze row is one control** on a ringing card, one box that reads as one sentence:
   "[Snooze 5m] or 20m, 4p… [→ 11:30p]". Snooze 5m is one key inside it with where it lands under
   it; type a length or a time after it ("until" shows before a time), and a matching key at the

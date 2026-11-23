@@ -18,7 +18,7 @@ import { getTunables, useSettings } from '../../store/settings.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL, verticalCrossBudget } from './geometry.ts'
 import type { PushBox } from '../../domain/pushClear.ts'
 import { pushClear } from '../../domain/pushClear.ts'
-import { hasArmedAlarm, openAlarms, parseRingKey, ringKey } from '../../domain/alarms.ts'
+import { hasArmedAlarm, parseRingKey, ringKey } from '../../domain/alarms.ts'
 import { bellItemId, bellsToShow } from '../../domain/bells.ts'
 import type { Stage, Visibility } from '../../domain/displayGroups.ts'
 import { groupVisibility, markFade, recurringGroupOf, stageAt } from '../../domain/displayGroups.ts'
@@ -37,51 +37,33 @@ export const CULL_MARGIN_PX = 400
 export const CHIP_HEIGHT = 28
 /** Horizontal: a chip being named shows its time in a box under it (.tl-col__below), this much taller. */
 export const EDIT_TIME_EXTRA = 26
-/** A chip's tool buttons (InstantColumns: .icon-btn 26px, 3px apart), and the gap to the chip: a row under it (beside it while moving in horizontal). */
+/** Vertical: a chip being named has a row under it (its time, and its tools) this much taller (a tool button 26px and its gap). */
 const TOOL_SIZE = 26
-const TOOL_GAP = 3
 const TOOLS_GAP_BELOW = 4
-const TOOLS_GAP_BESIDE = 6
 
-/** How many tool buttons a chip shows (as InstantColumns draws them): selected, or moving. */
-export function chipToolCount(i: InstantRecord, o: { selected: boolean; focused: boolean; moving: boolean; now: number; selectedBell?: string | null }): number {
-  if (o.moving) return 3 // type the time, confirm, cancel
-  // A bell on the chip (at the instant, or folded in), selected: its tools instead (type the offset, sound, delete).
-  if (o.selectedBell && i.alarms?.some(a => a.id === o.selectedBell)) return BELL_TOOLS
-  if (!o.selected) return 0
-  // Favorite, add an alarm (ahead only), cancel alarms (any unanswered), repeat, move (focused), hide (not with an alarm to ring), delete.
-  return Number(!i.favorite) + Number(i.tsEpochMs >= o.now) + Number(openAlarms(i).length > 0) + 1 + Number(o.focused) + Number(!hasArmedAlarm(i, o.now)) + 1
-}
-
-/** A bell before its instant (BellMarker): its button, and its tools (type the offset, sound, delete) while selected. */
+/** A bell before its instant (BellMarker): its button (its tools, while selected, take no room). */
 export const BELL_SIZE = 26
-const BELL_TOOLS = 3
 
-/** A bell's box: the bell, and its tools under it while selected. */
-function bellExtent(selected: boolean, vertical: boolean): { mainExtent: number; crossExtent: number; tail?: number } {
-  const toolsWidth = BELL_TOOLS * TOOL_SIZE + (BELL_TOOLS - 1) * TOOL_GAP
-  const row = TOOLS_GAP_BELOW + TOOL_SIZE
-  if (vertical) return selected ? { mainExtent: CHIP_HEIGHT, crossExtent: Math.max(BELL_SIZE, toolsWidth), tail: row } : { mainExtent: CHIP_HEIGHT, crossExtent: BELL_SIZE }
-  return selected ? { mainExtent: Math.max(BELL_SIZE, toolsWidth), crossExtent: CHIP_HEIGHT + row } : { mainExtent: BELL_SIZE, crossExtent: CHIP_HEIGHT }
+/** A bell's box: the bell alone. Its tools (while selected) draw over whatever is under them and take no room (owner 2026-11-22). */
+function bellExtent(vertical: boolean): { mainExtent: number; crossExtent: number } {
+  return vertical ? { mainExtent: CHIP_HEIGHT, crossExtent: BELL_SIZE } : { mainExtent: BELL_SIZE, crossExtent: CHIP_HEIGHT }
 }
 
 /** Whether a chip's tools sit in the row under it (.tl-col__below): always, but beside a moving chip in horizontal (its "Moving" badge is under it). */
 export const chipToolsBelow = (o: { moving: boolean; vertical: boolean }) => o.vertical || !o.moving
 
 /**
- * The room a chip's tools take: the row under the chip (the tools, and the time while renaming)
- * is `tail` along the time axis in vertical and `below` across it in horizontal; tools beside a
- * moving chip in horizontal are `tail`. `toolsWidth` is the tools' own width.
+ * The room the row under a chip takes in the layout: only the time shown while it is being named
+ * (`tail` along the time axis in vertical, `below` across it in horizontal). Its tools take none:
+ * they draw over the chips under them, never pushing them aside (owner 2026-11-22). `toolsWidth`
+ * is always 0 here (kept so callers read one shape).
  */
 export function chipToolsExtent(
-  i: InstantRecord,
+  _i: InstantRecord,
   o: { selected: boolean; focused: boolean; moving: boolean; editing: boolean; now: number; vertical: boolean; selectedBell?: string | null },
 ): { tail: number; below: number; toolsWidth: number } {
-  const tools = chipToolCount(i, o)
-  const toolsWidth = tools > 0 ? tools * TOOL_SIZE + (tools - 1) * TOOL_GAP : 0
-  const row = tools > 0 && chipToolsBelow(o) ? TOOLS_GAP_BELOW + TOOL_SIZE : o.editing ? (o.vertical ? TOOLS_GAP_BELOW + TOOL_SIZE : EDIT_TIME_EXTRA) : 0
-  if (o.vertical) return { tail: row, below: 0, toolsWidth }
-  return { tail: tools > 0 && !chipToolsBelow(o) ? TOOLS_GAP_BESIDE + toolsWidth : 0, below: row, toolsWidth }
+  const row = o.editing ? (o.vertical ? TOOLS_GAP_BELOW + TOOL_SIZE : EDIT_TIME_EXTRA) : 0
+  return o.vertical ? { tail: row, below: 0, toolsWidth: 0 } : { tail: 0, below: row, toolsWidth: 0 }
 }
 export const CLUSTER_WIDTH = 46
 export const FOLD_BADGE_WIDTH = 34
@@ -448,7 +430,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       items.push({
         id: bellItemId(b.alarm.id),
         pos: f.pos(b.ringTs) - originPos,
-        ...bellExtent(c.selectedBell === b.alarm.id, vertical),
+        ...bellExtent(vertical),
         priority: 3.5,
         pinned: true,
       })
