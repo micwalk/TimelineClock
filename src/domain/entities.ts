@@ -31,6 +31,8 @@ export interface InstantRecord {
   visibility?: Visibility
   /** At a sunrise or sunset (domain/sunEvents): it follows the sun while it stays there (isAtSun). */
   sun?: SunAnchor
+  /** Made by a todo (domain/todos): which one, and its part (`at`: when it is to be done; `done`: where it was). */
+  todo?: TodoLink
   /**
    * A virtual instant: computed, never stored. A repeat's occurrence past the horizon (domain/series
    * virtualOccurrences) or a sunrise or sunset (domain/sunEvents). Selected or focused, it is held
@@ -38,6 +40,20 @@ export interface InstantRecord {
    * makes it real (saved, same id).
    */
   virtual?: true
+}
+
+/** A todo's instants, by their part (domain/todos): `start` and `pause` are Phase 3's (time tracking). */
+export type TodoRole = 'at' | 'was' | 'done' | 'start' | 'pause'
+const TODO_ROLES: readonly string[] = ['at', 'was', 'done', 'start', 'pause'] satisfies TodoRole[]
+
+/** On an instant a todo made: which todo, and its part. */
+export interface TodoLink { id: string; role: TodoRole }
+
+/** A todo link from untrusted JSON, or undefined. */
+export function sanitizeTodoLink(raw: unknown): TodoLink | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  return typeof r.id === 'string' && r.id && typeof r.role === 'string' && TODO_ROLES.includes(r.role) ? { id: r.id, role: r.role as TodoRole } : undefined
 }
 
 /** The instants that are stored: without virtual ones held while selected or focused (the same list when there are none). */
@@ -122,10 +138,12 @@ export function sanitizeInstants(data: unknown): InstantRecord[] {
   return data
     .filter((x): x is InstantRecord => !!x && typeof x.id === 'string' && typeof x.tsEpochMs === 'number' && Number.isFinite(x.tsEpochMs))
     .map(x => {
-      const { alarm, alarms, sun, createdAt, visibility, collectionId, ...rest } = x as InstantRecord & { alarm?: unknown }
+      const { alarm, alarms, sun, createdAt, visibility, collectionId, todo, ...rest } = x as InstantRecord & { alarm?: unknown }
       const list = alarms !== undefined ? sanitizeAlarms(alarms) : alarm === true ? [{ id: legacyAlarmId(x.id), offsetMs: 0 }] : []
       const anchor = sanitizeSunAnchor(sun)
+      const link = sanitizeTodoLink(todo)
       return { ...rest, label: typeof x.label === 'string' ? x.label : '', ...(list.length > 0 ? { alarms: list } : {}), ...(anchor ? { sun: anchor } : {}),
+        ...(link ? { todo: link } : {}),
         ...(typeof createdAt === 'number' && Number.isFinite(createdAt) ? { createdAt } : {}),
         ...(typeof collectionId === 'string' && collectionId && collectionId !== 'default' ? { collectionId } : {}),
         ...(sanitizeVisibility(visibility) ? { visibility: sanitizeVisibility(visibility)! } : {}) }

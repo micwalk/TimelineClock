@@ -12,6 +12,7 @@
 //                                                            other adds a −20m (and a fresh box)
 //   SOUND    (Classic)(Beacon)(Marimba)(Klaxon)(Glass · chime) ← its alarms' sound (domain/sounds)
 //   NAME     [ optional ]
+//   TODO     [Todo]  Takes [ 20m ]                         ← a todo (docs/prd_todos.md): it asks Done when it rings
 //   [            Set alarm · Tue 7:00a            ]
 //
 // On a wide screen it opens from the button. On a phone (vertical, or a narrow window), or opened
@@ -30,7 +31,8 @@ import type { Repeat } from '../../domain/series.ts'
 import { clockKey, dateKey, describeRepeat, nextOccurrence } from '../../domain/series.ts'
 import type { GeoPoint, SunEvent } from '../../domain/sun.ts'
 import { SUN_EVENTS, nextSunEvent, sunEventName, sunEventOnDay } from '../../domain/sun.ts'
-import { formatClockCompact, formatRelativeShort } from '../../domain/format.ts'
+import { formatClockCompact, formatDuration, formatRelativeShort } from '../../domain/format.ts'
+import { parseTimerInput } from '../../domain/quickCreate.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useQuick } from '../../store/quick.ts'
 import { useSettings } from '../../store/settings.ts'
@@ -40,6 +42,7 @@ import * as act from '../../store/actions.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
 import { RepeatPicker } from '../common/RepeatPicker.tsx'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
+import { StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import type { AlarmSound } from '../../domain/sounds.ts'
 import { CtlButton } from './CtlButton.tsx'
 
@@ -130,13 +133,17 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   /** A one-off alarm's day ("YYYY-MM-DD"); empty = today or tomorrow, whichever comes first. */
   const [date, setDate] = useState('')
   const [sound, setSound] = useState<AlarmSound>(ringDefaults.sound)
+  /** A todo (the Todo switch, off by default), and how long it takes (optional). */
+  const [todo, setTodo] = useState(false)
+  const [takes, setTakes] = useState('')
   const seeded = useRef<string | null>(null)
   const close = () => {
     ui.setAlarmMenu(false); setText(''); setPm(null); setRepeat(null); setWarnings([]); setOnTime(true); setExtras([]); setOther(''); setLabel(''); setDate(''); setSound(ringDefaults.sound)
+    setTodo(false); setTakes('')
     seeded.current = null
   }
   /** Fills the form in: a series being edited, or a recent alarm. */
-  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string; sun?: SunEvent; sound?: AlarmSound }) => {
+  const fill = (a: { time: string; repeat: Repeat | null; warnings: number[]; onTime: boolean; label: string; sun?: SunEvent; sound?: AlarmSound; todo?: { durationMs?: number } }) => {
     const [h, m] = a.time.split(':').map(Number)
     setText(a.sun ? sunEventName(a.sun) : `${h % 12 || 12}:${String(m).padStart(2, '0')}`)
     setPm(h >= 12)
@@ -147,6 +154,8 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
     setLabel(a.label)
     setDate('')
     setSound(a.sound ?? ringDefaults.sound)
+    setTodo(!!a.todo)
+    setTakes(a.todo?.durationMs ? formatDuration(a.todo.durationMs, { exact: true }) : '')
   }
   // Start from what is being edited, else from the defaults (Settings > Alarms), once per opening.
   const seedKey = editing?.id ?? 'new'
@@ -197,14 +206,16 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
   // A length still in "other" counts as picked (Set may be tapped without leaving the box).
   const allWarnings = otherMs !== null && !warnings.includes(otherMs) ? [...warnings, otherMs] : warnings
   const rings = pickerOffsets(allWarnings, onTime)
+  const takesMs = takes.trim() ? parseTimerInput(takes) : null
+  const todoPart = todo ? { durationMs: takesMs ?? undefined } : undefined
 
   const set = (e?: FormEvent) => {
     e?.preventDefault()
     // A repeat may have no alarm (made with the ⟳ tool); a new alarm must ring.
     if (!time || ring === null || (!editing && rings.length === 0)) return
     const anchor = sun ? { event: sun.event, lat: sun.loc.lat, lon: sun.loc.lon } : undefined
-    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings, sun: anchor, sound })
-    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime, sound, ...(sun ? { sun: sun.event } : {}) })
+    if (editing) act.updateSeries(editing.id, { label: label.trim(), time, repeat: repeat ?? editing.repeat, alarms: rings, sun: anchor, sound, todo: todoPart })
+    else act.setAlarm({ time, at: ring, repeat, warnings: allWarnings, label: label.trim(), onTime, sound, ...(sun ? { sun: sun.event } : {}), ...(todoPart ? { todo: todoPart } : {}) })
     close()
   }
   /** A recent alarm fills the form in (nothing is set until Set): change what you like first. */
@@ -298,6 +309,19 @@ export function AlarmButton({ style }: { style?: CSSProperties }) {
       ))}
       {section('Sound', <SoundChips value={sound} onChange={setSound} label="What it sounds like" />, <SoundSettingsButton onLeave={close} />)}
       {section('Name', <input className="alarm-pick__name" aria-label="Name (optional)" placeholder="Optional" value={label} onChange={e => setLabel(e.target.value)} autoComplete="off" />)}
+      {section('Todo', (
+        <div className="alarm-pick__row" role="group" aria-label="A todo">
+          <button type="button" className={`repeat-chip glow-box${todo ? ' is-on' : ''}`} aria-pressed={todo} onClick={() => setTodo(t => !t)}
+            title="A todo asks Done when it rings; dismissed, it counts until you tap ✓"><TodoBoxIcon aria-hidden className="alarm-pick__todo-box" /> Todo</button>
+          {todo && (
+            <label className="alarm-pick__takes">
+              <StopwatchIcon aria-hidden className="todo-dur__icon" />
+              <input className={`repeat-chip alarm-pick__other mono${takes && takesMs === null ? ' is-invalid' : ''}`} aria-label="Duration (optional: 20, 1h30)"
+                placeholder="20m" value={takes} onChange={e => setTakes(e.target.value)} autoComplete="off" />
+            </label>
+          )}
+        </div>
+      ))}
       <button type="submit" className="alarm-pick__set glow-box" disabled={ring === null || (!editing && rings.length === 0)}>
         {editing
           ? (ring === null || !time ? 'Save' : `Save · ${describeRepeat(repeat ?? editing.repeat)} ${sun ? sunEventName(sun.event).toLowerCase() : formatClockCompact(ring, false)}`)

@@ -1,6 +1,7 @@
 // Controls under the timeline: navigation; NOW with the clock (long-press: zoom out until Now
 // shows, #23; following Now, it types a time to go to instead, #15) over ＋ (drop at Now or the cursor;
-// on an instant, its name to rename it); and the Stopwatch and Timer buttons. Long-press (or the caret) on the ± buttons picks the cursor step.
+// on an instant, its name to rename it); the Stopwatch, Timer and Alarm buttons, and Todo (the
+// Todos tab). Long-press (or the caret) on the ± buttons picks the cursor step.
 import { MARKS } from '../../config/labels.ts'
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -10,8 +11,9 @@ import {
 import { TIME_INCREMENT_OPTIONS, incrementOption } from '../../domain/time.ts'
 import type { TimeIncrement } from '../../domain/time.ts'
 import { useAnchoredMenu } from '../../hooks/useAnchoredMenu.ts'
+import { LONG_PRESS_MS, useLongPress } from '../../hooks/useLongPress.ts'
 import { CtlButton } from './CtlButton.tsx'
-import { StopwatchButton, TimerButton } from './QuickButtons.tsx'
+import { StopwatchButton, TimerButton, TodoButton } from './QuickButtons.tsx'
 import { AlarmButton } from './AlarmButton.tsx'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatClockCompact } from '../../domain/format.ts'
@@ -24,7 +26,6 @@ import { openAlarms } from '../../domain/alarms.ts'
 import { useLayout } from '../../store/layout.ts'
 import * as act from '../../store/actions.ts'
 
-const LONG_PRESS_MS = 500
 
 /** `cell`: the grid cell in the vertical bar. `compact`: label the button "−30m" rather than "− 30 minutes" (horizontal picks by room: panels.css). */
 function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell?: CSSProperties; compact?: boolean }) {
@@ -87,26 +88,6 @@ function IncrementButton({ direction, cell, compact }: { direction: 1 | -1; cell
   )
 }
 
-/** A tap, or a long-press (also a right-click) that swallows the click after it. */
-function useLongPress(onLong: () => void, onTap: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressed = useRef(false)
-  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null }
-  return {
-    onPointerDown: () => {
-      longPressed.current = false
-      clear()
-      timer.current = setTimeout(() => { longPressed.current = true; onLong() }, LONG_PRESS_MS)
-    },
-    onPointerUp: clear,
-    onPointerLeave: clear,
-    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); clear(); onLong() },
-    onClick: () => {
-      if (longPressed.current) { longPressed.current = false; return }
-      onTap()
-    },
-  }
-}
 
 /**
  * The top button: NOW with the clock under it. A tap goes to Now; a long-press zooms out until
@@ -182,7 +163,7 @@ export function ControlBar() {
 
   if (vertical) {
     // A two-row grid that follows the screen: row 1 is "− ▲ step-up", row 2 is "+ ▼ step-down", column 4 is
-    // NOW over ＋, then Stopwatch over Timer, and Alarm spanning both rows.
+    // NOW over ＋, then Stopwatch over Timer, and Alarm over Todo.
     // "Up the screen" is earlier when the future runs down (dir 1) and later when it runs up (dir -1).
     const up: 1 | -1 = dir === 1 ? -1 : 1
     const down: 1 | -1 = up === 1 ? -1 : 1
@@ -200,14 +181,15 @@ export function ControlBar() {
         <IncrementButton direction={down} cell={cell(2, 3)} compact />
         <StopwatchButton style={cell(1, 5)} />
         <TimerButton style={cell(2, 5)} />
-        <AlarmButton style={cell(1, 6, 2)} />
+        <AlarmButton style={cell(1, 6)} />
+        <TodoButton style={cell(2, 6)} />
       </nav>
     )
   }
 
   // Horizontal: NOW sits at the bar's center, right under the timeline's (where the Now line is
   // while following Now), with the navigation gathered to either side of it; Stopwatch, Timer
-  // and Alarm sit right of ＋ (a row of their own below when the bar is narrow: panels.css).
+  // and Alarm sit right of ＋, and Todo left of it, level with it.
   return (
     <nav className="controls controls--horizontal" aria-label="Timeline controls">
       <div className="controls__side is-before">
@@ -224,6 +206,9 @@ export function ControlBar() {
         <IncrementButton direction={1} />
         <CtlButton icon={ChevronRightIcon} label="Next instant (D)" onClick={() => act.goToAdjacentInstant(1)}>Next</CtlButton>
         <CtlButton icon={MagnifyingGlassPlusIcon} label="Zoom in (I)" onClick={act.zoomIn}>Zoom in</CtlButton>
+      </div>
+      <div className="controls__todo">
+        <TodoButton />
       </div>
       <div className="controls__quick">
         <StopwatchButton />

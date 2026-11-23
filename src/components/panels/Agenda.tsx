@@ -28,11 +28,14 @@ import { HelpButton } from './Help.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { AlarmsList, RepeatsList } from './AlarmsList.tsx'
 import { VisibilityEditor } from './VisibilityEditor.tsx'
+import { TodosList } from './TodosList.tsx'
+import { useTodoNowCount } from '../../hooks/useTodos.ts'
 
 /** Each tab's name, and a short one for a narrow Agenda (side dock, drawer: panels.css container query). */
 const TABS: { key: ListTab; label: string; short: string }[] = [
   { key: 'instants', label: 'All Instants', short: 'Instants' },
   { key: 'favorites', label: 'Favorites', short: 'Favs' },
+  { key: 'todos', label: 'Todos', short: 'Todo' },
   { key: 'spans', label: 'All Spans', short: 'Spans' },
   { key: 'alarms', label: 'Alarms', short: 'Alarms' },
   { key: 'groups', label: 'Groups', short: 'Groups' },
@@ -280,6 +283,8 @@ function SpansList() {
 
 export function Agenda() {
   const tab = useUi(s => s.listTab)
+  // Todos that rang and aren't done: a badge on their tab (and on the ☰: AgendaButton).
+  const todoCount = useTodoNowCount()
   const placement = useLayout(s => s.agendaPlacement)
   const canDock = useLayout(s => s.agendaCanDock)
   const inDrawer = placement === 'drawer'
@@ -300,6 +305,7 @@ export function Agenda() {
             >
               <span className="list-tab__long">{t.label}</span>
               <span className="list-tab__short" aria-hidden>{t.short}</span>
+              {t.key === 'todos' && todoCount > 0 && <span className="list-tab__badge" aria-label={`${todoCount} to do now`}>{todoCount}</span>}
             </button>
           ))}
         </div>
@@ -315,7 +321,7 @@ export function Agenda() {
         <SettingsPanel />
       </div>
       <div className="list-scroll" role="tabpanel">
-        {tab === 'spans' ? <SpansList /> : tab === 'alarms' ? <AlarmsList /> : tab === 'groups' ? <RepeatsList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
+        {tab === 'spans' ? <SpansList /> : tab === 'alarms' ? <AlarmsList /> : tab === 'groups' ? <RepeatsList /> : tab === 'todos' ? <TodosList /> : <InstantsList favoritesOnly={tab === 'favorites'} />}
       </div>
     </section>
   )

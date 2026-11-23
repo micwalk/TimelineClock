@@ -13,6 +13,7 @@ import { entities, useEntities } from '../store/entities.ts'
 import { useShell } from '../store/shell.ts'
 import { view } from '../store/view.ts'
 import { AlarmAudioManager } from './AlarmAudioManager.ts'
+import { DONE_DING, doneCharge } from './tones.ts'
 import { isNativeShell, requestNativeNotifications, silenceNativeAlarms } from './nativeShell.ts'
 import { NotificationService } from './NotificationService.ts'
 
@@ -21,9 +22,9 @@ const MAX_WAIT_MS = 1000
 const MIN_WAIT_MS = 50
 
 // Keep one audio manager across HMR reloads so a ringing alarm doesn't cut out (one from before
-// playOnce is replaced).
+// playOnce told when it ends is replaced).
 const hmr = ((globalThis as unknown as { __TC_HMR__?: { audio?: AlarmAudioManager } }).__TC_HMR__ ??= {})
-if (typeof hmr.audio?.playOnce !== 'function') hmr.audio = new AlarmAudioManager()
+if (typeof hmr.audio?.playPreset !== 'function' || hmr.audio.playOnce.length < 2) hmr.audio = new AlarmAudioManager()
 const audio = hmr.audio as AlarmAudioManager
 const notifications = new NotificationService()
 
@@ -48,14 +49,14 @@ function ringingTone(): AlarmSound | null {
   return alarm ? soundFor(alarm) : useSettings.getState().alarmRings.sound
 }
 
-/** Silence was asked for: quiet until another alarm comes due. */
-let silenced = false
+/** Muted (the panel's 🔇, useAlarms.muted): quiet until another alarm comes due. */
+const setMuted = (muted: boolean) => { if (useAlarms.getState().muted !== muted) useAlarms.setState({ muted }) }
 
 /** Rings the latest alarm's tone (the page's own sound: pageRings), or stops when none rings. */
 function updateSound() {
   const tone = ringingTone()
-  if (!tone) { silenced = false; audio.stopAlarmSound() }
-  else if (pageRings() && !silenced) audio.startAlarmSound(isChime(tone) ? 'tone1' : tone, hasRinging)
+  if (!tone) { setMuted(false); audio.stopAlarmSound() }
+  else if (pageRings() && !useAlarms.getState().muted) audio.startAlarmSound(isChime(tone) ? 'tone1' : tone, hasRinging)
 }
 
 /**
@@ -93,7 +94,7 @@ function check() {
     useAlarms.setState(s => ({
       ringing: [...s.ringing, ...rings.map(({ inst, alarm }) => ({ instantId: inst.id, alarmId: alarm.id, label: alarmLabel(inst, alarm), tsEpochMs: inst.tsEpochMs, triggeredAt: now }))],
     }))
-    silenced = false
+    setMuted(false)
     updateSound()
   }
   if (chimes.length > 0 && pageRings()) audio.playOnce('chime')
@@ -161,7 +162,11 @@ export function clearChime(key: string) {
   useAlarms.setState(s => ({ chimes: s.chimes.filter(c => ringKey(c.instantId, c.alarmId) !== key) }))
 }
 
-/** Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). */
+/**
+ * Dismisses an alarm, or records that it chimed: either way it is over (see dismiss). A todo's
+ * alarm answered doesn't start it: only ▶ Start does (store/actions startTodo), so a todo whose
+ * alarm was silenced, went unanswered or chimed waits in the Todos tab's Now.
+ */
 function answer(key: string, how: Exclude<AlarmAnswer, 'snoozed'>) {
   const { instantId, alarmId } = parseRingKey(key)
   const alarm = findAlarm(entities.getInstant(instantId), alarmId)
@@ -224,13 +229,25 @@ export function cancelAlarms(instantId: string) {
 
 /** Stops the sound but keeps alarms on screen (in the Android app, their notifications too). */
 export function silence() {
-  silenced = true
+  setMuted(true)
   audio.stopAlarmSound()
   void silenceNativeAlarms()
 }
 
-/** Plays a sound once to hear what it is (Settings › Alarms); the web presets (the Android app plays its own: services/native). */
-export const previewSound = (sound: AlarmSound) => audio.playOnce(sound)
+/**
+ * Plays a sound once to hear what it is (services/soundPreview); the web presets (the Android app
+ * plays its own: services/native). `onEnded` when it has played out or been cut; returns whether it plays.
+ */
+export const previewSound = (sound: AlarmSound, onEnded?: () => void) => audio.playOnce(sound, onEnded)
+
+/**
+ * The Done sounds (services/tones), at `volume` (0–1): the charge's swoosh (`seconds` long) and
+ * the ding on the pop. Only while the page is on screen.
+ */
+export function playDoneSound(kind: 'charge' | 'ding', volume: number, seconds = 0) {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  if (kind === 'charge') { if (seconds > 0) audio.playPreset(doneCharge(seconds), volume) } else audio.playPreset(DONE_DING, volume)
+}
 
 /** Stops a preview. */
 export const stopPreview = () => audio.stopOnce()

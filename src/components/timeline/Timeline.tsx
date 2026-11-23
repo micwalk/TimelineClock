@@ -11,6 +11,7 @@ import { CursorTag, NowTag } from './LiveTags.tsx'
 import { AgendaButton } from '../panels/AgendaButton.tsx'
 import { RotateButton } from './RotateButton.tsx'
 import { PlusMorphLayer } from './PlusMorphLayer.tsx'
+import { Toast } from '../common/Toast.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { NowFlags } from './NowFlags.tsx'
 import { LaneGroupChips } from './LaneGroupChips.tsx'
@@ -74,6 +75,7 @@ export function Timeline() {
       {orientation === 'vertical' ? <NowFlags lanes={lanes} /> : <LaneGroupChips lanes={lanes} />}
       <RotateButton />
       <PlusMorphLayer />
+      <Toast />
     </section>
   )
 }

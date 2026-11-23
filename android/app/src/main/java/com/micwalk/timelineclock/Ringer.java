@@ -31,31 +31,53 @@ final class Ringer {
     /** The alarm whose tone is ringing (0: none). */
     private static int ringingId;
     private static Ringtone once;
+    /** The Vibrator that started the vibration going now (the one that can cancel it), or null. */
+    private static Vibrator vibrating;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private Ringer() {}
 
-    /** Loops alarm `id`'s tone (replacing whatever rang before). A channel turned off or set to no sound stays quiet. */
+    /**
+     * Loops alarm `id`'s tone and vibration (replacing whatever rang before). A channel turned off
+     * or set to no sound stays quiet, but it is still alarm `id` ringing (it may vibrate), so
+     * stop(c, id) stops it and ringInApp doesn't ring it again.
+     */
     static void ring(Context c, int id, String sound) {
         synchronized (LOCK) {
             stop(c, 0);
             ringing = play(c, sound, true);
-            ringingId = ringing != null ? id : 0;
+            ringingId = id;
             vibrate(c, sound, true);
         }
     }
 
-    /** Stops the looping tone if it is alarm `id`'s (0: whichever). */
+    /** Stops the looping tone and its vibration if it is alarm `id`'s (0: whichever). */
     static void stop(Context c, int id) {
         synchronized (LOCK) {
             if (id != 0 && id != ringingId) return;
             stopRinging();
-            Vibrator v = c.getSystemService(Vibrator.class);
-            if (v != null) v.cancel();
+            stopVibrating(c);
         }
     }
 
-    /** The alarm whose tone is ringing, 0 for none. */
+    /**
+     * A vibration is cancelled only through the Vibrator that started it: Android keeps one caller
+     * token per Context, and a ring starts from the alarm's receiver while Silence or a dismiss
+     * comes through the plugin (the activity). So it vibrates through the application's Context,
+     * and the Vibrator that started it is the one cancelled.
+     */
+    private static Vibrator vibrator(Context c) {
+        return c.getApplicationContext().getSystemService(Vibrator.class);
+    }
+
+    private static void stopVibrating(Context c) {
+        if (vibrating != null) vibrating.cancel();
+        vibrating = null;
+        Vibrator v = vibrator(c);
+        if (v != null) v.cancel();
+    }
+
+    /** The alarm ringing (its tone, or only its vibration), 0 for none. */
     static int ringingId() {
         synchronized (LOCK) {
             return ringingId;
@@ -122,12 +144,13 @@ final class Ringer {
     private static void vibrate(Context c, String sound, boolean loop) {
         try {
             NotificationChannel ch = channel(c, sound);
-            Vibrator v = c.getSystemService(Vibrator.class);
+            Vibrator v = vibrator(c);
             if (ch == null || v == null || !ch.shouldVibrate() || ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
             long[] pattern = ch.getVibrationPattern();
             if (pattern == null || pattern.length == 0) pattern = NotificationChannels.VIBRATION;
             v.vibrate(VibrationEffect.createWaveform(pattern, loop ? 0 : -1),
                 new AudioAttributes.Builder().setUsage(loop ? AudioAttributes.USAGE_ALARM : AudioAttributes.USAGE_NOTIFICATION).build());
+            vibrating = v;
         } catch (RuntimeException e) {
             Log.w(TAG, "Could not vibrate", e);
         }

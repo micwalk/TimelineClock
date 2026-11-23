@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import { MINUTE } from '../../domain/time.ts'
-import { settings, useSettings } from '../../store/settings.ts'
+import { getTunables, settings, useSettings } from '../../store/settings.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import { AdvancedSettings } from './AdvancedSettings.tsx'
@@ -18,6 +18,7 @@ import { SkySettings } from './SkySettings.tsx'
 import { panelPosition } from './panelPosition.ts'
 import { parseWarningList, warnText } from '../../domain/alarmPicker.ts'
 import { SoundSettings } from './SoundSettings.tsx'
+import { playDoneSound } from '../../services/AlarmScheduler.ts'
 
 const RING_OPTIONS = [1, 2, 5, 10, 30].map(m => ({ label: `${m} min`, ms: m * MINUTE }))
 
@@ -26,7 +27,6 @@ export function SettingsPanel() {
   const gearRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const glow = useSettings(s => s.glow)
-  const favoriteLanes = useSettings(s => s.favoriteLanes)
   const orientation = useSettings(s => s.orientation)
   const verticalDir = useSettings(s => s.verticalDir)
   const tickSnap = useSettings(s => s.tickSnap)
@@ -140,13 +140,6 @@ export function SettingsPanel() {
                 <option value="drawer">Drawer</option>
               </select>
             </label>
-            <label className="settings__row">
-              <span>Lanes for favorites</span>
-              <select value={favoriteLanes} onChange={e => settings.setFavoriteLanes(e.target.value === 'always' ? 'always' : 'selected')}>
-                <option value="selected">When selected</option>
-                <option value="always">Always</option>
-              </select>
-            </label>
             <label className="settings__row" title="The moments the clocks go forward or back (daylight saving), as instants on the timeline">
               <span>Daylight Savings Time changes on the timeline</span>
               <input type="checkbox" checked={dstShifts} onChange={e => settings.setDstShifts(e.target.checked)} />
@@ -188,6 +181,7 @@ export function SettingsPanel() {
             </label>
             <AlarmRingSettings />
             <div data-settings="sounds"><SoundSettings /></div>
+            <TodoSettings />
           </section>
 
           <section className="settings__group">
@@ -209,6 +203,47 @@ export function SettingsPanel() {
         document.body,
       )}
     </>
+  )
+}
+
+/** The Done sound as a tap plays it: the charge's swoosh, then the ding on the pop. */
+function previewDoneSound(volume: number) {
+  const ms = getTunables().doneChargeMs
+  playDoneSound('charge', volume, ms / 1000)
+  setTimeout(() => playDoneSound('ding', volume), ms)
+}
+
+/** Settings > Alarms › Todos: the quick times (Tonight, Tomorrow) and the Done sound. */
+function TodoSettings() {
+  const tonight = useSettings(s => s.todoTonight)
+  const tomorrow = useSettings(s => s.todoTomorrow)
+  const fanfare = useSettings(s => s.doneFanfare)
+  const volume = useSettings(s => s.fanfareVolume)
+  return (
+    <div data-settings="todos">
+      <h4 className="settings__sub">Todos</h4>
+      <label className="settings__row" title="What a todo's Tonight means (Schedule, Later)">
+        <span>Tonight</span>
+        <input type="time" value={tonight} onChange={e => settings.setTodoTime('todoTonight', e.target.value)} />
+      </label>
+      <label className="settings__row" title="What a todo's Tomorrow means (Schedule, Later)">
+        <span>Tomorrow</span>
+        <input type="time" value={tomorrow} onChange={e => settings.setTodoTime('todoTomorrow', e.target.value)} />
+      </label>
+      <label className="settings__row">
+        <span>Done sound</span>
+        <input type="checkbox" checked={fanfare} onChange={e => settings.setDoneFanfare(e.target.checked)} />
+      </label>
+      {fanfare && (
+        <label className="settings__row">
+          <span>Done sound volume</span>
+          <input type="range" min={0} max={1} step={0.05} value={volume}
+            onChange={e => settings.setFanfareVolume(Number(e.target.value))}
+            onPointerUp={() => previewDoneSound(useSettings.getState().fanfareVolume)} />
+          <output className="mono">{Math.round(volume * 100)}%</output>
+        </label>
+      )}
+    </div>
   )
 }
 

@@ -1,6 +1,7 @@
 # Todos — Product Requirements (draft v0.8, 2026-11-21)
 
-Status: proposal for the owner's review. Nothing here is built. A todo is a **record** that
+Status: Phase 1 (web) built in 0.8.0 on branch `todo`; see §12 for what was built and the calls
+made building it. Phase 1b, 2 and 3 are not built. A todo is a **record** that
 ties together the instants, spans and alarms it makes; it holds no times itself. A todo's
 length (its estimate) lives on the record; once scheduled, the timeline draws it as a
 **planned block** computed from the record, never stored, and what gets saved is only what
@@ -187,15 +188,20 @@ Derived state (`domain/todos.ts`, pure, tested), from the record and its instant
   stops counting as unfavoriting does (nothing saved).
 - **Unfavoriting** a counting todo (the star tool): stop tracking, nothing saved, as today;
   the todo is waiting.
-- **Delete** a todo (its tools, with a second tap): the record goes; its `at` too if it
-  never rang; every other instant stays as history with its `todo` link cleared.
-- Cancelling all alarms (bell-slash) on a scheduled todo reads **Unschedule** and is Back to
-  the list.
+- **Delete** a todo (its ⋯ in the Todos tab, with a second tap): the record goes; its `at`
+  too if it never rang; every other instant stays as history with its `todo` link cleared.
+- The **trash on a scheduled todo's chip** deletes the schedule, not the todo: Back to the
+  list, then a toast offers **Delete todo** too (owner, 2026-11-21). Its bell-slash cancels its
+  alarms as on any instant (it stays planned, ringing nothing).
 
 The count runs from `at`, the scheduled time, not from the dismiss: one instant, one rule
 (owner, 2026-11-21). If she really began later, she moves it like any instant.
 
 ### 4.4 Time tracking: start, pause, switch (Phase 3, its own push)
+
+> Built ahead of Phase 3 (owner, 2026-11-22): ⏸ Pause (lane and counting row), stretches listed
+> in a row's ⋯, a row's tap going to its latest stretch, and counting held by the record
+> (`startedId`) so an unfavorited todo still counts. Switch is still to come.
 
 A todo worked on in pieces is several stretches tied to one record (§4.2), so the data needs
 nothing more than the `start` and `pause` roles. Phase 1's only way to count is dismissing
@@ -228,7 +234,7 @@ virtual instant. **Passed**: when an occurrence's next one arrives with this one
 its record becomes `passed` and a counting todo stops counting with nothing saved (as
 unfavoriting does). Nothing is moved or carried over (owner's call, 2026-11-20).
 
-### 4.6 Scheduling workflow (Phase 2, its own spec next)
+### 4.6 Scheduling workflow (Phase 2, its own spec: [prd_todos_phase2.md](prd_todos_phase2.md))
 
 The next phase (owner, 2026-11-21): a good way to take an unscheduled todo to a spot on the
 timeline. Phase 1 has only Schedule's time entry and chips (§5); Phase 2 makes placing it
@@ -315,18 +321,23 @@ back out (principle 7).
 
 - **Glow pulse**: the ✓ chip, the lane chip it came from and the Todos row flare in a short
   glow burst (the drop pulse's family, `--accent`/`--halo` × `--glow`).
-- **Sparks**: glowing e-confetti bursts from the ✓: a few dozen small sparks in the theme's
-  accent colours, flung out, falling and fading over about a second and a half. Drawn on one
-  short-lived canvas over the timeline from engine frames (`f.perf`), gone when done, so
-  the timeline's DOM and its 60fps budget are untouched. Count, spread and length are
-  tunables.
-- **Fanfare**: a short "ta-da-daaa" brass call, synthesized like the alarm tones (Web Audio,
-  `services/tones.ts`; an original phrase, not a recording). Settings › Alarms: "Done
-  fanfare" on/off and its own volume. Plays only when the page is on screen; a Done from the
-  Android notification with the app closed is silent (Phase 1b: maybe the native side plays
-  a rendered `fanfare.ogg`, as the tones are rendered).
-- `reducedMotion()`: the glow fades in and out, no sparks; the fanfare still follows its
-  setting.
+- **Charge and pop** (owner, 2026-11-22; domain/doneBurst): a tap on a Done box (a Todos row,
+  a selected chip, the lane's ✓) charges it first (`doneChargeMs`, 600 ms): glowing motes rush
+  in from outside onto its border, brighter as they near it; the border glows harder, the
+  middle fills until opaque, and the box shrinks a little and turns green. Then it pops, and
+  only then is the todo done (dated at the tap): the box is green, its fill becomes a green ✓
+  that springs out past the box and back, and green confetti is thrown out as fast, tumbling,
+  falling and fading. Drawn on one short-lived canvas over everything from engine frames
+  (`f.perf`), gone when done, so the timeline's DOM and its 60fps budget are untouched. Motes,
+  confetti count, spread and length are tunables. A Done with no box (the ringing card) pops at
+  once where it was tapped.
+- **Sound**: a sci-fi swoosh of air sucked in through the charge, then one ding on the pop
+  (Web Audio, `services/tones.ts` `doneCharge`, `DONE_DING`; the earlier trumpet call,
+  `FANFARE`, is shelved). Settings › Alarms › Todos: "Done sound" on/off and its own volume.
+  Plays only when the page is on screen; a Done from the Android notification with the app
+  closed is silent (Phase 1b: maybe a rendered sound, as the tones are rendered).
+- `reducedMotion()`: done at once; the glow fades in and out, no charge or confetti; the ding
+  still follows its setting.
 
 ## 8. Phases
 
@@ -413,3 +424,44 @@ scheduling, tracking time. Its addendum's requirements, sorted for this app:
 - Streaks.
 - iPhone: alarms with the app closed need a native iOS app (this app's native side is Android
   only, and the web can't ring closed without a push server).
+
+## 12. Phase 1 as built (0.8.0, branch `todo`), and the calls made building it
+
+Built: everything in §8's Phase 1 (web). Not built: Phase 1b (Android: the notification still
+offers Dismiss / Snooze; dismissing there replays as a Dismiss, which now leaves the todo
+waiting, not counting (call 5): Phase 1b should give it ▶ Start and ✓ Done), Phase 2 (its own
+spec: prd_todos_phase2.md), Phase 3. Where things live: AGENTS.md › UX Patterns ›
+Todos.
+
+Calls made by Claude while building (for the owner to override):
+
+| # | Call | Why |
+|---|---|---|
+| 1 | The branch starts from `minor-0.7.2` (0.7.2 plus this PRD): there is no v0.7.3 yet | Rebase onto 0.7.3 once it exists |
+| 2 | Records live in the entities store, under their own key `timeline.todos.v1` | One place for data: backups, imports and groups handle them with the rest |
+| 3 | The record has a `closedAt` (when it stopped being open) | The Done section lists "the last day's" done, won't do and passed; won't do and passed have no instant to date them |
+| 4 | Only an alarm at (or after) its time starts the count. A warning's card says "in 10m · get ready" and asks **▶ Start now** (the plan moves to Now and counts, §4.4's Start, brought forward from Phase 3) or **OK** (it rings again at its time), with Done as a quiet link | Owner, 2026-11-21: a warning is "get ready", never a start by default |
+| 5 | Only ▶ Start starts a todo. Its card asks ▶ Start (green, first: from its time) or ✓ Done; Silence answers it without starting (it waits in Now); so does an alarm nobody answered, a chime (whose card is the full todo card, without Silence) and Dismiss on the Android notification. Waiting, ▶ Start (its row, its chip) counts from Now: a `start` instant ("▶ Laundry", Phase 3's role), so the plan stays where it was and history shows the gap | Owner, 2026-11-21: Dismiss reads as Start; Silence hides without starting (replaces "a chime and an unanswered alarm start the count") |
+| 5b | Snooze 5m on a todo's card at its time moves the todo itself 5 minutes on (as Later does), with no bell added; a warning's snooze stays a reminder before its time | Owner, 2026-11-21 |
+| 5c | The panel's Silence (sound off, cards kept) is a small 🔇 by its title, for every alarm, lit once muted; the big button under the cards is gone | Owner, 2026-11-21; it no longer reads like the todo card's Silence |
+| 6 | A counting todo's lane to Now always shows (like a running stopwatch's), whatever "favorite lanes" says (owner, 2026-11-22: that setting is gone; every favorite's lane shows) | Otherwise a dismissed todo would be invisible unless selected |
+| 7 | Done before its time, or Won't do before it rang: an `at` none of whose alarms rang is deleted | §4.3's "a plan that never happened isn't history" (said for Back to the list) |
+| 8 | Later also drops pending snoozes, stops a count (nothing saved), and adds an alarm at the time if none is left to ring | Later is "the plan changed": it should ring at the new time, once |
+| 9 | A folded ✓ draws as a Mark (a stub from the axis), not as nothing | Its line stays visible: history isn't hidden, only its chip folds |
+| 10 | The planned block is a new `block` lane kind (domain/blocks `TimeBlock`, look `planned`), packed with the saved span lanes. Tap selects its `at`, double-tap focuses it. During a live move it stays put until the move is confirmed | Sparing #12: the same lane kind can draw first-class spans as blocks later (a `solid` look) |
+| 11 | Schedule and Later: the quick chips, a typed box ("3p", "1h30", "tomorrow 9a") and the hh:mm:ss time entry (for a date) | The typed box matches the ringing card's Other…; the time entry reaches any date |
+| 12 | In a typed "when", "1:30" is a clock time; lengths are "90", "1h30", "45m" | It answers "when", not "how long" |
+| 13 | The Add box reads only words at its end that can't be part of a name: "3p", "at 7", "20m", "daily", "tomorrow"; "buy 2 eggs" stays a name; a repeat needs a time, else its words stay in the name | Capture must never mangle a name |
+| 14 | A row's box is its Done, and a closed row's box opens it again (no separate ✓ or ↺); Later/Schedule on every open row; a ⋯ for Rename, Won't do (boxed), Delete (a second tap) and Duration: quick lengths 5m–2h with "—" for none, or a typed one in a box labelled Duration. A duration reads as a drawn stopwatch and its length, not "takes" | Owner, 2026-11-21: the ✓ was redundant with the box; uncheck is needed now, a global Undo is Phase 2a |
+| 14b | A tap on an unscheduled row opens its Schedule (the drawer stays open); other rows go to their instant (closing the drawer) | Owner, 2026-11-21: it shouldn't hide the drawer; there is nothing on the timeline to go to |
+| 14c | The Todo button: the control bar's way to the Todos tab, left of ＋ (horizontal), under Alarm (vertical), with the Now badge; tapped again while the drawer shows Todos, it closes it. N still adds one from anywhere | Owner, 2026-11-21 |
+| 15 | No ＋ in the Agenda header: the Add box is at the top of the Todos tab, which the ☰ reaches | It would open the same box one tap later |
+| 16 | On a scheduled todo's chip, the trash is Back to the list, then a toast (components/common/Toast, which Phase 2a's Undo can speak through) offers Delete todo; the bell-slash cancels alarms as everywhere (it no longer reads Unschedule: two tools would mean the same) | Owner, 2026-11-21 |
+| 16d | Copy: the card's Silence is **Hide** (it only answers the alarm; the todo waits), Later is **Delay**, Back to the list is **Unschedule** (code keeps `laterTodo` / `backToList`). Rows: Schedule (or Delay) then a green ▶ on every open row not counting (the ⋯'s Start now and the chip's ▶ went: the tool row was crowded). A long-press on a selected todo chip's box opens the Todos tab and scrolls to its row, lit (its hover green only under a mouse: a touch long-press left it lit). A counting todo has no Not a todo. The chip's contents are centered and its box is 18px | Owner, 2026-11-21 |
+| 16c | A selected todo chip's box is its Done (the ✓ tool was redundant); in its place, Not a todo (a struck-through box) un-todoes it: the instant stays (alarms, favorite), the record goes; on an occurrence the series stops being a todo, its occurrences ahead plain. Also in a row's ⋯ | Owner, 2026-11-21 |
+| 16b | Any instant becomes a todo: a faint ☐ before a selected chip's name (it lights up as the chip's box), and ☐ Todo on a plain alarm's ringing card (the card becomes the todo card). One ahead gets an alarm at its time if it has none (a todo at a time rings); one past is waiting, or counting if it is a favorite; on an occurrence the series becomes a repeating todo; unnamed, the chip's name box opens; fixed times (sun, clock changes, seasons) never | Owner, 2026-11-21: a way to promote an instant; both places they suggested, one action |
+| 17 | Repeating a todo's `at` with ⟳, or editing a series in the Alarm picker with Todo on, makes a repeating todo (its occurrences ahead get records) | The repeat should keep being a todo |
+| 18 | Renaming the `at` renames the todo, and the other way round | The `at` carries the todo's name |
+| 19 | A group switched off hides its todos from the tab too | As it hides its instants |
+| 20 | Todo colour `--c-todo` (violet); the todo card's Dismiss is cyan, not red; Done is green | §6: no red for open todos |
+| 21 | The fanfare is a herald's trumpet call, as for royal news (owner's reference, 2026-11-21): an original call on the natural trumpet's notes; since the owner's ask (2026-11-21) only its second half: a quick G–C–E pickup into a held C major chord in three trumpets, in a little hall, synthesized; only while the page is on screen; the volume slider plays it when let go | §7.2 |

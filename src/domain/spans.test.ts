@@ -53,7 +53,7 @@ describe('savedSpanLanes', () => {
   ]
   const resolved = spans.map(s => resolveSpan(s, byId)!)
   const base = {
-    favoriteLanes: 'selected' as const, resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
+    resolved, focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 0 }
 
   it('shows only visible spans without a selection, ordered by midpoint', () => {
     expect(savedSpanLanes(base).map(s => s.span.id)).toEqual(['ac', 'bc'])
@@ -73,23 +73,13 @@ describe('savedSpanLanes', () => {
   it('drops spans whose endpoints no longer exist', () => {
     expect(resolveSpan({ id: 'x', startInstantId: 'a', endInstantId: 'gone', label: '' }, byId)).toBeNull()
   })
-  it('hides lanes for favorites to Now unless selected, or always on', () => {
+  it('always shows lanes for favorites to Now', () => {
     const fav: InstantRecord = { id: 'f', tsEpochMs: HOUR, label: 'Rice', favorite: true }
     const favById = new Map([...byId, ['f', fav]])
     const favSpan = resolveSpan({ id: 'fn', startInstantId: 'f', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }, favById)!
     const all = { ...base, resolved: [...resolved, favSpan] }
-    expect(savedSpanLanes(all).map(s => s.span.id)).not.toContain('fn')
+    expect(savedSpanLanes(all).map(s => s.span.id)).toContain('fn')
     expect(savedSpanLanes({ ...all, selectedInstantId: 'f' }).map(s => s.span.id)).toContain('fn')
-    expect(savedSpanLanes({ ...all, favoriteLanes: 'always' }).map(s => s.span.id)).toContain('fn')
   })
 })
 
-describe('savedSpanLanes: tracked spans', () => {
-  it('always shows a tracked favorite span to Now, even when favorites show only when selected', () => {
-    const start = { id: 's', tsEpochMs: 0, label: 'Stopwatch', favorite: true }
-    const r = { span: { id: 'n', startInstantId: 's', endInstantId: '__NOW__', label: '', visible: true, endIsNow: true }, start }
-    const base = { resolved: [r], focusMode: 'now', focusedInstantId: null, focusedSpanId: null, selectedInstantId: null, now: 1000, favoriteLanes: 'selected' as const }
-    expect(savedSpanLanes(base)).toHaveLength(0)
-    expect(savedSpanLanes({ ...base, trackedIds: new Set(['s']) })).toHaveLength(1)
-  })
-})

@@ -1,6 +1,6 @@
 // User-level operations that touch several stores and/or the viewport engine.
 // Components and hotkeys call these; they are the app's behavior in one place.
-import { engine } from '../engine/viewportEngine.ts'
+import { engine, reducedMotion } from '../engine/viewportEngine.ts'
 import type { Frame } from '../engine/viewportEngine.ts'
 import { noteLaneFlow } from '../engine/laneFlow.ts'
 import type { NavTarget } from '../domain/navigation.ts'
@@ -9,13 +9,13 @@ import { panCenterByPixels, widthToShow, zoomToFitRange } from '../domain/viewpo
 import type { TimeRef } from '../domain/spans.ts'
 import { resolveTimeRef } from '../domain/spans.ts'
 import { DAY, MINUTE, SECOND, TIME_INCREMENT_OPTIONS, incrementOption } from '../domain/time.ts'
-import { atClockTimeOnDay, parseDurationInput, to24h } from '../domain/format.ts'
+import { atClockTimeOnDay, formatClockCompact, parseDurationInput, to24h } from '../domain/format.ts'
 import { entities, shownInstants, useEntities } from './entities.ts'
 import { useView, view } from './view.ts'
 import { agendaFromSettings, recomputeLayout, useLayout } from './layout.ts'
 import { resolveOrientation } from '../domain/layoutMode.ts'
 import type { SettingsState } from './settings.ts'
-import { getTunables, sanitizeSettings, useSettings } from './settings.ts'
+import { getTodoTimes, getTunables, sanitizeSettings, useSettings } from './settings.ts'
 import type { Visibility } from '../domain/displayGroups.ts'
 import { labelSpacingPx, nearestFinestTick } from '../domain/ticks.ts'
 import { ui, useUi } from './ui.ts'
@@ -28,14 +28,20 @@ import { syncFavorites } from '../domain/entities.ts'
 import { NOW_TARGET, findCapture } from '../domain/capture.ts'
 import type { NotificationKind } from '../domain/nativeNotifications.ts'
 import { liveTapTarget } from '../domain/nativeNotifications.ts'
-import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
+import { SNOOZE_MINUTES, cancelAlarms as cancelAlarmsNow, clearChime as clearChimeCard, dismiss, dismissInstant, isAlarmRinging, primeNotifications, snoozeUntil } from '../services/AlarmScheduler.ts'
 import type { AlarmSound } from '../domain/sounds.ts'
 import type { Repeat, SeriesRecord } from '../domain/series.ts'
 import {
-  OCCURRENCE_HORIZON_MS, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
+  OCCURRENCE_HORIZON_MS, clockKey, dateKey, duplicateOccurrences, newGroupId, occursAheadBefore, splitSeries, newOccurrence, occurrenceTs, parseVirtualId, planOccurrences, refreshOccurrence, remakeable, ruleFromOccurrence, seriesFromInstant,
 } from '../domain/series.ts'
 import { newAlarmId, newInstantId, storedInstants } from '../domain/entities.ts'
-import type { InstantRecord } from '../domain/entities.ts'
+import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
+import type { TodoRecord } from '../domain/todos.ts'
+import type { DoneOrigin } from '../domain/doneBurst.ts'
+import {
+  countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+} from '../domain/todos.ts'
+import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
 import { pickerOffsets } from '../domain/alarmPicker.ts'
 import type { SunEvent } from '../domain/sun.ts'
@@ -43,7 +49,7 @@ import { sunEventName } from '../domain/sun.ts'
 import { isAtSun, parseSunVirtualId } from '../domain/sunEvents.ts'
 import { parseSeasonVirtualId, seasonName } from '../domain/seasons.ts'
 import { addCalendarDays, addCalendarMonths, describeShift, dstShifts, isFixedTime, parseDstVirtualId } from '../domain/dst.ts'
-import { findAlarm, hasArmedAlarm, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
+import { findAlarm, hasArmedAlarm, isArmed, parseRingKey, rearmAfterMove, ringKey, ringingChoices, snoozeLanding, syncAlarmVisibility } from '../domain/alarms.ts'
 import { quick, useQuick } from './quick.ts'
 import {
   closedSpanLabel, formatTimerLength, lapLabel, stopwatchPhase, stopwatchStartLabel, stopwatchStopLabel,
@@ -603,6 +609,9 @@ export function stopNowSpan(instantId: string) {
   const sp = entities.nowSpanOf(instantId)
   if (!inst?.favorite || !sp || inst.tsEpochMs > nowTime()) return
   ui.closeLaneTools()
+  // On a todo the stop is ✓ Done: the same stop, the new instant its `done`.
+  const todo = openTodoOf(inst)
+  if (todo) { doneTodo(todo.id); return }
   if (stopwatchPhase(stopwatch()) === 'running' && stopwatch().marks.includes(instantId)) {
     stopStopwatch()
     return
@@ -623,6 +632,8 @@ export function lapNowSpan(instantId: string) {
   const inst = entities.getInstant(instantId)
   const sp = entities.nowSpanOf(instantId)
   if (!inst?.favorite || !sp || inst.tsEpochMs > nowTime()) return
+  // A todo has no lap (Phase 3 makes it ⏸ Pause).
+  if (openTodoOf(inst)) return
   ui.closeLaneTools()
   if (stopwatchPhase(stopwatch()) === 'running' && stopwatch().marks.includes(instantId)) {
     lapStopwatch()
@@ -734,8 +745,11 @@ export function setInstantHidden(id: string, hidden: boolean) {
 }
 
 export function renameInstant(id: string, label: string) {
-  if (entities.getInstant(id)?.label !== label) touchOccurrence(id)
+  const inst = entities.getInstant(id)
+  if (inst?.label !== label) touchOccurrence(id)
   entities.setInstantLabel(id, label)
+  // A todo's `at` carries its name: renaming one renames the other.
+  if (inst?.todo?.role === 'at' && label) entities.patchTodo(inst.todo.id, { label })
   view.editInstant(null)
 }
 
@@ -794,6 +808,7 @@ export function deleteCollection(id: string, opts: { withInstants?: boolean } = 
     const doomed = storedInstants(useEntities.getState().instants).filter(i => collectionOf(i, seriesGroup) === id).map(i => i.id)
     for (const s of groups ?? []) if (s.collectionId === id) entities.removeGroup(s.id)
     for (const iid of doomed) deleteInstant(iid)
+    for (const t of useEntities.getState().todos ?? []) if (t.collectionId === id) entities.removeTodo(t.id)
   }
   entities.removeCollection(id)
 }
@@ -807,6 +822,13 @@ export function setInstantCollection(id: string, collectionId: string) {
     const { collectionId: _c, ...rest } = series
     void _c
     entities.putGroup(collectionId === DEFAULT_COLLECTION ? rest : { ...rest, collectionId })
+    return
+  }
+  // A todo's instants follow it: moving one moves the todo and all of them.
+  const todo = inst.todo ? entities.getTodo(inst.todo.id) : undefined
+  if (todo) {
+    entities.patchTodo(todo.id, { collectionId: collectionId === DEFAULT_COLLECTION ? undefined : collectionId })
+    for (const i of todoInstants(todo.id)) entities.setInstantCollection(i.id, collectionId)
     return
   }
   entities.setInstantCollection(id, collectionId)
@@ -1054,7 +1076,11 @@ export function syncSeries() {
   const dupes = duplicateOccurrences(storedInstants(useEntities.getState().instants))
   if (dupes.length > 0) { for (const id of dupes) { dismissInstant(id); view.forgetInstant(id) } entities.deleteInstants(dupes) }
   const { instants } = useEntities.getState()
-  entities.addInstants(planOccurrences(groups, instants, now, now + OCCURRENCE_HORIZON_MS, { instant: newInstantId, alarm: newAlarmId }))
+  const made = planOccurrences(groups, instants, now, now + OCCURRENCE_HORIZON_MS, { instant: newInstantId, alarm: newAlarmId })
+  // A repeating todo's occurrences each get a todo record of their own.
+  const withTodos = todoOccurrences(made, groups, newTodoId, now)
+  entities.addTodos(withTodos.todos)
+  entities.addInstants(withTodos.instants)
 }
 
 /**
@@ -1108,7 +1134,9 @@ export function materializeOccurrence(id: string): string | undefined {
   if (!series) return
   const have = storedInstants(useEntities.getState().instants).find(i => i.seriesId === series.id && i.occurrence === v.date)
   if (have) return have.id
-  entities.addInstants([newOccurrence(series, v.date, { instant: () => id, alarm: newAlarmId })])
+  const made = todoOccurrences([newOccurrence(series, v.date, { instant: () => id, alarm: newAlarmId })], [series], newTodoId, Date.now())
+  entities.addTodos(made.todos)
+  entities.addInstants(made.instants)
   return id
 }
 
@@ -1141,8 +1169,14 @@ export function repeatInstant(id: string, repeat: Repeat) {
   }
   // The instant is the first occurrence before the series exists: saving the series makes its
   // occurrences at once (services/seriesSync), and this date must already be taken.
-  const series = seriesFromInstant(inst, repeat)
+  const made = seriesFromInstant(inst, repeat)
+  // A todo's `at` repeated: a repeating todo (each occurrence a todo of its own, with its length).
+  const todo = inst.todo?.role === 'at' ? entities.getTodo(inst.todo.id) : undefined
+  const series: SeriesRecord = todo
+    ? { ...made, todo: todo.durationMs ? { durationMs: todo.durationMs } : {}, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }
+    : made
   entities.patchInstant(id, () => ({ seriesId: series.id, occurrence: dateKey(inst.tsEpochMs), seriesEdited: false }))
+  if (todo) entities.patchTodo(todo.id, { seriesId: series.id, occurrence: dateKey(inst.tsEpochMs) })
   entities.putGroup(series)
   syncSeries()
 }
@@ -1162,6 +1196,7 @@ export function stopRepeating(id: string) {
   }
   if (useEntities.getState().instants.some(i => i.seriesId === series.id && i.id !== id)) return
   entities.patchInstant(id, () => ({ seriesId: undefined, occurrence: undefined, seriesEdited: undefined, collectionId: series.collectionId }))
+  if (inst.todo) entities.patchTodo(inst.todo.id, { seriesId: undefined, occurrence: undefined })
   entities.removeGroup(series.id)
   ui.showSeriesHint(null)
 }
@@ -1229,11 +1264,11 @@ export function deleteOccurrences(id: string, which: 'this' | 'later') {
  * time itself unless `onTime` is false), once (an instant at `at`) or repeating (a series from today). Remembered as a recent alarm. Goes to it.
  * Returns the instant (the first occurrence of a series).
  */
-export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent; sound?: AlarmSound }): string | undefined {
+export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; warnings: number[]; label: string; onTime?: boolean; sun?: SunEvent; sound?: AlarmSound; todo?: { durationMs?: number } }): string | undefined {
   const offsets = pickerOffsets(a.warnings, a.onTime !== false)
   if (offsets.length === 0) return
   void primeNotifications()
-  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}), ...(a.sound ? { sound: a.sound } : {}) })
+  quick.rememberAlarm({ time: a.time, repeat: a.repeat, warnings: a.warnings, label: a.label, ...(a.onTime === false ? { onTime: false } : {}), ...(a.sun ? { sun: a.sun } : {}), ...(a.sound ? { sound: a.sound } : {}), ...(a.todo ? { todo: a.todo } : {}) })
   const sound = a.sound ? { sound: a.sound } : {}
   // At sunrise or sunset (the location in Settings): it follows the sun, and is named for it unless named.
   const loc = useSettings.getState().skyLocation
@@ -1241,11 +1276,17 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
   const label = a.label || (sun ? sunEventName(sun.event) : '')
   if (!a.repeat) {
     const id = entities.createInstant(a.at, label)
-    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs, ...sound })), ...(sun ? { sun } : {}) }))
+    // A todo (the picker's Todo switch): the instant is its `at`.
+    const todo = a.todo ? makeTodo({ label, durationMs: a.todo.durationMs }, newTodoId(), nowTime(), nextOrder(useEntities.getState().todos ?? [])) : null
+    if (todo) entities.putTodo(todo)
+    entities.patchInstant(id, () => ({ alarms: offsets.map(offsetMs => ({ id: newAlarmId(), offsetMs, ...sound })), ...(sun ? { sun } : {}), ...(todo ? { todo: { id: todo.id, role: 'at' as const } } : {}) }))
     revealInstant(id)
     return id
   }
-  const series: SeriesRecord = { id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}), ...sound }
+  const series: SeriesRecord = {
+    id: newGroupId(), kind: 'series', label, time: a.time, repeat: a.repeat, alarms: offsets, from: dateKey(Date.now()), ...(sun ? { sun } : {}), ...sound,
+    ...(a.todo ? { todo: a.todo.durationMs ? { durationMs: a.todo.durationMs } : {} } : {}),
+  }
   entities.putGroup(series)
   syncSeries()
   const first = useEntities.getState().instants
@@ -1260,11 +1301,21 @@ export function setAlarm(a: { time: string; at: number; repeat: Repeat | null; w
  * occurrences ahead take the change in place (refreshSeries); ones changed on their own keep
  * theirs.
  */
-export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun' | 'sound'>>) {
+export function updateSeries(seriesId: string, patch: Partial<Pick<SeriesRecord, 'label' | 'time' | 'repeat' | 'alarms' | 'sun' | 'sound' | 'todo'>>) {
   const series = entities.getGroup(seriesId)
   if (!series) return
-  entities.putGroup({ ...series, ...patch })
+  const next = { ...series, ...patch }
+  if ('todo' in patch && !patch.todo) delete next.todo
+  entities.putGroup(next)
   refreshSeries(seriesId)
+  // Made a repeating todo: its occurrences ahead that have no todo yet get one.
+  if (next.todo) {
+    const now = Date.now()
+    const plain = storedInstants(useEntities.getState().instants).filter(i => i.seriesId === seriesId && !i.todo && i.tsEpochMs > now)
+    const made = todoOccurrences(plain, [next], newTodoId, now)
+    entities.addTodos(made.todos)
+    for (const i of made.instants) if (i.todo) entities.setInstantTodo(i.id, i.todo)
+  }
 }
 
 /** Ends a series now: its occurrences ahead go (those that passed stay as history). */
@@ -1287,6 +1338,506 @@ export function ringingChoicesFor(key: string): RingingChoices | null {
 }
 
 // ---------------------------------------------------------------------------
+// Todos (docs/prd_todos.md; domain/todos): a record of a thing to do, and quick ways to make the
+// ordinary instants, spans and alarms it ties together. Only ▶ Start starts one counting
+// (startTodo): its alarm answered any other way (Silence, unanswered, a chime) leaves it waiting.
+
+/** A todo's instants, in time order. */
+const todoInstants = (todoId: string): InstantRecord[] =>
+  useEntities.getState().instants.filter(i => i.todo?.id === todoId).sort((a, b) => a.tsEpochMs - b.tsEpochMs)
+
+/** The open todo an instant belongs to, if any. */
+export function openTodoOf(inst: InstantRecord | undefined): TodoRecord | undefined {
+  const t = inst?.todo ? entities.getTodo(inst.todo.id) : undefined
+  return t?.status === 'open' ? t : undefined
+}
+
+/** Whether any of an instant's alarms has rung (answered, ringing, or due). */
+const hasRung = (inst: InstantRecord, now: number) =>
+  (inst.alarms ?? []).some(a => !!a.answered || isAlarmRinging(ringKey(inst.id, a.id)) || !isArmed(inst, a, now))
+
+/** Answers a todo's ringing alarms and takes its chimes' cards away (it is about to be started, moved, done or put back). */
+function quietTodoAlarms(instantId: string) {
+  for (const r of useAlarms.getState().ringing) if (r.instantId === instantId) dismiss(ringKey(r.instantId, r.alarmId))
+  for (const c of useAlarms.getState().chimes) if (c.instantId === instantId) clearChimeCard(ringKey(c.instantId, c.alarmId))
+}
+
+/** Deletes an instant's alarms still to ring, as if never set (those that rang stay as history). */
+function dropArmedAlarms(inst: InstantRecord, now: number) {
+  for (const a of inst.alarms ?? []) if (isArmed(inst, a, now)) entities.removeAlarm(inst.id, a.id)
+}
+
+/** Stops a todo counting, saving nothing (as unfavoriting does). */
+function stopCounting(todoId: string) {
+  for (const i of todoInstants(todoId)) if (i.favorite) setFavorite(i.id, false)
+  if (entities.getTodo(todoId)?.startedId) entities.patchTodo(todoId, { startedId: undefined })
+}
+
+/**
+ * Ends the stretch a todo is counting at `endId` (its ⏸ or ✓): the span to Now becomes the saved
+ * span to it (the favorite's stop), or, its lane hidden (unfavorited while it counted), a span is
+ * saved from where it started. It stops counting.
+ */
+function endStretch(todoId: string, counting: InstantRecord, endId: string, label: string) {
+  if (entities.nowSpanOf(counting.id)) closeNowSpan(counting.id, endId, label)
+  else entities.createSpan(counting.id, endId, label, { visible: true })
+  if (entities.getInstant(counting.id)?.favorite) setFavorite(counting.id, false)
+  entities.patchTodo(todoId, { startedId: undefined })
+}
+
+/**
+ * The alarms a todo's new `at` gets: what Settings › Alarms gives a new alarm (its warnings, and
+ * the one at its time), without warnings whose time has already gone.
+ */
+function todoAlarms(ts: number, now: number): AlarmRecord[] {
+  const { alarmRings } = useSettings.getState()
+  const offsets = pickerOffsets(alarmRings.warnings, alarmRings.onTime)
+  return offsets.filter(o => o === 0 || ts - o > now).map(offsetMs => ({ id: newAlarmId(), offsetMs }))
+}
+
+/** A todo's `at` at `ts`, with its alarms, in its group. Returns its id. */
+function createTodoAt(todo: TodoRecord, ts: number): string {
+  const id = entities.createInstant(ts, todo.label)
+  const alarms = todoAlarms(ts, nowTime())
+  entities.patchInstant(id, () => ({
+    todo: { id: todo.id, role: 'at' as const }, ...(alarms.length > 0 ? { alarms } : {}), ...(todo.collectionId ? { collectionId: todo.collectionId } : {}),
+  }))
+  void primeNotifications() // the first todo with a time asks for notification permission
+  return id
+}
+
+/**
+ * The Todos tab's Add box and the capture box (N): a name, and maybe a time, a day, a length and
+ * a repeat ("laundry 4p 20m", "feed cats 7a daily"; domain/todos parseTodoInput). A time
+ * schedules it straight away; a repeat makes a repeating todo (a series marked as todos). Capture
+ * never interrupts: nothing else changes (no selection, the view stays put). Returns the todo's id.
+ */
+export function addTodo(text: string): string | undefined {
+  const input = parseTodoInput(text)
+  if (!input.label.trim()) return
+  const now = nowTime()
+  const at = todoInputAt(input, now, getTodoTimes())
+  if (input.repeat && at !== null) {
+    const { alarmRings } = useSettings.getState()
+    const series: SeriesRecord = {
+      id: newGroupId(), kind: 'series', label: input.label, time: clockKey(at), repeat: input.repeat,
+      alarms: pickerOffsets(alarmRings.warnings, alarmRings.onTime), from: dateKey(now), todo: input.durationMs ? { durationMs: input.durationMs } : {},
+    }
+    void primeNotifications()
+    entities.putGroup(series)
+    syncSeries()
+    return storedInstants(useEntities.getState().instants)
+      .filter(i => i.seriesId === series.id && i.todo)
+      .sort((x, y) => x.tsEpochMs - y.tsEpochMs)[0]?.todo?.id
+  }
+  const todo = makeTodo({ label: input.label, durationMs: input.durationMs }, newTodoId(), now, nextOrder(useEntities.getState().todos ?? []))
+  entities.putTodo(todo)
+  if (at !== null) createTodoAt(todo, at)
+  return todo.id
+}
+
+/** Schedule an unscheduled todo (or reschedule one: Later). */
+export function scheduleTodo(todoId: string, ts: number) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  if (todoAt(todoInstants(todoId))) { rescheduleTodo(todoId, ts); return }
+  createTodoAt(todo, ts)
+}
+
+/**
+ * Later: the plan changed, so its `at` moves to `ts` (Snooze is "remind me again"; this is "do
+ * it then"). It stops counting (nothing saved), its ringing alarms go quiet, pending snoozes go,
+ * and its alarms re-arm at the new time (domain/alarms rearmAfterMove), with one at its time
+ * if none is left; the planned block follows.
+ */
+export function rescheduleTodo(todoId: string, ts: number) {
+  const todo = entities.getTodo(todoId)
+  const at = todoAt(todoInstants(todoId))
+  if (!todo || todo.status !== 'open') return
+  if (!at) { createTodoAt(todo, ts); return }
+  const now = nowTime()
+  stopCounting(todoId)
+  quietTodoAlarms(at.id)
+  for (const a of entities.getInstant(at.id)?.alarms ?? []) if (a.snoozeOf && !a.answered) entities.removeAlarm(at.id, a.id)
+  setInstantTime(at.id, ts)
+  const moved = entities.getInstant(at.id)
+  if (moved && !(moved.alarms ?? []).some(a => a.offsetMs === 0 && isArmed(moved, a, now))) entities.addAlarm(at.id)
+  // An occurrence moved on its own: the series' rule changes leave it alone.
+  if (moved?.seriesId && !moved.seriesEdited) entities.patchInstant(at.id, () => ({ seriesEdited: true }))
+  if (v().moveMode?.instantId === at.id) view.setMoveMode(null)
+}
+
+/** Takes a todo's `at` out of time: deleted if none of its alarms rang (a plan that never happened isn't history), else kept as `was`. */
+function unscheduleAt(at: InstantRecord, now: number) {
+  stopCounting(at.todo!.id)
+  const rang = hasRung(at, now)
+  quietTodoAlarms(at.id)
+  if (!rang) {
+    // Unlinked first: an occurrence's record stays (deleting its `at` skips the date).
+    entities.setInstantTodo(at.id, null)
+    deleteInstant(at.id)
+    return
+  }
+  const kept = entities.getInstant(at.id)
+  if (kept) dropArmedAlarms(kept, now)
+  entities.setInstantTodo(at.id, { id: at.todo!.id, role: 'was' })
+}
+
+/** Back to the list: unscheduled again, name kept. */
+export function backToList(todoId: string) {
+  const at = todoAt(todoInstants(todoId))
+  if (at) unscheduleAt(at, nowTime())
+}
+
+/**
+ * The trash on a scheduled todo's chip deletes its schedule, not the todo: Back to the list (its
+ * `at` goes if it never rang, else stays as `was`). Then a toast offers the second step, Delete
+ * todo ("Laundry is back on the list · Delete todo").
+ */
+export function deleteTodoSchedule(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const at = todoAt(todoInstants(todoId))
+  if (!at) return
+  backToList(todoId)
+  ui.showToast(TODO_COPY.backOnList(todo.label || formatClockCompact(at.tsEpochMs, false)), {
+    label: TODO_COPY.deleteTodo, danger: true, run: () => deleteTodo(todoId),
+  })
+}
+
+/**
+ * Makes an instant a todo (the ☐ on a selected chip, a ringing alarm's card): a record named for
+ * it, the instant its `at` (docs/prd_todos.md). A todo at a time rings (dismissing it starts the
+ * count), so one still to come gets an alarm at its time if it has none there; one already past
+ * is waiting (in the Todos tab's Now), or counting if it is a favorite. On an occurrence its
+ * series becomes a repeating todo (each occurrence ahead its own record), as Repeat on a todo
+ * does. `name`: an unnamed one opens its name box (the chip's ☐). Returns the todo's id.
+ */
+export function makeInstantTodo(id: string, opts: { name?: boolean } = {}): string | undefined {
+  let inst = entities.getInstant(id)
+  if (!inst || inst.todo || isFixedTime(inst)) return
+  // A held virtual (a repeat's far occurrence) becomes real.
+  if (inst.virtual) { entities.patchInstant(id, () => ({})); inst = entities.getInstant(id)! }
+  const now = nowTime()
+  const series = entities.getGroup(inst.seriesId)
+  if (series && !series.todo) updateSeries(series.id, { todo: {} })
+  inst = entities.getInstant(id)!
+  // The series gave it its own record already (an occurrence ahead).
+  let todoId = inst.todo?.id
+  if (!todoId) {
+    const todo = makeTodo({
+      label: inst.label ?? '', collectionId: inst.collectionId,
+      ...(series && inst.occurrence ? { seriesId: series.id, occurrence: inst.occurrence } : {}),
+    }, newTodoId(), now, nextOrder(useEntities.getState().todos ?? []))
+    entities.putTodo(todo)
+    entities.setInstantTodo(id, { id: todo.id, role: 'at' })
+    todoId = todo.id
+  }
+  // An occurrence keeps its series' alarms (the rule's, as every other occurrence).
+  const made = entities.getInstant(id)!
+  if (!series && made.tsEpochMs > now && !(made.alarms ?? []).some(a => a.offsetMs === 0 && isArmed(made, a, now))) {
+    entities.addAlarm(id)
+    void primeNotifications()
+  }
+  if (opts.name && !made.label) view.editInstant(id)
+  return todoId
+}
+
+/**
+ * ✓ Done (the lane's stop on a counting todo, the ringing card, a Todos row, the chip's tool): a
+ * `done` instant at Now ("✓ Feed cats"). Counting, the span to Now becomes the saved span to it
+ * (the favorite's ordinary stop: entities.closeNowSpan), its stretch; otherwise nothing was timed
+ * and no span is made. Its alarms answered or cancelled; done before its time, a plan that never
+ * rang is let go. The record is done, and it is celebrated (glow, confetti, a ding): at `origin`,
+ * the box that was tapped, when given. `at`: when it was done (a charged tap's moment), else Now.
+ */
+export function doneTodo(todoId: string, opts: { at?: number; origin?: DoneOrigin } = {}): string | undefined {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = opts.at ?? nowTime()
+  const mine = todoInstants(todoId)
+  const at = todoAt(mine)
+  const counting = countingInstant(mine, now, todo.startedId)
+  endNaming()
+  ui.closeLaneTools()
+  if (at) quietTodoAlarms(at.id)
+  const doneId = entities.createInstant(now, TODO_COPY.doneName(todo.label))
+  entities.patchInstant(doneId, () => ({ todo: { id: todoId, role: 'done' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+  if (counting) endStretch(todoId, counting, doneId, todo.label)
+  const after = at ? entities.getInstant(at.id) : undefined
+  if (after && !counting) {
+    if (after.tsEpochMs > now && !hasRung(after, now)) {
+      // Done before its time: the plan never happened.
+      entities.setInstantTodo(after.id, null)
+      deleteInstant(after.id)
+    } else dropArmedAlarms(after, now)
+  }
+  entities.patchTodo(todoId, { status: 'done', closedAt: now, startedId: undefined })
+  ui.markDropped(doneId)
+  ui.celebrate(doneId, todoId, opts.origin)
+  return doneId
+}
+
+/** Done boxes charging (completeTodo), by todo: a second tap while one charges does nothing. */
+const charging = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * A tap on a todo's Done box (its Todos row, its selected chip, its lane's ✓): the box charges
+ * for the `doneChargeMs` tunable (domain/doneBurst: motes rush in, it fills and greens), then
+ * pops, and only then is the todo done (doneTodo), dated at the tap. With reduced motion, no
+ * charge, or no box to charge, it is done at once.
+ */
+export function completeTodo(todoId: string, origin?: DoneOrigin) {
+  if (charging.has(todoId)) return
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const ms = getTunables().doneChargeMs
+  if (!origin || !origin.box || ms <= 0 || reducedMotion()) {
+    doneTodo(todoId, { origin })
+    return
+  }
+  const at = nowTime()
+  ui.charge(todoId, origin)
+  charging.set(todoId, setTimeout(() => {
+    charging.delete(todoId)
+    if (!doneTodo(todoId, { at, origin })) ui.endCharge(todoId)
+  }, ms))
+}
+
+/** Won't do: the record is dropped; it stops counting (nothing saved) and alarms still to ring are cancelled. */
+export function wontDoTodo(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = nowTime()
+  stopCounting(todoId)
+  const at = todoAt(todoInstants(todoId))
+  if (at) {
+    if (at.tsEpochMs > now && !hasRung(at, now)) unscheduleAt(at, now)
+    else {
+      quietTodoAlarms(at.id)
+      const kept = entities.getInstant(at.id)
+      if (kept) dropArmedAlarms(kept, now)
+    }
+  }
+  entities.patchTodo(todoId, { status: 'dropped', closedAt: now })
+}
+
+/**
+ * ▶ Start: it counts on the timeline until its ✓ (docs/prd_todos.md §4.4), the only way a todo
+ * starts. `fromAlarm` (its ringing card at its time, or its chime's): it counts from its time,
+ * the scheduled one (its `at` is favorited). Its plan still ahead (a warning's Start now, its
+ * chip's ▶ early) moves to Now. Its time gone by (its alarm silenced, unanswered, or none) counts
+ * from Now: a ▶ instant at Now (role `start`), so the plan stays where it was. Unscheduled, an
+ * `at` at Now. Its ringing alarms are answered and those still to ring cancelled (she is on it).
+ */
+export function startTodo(todoId: string, opts: { fromAlarm?: boolean } = {}) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = nowTime()
+  const at = todoAt(todoInstants(todoId))
+  if (countingInstant(todoInstants(todoId), now, todo.startedId)) return
+  let id: string
+  if (at) {
+    quietTodoAlarms(at.id)
+    const kept = entities.getInstant(at.id)
+    if (kept) dropArmedAlarms(kept, now)
+    if (at.tsEpochMs > now) {
+      entities.setInstantTime(at.id, now)
+      if (kept?.seriesId && !kept.seriesEdited) entities.patchInstant(at.id, () => ({ seriesEdited: true }))
+      id = at.id
+    } else if (opts.fromAlarm) id = at.id
+    else {
+      id = entities.createInstant(now, TODO_COPY.startName(todo.label || formatClockCompact(at.tsEpochMs, false)))
+      entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'start' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+    }
+  } else {
+    // Back on the list: a paused one (it has stretches) goes on from a ▶ instant; a new one's `at` is at Now.
+    const resumed = todoInstants(todoId).length > 0
+    id = entities.createInstant(now, resumed ? TODO_COPY.startName(todo.label) : todo.label)
+    entities.patchInstant(id, () => ({ todo: { id: todoId, role: resumed ? 'start' as const : 'at' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+  }
+  setFavorite(id, true)
+  entities.patchTodo(todoId, { startedId: id })
+  ui.markDropped(id)
+}
+
+/**
+ * ⏸ Pause (docs/prd_todos.md §4.4): the stretch counting now is saved, ending at a ⏸ instant at
+ * Now ("⏸ Laundry", a Mark), and the todo goes back on the list, paused, at its top (owner,
+ * 2026-11-22: not a todo waiting in Now): its `at` stays as history (`was`), its alarms still to
+ * ring cancelled. ▶ Start counts a new stretch; Schedule gives it a time again. No celebration.
+ * Not counting: nothing.
+ */
+export function pauseTodo(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status !== 'open') return
+  const now = nowTime()
+  const counting = countingInstant(todoInstants(todoId), now, todo.startedId)
+  if (!counting) return
+  endNaming()
+  ui.closeLaneTools()
+  const id = entities.createInstant(now, TODO_COPY.pauseName(todo.label || formatClockCompact(counting.tsEpochMs, false)))
+  entities.patchInstant(id, () => ({ todo: { id: todoId, role: 'pause' as const }, ...(todo.collectionId ? { collectionId: todo.collectionId } : {}) }))
+  endStretch(todoId, counting, id, todo.label)
+  const at = todoAt(todoInstants(todoId))
+  if (at) {
+    quietTodoAlarms(at.id)
+    const kept = entities.getInstant(at.id)
+    if (kept) dropArmedAlarms(kept, now)
+    entities.setInstantTodo(at.id, { id: todoId, role: 'was' })
+  }
+  entities.patchTodo(todoId, { order: firstOrder(useEntities.getState().todos ?? []) })
+}
+
+/**
+ * Not a todo (the struck-through box in a todo chip's tools, a Todos row's ⋯): the opposite of
+ * makeInstantTodo. Not once it was worked on (a stretch saved, or counting): that time is the todo's.
+ * Otherwise: The instant stays as it is (time, name, alarms, favorite), no longer a todo,
+ * and its record goes; instants the todo made (✓ done, ▶ start) stay as history, their links
+ * cleared. On an occurrence its series stops being a repeating todo, and its occurrences ahead
+ * become plain too.
+ */
+export function untodo(instantId: string) {
+  const inst = entities.getInstant(instantId)
+  const todoId = inst?.todo?.id
+  if (!inst || !todoId) return
+  if (hasStretches(todoInstants(todoId), useEntities.getState().spans, nowTime(), entities.getTodo(todoId)?.startedId)) return
+  const ids = [todoId]
+  const series = entities.getGroup(inst.seriesId)
+  if (series?.todo) {
+    updateSeries(series.id, { todo: undefined })
+    const now = Date.now()
+    for (const i of storedInstants(useEntities.getState().instants)) {
+      if (i.seriesId === series.id && i.todo?.role === 'at' && i.tsEpochMs > now && entities.getTodo(i.todo.id)?.status === 'open' && !ids.includes(i.todo.id)) ids.push(i.todo.id)
+    }
+  }
+  for (const id of ids) {
+    for (const i of todoInstants(id)) entities.setInstantTodo(i.id, null)
+    entities.removeTodo(id)
+  }
+}
+
+/**
+ * Snooze on a todo's card at its time: the todo itself moves to 5 minutes from now (its plan,
+ * alarms and block with it: rescheduleTodo), rather than a bell added (owner, 2026-11-21). A warning's
+ * snooze stays a reminder (snoozeAlarm).
+ */
+export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
+  const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
+  if (!todo) return
+  rescheduleTodo(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+}
+
+/**
+ * Opens a done, dropped or passed todo again (a mistaken tap): its instant is its todo again,
+ * where it was (owner, 2026-11-22), so it waits (or is paused, if it was), or is scheduled if
+ * its time is still ahead; ▶ Start goes on. With none, it is back on the list. Its ✓ and
+ * stretches stay as history.
+ */
+export function reopenTodo(todoId: string) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || todo.status === 'open') return
+  entities.patchTodo(todoId, { status: 'open', closedAt: undefined, startedId: undefined, order: nextOrder(useEntities.getState().todos ?? []) })
+}
+
+/**
+ * Deletes a todo: the record goes, and its `at` too if it never rang; every other instant stays
+ * as history, its link cleared.
+ */
+export function deleteTodo(todoId: string) {
+  const now = nowTime()
+  stopCounting(todoId)
+  for (const i of todoInstants(todoId)) {
+    entities.setInstantTodo(i.id, null)
+    if (i.todo?.role !== 'at') continue
+    quietTodoAlarms(i.id)
+    if (!hasRung(i, now)) deleteInstant(i.id)
+    else { const kept = entities.getInstant(i.id); if (kept) dropArmedAlarms(kept, now) }
+  }
+  entities.removeTodo(todoId)
+}
+
+/** Renames a todo (and its `at`, which carries its name). */
+export function renameTodo(todoId: string, label: string) {
+  const name = label.trim()
+  if (!name) return
+  entities.patchTodo(todoId, { label: name })
+  const at = todoAt(todoInstants(todoId))
+  if (at && at.label !== name) { entities.setInstantLabel(at.id, name); touchOccurrence(at.id) }
+}
+
+/** Sets or clears a todo's length (its estimate, drawn as the planned block). */
+export function setTodoLength(todoId: string, ms: number | null) {
+  entities.patchTodo(todoId, { durationMs: ms && ms > 0 ? ms : undefined })
+}
+
+/** Moves an unscheduled todo in its list: before `beforeId`, or to the end. */
+export function reorderTodo(todoId: string, beforeId: string | null) {
+  const list = (useEntities.getState().todos ?? []).filter(t => t.status === 'open' && t.id !== todoId).sort((a, b) => a.order - b.order)
+  const at = beforeId ? list.findIndex(t => t.id === beforeId) : -1
+  const next = [...list]
+  const moving = entities.getTodo(todoId)
+  if (!moving) return
+  next.splice(at < 0 ? next.length : at, 0, moving)
+  next.forEach((t, k) => { if (t.order !== k) entities.patchTodo(t.id, { order: k }) })
+}
+
+/** Goes to a todo's `at` on the timeline (a Todos row), or its ✓ once done. */
+export function showTodo(todoId: string) {
+  const mine = todoInstants(todoId)
+  // Worked on: its latest stretch (the one counting, if one is).
+  const todo = entities.getTodo(todoId)
+  const last = todoStretches(mine, useEntities.getState().spans, nowTime(), todo?.startedId).pop()
+  if (last?.spanId) { showStretch(last.spanId); return }
+  const counting = countingInstant(mine, nowTime(), todo?.startedId)
+  const target = counting ?? todoAt(mine) ?? mine.filter(i => i.todo?.role === 'done').pop() ?? mine[mine.length - 1]
+  if (target) focusInstant(target.id)
+}
+
+/** Goes to one of a todo's stretches (the latest, from its row; any, from its ⋯): focused, the view fit to it. */
+export function showStretch(spanId: string) {
+  focusSpan(spanId)
+}
+
+/**
+ * A repeating todo's occurrence still open when the next one arrives is passed (domain/todos
+ * passedTodos): it stops counting with nothing saved, its alarms still to ring are cancelled,
+ * and nothing is moved or carried over. Run on start and when an occurrence arrives (services/todoSync).
+ */
+export function passTodos() {
+  const now = Date.now()
+  const { todos, instants } = useEntities.getState()
+  for (const id of passedTodos(todos ?? [], storedInstants(instants), now)) {
+    stopCounting(id)
+    const at = todoAt(todoInstants(id))
+    if (at) { quietTodoAlarms(at.id); const kept = entities.getInstant(at.id); if (kept) dropArmedAlarms(kept, now) }
+    entities.patchTodo(id, { status: 'passed', closedAt: now })
+  }
+}
+
+/** Opens the todo capture box (N): a name and Enter, from anywhere. */
+export const openCapture = () => ui.setCapture(true)
+
+/** Its todo in the Todos tab (a long-press on a todo chip's box): the tab opens (the drawer too) and its row scrolls into view, lit. */
+export function findTodo(todoId: string) {
+  ui.setListTab('todos')
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
+  ui.findTodo(todoId)
+}
+
+/**
+ * The Todo button: the Agenda's Todos tab, opening the drawer when the Agenda is one (tapped
+ * again while the drawer shows it, it closes).
+ */
+export function openTodos() {
+  const drawer = useLayout.getState().agendaPlacement === 'drawer'
+  const { agendaOpen, listTab } = useUi.getState()
+  if (drawer && agendaOpen && listTab === 'todos') { ui.closeAgenda(); return }
+  ui.setListTab('todos')
+  if (drawer) ui.openAgenda()
+}
+
+// ---------------------------------------------------------------------------
 // Backup: export and import
 
 /** Everything worth keeping as one backup: the settings and the saved instants and spans. */
@@ -1301,9 +1852,9 @@ export function exportBackup(date = new Date(), opts: { collections?: ReadonlySe
   delete preferences.layoutVersion
   const { autoDismissMs, unattended } = useAlarms.getState()
   const { showImpliedSelectedNow, showImpliedSelectedPrev, timeIncrement } = v()
-  const { spans, groups, collections: mine } = useEntities.getState()
+  const { spans, groups, collections: mine, todos } = useEntities.getState()
   const instants = storedInstants(useEntities.getState().instants)
-  const all = { instants, spans, groups: groups ?? [], collections: mine }
+  const all = { instants, spans, groups: groups ?? [], collections: mine, todos: todos ?? [] }
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -1349,7 +1900,7 @@ export function importBackup(backup: Backup, choice: ImportChoice) {
     const collections = choice.mode === 'replace'
       ? sanitizeCollections(backup.data.collections ?? [])
       : [...before.collections, ...(mapped?.added ?? [])]
-    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [], collections }
+    const next = { instants: syncAlarmVisibility(synced.instants, nowTime()), spans: synced.spans, groups: merged.groups ?? [], collections, todos: merged.todos ?? [] }
     const instantIds = new Set(next.instants.map(i => i.id))
     const spanIds = new Set(next.spans.map(sp => sp.id))
     const lostFocus = v().viewFocusMode === 'instant' && !!v().focusedInstantId && !instantIds.has(v().focusedInstantId!)

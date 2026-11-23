@@ -9,6 +9,7 @@ import { startNoButtonSelect } from './hooks/noButtonSelect.ts'
 import { startNotificationClicks } from './services/notificationClicks.ts'
 import { startPwaUpdates } from './services/pwaUpdate.ts'
 import { startSeriesSync } from './services/seriesSync.ts'
+import { startTodoSync } from './services/todoSync.ts'
 import { revealInstant } from './store/actions.ts'
 import { applySettingsToDocument } from './store/settings.ts'
 import { startLayoutTracking } from './store/layout.ts'
@@ -21,6 +22,7 @@ engine.start()
 startAlarmScheduler({ onNotificationClick: id => revealInstant(id) })
 startNotificationClicks()
 startSeriesSync()
+startTodoSync()
 startNoButtonSelect()
 // Inside the Android app only: alarm and live notifications (docs/android.md).
 startNativeShell()

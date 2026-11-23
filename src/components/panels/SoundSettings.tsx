@@ -2,22 +2,16 @@
 // it. In the Android app each sound is a notification channel ("Alarm tone 1"…, "Chime"):
 // Change… opens Android's settings for it, where any sound can be picked, the user's own files
 // included; the row then shows that sound's name.
-import { PlayIcon } from '@heroicons/react/20/solid'
 import { SOUNDS, soundSlotName } from '../../domain/sounds.ts'
-import type { AlarmSound } from '../../domain/sounds.ts'
 import { settings, useSettings } from '../../store/settings.ts'
-import { previewSound } from '../../services/AlarmScheduler.ts'
-import { isNativeShell, openNativeSoundSettings, previewNativeSound } from '../../services/nativeShell.ts'
-import { SoundChips } from '../common/SoundPicker.tsx'
+import { isNativeShell, openNativeSoundSettings } from '../../services/nativeShell.ts'
+import { PreviewButton, SoundChips } from '../common/SoundPicker.tsx'
 import { useSoundNames } from '../../hooks/useSoundNames.ts'
-import { IconButton } from '../common/IconButton.tsx'
 
 export function SoundSettings() {
   const rings = useSettings(s => s.alarmRings)
   const { names, native } = useSoundNames()
   const shell = isNativeShell()
-  // The app's channels' own sound, as Android plays it; in a browser (or an older app), the preset.
-  const play = (s: AlarmSound) => (native ? void previewNativeSound(s) : previewSound(s))
   return (
     <>
       <div className="settings__row settings__row--wrap">
@@ -27,7 +21,7 @@ export function SoundSettings() {
       <ul className="sound-list" aria-label="Sounds">
         {SOUNDS.map(s => (
           <li key={s} className="sound-list__row">
-            <IconButton icon={PlayIcon} label={`Play ${soundSlotName(s)}: ${names[s].name}`} color="var(--c-alarm)" bare onClick={() => play(s)} />
+            <PreviewButton sound={s} name={`${soundSlotName(s)}: ${names[s].name}`} native={native} />
             <span className="sound-list__slot">{soundSlotName(s)}</span>
             <span className={`sound-list__name${names[s].off ? ' is-off' : ''}`}>
               {names[s].name}

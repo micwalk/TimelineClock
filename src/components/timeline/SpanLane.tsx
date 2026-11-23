@@ -15,8 +15,8 @@ import { observeLaneChip, rightSideLayout } from './rightSideLayout.ts'
 import { laneChipLayout } from './laneChipLayout.ts'
 import { followLaneFlow, playLaneFlow, registerLaneLayers } from '../../engine/laneFlow.ts'
 
-/** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes. */
-export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span'
+/** `now` and `cursor` are the live lanes' accents (red, cursor colour); the rest are saved-side lanes (`planned`: a todo's plan, domain/blocks). */
+export type LaneVariant = 'now' | 'cursor' | 'selected' | 'secondary' | 'focused' | 'span' | 'planned'
 
 /** What an endpoint arrow jumps to. Cursor endpoints get no arrow. */
 export type EndTarget = { kind: 'instant'; id: string } | { kind: 'now' } | { kind: 'cursor' }

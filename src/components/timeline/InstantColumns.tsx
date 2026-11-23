@@ -1,6 +1,6 @@
 // Saved instant markers: a line (in the shared lines layer, InstantLines) plus one compact chip,
 // placed along the time axis each frame with its animated layout offsets (chipPlacement).
-import { MARKS } from '../../config/labels.ts'
+import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -10,7 +10,7 @@ import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, 
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
-import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
+import { SNOOZE_MARK, chipName, formatClockCompact, formatDateTime, formatDuration, formatDurationShort, formatRelativeShort, showsSeconds } from '../../domain/format.ts'
 import { labelSpacingPx, pickTickTiers } from '../../domain/ticks.ts'
 import type { AlarmRecord, InstantRecord } from '../../domain/entities.ts'
 import { hasArmedAlarm, openAlarms, ringKey, ringTime } from '../../domain/alarms.ts'
@@ -25,6 +25,10 @@ import { ui, useUi } from '../../store/ui.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
+import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { doneOrigin } from '../common/doneOrigin.ts'
+import { hasStretches } from '../../domain/todos.ts'
+import { useLongPress } from '../../hooks/useLongPress.ts'
 import { GEOMETRY, GEOMETRY_VERTICAL } from './geometry.ts'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss.ts'
 import { useKeepOnScreen } from '../../hooks/useKeepOnScreen.ts'
@@ -42,7 +46,7 @@ import { describeRepeat } from '../../domain/series.ts'
 import { sunEventName } from '../../domain/sun.ts'
 import { isAtSun } from '../../domain/sunEvents.ts'
 import { VisibilityEditor } from '../panels/VisibilityEditor.tsx'
-import { isAtDstShift } from '../../domain/dst.ts'
+import { isAtDstShift, isFixedTime } from '../../domain/dst.ts'
 import { isAtSeason } from '../../domain/seasons.ts'
 import type { ChipOffsets } from './chipPlacement.ts'
 import { useChipPlacement } from './chipPlacement.ts'
@@ -84,6 +88,8 @@ interface ChipProps {
   foldedIds: string
   /** Bells before or after the instant folded into its chip (too close to stand apart: zoomed out): alarm ids, comma-joined, earliest first. */
   bellFolded: string
+  /** A todo's ✓ folded into this chip (its `at`; too close to stand apart): the ✓ instant's id, or ''. */
+  doneFolded: string
   selected: boolean
   focused: boolean
   editing: boolean
@@ -91,8 +97,18 @@ interface ChipProps {
   fineSeconds: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
+  // A todo's `at` leads with its state (☐ open, ✓ done, ↷ passed, – won't do: config/labels).
+  const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
+  const openTodo = todoStatus === 'open' ? inst.todo!.id : null
+  // Counting already (its `at`, or a ▶ start, a favorite): no ▶ Start.
+  // Worked on (a stretch saved, or counting now): it can't stop being a todo.
+  const todoWorked = useEntities(s => !!openTodo && hasStretches(s.instants.filter(i => i.todo?.id === openTodo), s.spans, Date.now(), s.todos?.find(t => t.id === openTodo)?.startedId))
+  const doneFoldTs = useEntities(s => (doneFolded ? s.instants.find(i => i.id === doneFolded)?.tsEpochMs : undefined))
+  const celebrating = useUi(s => s.celebrating?.instantId === inst.id || (!!doneFolded && s.celebrating?.instantId === doneFolded))
+  // Its todo's ✓ is springing out of a box drawn over this chip's (components/timeline/Celebration).
+  const popping = useUi(s => !!inst.todo && s.celebrating?.todoId === inst.todo.id && !!s.celebrating.origin?.box)
   // Only alarms and a selected chip's tools care whether it is past: others don't watch the clock.
   const isPast = useFrameValueWhile(!!inst.alarms || selected, f => ts < f.now, false)
   const armed = useFrameValueWhile(!!inst.alarms, f => hasArmedAlarm(inst, f.now), false)
@@ -172,6 +188,8 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
     <BellTools inst={inst} alarm={toolAlarm} />
   ) : selected && !moving ? (
     <>
+      {/* A todo: Not a todo (its box is its Done; Start is in the Todos tab, a long-press on the box away), not once it was worked on. */}
+      {openTodo && !todoWorked && <IconButton icon={NotTodoIcon} label={`${TODO_UI.notTodo}: keep it as a plain instant`} color="var(--c-todo)" bare onClick={() => act.untodo(inst.id)} />}
       {!inst.favorite && <IconButton icon={StarOutline} label="Favorite" color={starColor} bare onClick={() => act.toggleFavorite(inst.id)} />}
       {!isPast && <IconButton icon={BellOutline} label={atInstant.length > 0 ? 'Add another alarm' : 'Set alarm'} color={bellColor} bare onClick={() => act.addAlarm(inst.id)} />}
       {openAlarms(inst).length > 0 && <CancelTool inst={inst} />}
@@ -181,8 +199,11 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
       {(inst.seriesId || (!atShift && !atSeason && (!atSun || openAlarms(inst).length > 0))) && <RepeatTool inst={inst} />}
       {/* The eye: how far out it stays (chip, mark, gone), or hidden everywhere. */}
       <VisibilityTool inst={inst} />
-      {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye. */}
-      {inst.seriesId
+      {/* A sunrise or sunset isn't deleted (the sun still sets): it is hidden, with the eye.
+          A todo's schedule is deleted, not the todo: it goes back to the list, and a toast offers the rest. */}
+      {openTodo && !inst.seriesId && inst.todo?.role === 'at'
+        ? <IconButton icon={TrashIcon} label="Delete the schedule: back to the todo list" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteTodoSchedule(openTodo)} />
+        : inst.seriesId
         ? <DeleteOccurrenceTool inst={inst} />
         : !fixed && <IconButton icon={TrashIcon} label="Delete instant" color="var(--c-danger)" className="glow-box" onClick={() => act.deleteInstant(inst.id)} />}
     </>
@@ -221,7 +242,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
           <BellAlertIcon aria-hidden />
         </button>
       )}
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -235,6 +256,14 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
           />
         ) : (
           <>
+          {/* A selected open todo's box is its Done, as on its Todos row; a long-press finds it there. */}
+          {selected && openTodo && !moving && <TodoBoxButton todoId={openTodo} name={displayName(inst.label, 'todo')} />}
+          {/* Make it a todo: a faint ☐ while selected; a tap lights it (the chip's own ☐ from then on). */}
+          {selected && !inst.todo && !fixed && !moving && (
+            <button type="button" className="chip__todo-hint" aria-label={TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)}
+              title={TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)}
+              onClick={() => act.makeInstantTodo(inst.id, { name: true })}><TodoBoxIcon aria-hidden /></button>
+          )}
           {unnamed && selected && (
             <button type="button" className="chip__name-hint" aria-label="Name this instant" onClick={() => view.editInstant(inst.id)}>name…</button>
           )}
@@ -246,12 +275,15 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
             onDoubleClick={() => act.activateInstant(inst.id, firstTap.current?.wasFocused)}
           >
             {atSun && <SunIcon className="chip__sun" aria-label={`at ${sunEventName(inst.sun!.event).toLowerCase()}`} />}
+            {todoStatus && !(selected && openTodo && !moving) && <TodoBoxIcon className="chip__todo" state={doneFolded && todoStatus === 'done' ? 'done' : todoStatus} role="img" aria-label={TODO_STATUS_TEXT[todoStatus]} />}
             {!unnamed && <span className="chip__name">{name}</span>}
             {inst.seriesId && <span className="chip__repeat" aria-label="repeats">{REPEAT_MARK}</span>}
             <span className="chip__time">
               {moving ? <LiveText compute={f => formatChipTime(f.center, f.now, f.end - f.start, true)} /> : <LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} />}
             </span>
             {showRelative && !moving && <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
+            {/* Its ✓, folded in: when it was done, "· +12m". */}
+            {doneFoldTs !== undefined && <span className="chip__rel">· {TODO_COPY.foldAfter(formatDurationShort(doneFoldTs - ts))}</span>}
             {moving && <LiveText className="chip__rel" compute={f => `· ${formatRelativeShort(f.center - f.now)}`} />}
           </button>
           </>
@@ -289,7 +321,20 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, selected, focused, 
   )
 }
 
-/** Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap too. */
+/** A selected open todo's box: a tap is Done; a long-press opens the Todos tab at its row (act.findTodo). */
+function TodoBoxButton({ todoId, name }: { todoId: string; name: string }) {
+  const ref = useRef<HTMLButtonElement>(null)
+  const press = useLongPress(() => act.findTodo(todoId), () => act.completeTodo(todoId, ref.current ? doneOrigin(ref.current) : undefined))
+  return (
+    <button ref={ref} type="button" className="chip__todo-btn" aria-label={`${TODO_UI.done}: ${name} (long-press: show it in the Todos tab)`} title={`${TODO_UI.done} (long-press: show it in the Todos tab)`}
+      {...press}><TodoBoxIcon aria-hidden /></button>
+  )
+}
+
+/**
+ * Cancel all of an instant's alarms (the opposite of a snooze): one tap; adding one back is a tap
+ * too. On a scheduled todo too: it stays planned, ringing nothing (its trash puts it back on the list).
+ */
 function CancelTool({ inst }: { inst: InstantRecord }) {
   const all = openAlarms(inst).length
   return (
@@ -297,6 +342,9 @@ function CancelTool({ inst }: { inst: InstantRecord }) {
       onClick={() => act.cancelAlarms(inst.id)} />
   )
 }
+
+/** A todo's state on its chip, for screen readers (its box draws it). */
+const TODO_STATUS_TEXT = { open: 'todo', done: 'done', passed: TODO_COPY.passed, dropped: TODO_COPY.dropped } as const
 
 /**
  * What a chip's time text depends on: the zoom band (time / date and time / date / with year:
@@ -420,13 +468,20 @@ function FoldedBells({ inst, alarms, selected, ringing }: { inst: InstantRecord;
   )
 }
 
-/** A selected bell's tools: type how long before its instant it rings, pick its sound, or delete it. */
+/**
+ * A selected bell's tools: type how long before its instant it rings, pick its sound, make its
+ * instant a todo (a reminder that is something to do: owner, 2026-11-22, here before it rings,
+ * not on the ringing card), or delete it.
+ */
 function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
   const [typing, setTyping] = useState(false)
+  const canTodo = !inst.todo && !alarm.answered && !isFixedTime(inst)
+  const makeTodo = TODO_COPY.makeTodo(inst.seriesId ? displayName(inst.label, 'occurrence') : null)
   return (
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
       {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
+      {canTodo && <IconButton icon={TodoBoxIcon} label={makeTodo} color="var(--c-todo)" bare onClick={() => act.makeInstantTodo(inst.id, { name: true })} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
         <TimeEntry
@@ -576,8 +631,8 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, doneFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; doneFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -618,7 +673,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   return (
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
-      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} belowRef={belowRef}
+      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
@@ -736,6 +791,7 @@ export function SavedInstantColumns() {
             foldCount={layout.foldCount[id] ?? 0}
             foldedIds={(foldedIds[id] ?? []).join(',')}
             bellFolded={layout.bellFolded[id] ?? ''}
+            doneFolded={layout.doneFolded[id] ?? ''}
             bellLinked={bellsByInstant.has(id)}
             selected={v.selected === id}
             focused={focusedId === id}

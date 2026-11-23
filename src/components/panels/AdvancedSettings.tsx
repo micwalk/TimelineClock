@@ -7,7 +7,7 @@ import { TUNABLE_DESCRIPTORS } from '../../domain/tunables.ts'
 import { getTunables, settings, useSettings } from '../../store/settings.ts'
 import { IconButton } from '../common/IconButton.tsx'
 
-const GROUPS: TunableGroup[] = ['Layout', 'Gestures', 'Glide', 'Labels']
+const GROUPS: TunableGroup[] = ['Layout', 'Gestures', 'Glide', 'Labels', 'Todos']
 
 function TunableRow({ d }: { d: TunableDescriptor }) {
   const overridden = useSettings(s => d.key in s.tunables)

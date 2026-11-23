@@ -7,6 +7,88 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.8.0 — 2026-11-22
+
+**Android app: install again** (the vibration fix below is native; the rest is web. A todo's
+notification still offers Dismiss / Snooze: Dismiss there leaves it waiting, and Start / Done
+there is Phase 1b).
+
+- **Todos** (docs/prd_todos.md, Phase 1). A todo is a thing to do: a name, maybe a time and how
+  long it takes. A new **Todos** tab (after Favorites) has an Add box that reads "book appt",
+  "laundry 4p 20m" or "feed cats 7a daily", and lists what rang and isn't done (Now), today's,
+  upcoming, unscheduled (drag to reorder; **Schedule**: In 15m, In 1h, Tonight, Tomorrow, a typed
+  time or the time entry) and the last day's done, with how long each took ("31m · planned 20m").
+  A row's box is its Done (a checked one opens it again); a tap on an unscheduled row opens
+  Schedule (the drawer stays). Its ⋯ sets a **Duration** from one row ("—" for none, 5m, 15m,
+  30m, 1h) or typed; a duration shows as a stopwatch and its length. **N** adds one from anywhere without
+  moving anything else, and the new **Todo** button (left of ＋; under Alarm in vertical) goes to
+  the tab.
+- **When a todo rings**: **▶ Start** (green, first) or **✓ Done** (already did it). Started, it
+  counts on the timeline from its time until you tap the lane's **✓** (the stop, on a todo), which
+  saves the time it took. **Snooze 5m** moves the todo itself 5 minutes on; the box beside it moves it
+  further (In 1h, Tonight, Tomorrow, Unschedule, or a typed time). **Hide** stops it without
+  starting: it waits under Now, where its row's green **▶** counts from then on (a "▶ Laundry"
+  instant; the plan stays where it was). **Won't do** lets it go. Only Start starts a todo. A todo's
+  chime shows the same card, without Hide. A warning before it reads "in 10m · get ready" and
+  asks **▶ Start now** (it moves to Now and counts) or **OK** (it rings again at its time).
+- **Any instant can become a todo**: a selected chip shows a faint ☐ before its name (tap it), and
+  a bell's tools have **☐** (make it a todo, before it rings); a repeating one makes
+  its series a repeating todo.
+- **Todos rows**: Schedule (or **Move**) then a green **▶** to start it, on every open row that
+  isn't counting. A counting row has **⏸ Pause** and **Done** instead (Done is sucked into the
+  row's box, which charges and pops as a tap on it does).
+- **Pause and stretches**: ⏸ (on a counting row, and on its lane beside ✓) saves the stretch so
+  far ("⏸ Laundry", a mark) and puts the todo back at the top of Unscheduled, paused ("12m so
+  far"); ▶ counts a new stretch. A tap on a row with stretches goes to the latest; its ⋯ lists them all (newest
+  first, the one counting live), and a tap goes to one.
+- Taking a counting todo's star off only hides its lane: it still counts, and ✓ or ⏸ saves the
+  stretch. Opening a done todo again (its box) makes its instant its todo again, where it was,
+  rather than sending it back to the list.
+- **Snooze row** on every ringing card: **Snooze 5m** (where it lands under it) and beside it a box
+  that says what it does ("Snooze for 20m"; "until" once a time is typed), its submit where it
+  lands ("→ 1:56p"), in place of the Other… row. On a todo it takes a length, a time or
+  "tomorrow", so Delay is gone from the card (snoozing and moving a todo are one thing);
+  **Unschedule** sits with **Ignore** (was Hide) and Won't do. Delay is now **Move** in the Todos tab.
+- **Not a todo** is gone once a todo has a stretch saved (or counts): that time is the todo's.
+- **Make it a todo** moved from the ringing card (too late there) to a bell's tools (☐).
+- The todo and alarm-card words are in `src/config/labels.ts` (`TODO_UI`, `ALARM_UI`).
+- Fixed: a todo started this minute showed as scheduled ("Today") in the Todos tab, without its
+  Pause and Done.
+- **On the timeline**: a todo's chip leads with its box (checked once done, an arrow when
+  passed), its contents centered; selected, its box is its Done (a long-press opens the Todos tab
+  at its row), and its tools start with **Not a todo** (a struck-through box: it stays a plain
+  instant, alarms and all; also in a row's ⋯; not while it counts). Its trash deletes only the
+  schedule: the todo goes back to the list, and a toast offers **Delete todo** too. A todo with a
+  length draws its **plan** as a dashed block ("Laundry · 20m"), computed, never saved; it goes
+  once the todo is done. A ✓ close to its todo folds into its chip ("✓ Feed cats · +12m") until
+  you zoom in.
+- **Done is celebrated**: tapping a todo's box (its row, its selected chip, or the lane's ✓)
+  charges it: glowing motes rush in onto its border, it glows harder, fills, shrinks a little and
+  turns green, over a sci-fi swoosh of air sucked in. Then it pops, and the todo is done (dated at
+  the tap): its fill becomes a green ✓ that springs out past the box and back, green confetti
+  flies out and falls, and it dings. The ✓ chip and the row flare too. Settings › Alarms › Todos:
+  the Done sound on/off and its volume, with Tonight and Tomorrow's times. With reduced motion it
+  is done at once, with the flare and the ding; the charge's length (0: pop at once), the motes and
+  the confetti are in Advanced.
+- **Repeating todos**: the Alarm picker's **Todo** switch (with an optional duration), or
+  "daily" in the Add box: each occurrence is a todo of its own, and one still open when the next
+  arrives is simply passed.
+- Badges: the Todos tab, the ☰ and the Todo button count what rang and isn't done. Todos are in
+  backups (`data.todos`) and follow their group, as instants do.
+- **Favorites' lanes** to Now always show: the "Lanes for favorites" setting (When selected /
+  Always) is gone, until showing them by zoom, as instants are.
+- **Mute** is a small 🔇 by the alarm panel's title (it lights once muted, and the bell stops
+  shaking), in place of the big Silence button under the cards.
+- **Sound previews** have a ■ to stop them while they play, and picking a sound (or closing the
+  picker) stops the preview.
+- Fixed (Android app): Silence, dismissing or moving a ringing alarm stopped its sound but not its
+  vibration. Android only lets a vibration be cancelled through the Context that started it, and
+  the ring started from the alarm's receiver while the stop came through the app's screen; the
+  vibration now starts and stops through the application's Context, and an alarm with no sound
+  (only vibration) stops too.
+- Fixed: a selected bell's background was see-through (an invalid colour mix), so the instant's
+  line showed through it.
+
 ## 0.7.2 — 2026-11-21
 
 **Android app: install again** (chime notifications are native).

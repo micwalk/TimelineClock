@@ -1,5 +1,6 @@
 // The Stopwatch and Timer buttons: one-tap ways in to the timeline's instants and spans.
 // Stopwatch: Start, then Lap / Stop with live readings, then Reset. Timer: pick a length.
+// Todo: the Todos tab (a badge counts those that rang and aren't done).
 import { useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { ArrowPathIcon, BellAlertIcon, ClockIcon, FlagIcon, StopIcon } from '@heroicons/react/20/solid'
@@ -12,7 +13,23 @@ import { useEntities } from '../../store/entities.ts'
 import { useQuick } from '../../store/quick.ts'
 import { ui, useUi } from '../../store/ui.ts'
 import * as act from '../../store/actions.ts'
+import { useTodoNowCount } from '../../hooks/useTodos.ts'
+import { TodoIcon } from '../common/TodoIcons.tsx'
 import { CtlButton } from './CtlButton.tsx'
+
+/** Todo: goes to the Agenda's Todos tab (act.openTodos); N adds one from anywhere. */
+export function TodoButton({ style }: { style?: CSSProperties }) {
+  const count = useTodoNowCount()
+  return (
+    <div className="ctl-anchor ctl-todo" style={style}>
+      <CtlButton icon={TodoIcon} className="ctl-btn--quick ctl-btn--todo" label={count > 0 ? `Todos (${count} to do now)` : 'Todos'}
+        title="Todos (N adds one)" onClick={act.openTodos}>
+        Todo
+      </CtlButton>
+      {count > 0 && <span className="ctl-badge" aria-hidden>{count}</span>}
+    </div>
+  )
+}
 
 /** Time of a mark (null if it was deleted: the store prunes it on the next change). */
 const useMarkTime = (id: string | undefined) => useEntities(s => (id ? s.instants.find(i => i.id === id)?.tsEpochMs ?? null : null))

@@ -51,6 +51,8 @@ export interface SeriesRecord {
   paused?: boolean
   /** The group its occurrences are in (domain/collections); absent = Default. */
   collectionId?: string
+  /** A repeating todo (domain/todos): each occurrence made gets a todo record of its own, with this length. */
+  todo?: { durationMs?: number }
 }
 
 export type GroupRecord = SeriesRecord
@@ -387,6 +389,9 @@ export function sanitizeRepeat(raw: unknown): Repeat | null {
   return null
 }
 
+const sanitizeSeriesTodo = (t: Record<string, unknown>): { durationMs?: number } =>
+  (typeof t.durationMs === 'number' && Number.isFinite(t.durationMs) && t.durationMs > 0 ? { durationMs: t.durationMs } : {})
+
 /** The well-formed groups in untrusted JSON (storage or an imported file). */
 export function sanitizeGroups(data: unknown): GroupRecord[] {
   if (!Array.isArray(data)) return []
@@ -415,6 +420,7 @@ export function sanitizeGroups(data: unknown): GroupRecord[] {
       ...(sun ? { sun } : {}),
       ...(isSound(r.sound) ? { sound: r.sound } : {}),
       ...(typeof r.collectionId === 'string' && r.collectionId && r.collectionId !== 'default' ? { collectionId: r.collectionId } : {}),
+      ...(r.todo && typeof r.todo === 'object' ? { todo: sanitizeSeriesTodo(r.todo as Record<string, unknown>) } : {}),
     }]
   })
 }

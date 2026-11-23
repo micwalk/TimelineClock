@@ -1,5 +1,6 @@
 import type { AlarmSound } from '../domain/sounds.ts'
 import { TONE_PRESETS } from './tones.ts'
+import type { TonePreset } from './tones.ts'
 
 /**
  * Plays the alarm sounds (services/tones): a tone over and over while alarms ring, and a sound
@@ -144,10 +145,13 @@ export class AlarmAudioManager {
     }
   }
 
-  /** Plays `sound` once (a chime as it sounds, or a preview), cutting the last one played once. */
-  public playOnce(sound: AlarmSound): void {
+  /**
+   * Plays `sound` once (a chime as it sounds, or a preview), cutting the last one played once.
+   * `onEnded` is called when it has played out or been cut. Returns whether it plays.
+   */
+  public playOnce(sound: AlarmSound, onEnded?: () => void): boolean {
     const ctx = this.ready()
-    if (!ctx) return
+    if (!ctx) return false
     this.stopOnce()
     try {
       const gain = ctx.createGain()
@@ -155,6 +159,24 @@ export class AlarmAudioManager {
       gain.connect(ctx.destination)
       const sources = TONE_PRESETS[sound].play(ctx, gain, ctx.currentTime)
       this.onceSources = sources
+      let left = sources.length
+      for (const s of sources) s.addEventListener('ended', () => { if (--left === 0) { gain.disconnect(); onEnded?.() } })
+      return true
+    } catch (error) {
+      console.warn('Could not play sound:', error)
+      return false
+    }
+  }
+
+  /** Plays a preset that isn't an alarm sound (the Done fanfare) once, at `volume` (0–1) of the alarm level; it overlaps nothing it would cut. */
+  public playPreset(preset: TonePreset, volume = 1): void {
+    const ctx = this.ready()
+    if (!ctx || volume <= 0) return
+    try {
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(this.MASTER_LEVEL * Math.min(1, volume), ctx.currentTime)
+      gain.connect(ctx.destination)
+      const sources = preset.play(ctx, gain, ctx.currentTime + 0.02)
       let left = sources.length
       for (const s of sources) s.addEventListener('ended', () => { if (--left === 0) gain.disconnect() })
     } catch (error) {

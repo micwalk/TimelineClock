@@ -7,14 +7,13 @@ import type { InstantRecord } from '../../domain/entities.ts'
 import type { LaneSpan, ResolvedSpan, TimeRef } from '../../domain/spans.ts'
 import { endpointName, resolveSpan, resolveTimeRef, savedSpanLanes, spanEndName, spanGeometry, spanHeader } from '../../domain/spans.ts'
 import { useEntities, useShownInstants } from '../../store/entities.ts'
-import { useSettings } from '../../store/settings.ts'
-import { useQuick } from '../../store/quick.ts'
-import { stopwatchPhase } from '../../domain/quickCreate.ts'
 import { useView } from '../../store/view.ts'
 import { useUi } from '../../store/ui.ts'
 import type { Orientation } from '../../domain/layoutMode.ts'
 import { lanesTop, liveLaneTop } from './geometry.ts'
 import { packSlots, stableSlots } from '../../domain/laneSlots.ts'
+import type { TimeBlock } from '../../domain/blocks.ts'
+import { instantsByTodo, plannedBlocks } from '../../domain/todos.ts'
 
 const LANE_HEIGHT = 40
 const LANES_BOTTOM_PAD = 18
@@ -34,6 +33,8 @@ export type BottomLane = LaneBase & (
   | { kind: 'selected-cursor'; selected: InstantRecord }
   | { kind: 'secondary'; selected: InstantRecord; secondary: InstantRecord }
   | { kind: 'saved'; span: LaneSpan }
+  /** A block (domain/blocks): a todo's planned block, computed, never stored. */
+  | { kind: 'block'; block: TimeBlock }
 )
 
 /**
@@ -44,6 +45,8 @@ export function useVisibleLanes(): BottomLane[] {
   // A span with an end in a group you switched off has no lane (resolveSpan finds no end).
   const instants = useShownInstants()
   const spans = useEntities(s => s.spans)
+  // A plan shows while its todo is scheduled, waiting or counting: what changes that is the data, not the clock.
+  const todos = useEntities(s => s.todos)
   const v = useView(useShallow(s => ({
     mode: s.viewFocusMode,
     focusedInstantId: s.focusedInstantId,
@@ -56,12 +59,7 @@ export function useVisibleLanes(): BottomLane[] {
     inMove: !!s.moveMode,
   })))
 
-  const favoriteLanes = useSettings(s => s.favoriteLanes)
   const cursorHidden = useUi(s => s.cursorHidden)
-  // A running stopwatch's lanes to Now (its start, when kept favorited, and the latest lap) always show.
-  const trackedId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[s.stopwatch.marks.length - 1] : null))
-  const startId = useQuick(s => (stopwatchPhase(s.stopwatch) === 'running' ? s.stopwatch.marks[0] : null))
-  const keepStart = useSettings(s => s.stopwatchKeepStart)
 
   const candidates = useMemo(() => {
     // An instant being moved follows the cursor, and so do its spans.
@@ -75,8 +73,6 @@ export function useVisibleLanes(): BottomLane[] {
       focusedSpanId: v.focusedSpanId,
       selectedInstantId: v.selectedId,
       now: Date.now(),
-      favoriteLanes,
-      trackedIds: trackedId ? new Set([trackedId, ...(keepStart && startId ? [startId] : [])]) : undefined,
     })
     const out: BottomLane[] = []
     const selected = byId.get(v.selectedId ?? '')
@@ -108,8 +104,14 @@ export function useVisibleLanes(): BottomLane[] {
         index: 0,
       })
     }
+    // Todos' planned blocks (domain/todos): on the saved side, packed with the span lanes.
+    if (todos && todos.length > 0) {
+      for (const b of plannedBlocks(todos, instantsByTodo(instants), Date.now())) {
+        out.push({ key: b.key, kind: 'block', block: b, a: b.start, b: b.end, top: 0, index: 0 })
+      }
+    }
     return out
-  }, [instants, spans, v, favoriteLanes, cursorHidden, trackedId, startId, keepStart])
+  }, [instants, spans, todos, v, cursorHidden])
 
   const onScreenKeys = useFrameValue((f: Frame) => candidates
     .filter(c => spanGeometry(f.pos(resolveTimeRef(c.a, f.now, f.center)), f.pos(resolveTimeRef(c.b, f.now, f.center)), f.mainSize).onScreen)
@@ -178,10 +180,11 @@ export function savedLaneVariant(r: LaneSpan): 'span' | 'focused' | 'selected' {
 
 /** Lanes with controls (focused, selected, or an implied selection span) show a chip and tools; the rest draw only their bar in vertical. */
 export const laneHasControls = (lane: BottomLane, selectedSpanId: string | null): boolean =>
-  lane.kind !== 'saved' || lane.span.focused || lane.span.priority <= 1 || selectedSpanId === lane.span.span.id
+  lane.kind === 'block' ? false : lane.kind !== 'saved' || lane.span.focused || lane.span.priority <= 1 || selectedSpanId === lane.span.span.id
 
 /** What a lane is called where its own chip isn't shown (an "N spans" chip's list). */
 export function laneName(lane: BottomLane): string {
+  if (lane.kind === 'block') return lane.block.label
   if (lane.kind === 'saved') return spanHeader(lane.span) ?? `${endpointName(lane.span.start)} → ${spanEndName(lane.span)}`
   if (lane.kind === 'secondary') return `${endpointName(lane.secondary)} → ${endpointName(lane.selected)}`
   return endpointName(lane.selected)

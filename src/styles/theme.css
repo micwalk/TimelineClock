@@ -52,6 +52,10 @@
   --c-sun: #fb923c; /* sunrise and sunset chips */
   --c-danger: #f43f5e;
   --c-ok: #22c55e;
+  /* Todos (docs/prd_todos.md): their marks and rows, and a todo's planned block (hollow, dashed:
+     a plan, not something that happened). Never red: red stays Now's. */
+  --c-todo: #a78bfa;
+  --c-planned: var(--c-todo);
   --c-past: #fca5a5;
   --c-future: #93c5fd;
 

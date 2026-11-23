@@ -1,7 +1,8 @@
 // Transient UI state that isn't part of the timeline model.
 import { create } from 'zustand'
+import type { DoneOrigin } from '../domain/doneBurst.ts'
 
-export type ListTab = 'instants' | 'favorites' | 'spans' | 'alarms' | 'groups'
+export type ListTab = 'instants' | 'favorites' | 'todos' | 'spans' | 'alarms' | 'groups'
 
 /** Which time-entry popover is open, if any. */
 export type TimeInputTarget =
@@ -63,6 +64,30 @@ export interface UiState {
   draggingBell: string | null
   /** An occurrence of a repeating series just edited on its own: its chip offers "Apply to all future" for a while. */
   seriesHint: string | null
+  /** The todo capture box (N, or the Todos tab's ＋): a name and Enter, over whatever is on screen. */
+  captureOpen: boolean
+  /**
+   * A todo just done: the ✓ instant (its chip flares) and the todo (its row flares); `origin`, the
+   * box that was tapped (its ✓ springs out there and the confetti flies from it). `n` tells one
+   * celebration from the next.
+   */
+  celebrating: { instantId: string; todoId: string; n: number; origin?: DoneOrigin } | null
+  /** A Done box charging (domain/doneBurst: the tap's anticipation), before act.completeTodo makes it done. */
+  charging: { todoId: string; origin: DoneOrigin; n: number } | null
+  /** A todo to find in the Todos tab (a long-press on its chip's box): its row scrolls into view and lights up. */
+  foundTodo: { id: string; n: number } | null
+  /** A short note over the timeline with one choice (components/common/Toast); gone by itself after TOAST_MS. */
+  toast: Toast | null
+}
+
+/**
+ * What a toast says, and its one choice: "Laundry is back on the list · Delete todo". `n` tells
+ * one from the next. (Phase 2a's Undo, docs/prd_todos_phase2.md, is meant to speak through it.)
+ */
+export interface Toast {
+  n: number
+  text: string
+  action?: { label: string; danger?: boolean; run: () => void }
 }
 
 export const useUi = create<UiState>(() => ({
@@ -87,7 +112,27 @@ export const useUi = create<UiState>(() => ({
   selectedBell: null,
   draggingBell: null,
   seriesHint: null,
+  captureOpen: false,
+  celebrating: null,
+  charging: null,
+  foundTodo: null,
+  toast: null,
 }))
+
+/** How long a toast stays. */
+export const TOAST_MS = 6000
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+let toasts = 0
+
+/** How long a found todo's row stays lit. */
+export const FOUND_MS = 1600
+let foundTimer: ReturnType<typeof setTimeout> | null = null
+let founds = 0
+
+/** How long a Done's celebration lasts (its glow; the sparks have their own tunable). */
+export const CELEBRATE_MS = 1600
+let celebrateTimer: ReturnType<typeof setTimeout> | null = null
+let celebrations = 0
 
 /** How long an edited occurrence offers "Apply to all future". */
 export const SERIES_HINT_MS = 8000
@@ -128,6 +173,37 @@ export const ui = {
   setPlusHidden: (plusHidden: boolean) => useUi.setState({ plusHidden }),
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
+  setCapture: (captureOpen: boolean) => useUi.setState({ captureOpen }),
+  /** A Done box starts charging (act.completeTodo); `celebrate` (the pop) or `endCharge` ends it. */
+  charge(todoId: string, origin: DoneOrigin) {
+    useUi.setState({ charging: { todoId, origin, n: ++celebrations } })
+  },
+  endCharge(todoId: string) {
+    useUi.setState(s => (s.charging?.todoId === todoId ? { charging: null } : s))
+  },
+  celebrate(instantId: string, todoId: string, origin?: DoneOrigin) {
+    if (celebrateTimer) clearTimeout(celebrateTimer)
+    const n = ++celebrations
+    useUi.setState(s => ({ celebrating: { instantId, todoId, n, ...(origin ? { origin } : {}) }, charging: s.charging?.todoId === todoId ? null : s.charging }))
+    celebrateTimer = setTimeout(() => { celebrateTimer = null; useUi.setState(s => (s.celebrating?.n === n ? { celebrating: null } : s)) }, CELEBRATE_MS)
+  },
+  findTodo(id: string) {
+    if (foundTimer) clearTimeout(foundTimer)
+    const n = ++founds
+    useUi.setState({ foundTodo: { id, n } })
+    foundTimer = setTimeout(() => { foundTimer = null; useUi.setState(s => (s.foundTodo?.n === n ? { foundTodo: null } : s)) }, FOUND_MS)
+  },
+  showToast(text: string, action?: Toast['action']) {
+    if (toastTimer) clearTimeout(toastTimer)
+    const n = ++toasts
+    useUi.setState({ toast: { n, text, ...(action ? { action } : {}) } })
+    toastTimer = setTimeout(() => { toastTimer = null; useUi.setState(s => (s.toast?.n === n ? { toast: null } : s)) }, TOAST_MS)
+  },
+  closeToast() {
+    if (toastTimer) clearTimeout(toastTimer)
+    toastTimer = null
+    useUi.setState({ toast: null })
+  },
   showSeriesHint(id: string | null) {
     if (seriesHintTimer) clearTimeout(seriesHintTimer)
     seriesHintTimer = null

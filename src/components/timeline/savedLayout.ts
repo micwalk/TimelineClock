@@ -24,6 +24,7 @@ import type { Stage, Visibility } from '../../domain/displayGroups.ts'
 import { groupVisibility, markFade, recurringGroupOf, stageAt } from '../../domain/displayGroups.ts'
 import { HOUR } from '../../domain/time.ts'
 import { instantVisibility, longestSpans } from '../../domain/reach.ts'
+import { doneFolds } from '../../domain/todos.ts'
 import type { SpanRecord } from '../../domain/entities.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
@@ -227,6 +228,8 @@ export interface SavedLayout {
   bellIds: string[]
   /** Instant id → live bells folded into its chip (too close to stand apart): alarm ids, comma-joined, earliest first. */
   bellFolded: Record<string, string>
+  /** A todo's `at` id → its ✓ (`done`) instant folded into its chip (too close to stand apart; domain/todos doneFolds). The ✓ draws as a mark. */
+  doneFolded: Record<string, string>
   /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups). */
   marks: Record<string, true>
   /** Marks fading out before their zoom hides them (id → opacity, absent = 1); not structure. */
@@ -246,7 +249,7 @@ const sameRecord = <T,>(a: Readonly<Record<string, T>>, b: Readonly<Record<strin
 export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
-    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameRecord(a.doneFolded, b.doneFolded) &&
     sameRecord(a.marks, b.marks) &&
     sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
@@ -394,6 +397,10 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       const fade = markFade(v, visibleMs)
       if (fade < 1) fades[i.id] = Math.round(fade * 50) / 50
     }
+    // A todo's ✓ close to its todo folds into its chip (as bells do): the ✓ draws as a mark (a
+    // stub from the axis), its `at` chip says when ("✓ Feed cats · +12m"). Zoom in and it is back.
+    const doneFolded = doneFolds(visible.filter(i => !marks[i.id]), f.pos, t.doneFoldPx, id => worked.has(id) || ringingIds.has(id))
+    for (const d of Object.values(doneFolded)) marks[d] = true
     const items = layoutItems(visible.filter(i => !marks[i.id]), {
       now: f.now,
       pos: ts => f.pos(ts) - originPos,
@@ -451,6 +458,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
       bellIds: shownBells.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
       bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !marks[id])),
+      doneFolded,
       marks,
       markFade: fades,
       rowsUsed: Math.max(1, deepest + 1),
@@ -490,6 +498,7 @@ export interface SavedLayoutStructure {
   clusters: { id: string; memberIds: string[]; topPriority: number }[]
   bellIds: string[]
   bellFolded: Record<string, string>
+  doneFolded: Record<string, string>
   /** Instants shown as marks (they leave the chips, so the chips' change covers it). */
   marks: Record<string, true>
   rowsUsed: number
@@ -504,7 +513,7 @@ const sameKeys = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<strin
 export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
-    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) &&
+    sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameRecord(a.doneFolded, b.doneFolded) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
@@ -520,11 +529,12 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   clusters: l.clusters.map(c => ({ id: c.id, memberIds: c.memberIds, topPriority: c.topPriority })),
   bellIds: l.bellIds,
   bellFolded: l.bellFolded,
+  doneFolded: l.doneFolded,
   marks: l.marks,
   rowsUsed: l.rowsUsed,
 })
 
-export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, doneFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
 
 const source: {
   compute: ReturnType<typeof createSavedLayoutCache>

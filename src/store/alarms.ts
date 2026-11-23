@@ -15,6 +15,8 @@ export interface AlarmsState {
   autoDismissMs: number
   /** What happens to an alarm nobody answered. */
   unattended: 'dismiss' | 'snooze'
+  /** Muted (the panel's 🔇): quiet until another alarm comes due; the cards stay (not saved). */
+  muted: boolean
 }
 
 /** The alarm preferences in untrusted JSON (storage or an imported file), with junk replaced by defaults. */
@@ -46,6 +48,7 @@ const loaded = loadJson<Partial<AlarmsState>>(ALARMS_KEY, {})
 export const useAlarms = create<AlarmsState>(() => ({
   ringing: sanitizeRinging(loaded.ringing),
   chimes: [],
+  muted: false,
   ...sanitizeAlarmPrefs(loaded),
 }))
 
