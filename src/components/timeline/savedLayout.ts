@@ -91,25 +91,42 @@ export const estimateChipWidth = (label: string): number => 9 * chipName(label).
 
 // ---------------------------------------------------------------------------
 // Measured chip widths, by instant id. Chips write here; widths change only when
-// their content does, so re-running the layout is cheap.
+// their content does, so re-running the layout is cheap. Heights only for chips taller than
+// CHIP_HEIGHT (a focused chip's name wrapping onto more lines); the rest are CHIP_HEIGHT.
 
 interface ChipWidthsState {
   widths: Record<string, number>
+  heights: Record<string, number>
   setWidth: (id: string, width: number) => void
+  /** A chip's height: kept only while it is taller than CHIP_HEIGHT. */
+  setHeight: (id: string, height: number) => void
   /** Drops the widths of instants that no longer exist. */
   prune: (existingIds: ReadonlySet<string>) => void
 }
 
 export const useChipWidths = create<ChipWidthsState>(set => ({
   widths: {},
+  heights: {},
   setWidth: (id, width) => set(s => (s.widths[id] === width ? s : { widths: { ...s.widths, [id]: width } })),
+  setHeight: (id, height) => set(s => {
+    const tall = height > CHIP_HEIGHT + 1
+    if (tall ? s.heights[id] === height : s.heights[id] === undefined) return s
+    const heights = { ...s.heights }
+    if (tall) heights[id] = height
+    else delete heights[id]
+    return { heights }
+  }),
   prune: existingIds => set(s => {
     // Series summary chips (series:<id>) aren't instants: their widths stay.
-    const stale = Object.keys(s.widths).filter(id => !existingIds.has(id) && !id.startsWith('series:'))
-    if (stale.length === 0) return s
+    const gone = (id: string) => !existingIds.has(id) && !id.startsWith('series:')
+    const stale = Object.keys(s.widths).filter(gone)
+    const staleTall = Object.keys(s.heights).filter(gone)
+    if (stale.length === 0 && staleTall.length === 0) return s
     const widths = { ...s.widths }
     for (const id of stale) delete widths[id]
-    return { widths }
+    const heights = { ...s.heights }
+    for (const id of staleTall) delete heights[id]
+    return { widths, heights }
   }),
 }))
 
@@ -125,6 +142,8 @@ const chipObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeOb
     // Untransformed width: a pulsing (scaled) chip still reports its real size.
     const w = Math.ceil(box ? box.inlineSize : (e.target as HTMLElement).offsetWidth)
     if (w > 0) useChipWidths.getState().setWidth(id, w)
+    const h = Math.ceil(box ? box.blockSize : (e.target as HTMLElement).offsetHeight)
+    if (h > 0) useChipWidths.getState().setHeight(id, h)
   }
 })
 
@@ -164,6 +183,8 @@ export interface LayoutContext {
   /** The alarm whose bell is selected, when it is on its chip (at the instant, or folded in): its tools show under the chip. */
   selectedBell?: string | null
   widths: Readonly<Record<string, number>>
+  /** Measured heights of chips taller than CHIP_HEIGHT (a focused chip's wrapped name). */
+  heights?: Readonly<Record<string, number>>
   /** Defaults to horizontal. Vertical swaps the chip's extents: its height runs along time. */
   orientation?: 'horizontal' | 'vertical'
 }
@@ -179,6 +200,7 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
     const editing = c.editingId === i.id
     const ringing = c.ringingIds.has(i.id)
     const width = c.widths[i.id] ?? estimateChipWidth(i.label)
+    const height = c.heights?.[i.id] ?? CHIP_HEIGHT
     const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
       : hasArmedAlarm(i, c.now) ? 4 : i.favorite ? 5 : 6
     // Its tools take room too, so neighbours keep clear of them.
@@ -188,8 +210,8 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
       id: i.id,
       // A moving instant follows the cursor at the center of the view.
       pos: moving ? c.mainSize / 2 : c.pos(i.tsEpochMs),
-      mainExtent: vertical ? CHIP_HEIGHT : Math.max(width, rowWidth),
-      crossExtent: vertical ? Math.max(width, toolsWidth) : CHIP_HEIGHT + below,
+      mainExtent: vertical ? height : Math.max(width, rowWidth),
+      crossExtent: vertical ? Math.max(width, toolsWidth) : height + below,
       ...(tail > 0 ? { tail } : {}),
       priority,
       ...(i.snoozeOriginalId ? { groupId: i.snoozeOriginalId } : {}),
@@ -283,6 +305,8 @@ export interface SavedLayoutInputs {
   selectedBell: string | null
   draggingBell: string | null
   widths: Readonly<Record<string, number>>
+  /** Chips taller than CHIP_HEIGHT (useChipWidths heights). Absent = none. */
+  heights?: Readonly<Record<string, number>>
   tunables: unknown
   /** How each group shows by zoom (settings), by group key. */
   groupVisibility: Readonly<Record<string, Visibility>>
@@ -413,6 +437,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       ringingIds,
       selectedBell: c.selectedBell && !bells.shown.some(b => b.alarm.id === c.selectedBell) ? c.selectedBell : null,
       widths: c.widths,
+      heights: c.heights,
       orientation: c.orientation,
     })
     // Bells before their instants share the chips' room. A live one is never hidden (pinned:
@@ -596,9 +621,10 @@ function keepClearOfPlus(f: FrameLike, c: SavedLayoutInputs, l: SavedLayout): Sa
       selected: c.selected === id, focused: c.mode === 'instant' && c.focusedInstantId === id,
       moving: c.moving === id, editing: c.editing === id, now: f.now, vertical, selectedBell: c.selectedBell,
     })
-    if (!inBand(offset, vertical ? Math.max(w, toolsWidth) : CHIP_HEIGHT)) continue
+    const h = c.heights?.[id] ?? CHIP_HEIGHT
+    if (!inBand(offset, vertical ? Math.max(w, toolsWidth) : h)) continue
     const at = (c.moving === id ? cursor : f.pos(inst.tsEpochMs)) + (l.shifts[id] ?? 0)
-    const half = vertical ? CHIP_HEIGHT / 2 : (Math.max(w, below > 0 ? toolsWidth : 0) + (l.foldCount[id] ? FOLD_BADGE_WIDTH : 0)) / 2
+    const half = vertical ? h / 2 : (Math.max(w, below > 0 ? toolsWidth : 0) + (l.foldCount[id] ? FOLD_BADGE_WIDTH : 0)) / 2
     boxes.push({ id, at, lo: at - half, hi: at + half + tail })
   }
   for (const k of l.clusters) {
@@ -651,12 +677,13 @@ export function useSavedLayoutSource(laneCount = 0): number {
   const ringing = useAlarms(useShallow(s => s.ringing.map(r => ringKey(r.instantId, r.alarmId))))
   const bellUi = useUi(useShallow(s => ({ selectedBell: s.selectedBell, draggingBell: s.draggingBell })))
   const widths = useChipWidths(s => s.widths)
+  const heights = useChipWidths(s => s.heights)
   const tunables = useSettings(s => s.tunables) // tunable changes re-run the layout
   const groupVisibility = useSettings(s => s.groupVisibility) // so do the groups' visibility
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const inputs = useMemo<SavedLayoutInputs>(
-    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, tunables, groupVisibility, laneCount, revealIds, spans }),
-    [orientation, dir, instants, v, ringing, bellUi, widths, tunables, groupVisibility, laneCount, revealIds, spans],
+    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans }),
+    [orientation, dir, instants, v, ringing, bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans],
   )
   // Set during render so the children rendering next (the chips) read these inputs.
   source.inputs = inputs

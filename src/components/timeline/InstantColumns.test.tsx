@@ -221,7 +221,7 @@ describe('chip polish: renaming and vertical tools', () => {
     useView.setState({ currentSelectedInstantId: id, editingInstantId: id })
     const { container } = render(<Columns />)
     const input = screen.getByRole('textbox', { name: 'Instant name' })
-    expect(container.querySelectorAll('input')).toHaveLength(1)
+    expect(container.querySelectorAll('input, textarea')).toHaveLength(1)
     expect(input.closest('.glow-box')).toBe(input)
     expect(container.querySelector('.chip--editing')).not.toBeNull()
     expect(screen.getByText(formatClockCompact(t, true))).toHaveClass('chip__time')

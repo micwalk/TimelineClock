@@ -482,7 +482,7 @@ export function endNaming() {
   if (!v().editingInstantId) return
   const el = typeof document !== 'undefined' ? document.activeElement : null
   // The name box commits on blur.
-  if (el instanceof HTMLInputElement && el.closest('.chip--saved')) el.blur()
+  if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.closest('.chip--saved')) el.blur()
   else view.editInstant(null)
 }
 

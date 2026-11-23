@@ -284,7 +284,7 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   }
   return (
     <>
-      <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
+      <div className={`todo-row glow-box is-${state}${flare ? ' is-celebrating' : ''}${found ? ' is-found' : ''}${renaming ? ' is-renaming' : ''}`} role="button" tabIndex={0} data-todo={todo.id}
         onClick={tap} onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) tap() }}>
         {/* Its box: Done (a closed one's opens it again). */}
         <button ref={checkRef} type="button" className={`todo-check is-${open ? 'open' : todo.status}${popping ? ' is-popping' : ''}`}
@@ -294,10 +294,10 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
         </button>
         <span className="todo-row__main">
           {renaming ? (
-            <span onClick={e => e.stopPropagation()}>
-              <InlineInput initial={todo.label} ariaLabel="Todo name" onCommit={v => { act.renameTodo(todo.id, v); setRenaming(false) }} onCancel={() => setRenaming(false)} />
+            <span className="todo-row__rename" onClick={e => e.stopPropagation()}>
+              <InlineInput initial={todo.label} ariaLabel="Todo name" multiline className="todo-row__input chip-input glow-box" onCommit={v => { act.renameTodo(todo.id, v); setRenaming(false) }} onCancel={() => setRenaming(false)} />
             </span>
-          ) : <span className="todo-row__name">{name}</span>}
+          ) : <span className="todo-row__name" title={name}>{name}</span>}
           {state === 'counting' ? (
             <LiveText className="todo-row__sub mono" watch={bySecond}
               compute={f => [length(todoActual(mine, spans, f.now, todo.startedId).ms), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''].filter(Boolean).join(' · ')} />

@@ -67,6 +67,15 @@ describe('layoutItems', () => {
     expect(only(items, 'abc')).toMatchObject({ mainExtent: 28, crossExtent: estimateChipWidth('abc') })
     expect(only(items, 'measured')).toMatchObject({ mainExtent: 28, crossExtent: 123 })
   })
+
+  it('a chip taller than CHIP_HEIGHT (a focused one, its name wrapped) takes its measured height', () => {
+    const heights = { tall: 70 }
+    const h = layoutItems([inst('tall', 0), inst('abc', 0)], ctx({ heights }))
+    expect(only(h, 'tall').crossExtent).toBe(70)
+    expect(only(h, 'abc').crossExtent).toBe(28)
+    const v = layoutItems([inst('tall', 0)], ctx({ heights, orientation: 'vertical' }))
+    expect(only(v, 'tall').mainExtent).toBe(70)
+  })
 })
 
 describe('createSavedLayoutCache', () => {
@@ -211,11 +220,28 @@ describe('createSavedLayoutCache', () => {
   })
 })
 
+describe('useChipWidths.setHeight', () => {
+  it('keeps a height only while the chip is taller than CHIP_HEIGHT', () => {
+    useChipWidths.setState({ heights: {} })
+    const { setHeight } = useChipWidths.getState()
+    setHeight('a', 28)
+    expect(useChipWidths.getState().heights).toEqual({})
+    setHeight('a', 52)
+    expect(useChipWidths.getState().heights).toEqual({ a: 52 })
+    const same = useChipWidths.getState().heights
+    setHeight('a', 52)
+    expect(useChipWidths.getState().heights).toBe(same)
+    setHeight('a', 28)
+    expect(useChipWidths.getState().heights).toEqual({})
+  })
+})
+
 describe('useChipWidths.prune', () => {
   it('drops widths of instants that no longer exist and keeps the rest', () => {
-    useChipWidths.setState({ widths: { a: 10, gone: 20 } })
+    useChipWidths.setState({ widths: { a: 10, gone: 20 }, heights: { gone: 60 } })
     useChipWidths.getState().prune(new Set(['a']))
     expect(useChipWidths.getState().widths).toEqual({ a: 10 })
+    expect(useChipWidths.getState().heights).toEqual({})
     const same = useChipWidths.getState().widths
     useChipWidths.getState().prune(new Set(['a']))
     expect(useChipWidths.getState().widths).toBe(same)

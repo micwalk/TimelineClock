@@ -242,7 +242,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           <BellAlertIcon aria-hidden />
         </button>
       )}
-      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
+      <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${focused && !editing ? ' chip--full' : ''}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
         {inst.favorite && (
           <IconButton icon={StarSolid} label="Unfavorite" color={starColor} bare pressed onClick={() => act.toggleFavorite(inst.id)} />
         )}
@@ -250,6 +250,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           <InlineInput
             initial={inst.label}
             ariaLabel="Instant name"
+            multiline
             placeholder="Name"
             onCommit={v => act.renameInstant(inst.id, v)}
             onCancel={() => view.editInstant(null)}

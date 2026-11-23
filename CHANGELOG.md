@@ -7,6 +7,19 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.8.1 — 2026-11-22
+
+**Android app: web only.**
+
+- **Long names in the Todos tab** wrap (up to three lines) instead of being cut off. A name too
+  long to sit beside its buttons takes the whole row and the buttons go on a line under it, so on
+  a phone it never squeezes into a narrow column; short ones stay on one line.
+- **Renaming a todo**: the name box fills the row and grows taller as the name wraps, instead of
+  a one-line field running off the side.
+- **A focused instant shows its whole name**: a long one wraps into a taller chip (up to six
+  lines) instead of ending in "…"; the chips around it, and its tools, keep clear of it.
+  Renaming an instant's chip wraps the same way.
+
 ## 0.8.0 — 2026-11-22
 
 **Android app: install again** (the vibration fix below is native; the rest is web. A todo's

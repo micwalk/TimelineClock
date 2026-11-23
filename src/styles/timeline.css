@@ -198,6 +198,24 @@
   font: 650 15px/1 var(--font-ui);
 }
 .chip__name { min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+/* Focused: the whole name, wrapping into a taller box (up to six lines) instead of cut off. The
+   layout measures the chip's height (useChipWidths heights), so neighbours and tools keep clear. */
+.chip--saved.chip--full { height: auto; min-height: 28px; }
+.chip--full .chip__main { padding-block: 4px; }
+.chip--full .chip__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  /* Its own width (a chip on a zero-width line would otherwise shrink to one word a line). */
+  flex-shrink: 0;
+  width: max-content;
+  max-width: 220px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  text-align: left;
+  line-height: 1.2;
+}
 .chip__time { font: 700 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .chip__rel { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); }
 /* Tools hang off the chip's right edge, so a selected chip stays centered on its line and the layout measures the chip alone. */
@@ -248,6 +266,8 @@
    (a tap leaves a sticky hover on phones). Doubled class: .chip's rules come later. */
 .chip.chip--editing,
 .chip.chip--editing:hover { background: none; padding: 0; cursor: default; }
+/* Its name box grows taller as a long name wraps; the chip (and the time under it) with it. */
+.chip--saved.chip--editing { height: auto; min-height: 28px; }
 .chip--editing .chip-input { margin: 0; }
 
 /* "⟲N": snoozes folded into this chip. The chip shifts left so chip + badge (34px) stay centered on the line. */
@@ -695,6 +715,21 @@
   background: var(--box-bg-strong);
   font: 650 15px/1 var(--font-ui);
   outline: none;
+}
+/* A name that may be long (InlineInput multiline): wraps at the focused chip's width and grows taller. */
+.chip-input.is-multiline {
+  display: block;
+  height: auto;
+  min-height: 28px;
+  flex-shrink: 0;
+  width: max-content;
+  max-width: 240px;
+  padding: 4px 9px;
+  line-height: 20px;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* --- Span lanes --------------------------------------------------------- */
