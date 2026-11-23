@@ -130,6 +130,13 @@ export const OFFLINE_UI = {
 export const ALARM_UI = {
   dismiss: 'Dismiss',
   snooze: (minutes: number) => `Snooze ${minutes}m`,
+  /** The Snooze row (one control: "Snooze | 5m | or 20m, 4p… | → 10:41p"): its label, and its quick snooze after it. */
+  snoozeLabel: 'Snooze',
+  snoozeQuick: (minutes: number) => `${minutes}m`,
+  /** A warning's quick snooze when 5m would take it past its instant ("Snooze | until start"). */
+  snoozeUntilStart: 'until start',
+  /** The quick snooze's accessible name: where it lands. */
+  lands: (at: string) => `until ${at}`,
   untilStart: 'Until start',
   dismissAll: (n: number) => `Dismiss all ${n}`,
   dismissAllTitle: "Dismiss this and cancel the instant's other alarms",
@@ -139,7 +146,7 @@ export const ALARM_UI = {
   /** Once typing, the shorter word. */
   for: 'for',
   until: 'until',
-  snoozePlaceholder: '20m',
+  snoozePlaceholder: 'or 20m, 4p…',
   /** Its submit, the landing: "→ 1:35p". */
   snoozeGo: (at: string) => `→ ${at}`,
   snoozeGoLabel: (at: string) => `Snooze until ${at}`,

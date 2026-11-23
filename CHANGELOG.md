@@ -16,6 +16,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   at once, and says it can't reach the site only when that fails too (a retry within 15
   seconds that brings it back), so it never loops.
 
+- **The Snooze row is one control** on a ringing card: "Snooze | 5m | or 20m, 4p… | → 11:30p",
+  its parts divided by lines. 5m is a filled button with where it lands under it; type a length
+  or a time in the box ("until" shows before a time), and its submit says where it lands.
 - **Opening offline, more reliably** (in the Android app and as an installed web app): the app
   opens without the internet from a copy its service worker saves. If saving that copy failed
   once (the network dropped, or the app went to the background mid-download), the worker was
