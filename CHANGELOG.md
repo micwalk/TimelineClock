@@ -7,6 +7,106 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.6 — 2026-11-25
+
+**Android app:** web only.
+
+- Todos widget: tapping a todo's name opens the app on the timeline at it when it has a time
+  there (scheduled, worked on or done); an unscheduled one still opens its row in the Todos tab.
+
+## 0.9.5 — 2026-11-25
+
+**Android app: install again** (the widgets and TC Preview).
+
+- **"sun" next to a time is Sunday**: "vet sun 9a" (or "sun at 9", "9a sun") is Sunday at 9:00a.
+  Short day names ("fri", "wed", "sat") count the same way. Without a time beside them they
+  stay words, so "enjoy the sun" is still a todo named that.
+- **Android: the Todos widget moves a todo to Now when its time comes**, and moves on at
+  midnight. Before, it waited for the next half-hourly update. It also redraws when the clock
+  or the time zone changes.
+- **Android: the widgets' dialogs follow the system theme** (Add todos, Widget settings): light
+  by day, dark at night. They were always dark.
+- **TC Preview: "Can't reach the site" retries the preview**. If the first load failed (no
+  network yet), its retry went to the live site, which opened in Chrome instead of the app.
+
+## 0.9.4 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **The cursor names the month or year it is in**: zoomed out to months or years its date line
+  read the nearest one, so a cursor in September 2027 said "2028". It now says "2027" (and
+  "Nov 2026" anywhere in November).
+
+## 0.9.3 — 2026-11-25
+
+**Android app: install again** (for the widgets).
+
+- **The cursor's hours read "4:00p"**, not "4p", when zoomed out to hours.
+- **Days are counted from today**: zoomed out to days or more, the cursor's offset reads
+  "Today +3d" (not "Now +3d"), and on today itself just "Today".
+- **Quick add always asks first**: text from the Android quick-add box is shown for approval
+  ("1 todo", **Add 1 todo**) even when it is a single todo, whether the app was closed or
+  already open.
+- **Android: the Add todo widget comes 1×1** (just a ＋); stretched wider it reads "＋ Add todo".
+- **Android: the Todos widget** has a rule between its header and its list (which scrolls).
+
+## 0.9.2 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **A pasted or dictated list** says just "3 todos" over its rows, and its Add and Cancel sit at
+  the left.
+
+## 0.9.1 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **The cursor says no more than the zoom can tell**: its time and its offsets ("Now …", from the
+  selected instant) round to the finest step that spans a few pixels (Settings › Advanced,
+  "The cursor shows seconds, minutes, hours… once one spans", 4 px): 1s, 5s, 15s, 1m, 5m, 15m,
+  1h, then days, months and years. Zoomed out, "3:41:27p · Now -01:05:30" reads "3:40p · Now
+  -1h 5m", then "4p · Now -1h"; past hours the clock goes (the date line says the day), then
+  the date reads "Nov 2026" and "2026".
+- **Days are counted as people count them**: once hours aren't told apart, offsets count
+  midnights from one end to the other, so Monday 10p to Thursday's first minutes reads "+3d", not
+  "+2d 2h"; months and years are calendar months ("+2y 5mo", "+3mo", "+12y"). Too close to tell
+  reads "≈ Now"; exactly on it, "at Now". An instant the cursor is about to land on keeps its exact
+  time.
+
+## 0.9.0 — 2026-11-25
+
+**Android app: install again** (for the new widgets; the rest is web).
+
+- **Paste a list of todos**: paste text or a Markdown checklist into the Todos tab's Add box and
+  it shows each todo it read (its time, length or repeat) before adding: untick one to leave it
+  out, edit one's text, then **Add N todos**. `- [x]` items come in done; a heading that names
+  a day ("## Tomorrow", "Friday:") dates the items under it; other headings are skipped, and
+  nested items are added as todos of their own for now.
+- **Dictate several todos**: speech from the keyboard's mic is read as said, all on the device:
+  "buy milk tomorrow at three pm then call mom for twenty minutes and laundry tonight" is three
+  todos. It splits at "then", "also", "after that", and at "and" or a comma before a verb ("salt
+  and pepper" stays one); it reads number words, "half past four", "noon", "in 20 minutes",
+  "this evening", "tomorrow morning", weekdays, dates and "every morning", and drops "um" and
+  "remind me to".
+- **Android: Add todo widget**: a tap opens a box over the home screen (type, or tap the
+  keyboard's mic); Add opens the app with what it read, ready to add.
+- **Android: Todos widget**: your todos on the home screen, filtered per widget by status (Now,
+  Scheduled, Unscheduled, Done today) and how far ahead (Today, 3 or 7 days, All). Tick a box to
+  mark a todo done (recorded at that time when the app next opens); tap a row to open it; ＋ adds.
+
+## 0.8.2 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **Time worked, without saying when**: a todo's panel (its row's stopwatch button, done or not,
+  with stretches or none) has **Time worked**: +5m, +15m, +30m, +1h or "Worked [25m]" add time
+  you spent on it that isn't on the timeline. It counts in how long it took ("40m · planned
+  30m"); "⏱ 25m not on the timeline" shows it, × clears it.
+- **…and put it on the timeline later**: **Ending at cursor** (its range under it, "5:18a –
+  5:43a") or a typed start ("2p", the latest before now; "until 3p" to say where it ended), or
+  the clock button's time and date, turn it into a stretch: a ▶ and a ⏸ instant and the span
+  between them, shown on the timeline.
+
 ## 0.8.1 — 2026-11-22
 
 **Android app: install again** (only for its offline page, below; the rest is web).

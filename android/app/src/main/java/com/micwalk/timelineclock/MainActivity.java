@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LiveNotificationsPlugin.class);
         registerPlugin(FilesPlugin.class);
         registerPlugin(PreviewPlugin.class);
+        registerPlugin(TodoWidgetPlugin.class);
 
         String site = null;
         if (BuildConfig.PREVIEW) {

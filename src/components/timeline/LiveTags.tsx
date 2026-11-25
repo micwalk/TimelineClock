@@ -9,7 +9,10 @@ import { ClockIcon, EyeSlashIcon, LockClosedIcon, LockOpenIcon, MapPinIcon, Plus
 import { useFrameValue } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { DAY, SECOND } from '../../domain/time.ts'
-import { YEAR_ZOOM_MS, formatClockCompact, formatDayLabel, formatRelativeShort, formatSignedDuration } from '../../domain/format.ts'
+import { YEAR_ZOOM_MS, formatClockCompact, formatDayLabel, formatRelativeShort } from '../../domain/format.ts'
+import type { CursorUnit } from '../../domain/cursorPrecision.ts'
+import { cursorClock, cursorCoarseDate, cursorOffset, cursorUnit, nowName, showsClock } from '../../domain/cursorPrecision.ts'
+import { getTunables } from '../../store/settings.ts'
 import { endpointName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
 import { useView } from '../../store/view.ts'
@@ -57,7 +60,14 @@ function writeStyle(el: HTMLElement | SVGElement | null, prop: 'translate' | 'op
   el.style[prop] = value
 }
 
-const offsetText = (name: string, ms: number) => `${name} ${formatSignedDuration(ms)}`
+/** "Now +3d", "Rice -1h 5m"; "≈ Now" when it rounds to nothing at this zoom, "at Now" exactly on it (domain/cursorPrecision). */
+const offsetText = (name: string, from: number, to: number, unit: CursorUnit) => {
+  const off = cursorOffset(from, to, unit)
+  // Nothing between them: exactly on it (an exact time), or too close to tell at this zoom.
+  if (off) return `${name} ${off}`
+  // Today needs no "≈": it is today.
+  return unit <= SECOND ? `at ${name}` : name === 'Today' ? name : `≈ ${name}`
+}
 
 function clockPopover(anchor: 'now' | 'cursor') {
   return (
@@ -117,6 +127,12 @@ export function CursorTag() {
     const cap = captureAt(f)
     return cap?.preview ? cap.ts : f.center
   }
+  /**
+   * What the tag can honestly say at this zoom (domain/cursorPrecision): an instant it is about to
+   * land on has an exact time; the free cursor only the unit that spans `cursorUnitPx`.
+   */
+  const unitAt = (f: Frame): CursorUnit => (captureAt(f)?.preview ? SECOND : cursorUnit(1 / f.pxPerMs, getTunables().cursorUnitPx))
+  const unit = useFrameValue(unitAt)
   // The selected-offset line only shows once the selected instant is a second or more from the cursor (never "+00:00.000" under it).
   const selectedTs = selected?.tsEpochMs
   const selectedAway = useFrameValue(f => selectedTs !== undefined && Math.abs(shownTime(f) - selectedTs) >= SECOND)
@@ -248,9 +264,9 @@ export function CursorTag() {
         popover={popover ?? undefined}
       >
         {/* Zoomed out to days, which day (and year) it is, over the time. */}
-        {dateMode > 0 && (
+        {(dateMode > 0 || (!onInstant && !showsClock(unit))) && (
           <>
-            <LiveText className="tl-tag__date" compute={f => formatDayLabel(onInstant ? onInstant.tsEpochMs : shownTime(f), f.now, dateMode === 2)} />{' '}
+            <LiveText className="tl-tag__date" compute={f => (onInstant ? null : cursorCoarseDate(shownTime(f), unitAt(f))) ?? formatDayLabel(onInstant ? onInstant.tsEpochMs : shownTime(f), f.now, dateMode === 2)} />{' '}
           </>
         )}
         {onInstant ? (
@@ -260,14 +276,14 @@ export function CursorTag() {
           </>
         ) : (
           <>
-            <LiveText compute={f => formatClockCompact(shownTime(f), true)} />{' '}
-            <LiveText className="tl-tag__sub" compute={f => offsetText('Now', shownTime(f) - f.now)} />
+            {showsClock(unit) && <><LiveText compute={f => cursorClock(shownTime(f), unitAt(f))} />{' '}</>}
+            <LiveText className="tl-tag__sub" compute={f => offsetText(nowName(unitAt(f)), f.now, shownTime(f), unitAt(f))} />
           </>
         )}
         {!onInstant && selected && selectedAway && (
           <>
             {' '}
-            <LiveText className="tl-tag__sub" compute={f => offsetText(name, shownTime(f) - selected.tsEpochMs)} />
+            <LiveText className="tl-tag__sub" compute={f => offsetText(name, selected.tsEpochMs, shownTime(f), unitAt(f))} />
           </>
         )}
       </ArrowTag>

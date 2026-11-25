@@ -49,6 +49,21 @@ export interface TodoRecord {
    * still saves the stretch.
    */
   startedId?: string
+  /**
+   * Time worked that isn't on the timeline (owner 2026-11-25): typed into its panel ("Worked
+   * [25m]") without saying when. It counts in what it took; "Put on the timeline" turns it into a
+   * stretch (a ▶ and a ⏸ instant and the span between them) at the cursor or a typed time.
+   */
+  extraMs?: number
+}
+
+/** The most extra time a todo holds (a typo's 999h stays out). */
+export const MAX_EXTRA_MS = 1000 * 60 * MINUTE
+
+/** Its extra time after adding `ms` (negative takes some away); undefined once none is left. */
+export function addExtra(current: number | undefined, ms: number): number | undefined {
+  const next = Math.min(MAX_EXTRA_MS, Math.max(0, (current ?? 0) + ms))
+  return next > 0 ? Math.round(next) : undefined
 }
 
 const randomId = () => Math.random().toString(36).slice(2, 11)
@@ -70,6 +85,7 @@ export function sanitizeTodos(data: unknown): TodoRecord[] {
     seen.add(r.id)
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
     const length = num(r.durationMs)
+    const extra = num(r.extraMs)
     const closedAt = num(r.closedAt)
     const series = typeof r.seriesId === 'string' && r.seriesId && typeof r.occurrence === 'string' && DATE_KEY.test(r.occurrence)
     return [{
@@ -83,6 +99,7 @@ export function sanitizeTodos(data: unknown): TodoRecord[] {
       ...(typeof r.collectionId === 'string' && r.collectionId && r.collectionId !== 'default' ? { collectionId: r.collectionId } : {}),
       ...(series ? { seriesId: r.seriesId as string, occurrence: r.occurrence as string } : {}),
       ...(typeof r.startedId === 'string' && r.startedId ? { startedId: r.startedId } : {}),
+      ...(extra !== undefined && extra > 0 ? { extraMs: Math.min(extra, MAX_EXTRA_MS) } : {}),
     }]
   })
 }
@@ -198,16 +215,43 @@ export function todoStretches(mine: readonly InstantRecord[], spans: readonly Sp
 export const hasStretches = (mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number, startedId?: string) =>
   todoStretches(mine, spans, now, startedId).length > 0
 
-/** Time actually worked: its stretches (spans between its own instants) and the one counting now. */
-export interface TodoActual { ms: number; stretches: number; counting: boolean }
+/**
+ * Time actually worked: its stretches (spans between its own instants), the one counting now, and
+ * its extra time (worked, not on the timeline; `extraMs` only when there is some).
+ */
+export interface TodoActual { ms: number; stretches: number; counting: boolean; extraMs?: number }
 
-export function todoActual(mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number, startedId?: string): TodoActual {
+export function todoActual(mine: readonly InstantRecord[], spans: readonly SpanRecord[], now: number, startedId?: string, extraMs?: number): TodoActual {
   const list = todoStretches(mine, spans, now, startedId)
+  const extra = extraMs && extraMs > 0 ? extraMs : 0
   return {
-    ms: list.reduce((sum, s) => sum + Math.max(0, (s.end ?? now) - s.start), 0),
+    ms: list.reduce((sum, s) => sum + Math.max(0, (s.end ?? now) - s.start), 0) + extra,
     stretches: list.length,
     counting: list.some(s => s.end === null),
+    ...(extra > 0 ? { extraMs: extra } : {}),
   }
+}
+
+/**
+ * Where extra time goes on the timeline, typed in its panel: a clock time ("2p", "1430") is where
+ * it starts, the latest such time at or before `now` (it is history); "until 3p" (or "to", "till",
+ * "ending") is where it ends. Returns the stretch, or null when it doesn't read.
+ */
+export function parsePlaceTime(text: string, extraMs: number, now: number): { start: number; end: number } | null {
+  let t = text.trim().toLowerCase()
+  const until = /^(until|till|til|to|ending|ends?)\b\s*/.exec(t)
+  if (until) t = t.slice(until[0].length)
+  t = t.replace(/^(from|at|start(s|ed)?)\b\s*/, '')
+  const time = parseAlarmTime(t)
+  if (!time || extraMs <= 0) return null
+  // An ambiguous 1–12 takes whichever of AM/PM was latest before now.
+  const latest = (pm: boolean) => {
+    const d = new Date(now)
+    const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour24(time, pm), time.m).getTime()
+    return at <= now ? at : new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, hour24(time, pm), time.m).getTime()
+  }
+  const at = isAmbiguous(time) ? Math.max(latest(false), latest(true)) : latest(false)
+  return until ? { start: at - extraMs, end: at } : { start: at, end: at + extraMs }
 }
 
 /**
@@ -216,7 +260,7 @@ export function todoActual(mine: readonly InstantRecord[], spans: readonly SpanR
  */
 export function todoReading(todo: TodoRecord, actual: TodoActual, length: (ms: number) => string): string {
   const parts: string[] = []
-  if (actual.stretches > 0) parts.push(actual.stretches > 1 ? `${length(actual.ms)} ${TODO_COPY.stretches(actual.stretches)}` : length(actual.ms))
+  if (actual.stretches > 0 || actual.extraMs) parts.push(actual.stretches > 1 ? `${length(actual.ms)} ${TODO_COPY.stretches(actual.stretches)}` : length(actual.ms))
   else if (todo.status === 'done') parts.push(TODO_COPY.done)
   if (todo.status === 'passed') parts.push(TODO_COPY.passed)
   if (todo.status === 'dropped') parts.push(TODO_COPY.dropped)

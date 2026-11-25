@@ -37,9 +37,10 @@ import {
 import { newAlarmId, newInstantId, storedInstants } from '../domain/entities.ts'
 import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
+import type { ImportRow } from '../domain/todoImport.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -1438,7 +1439,11 @@ export function addTodo(text: string): string | undefined {
   const input = parseTodoInput(text)
   if (!input.label.trim()) return
   const now = nowTime()
-  const at = todoInputAt(input, now, getTodoTimes())
+  return addTodoFrom(input, todoInputAt(input, now, getTodoTimes()), now)
+}
+
+/** Makes one todo: a series when it repeats (and has a time), else a record and its `at`. */
+function addTodoFrom(input: { label: string; durationMs?: number; repeat?: Repeat }, at: number | null, now: number): string | undefined {
   if (input.repeat && at !== null) {
     const { alarmRings } = useSettings.getState()
     const series: SeriesRecord = {
@@ -1456,6 +1461,24 @@ export function addTodo(text: string): string | undefined {
   entities.putTodo(todo)
   if (at !== null) createTodoAt(todo, at)
   return todo.id
+}
+
+/**
+ * Many todos at once (docs/prd_todo_import_widgets.md): the rows the Add box read from a pasted
+ * list or from dictation (domain/todoImport readTodoText), as the user left them. A done row
+ * ("- [x]") comes in done, with nothing on the timeline. Returns the new todos' ids.
+ */
+export function addTodoRows(rows: readonly ImportRow[]): string[] {
+  const now = nowTime()
+  const ids: string[] = []
+  for (const r of rows) {
+    if (!r.label.trim()) continue
+    const id = addTodoFrom({ label: r.label.trim(), durationMs: r.durationMs, repeat: r.repeat }, r.done ? null : r.at, now)
+    if (!id) continue
+    if (r.done) entities.patchTodo(id, { status: 'done', closedAt: now })
+    ids.push(id)
+  }
+  return ids
 }
 
 /** Schedule an unscheduled todo (or reschedule one: Later). */
@@ -1824,6 +1847,46 @@ export function setTodoLength(todoId: string, ms: number | null) {
   entities.patchTodo(todoId, { durationMs: ms && ms > 0 ? ms : undefined })
 }
 
+/**
+ * Extra time worked on a todo (its panel's Worked box; owner 2026-11-25): a length said without
+ * when, added to what it took. Negative takes some away; none left clears it. Any todo, done or
+ * not, with stretches or none.
+ */
+export function addTodoExtra(todoId: string, ms: number) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || !Number.isFinite(ms)) return
+  entities.patchTodo(todoId, { extraMs: addExtra(todo.extraMs, ms) })
+}
+
+/** Clears a todo's extra time (it was a mistake). */
+export function clearTodoExtra(todoId: string) {
+  if (entities.getTodo(todoId)?.extraMs) entities.patchTodo(todoId, { extraMs: undefined })
+}
+
+/**
+ * Puts a todo's extra time on the timeline as a stretch (owner 2026-11-25): a ▶ instant at `start`
+ * and a ⏸ at the end (its extra time later), in its group, and the saved span between them, so it
+ * counts as any stretch does; the extra time is spent. `end` given: from `end` minus its extra
+ * time instead (at the cursor). The new stretch is shown. Returns its span's id.
+ */
+export function placeTodoExtra(todoId: string, at: { start: number } | { end: number }): string | null {
+  const todo = entities.getTodo(todoId)
+  const ms = todo?.extraMs ?? 0
+  if (!todo || ms <= 0) return null
+  const start = 'start' in at ? at.start : at.end - ms
+  if (!Number.isFinite(start)) return null
+  const name = todo.label || formatClockCompact(start, false)
+  const group = todo.collectionId ? { collectionId: todo.collectionId } : {}
+  const a = entities.createInstant(start, TODO_COPY.startName(name))
+  entities.patchInstant(a, () => ({ todo: { id: todoId, role: 'start' as const }, ...group }))
+  const b = entities.createInstant(start + ms, TODO_COPY.pauseName(name))
+  entities.patchInstant(b, () => ({ todo: { id: todoId, role: 'pause' as const }, ...group }))
+  const spanId = entities.createSpan(a, b, todo.label, { visible: true })
+  entities.patchTodo(todoId, { extraMs: undefined })
+  if (spanId) showStretch(spanId)
+  return spanId ?? null
+}
+
 /** Moves an unscheduled todo in its list: before `beforeId`, or to the end. */
 export function reorderTodo(todoId: string, beforeId: string | null) {
   const list = (useEntities.getState().todos ?? []).filter(t => t.status === 'open' && t.id !== todoId).sort((a, b) => a.order - b.order)
@@ -1876,6 +1939,23 @@ export function findTodo(todoId: string) {
   ui.setListTab('todos')
   if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
   ui.findTodo(todoId)
+}
+
+/**
+ * A tap on a todo's row in the Android app's Todos widget: one on the timeline (scheduled, worked
+ * on or done there) goes there, as its Todos row does (the drawer closed so it isn't hidden);
+ * one with nothing on the timeline (unscheduled) opens the Todos tab at its row.
+ */
+export function openTodoFromWidget(todoId: string) {
+  if (todoInstants(todoId).length === 0) { findTodo(todoId); return }
+  showTodo(todoId)
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+}
+
+/** The Todos tab, shown (never closed, unlike the Todo button's toggle): the Android app's widgets. */
+export function showTodosTab() {
+  ui.setListTab('todos')
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
 }
 
 /**

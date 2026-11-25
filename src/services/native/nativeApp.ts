@@ -12,6 +12,7 @@ import { syncAlarms } from './alarmSync.ts'
 import { Alarms } from './alarmsPlugin.ts'
 import { LiveNotifications } from './liveNotificationsPlugin.ts'
 import { syncLive } from './liveSync.ts'
+import { drainTodoWidget, syncTodoWidget } from './todoWidgetSync.ts'
 import { clearPageLog, diag, pageLog, watchPage } from './diagLog.ts'
 import { useOffline } from '../../store/offline.ts'
 import { versionLine } from '../../domain/version.ts'
@@ -21,12 +22,24 @@ const DEBOUNCE_MS = 50
 
 let started = false
 let debounce: ReturnType<typeof setTimeout> | null = null
+let widgetDebounce: ReturnType<typeof setTimeout> | null = null
 
 const warn = (what: string) => (err: unknown) => console.warn(`[Native] ${what} failed`, err)
 
 function syncAll(force = false) {
   void syncAlarms()
   void syncLive(force)
+  syncWidgets()
+}
+
+/** The todo widgets: their snapshot (an app from before them has no plugin: nothing happens). */
+function syncWidgets() {
+  syncTodoWidget().catch(() => { /* an older app */ })
+}
+
+/** What the todo widgets asked for (quick add, a todo ticked, a tap). */
+function drainWidgets() {
+  drainTodoWidget().catch(() => { /* an older app */ })
 }
 
 function syncSoon() {
@@ -95,10 +108,14 @@ export function startNativeApp() {
   // Dismiss / Snooze on a notification while the page runs: replay it now.
   Alarms.addListener('actions', () => { diag('answers from a notification'); void syncAlarms() }).catch(warn('Alarm answer listener'))
 
-  useEntities.subscribe((s, prev) => { if (s.instants !== prev.instants || s.spans !== prev.spans) syncSoon() })
+  useEntities.subscribe((s, prev) => {
+    if (s.instants !== prev.instants || s.spans !== prev.spans) syncSoon()
+    else if (s.todos !== prev.todos) { if (widgetDebounce) clearTimeout(widgetDebounce); widgetDebounce = setTimeout(() => { widgetDebounce = null; syncWidgets() }, DEBOUNCE_MS) }
+  })
   useQuick.subscribe((s, prev) => { if (s.stopwatch !== prev.stopwatch) syncSoon() })
   useAlarms.subscribe((s, prev) => { if (s.autoDismissMs !== prev.autoDismissMs || s.unattended !== prev.unattended) syncSoon() })
-  App.addListener('resume', () => { diag('resume'); syncAll(true) }).catch(warn('Resume listener'))
+  App.addListener('resume', () => { diag('resume'); drainWidgets(); syncAll(true) }).catch(warn('Resume listener'))
+  drainWidgets()
   // Leaving the app: don't wait out the debounce.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && debounce) { clearTimeout(debounce); debounce = null; syncAll() }

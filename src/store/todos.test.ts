@@ -477,6 +477,17 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: last.id })
   })
 
+  it('a tap on its widget row goes to the timeline when it is scheduled, else to its Todos row', () => {
+    const later = act.addTodo('Dentist')!
+    act.scheduleTodo(later, Date.now() + HOUR)
+    act.openTodoFromWidget(later)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: atOf(later)!.id })
+    expect(useUi.getState().foundTodo).toBeNull()
+    const loose = act.addTodo('Book appointment')!
+    act.openTodoFromWidget(loose)
+    expect(useUi.getState()).toMatchObject({ listTab: 'todos', foundTodo: { id: loose } })
+  })
+
   it('Not a todo does nothing once it was worked on (a stretch saved, or counting)', () => {
     const { id, atId } = ringingTodo()
     act.startTodo(id, { fromAlarm: true })
@@ -496,5 +507,49 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     expect(entities.getTodo(id)).toMatchObject({ status: 'open' })
     // Its time has come: it waits under Now (its ✓ stays as history), and ▶ Start goes on.
     expect(stateOf(id)).toBe('waiting')
+  })
+})
+
+describe('time worked off the timeline (extra time)', () => {
+  const spansOf = (todoId: string) => {
+    const ids = new Set(instantsOf(todoId).map(i => i.id))
+    return useEntities.getState().spans.filter(s => ids.has(s.startInstantId) && ids.has(s.endInstantId))
+  }
+
+  it('a done todo takes extra time; it counts in what it took and adds up', () => {
+    const { id } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.doneTodo(id)
+    act.addTodoExtra(id, 15 * MINUTE)
+    act.addTodoExtra(id, 10 * MINUTE)
+    expect(entities.getTodo(id)).toMatchObject({ status: 'done', extraMs: 25 * MINUTE })
+    act.clearTodoExtra(id)
+    expect(entities.getTodo(id)!.extraMs).toBeUndefined()
+  })
+
+  it('put on the timeline ending at the cursor: a ▶ and a ⏸ instant and the span between them; the extra time is spent', () => {
+    const id = act.addTodo('Taxes')!
+    act.doneTodo(id)
+    act.addTodoExtra(id, 30 * MINUTE)
+    const end = Date.now() - HOUR
+    const spanId = act.placeTodoExtra(id, { end })!
+    const span = useEntities.getState().spans.find(s => s.id === spanId)!
+    const a = entities.getInstant(span.startInstantId)!
+    const b = entities.getInstant(span.endInstantId)!
+    expect(a).toMatchObject({ tsEpochMs: end - 30 * MINUTE, label: '▶ Taxes', todo: { id, role: 'start' } })
+    expect(b).toMatchObject({ tsEpochMs: end, label: '⏸ Taxes', todo: { id, role: 'pause' } })
+    expect(entities.getTodo(id)!.extraMs).toBeUndefined()
+    expect(entities.getTodo(id)!.status).toBe('done')
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: spanId })
+  })
+
+  it('a todo with stretches gets another one from a typed start; nothing without extra time', () => {
+    const { id } = ringingTodo()
+    act.startTodo(id, { fromAlarm: true })
+    act.doneTodo(id)
+    expect(act.placeTodoExtra(id, { start: Date.now() - 3 * HOUR })).toBeNull()
+    act.addTodoExtra(id, 20 * MINUTE)
+    act.placeTodoExtra(id, { start: Date.now() - 3 * HOUR })
+    expect(spansOf(id)).toHaveLength(2)
   })
 })

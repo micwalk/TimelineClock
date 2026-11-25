@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The todo list (TodoListWidget): a header (title and filters, ＋ quick add, ⚙ settings) over the rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/widget_todo_header"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="4dp">
+
+            <TextView
+                android:id="@+id/widget_todo_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/widget_todo"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_todo_summary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/widget_dim"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_todo_add"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@string/quick_add_widget"
+            android:gravity="center"
+            android:text="＋"
+            android:textColor="@color/widget_todo"
+            android:textSize="22sp" />
+
+        <TextView
+            android:id="@+id/widget_todo_settings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@string/todo_widget_settings"
+            android:gravity="center"
+            android:text="⚙"
+            android:textColor="@color/widget_dim"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- A rule between the header and the list. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="2dp"
+        android:background="@color/widget_edge" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/widget_todo_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="true" />
+
+        <TextView
+            android:id="@+id/widget_todo_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/todo_widget_empty"
+            android:textColor="@color/widget_dim"
+            android:textSize="13sp" />
+    </FrameLayout>
+</LinearLayout>

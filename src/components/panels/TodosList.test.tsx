@@ -6,7 +6,7 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { MINUTE } from '../../domain/time.ts'
-import { useUi } from '../../store/ui.ts'
+import { ui, useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 import * as actions from '../../store/actions.ts'
 
@@ -25,6 +25,38 @@ describe('the Todos tab', () => {
     expect(useEntities.getState().todos).toMatchObject([{ label: 'Book appointment', status: 'open' }])
     expect(screen.getByText('Unscheduled')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Schedule and more' })).toBeTruthy()
+  })
+
+  it('a pasted list shows each todo it read; unticked ones are left out, and nothing is made until Add', () => {
+    render(<TodosList />)
+    const box = screen.getByRole('textbox', { name: /Add a todo/ })
+    fireEvent.change(box, { target: { value: '- [ ] laundry 20m\n- [x] taxes\n- [ ] call mom' } })
+    expect(screen.getByText('3 todos')).toBeTruthy()
+    expect(useEntities.getState().todos).toEqual([])
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add call mom' }))
+    fireEvent.click(screen.getByText('Add 2 todos'))
+    expect(useEntities.getState().todos).toMatchObject([
+      { label: 'laundry', durationMs: 20 * MINUTE, status: 'open' },
+      { label: 'taxes', status: 'done' },
+    ])
+  })
+
+  it("dictation splits into todos, and the Android app's quick add fills the box (Add still to tap)", () => {
+    render(<TodosList />)
+    act(() => ui.setTodoDraft('buy milk then call mom and pick up the kids'))
+    expect(useUi.getState().todoDraft).toBeNull()
+    expect(screen.getAllByRole('textbox', { name: 'Todo text' }).map(e => (e as HTMLInputElement).value)).toEqual(['buy milk', 'call mom', 'pick up the kids'])
+    fireEvent.submit(screen.getByRole('textbox', { name: /Add a todo/ }))
+    expect(useEntities.getState().todos.map(t => t.label)).toEqual(['Buy milk', 'Call mom', 'Pick up the kids'])
+  })
+
+  it('a single todo from quick add is shown for approval too', () => {
+    render(<TodosList />)
+    act(() => ui.setTodoDraft('call mom at 5pm'))
+    expect(screen.getByText('1 todo')).toBeTruthy()
+    expect(useEntities.getState().todos).toEqual([])
+    fireEvent.click(screen.getByText('Add 1 todo'))
+    expect(useEntities.getState().todos.map(t => t.label)).toEqual(['call mom'])
   })
 
   it('shows what it read as you type, its duration with a stopwatch', () => {
@@ -118,6 +150,23 @@ describe('the Todos tab', () => {
     render(<TodosList />)
     fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(screen.getAllByRole('listitem').map(e => e.textContent)).toEqual([expect.stringMatching(/^✓ Done /)])
+  })
+
+  it("a done todo's panel takes time worked off the timeline, then puts it on the timeline ending at the cursor", () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'done', order: 0, closedAt: Date.now() }] })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getByRole('button', { name: '+15m' }))
+    const box = screen.getByRole('textbox', { name: 'Worked' })
+    fireEvent.change(box, { target: { value: '10m' } })
+    fireEvent.submit(box)
+    expect(useEntities.getState().todos[0].extraMs).toBe(25 * MINUTE)
+    expect(screen.getByText('not on the timeline')).toBeTruthy()
+    expect(screen.getByText(/^25m/, { selector: '.todo-row__sub' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Ending at cursor/ }))
+    expect(useEntities.getState().todos[0].extraMs).toBeUndefined()
+    expect(useEntities.getState().spans).toHaveLength(1)
+    expect(useEntities.getState().instants.map(i => i.todo?.role).sort()).toEqual(['pause', 'start'])
   })
 
   it('its panel sets a duration from a short list, or none', () => {

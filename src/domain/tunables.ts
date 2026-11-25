@@ -38,6 +38,7 @@ const SPECS = {
   glideMaxSpeed: { label: 'Maximum glide speed (px/ms)', default: 8, min: 1, max: 30, step: 0.5, group: 'Glide' },
   glideTauMs: { label: 'Glide friction time constant (ms)', default: 325, min: 50, max: 2000, step: 5, group: 'Glide' },
   unnamedReachHours: { label: 'Unnamed instants keep their Label out to (hours on screen)', default: 24, min: 1, max: 8760, step: 1, group: 'Labels' },
+  cursorUnitPx: { label: 'The cursor shows seconds, minutes, hours… once one spans (px)', default: 4, min: 0.5, max: 60, step: 0.5, group: 'Labels' },
   secondsBelowTickMs: { label: 'Show seconds when ticks are finer than (ms)', default: 60000, min: 1000, max: 3600000, step: 1000, group: 'Labels' },
   doneFoldPx: { label: 'A done ✓ folds into its todo’s chip when closer than (px)', default: 48, min: 0, max: 300, step: 2, group: 'Todos' },
   doneChargeMs: { label: 'Done box charges before it pops (ms; 0: pops at once)', default: 600, min: 0, max: 2000, step: 50, group: 'Todos' },

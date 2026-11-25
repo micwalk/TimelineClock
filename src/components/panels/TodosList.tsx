@@ -14,14 +14,14 @@
 // open todos.
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { Bars2Icon, CalendarDaysIcon, ClockIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@heroicons/react/20/solid'
+import { Bars2Icon, CalendarDaysIcon, ClockIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { useFrameValue } from '../../engine/hooks.ts'
 import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import type { TodoRow } from '../../domain/todos.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { doneOrigin } from '../common/doneOrigin.ts'
-import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parseWhen, quickChoices, todoActual, todoInputAt, todoReading, todoStretches, hasStretches } from '../../domain/todos.ts'
+import { TODO_DURATIONS_MIN, instantsOf, parsePlaceTime, parseWhen, quickChoices, todoActual, todoReading, todoStretches, hasStretches } from '../../domain/todos.ts'
 import { genieKeyframes, genieMs } from '../../domain/genie.ts'
 import { todoIndex, useTodoSections } from '../../hooks/useTodos.ts'
 import { describeRepeatShort } from '../../domain/series.ts'
@@ -37,6 +37,9 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { NotTodoIcon, ScheduleIcon, StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { PhraseBox } from '../common/PhraseBox.tsx'
+import { TodoImportPreview } from './TodoImportPreview.tsx'
+import { useImportRows } from '../../hooks/useImportRows.ts'
+import { isList, readTodoText } from '../../domain/todoImport.ts'
 import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
 import { reducedMotion } from '../../engine/viewportEngine.ts'
 
@@ -72,36 +75,61 @@ const dotted = (parts: ReactNode[]) => parts.filter(Boolean).map((p, k) => <span
  * picker reads times and Timer reads lengths ("book appt 3p", "laundry 20m", "feed cats 7a daily");
  * what it read shows under it as you type. `onAdded`: the capture box closes then.
  */
-export function AddBox({ autoFocus, onAdded, onCancel }: { autoFocus?: boolean; onAdded?: () => void; onCancel?: () => void }) {
+export function AddBox({ autoFocus, onAdded, onCancel, takesDraft }: { autoFocus?: boolean; onAdded?: () => void; onCancel?: () => void; takesDraft?: boolean }) {
   const [text, setText] = useState('')
-  const input = useMemo(() => parseTodoInput(text), [text])
-  const at = text.trim() ? todoInputAt(input, Date.now(), getTodoTimes()) : null
-  const read = [
-    at !== null ? whenText(at, Date.now()) : '',
-    input.durationMs ? <Duration ms={input.durationMs} exact /> : '',
-    input.repeat && at !== null ? describeRepeatShort(input.repeat) : '',
-  ].filter(Boolean)
+  // Text from outside (the Android app's quick add): shown here, read, added only on Add.
+  const draft = useUi(s => (takesDraft ? s.todoDraft : null))
+  const boxRef = useRef<HTMLTextAreaElement>(null)
+  // From quick add: always shown for approval first, even a single todo (owner 2026-11-25).
+  const [fromDraft, setFromDraft] = useState(false)
+  useEffect(() => {
+    if (draft === null) return
+    setFromDraft(true)
+    setText(t => (t.trim() ? `${t}\n${draft}` : draft))
+    ui.setTodoDraft(null)
+    boxRef.current?.focus()
+  }, [draft])
+  const rows = useMemo(() => readTodoText(text, Date.now(), getTodoTimes()), [text])
+  const pick = useImportRows(rows)
+  // A list, or speech that splits: each todo shown before any is made.
+  const many = rows.length > 1 || (rows.length === 1 && (rows[0].done || isList(text) || fromDraft))
+  const one = rows.length === 1 ? rows[0] : null
+  const read = one && !many ? [
+    one.at !== null ? whenText(one.at, Date.now()) : '',
+    one.durationMs ? <Duration ms={one.durationMs} exact /> : '',
+    one.repeat ? describeRepeatShort(one.repeat) : '',
+  ].filter(Boolean) : []
+  const clear = () => { setText(''); pick.reset(); setFromDraft(false) }
   const submit = () => {
     if (!text.trim()) { onCancel?.(); return }
-    act.addTodo(text)
-    setText('')
+    act.addTodoRows(many ? pick.chosen : rows)
+    clear()
     onAdded?.()
   }
   return (
     <form className="todo-add" onSubmit={e => { e.preventDefault(); submit() }}>
-      <input
+      <textarea
+        ref={boxRef}
+        rows={1}
         className="todo-add__input glow-box"
         value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') { setText(''); onCancel?.() } }}
+        onChange={e => { setText(e.target.value); pick.reset() }}
+        onKeyDown={e => {
+          e.stopPropagation()
+          if (e.key === 'Escape') { clear(); onCancel?.() }
+          // Enter adds; Shift+Enter is a new line (a list typed by hand).
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+        }}
         placeholder={TODO_UI.addPlaceholder}
         aria-label={TODO_UI.addLabel}
         autoFocus={autoFocus}
         enterKeyHint="done"
         autoComplete="off"
       />
-      <button type="submit" className="todo-add__go glow-box" aria-label="Add todo" disabled={!text.trim()}><PlusIcon aria-hidden /></button>
-      {read.length > 0 && <span className="todo-add__read" aria-live="polite">{dotted([input.label, ...read])}</span>}
+      <button type="submit" className="todo-add__go glow-box" aria-label={many ? TODO_UI.importAdd(pick.chosen.length) : 'Add todo'} disabled={!text.trim() || (many && pick.chosen.length === 0)}><PlusIcon aria-hidden /></button>
+      {read.length > 0 && one && <span className="todo-add__read" aria-live="polite">{dotted([one.label, ...read])}</span>}
+      {many && <span className="todo-add__read todo-add__read--many" aria-live="polite">{TODO_UI.importCount(rows.length)}</span>}
+      {many && <TodoImportPreview state={pick} onAdd={submit} onCancel={() => { clear(); onCancel?.() }} />}
     </form>
   )
 }
@@ -243,6 +271,85 @@ function StretchList({ todoId, startedId, done }: { todoId: string; startedId?: 
   )
 }
 
+/** A stretch's range, plainly: "2:00p – 2:25p" (the date before the start when not today). */
+const rangeText = (start: number, end: number) => `${whenText(start, Date.now())} – ${clock(end)}`
+/** Quick lengths for time worked. */
+const WORKED_MIN = [5, 15, 30, 60] as const
+/** The cursor, to the minute (the Ending at cursor button's range follows it). */
+const cursorMinute = (f: { center: number }) => Math.floor(f.center / 60_000)
+
+/**
+ * Time worked that isn't on the timeline (owner 2026-11-25): +5m … +1h and "Worked [25m]" add to
+ * it, said without when; it counts in what the todo took. Once there is some: "25m not on the
+ * timeline" (× clears it), then put it on the timeline as a stretch: Ending at cursor, or from a
+ * typed time ("From [2p]", "until 3p"), or the time entry's clock and date.
+ */
+function WorkedPick({ todoId, extraMs }: { todoId: string; extraMs: number }) {
+  const [picking, setPicking] = useState(false)
+  const cursor = useFrameValue(cursorMinute) * 60_000
+  const leave = () => { if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda() }
+  const place = (at: { start: number } | { end: number }) => { if (act.placeTodoExtra(todoId, at)) { setPicking(false); leave() } }
+  return (
+    <div className="todo-dur-pick todo-worked-pick" role="group" aria-labelledby={`worked-${todoId}`}>
+      <span className="todo-dur-pick__label" id={`worked-${todoId}`}><StopwatchIcon aria-hidden className="todo-dur__icon" />{TODO_UI.workedHead}</span>
+      <div className="todo-when__line">
+        {WORKED_MIN.map(min => (
+          <button key={min} type="button" className="alarm-link glow-box" title={TODO_UI.workedAddTitle(length(min * MINUTE))}
+            onClick={() => act.addTodoExtra(todoId, min * MINUTE)}>{TODO_UI.workedAdd(length(min * MINUTE))}</button>
+        ))}
+      </div>
+      <PhraseBox<number>
+        word={() => TODO_UI.worked}
+        name={() => TODO_UI.worked}
+        placeholder={TODO_UI.workedPlaceholder}
+        parse={text => parseTimerInput(text)}
+        go={ms => TODO_UI.workedGo(formatDuration(ms, { exact: true }))}
+        goLabel={ms => TODO_UI.workedGoLabel(formatDuration(ms, { exact: true }))}
+        onSubmit={ms => act.addTodoExtra(todoId, ms)}
+      />
+      {extraMs > 0 && (
+        <div className="todo-worked__extra">
+          <span className="todo-worked__amount">
+            <Duration ms={extraMs} exact /> {TODO_UI.extra}
+            <button type="button" className="todo-worked__clear" aria-label={TODO_UI.extraClear} title={TODO_UI.extraClear}
+              onClick={() => act.clearTodoExtra(todoId)}><XMarkIcon aria-hidden /></button>
+          </span>
+          <span className="todo-dur-pick__label">{TODO_UI.placeHead}</span>
+          <div className="todo-when__line">
+            <button type="button" className="alarm-link todo-when__quick glow-box" title={TODO_UI.placeCursorTitle}
+              onClick={() => place({ end: act.cursorTime() })}>
+              {TODO_UI.placeCursor} <span className="alarm-link__at">{rangeText(cursor - extraMs, cursor)}</span>
+            </button>
+          </div>
+          <div className="todo-when__typed-row">
+            <IconButton icon={ClockIcon} label={TODO_UI.placePick} color="var(--c-cursor)" bare pressed={picking} onClick={() => setPicking(p => !p)} />
+            <PhraseBox<{ start: number; end: number; until: boolean }>
+              word={(_typing, read) => (read?.until ? TODO_UI.placeUntil : TODO_UI.placeFrom)}
+              name={() => TODO_UI.placeHead}
+              placeholder={TODO_UI.placePlaceholder}
+              parse={text => {
+                const r = parsePlaceTime(text, extraMs, Date.now())
+                return r && { ...r, until: /^\s*(until|till|til|to|ending|ends?)\b/i.test(text) }
+              }}
+              go={r => TODO_UI.placeGo(rangeText(r.start, r.end))}
+              goLabel={r => TODO_UI.placeGoLabel(rangeText(r.start, r.end))}
+              onSubmit={r => place({ start: r.start })}
+            />
+          </div>
+          {picking && (
+            <TimeEntry
+              title={TODO_UI.placePick}
+              className="popover--inline"
+              clock={{ initialTs: cursor - extraMs, onSubmit: (t, day) => { const d = new Date(day); place({ start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), t.h, t.m, t.s).getTime() }) } }}
+              onCancel={() => setPicking(false)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TodoPanel({ row, verb, onClose }: { row: TodoRow; verb: 'schedule' | 'reschedule' | null; onClose: () => void }) {
   // Worked on (a stretch saved, or counting): it can't stop being a todo.
   const worked = useEntities(s => hasStretches(instantsOf(todoIndex(s.instants), row.todo.id), s.spans, Date.now(), row.todo.startedId))
@@ -253,6 +360,7 @@ function TodoPanel({ row, verb, onClose }: { row: TodoRow; verb: 'schedule' | 'r
     <div className="todo-when" onClick={e => e.stopPropagation()}>
       {verb && <WhenPick todoId={id} verb={verb} onClose={onClose} />}
       {open && <LengthPick todoId={id} current={row.todo.durationMs ?? null} onClose={onClose} />}
+      <WorkedPick todoId={id} extraMs={row.todo.extraMs ?? 0} />
       <StretchList todoId={id} startedId={row.todo.startedId} done={row.todo.status === 'done'} />
       <div className="todo-when__chips todo-when__actions">
         {/* Not a todo: its instant stays on the timeline as a plain one (alarms and all). */}
@@ -309,9 +417,9 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
   const dur = todo.durationMs ? <Duration ms={todo.durationMs} /> : null
   const sub: ReactNode = (() => {
     if (state === 'waiting' && at) return dotted([TODO_COPY.since(clock(at.tsEpochMs)), dur])
-    if (state === 'paused') return dotted([TODO_COPY.soFar(length(todoActual(mine, spans, Date.now()).ms)), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''])
+    if (state === 'paused') return dotted([TODO_COPY.soFar(length(todoActual(mine, spans, Date.now(), undefined, todo.extraMs).ms)), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''])
     if (state === 'scheduled' && at) return dotted([whenText(at.tsEpochMs, Date.now()), dur, series ? `${MARKS.repeat} ${describeRepeatShort(series.repeat)}` : ''])
-    if (state === 'unscheduled') return dur ?? ''
+    if (state === 'unscheduled') return todo.extraMs ? dotted([TODO_COPY.soFar(length(todo.extraMs)), dur]) : (dur ?? '')
     return null
   })()
   // Nothing on the timeline to go to: a tap schedules it instead (and the drawer stays).
@@ -339,11 +447,11 @@ const TodoRowView = memo(function TodoRowView({ row, drag }: { row: TodoRow; dra
           ) : <span className="todo-row__name" title={name}>{name}</span>}
           {state === 'counting' ? (
             <LiveText className="todo-row__sub mono" watch={bySecond}
-              compute={f => [length(todoActual(mine, spans, f.now, todo.startedId).ms), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''].filter(Boolean).join(' · ')} />
+              compute={f => [length(todoActual(mine, spans, f.now, todo.startedId, todo.extraMs).ms), todo.durationMs ? TODO_COPY.planned(length(todo.durationMs)) : ''].filter(Boolean).join(' · ')} />
           ) : sub !== null ? (
             sub && <span className="todo-row__sub">{sub}</span>
           ) : (
-            <span className="todo-row__sub">{todoReading(todo, todoActual(mine, spans, Date.now()), length)}</span>
+            <span className="todo-row__sub">{todoReading(todo, todoActual(mine, spans, Date.now(), undefined, todo.extraMs), length)}</span>
           )}
         </span>
         <span className="todo-row__tools" onClick={e => e.stopPropagation()}>
@@ -463,7 +571,7 @@ export function TodosList() {
   const empty = s.active.length + s.now.length + s.today.length + s.upcoming.length + s.unscheduled.length + s.done.length === 0
   return (
     <div ref={listRef} className="todos-list alarms-list">
-      <AddBox />
+      <AddBox takesDraft />
       {empty && <p className="alarms-empty">No todos yet. Type one above and press Enter, or press <b>N</b> anywhere. Add a time ("3p") to be reminded, a length ("20m") to plan it.</p>}
       {/* Counting now, then what rang and waits. */}
       {s.active.length > 0 && <h3 className="alarms-list__head">{TODO_UI.sections.active}</h3>}

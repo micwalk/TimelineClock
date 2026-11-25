@@ -3,7 +3,7 @@ import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants } from './entities.ts'
 import type { TodoRecord, TodoRole } from './todos.ts'
 import {
-  countingInstant, doneFolds, instantsByTodo, makeTodo, nextOrder, nextPassTime, nowCount, parseTodoInput, passedTodos, plannedBlocks, quickChoices,
+  addExtra, MAX_EXTRA_MS, parsePlaceTime, countingInstant, doneFolds, instantsByTodo, makeTodo, nextOrder, nextPassTime, nowCount, parseTodoInput, passedTodos, plannedBlocks, quickChoices,
   sanitizeTodos, todoActual, todoInputAt, todoOccurrences, todoReading, todoSections, todoState, todoStretches,
 } from './todos.ts'
 import type { SeriesRecord } from './series.ts'
@@ -225,5 +225,33 @@ describe('stretches and pause (domain)', () => {
     expect(todoSections([todo()], new Map([['t', mine.slice(0, 2)]]), 15).unscheduled).toHaveLength(1)
     expect(todoStretches(mine, spans, 30, 's')).toEqual([{ spanId: 'one', start: 0, end: 10 }, { spanId: 'live', start: 20, end: null }])
     expect(todoActual(mine, spans, 30, 's')).toEqual({ ms: 20, stretches: 2, counting: true })
+  })
+})
+
+describe('extra time (worked, not on the timeline)', () => {
+  it('adds up, never below none or past the cap', () => {
+    expect(addExtra(undefined, 5 * MINUTE)).toBe(5 * MINUTE)
+    expect(addExtra(5 * MINUTE, -10 * MINUTE)).toBeUndefined()
+    expect(addExtra(MAX_EXTRA_MS, MINUTE)).toBe(MAX_EXTRA_MS)
+  })
+
+  it('is kept by records and counts in what it took', () => {
+    expect(sanitizeTodos([{ id: 't', extraMs: 20 * MINUTE }, { id: 'u', extraMs: -1 }]).map(t => t.extraMs)).toEqual([20 * MINUTE, undefined])
+    const actual = todoActual([], [], NOW, undefined, 20 * MINUTE)
+    expect(actual).toEqual({ ms: 20 * MINUTE, stretches: 0, counting: false, extraMs: 20 * MINUTE })
+    expect(todoReading(todo('t', { status: 'done', durationMs: 15 * MINUTE }), actual, formatDurationShort)).toBe('20m · planned 15m')
+    const mine = [inst('a', at(10)), inst('d', at(10, 30))]
+    expect(todoActual(mine, [span('a', 'd')], NOW, undefined, 10 * MINUTE).ms).toBe(40 * MINUTE)
+  })
+
+  it('a typed time is where it starts, the latest one before now; "until" is where it ends', () => {
+    expect(parsePlaceTime('10a', 30 * MINUTE, NOW)).toEqual({ start: at(10), end: at(10, 30) })
+    // 2 alone: 2 AM today was latest before noon.
+    expect(parsePlaceTime('2', 30 * MINUTE, NOW)).toEqual({ start: at(2), end: at(2, 30) })
+    // 3p is still ahead today: yesterday's.
+    expect(parsePlaceTime('3p', 30 * MINUTE, NOW)).toEqual({ start: at(15, 0, 20), end: at(15, 30, 20) })
+    expect(parsePlaceTime('until 11:30', 30 * MINUTE, NOW)).toEqual({ start: at(11), end: at(11, 30) })
+    expect(parsePlaceTime('soon', 30 * MINUTE, NOW)).toBeNull()
+    expect(parsePlaceTime('10a', 0, NOW)).toBeNull()
   })
 })

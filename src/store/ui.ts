@@ -66,6 +66,8 @@ export interface UiState {
   seriesHint: string | null
   /** The todo capture box (N, or the Todos tab's ＋): a name and Enter, over whatever is on screen. */
   captureOpen: boolean
+  /** Text for the Todos tab's Add box from outside it (the Android app's quick add): it shows what it read before adding. */
+  todoDraft: string | null
   /**
    * A todo just done: the ✓ instant (its chip flares) and the todo (its row flares); `origin`, the
    * box that was tapped (its ✓ springs out there and the confetti flies from it). `n` tells one
@@ -113,6 +115,7 @@ export const useUi = create<UiState>(() => ({
   draggingBell: null,
   seriesHint: null,
   captureOpen: false,
+  todoDraft: null,
   celebrating: null,
   charging: null,
   foundTodo: null,
@@ -174,6 +177,7 @@ export const ui = {
   selectBell: (selectedBell: string | null) => useUi.setState({ selectedBell }),
   setDraggingBell: (draggingBell: string | null) => useUi.setState({ draggingBell }),
   setCapture: (captureOpen: boolean) => useUi.setState({ captureOpen }),
+  setTodoDraft: (todoDraft: string | null) => useUi.setState({ todoDraft }),
   /** A Done box starts charging (act.completeTodo); `celebrate` (the pop) or `endCharge` ends it. */
   charge(todoId: string, origin: DoneOrigin) {
     useUi.setState({ charging: { todoId, origin, n: ++celebrations } })
