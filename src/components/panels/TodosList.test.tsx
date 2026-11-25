@@ -120,6 +120,23 @@ describe('the Todos tab', () => {
     expect(screen.getAllByRole('listitem').map(e => e.textContent)).toEqual([expect.stringMatching(/^✓ Done /)])
   })
 
+  it("a done todo's panel takes time worked off the timeline, then puts it on the timeline ending at the cursor", () => {
+    useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'done', order: 0, closedAt: Date.now() }] })
+    render(<TodosList />)
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getByRole('button', { name: '+15m' }))
+    const box = screen.getByRole('textbox', { name: 'Worked' })
+    fireEvent.change(box, { target: { value: '10m' } })
+    fireEvent.submit(box)
+    expect(useEntities.getState().todos[0].extraMs).toBe(25 * MINUTE)
+    expect(screen.getByText('not on the timeline')).toBeTruthy()
+    expect(screen.getByText(/^25m/, { selector: '.todo-row__sub' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Ending at cursor/ }))
+    expect(useEntities.getState().todos[0].extraMs).toBeUndefined()
+    expect(useEntities.getState().spans).toHaveLength(1)
+    expect(useEntities.getState().instants.map(i => i.todo?.role).sort()).toEqual(['pause', 'start'])
+  })
+
   it('its panel sets a duration from a short list, or none', () => {
     useEntities.setState({ todos: [{ id: 't1', label: 'Dishes', createdAt: 0, status: 'open', order: 0 }] })
     render(<TodosList />)

@@ -39,7 +39,7 @@ import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -1822,6 +1822,46 @@ export function renameTodo(todoId: string, label: string) {
 /** Sets or clears a todo's length (its estimate, drawn as the planned block). */
 export function setTodoLength(todoId: string, ms: number | null) {
   entities.patchTodo(todoId, { durationMs: ms && ms > 0 ? ms : undefined })
+}
+
+/**
+ * Extra time worked on a todo (its panel's Worked box; owner 2026-11-25): a length said without
+ * when, added to what it took. Negative takes some away; none left clears it. Any todo, done or
+ * not, with stretches or none.
+ */
+export function addTodoExtra(todoId: string, ms: number) {
+  const todo = entities.getTodo(todoId)
+  if (!todo || !Number.isFinite(ms)) return
+  entities.patchTodo(todoId, { extraMs: addExtra(todo.extraMs, ms) })
+}
+
+/** Clears a todo's extra time (it was a mistake). */
+export function clearTodoExtra(todoId: string) {
+  if (entities.getTodo(todoId)?.extraMs) entities.patchTodo(todoId, { extraMs: undefined })
+}
+
+/**
+ * Puts a todo's extra time on the timeline as a stretch (owner 2026-11-25): a ▶ instant at `start`
+ * and a ⏸ at the end (its extra time later), in its group, and the saved span between them, so it
+ * counts as any stretch does; the extra time is spent. `end` given: from `end` minus its extra
+ * time instead (at the cursor). The new stretch is shown. Returns its span's id.
+ */
+export function placeTodoExtra(todoId: string, at: { start: number } | { end: number }): string | null {
+  const todo = entities.getTodo(todoId)
+  const ms = todo?.extraMs ?? 0
+  if (!todo || ms <= 0) return null
+  const start = 'start' in at ? at.start : at.end - ms
+  if (!Number.isFinite(start)) return null
+  const name = todo.label || formatClockCompact(start, false)
+  const group = todo.collectionId ? { collectionId: todo.collectionId } : {}
+  const a = entities.createInstant(start, TODO_COPY.startName(name))
+  entities.patchInstant(a, () => ({ todo: { id: todoId, role: 'start' as const }, ...group }))
+  const b = entities.createInstant(start + ms, TODO_COPY.pauseName(name))
+  entities.patchInstant(b, () => ({ todo: { id: todoId, role: 'pause' as const }, ...group }))
+  const spanId = entities.createSpan(a, b, todo.label, { visible: true })
+  entities.patchTodo(todoId, { extraMs: undefined })
+  if (spanId) showStretch(spanId)
+  return spanId ?? null
 }
 
 /** Moves an unscheduled todo in its list: before `beforeId`, or to the end. */

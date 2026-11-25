@@ -7,6 +7,19 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.8.2 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **Time worked, without saying when**: a todo's panel (its row's stopwatch button, done or not,
+  with stretches or none) has **Time worked**: +5m, +15m, +30m, +1h or "Worked [25m]" add time
+  you spent on it that isn't on the timeline. It counts in how long it took ("40m · planned
+  30m"); "⏱ 25m not on the timeline" shows it, × clears it.
+- **…and put it on the timeline later**: **Ending at cursor** (its range under it, "5:18a –
+  5:43a") or a typed start ("2p", the latest before now; "until 3p" to say where it ended), or
+  the clock button's time and date, turn it into a stretch: a ▶ and a ⏸ instant and the span
+  between them, shown on the timeline.
+
 ## 0.8.1 — 2026-11-22
 
 **Android app: install again** (only for its offline page, below; the rest is web).

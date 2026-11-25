@@ -1318,6 +1318,12 @@
 .todo-dur-pick__label .todo-dur__icon { width: 14px; height: 14px; }
 .todo-dur-pick .alarm-link { min-width: 40px; justify-content: center; }
 .todo-dur-pick .alarm-link.is-on { background: color-mix(in srgb, var(--c-todo) 50%, transparent); color: #fff; }
+/* Time worked, not on the timeline (WorkedPick): its amount with a ×, then where to put it. */
+.todo-worked__extra { display: flex; flex-direction: column; gap: 6px; }
+.todo-worked__amount { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
+.todo-worked__clear { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.todo-worked__clear:hover, .todo-worked__clear:focus-visible { background: color-mix(in srgb, var(--c-todo) 25%, transparent); }
+.todo-worked__clear svg { width: 14px; height: 14px; }
 .todo-row.is-celebrating { animation: todo-flare 1200ms ease-out 1; }
 @keyframes todo-flare {
   0% { box-shadow: 0 0 calc(26px * var(--glow)) var(--c-ok); filter: brightness(1.8); }
