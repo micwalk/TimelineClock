@@ -100,6 +100,24 @@ final class TodoWidgetFilter {
         return out.size() > MAX_ROWS ? new ArrayList<>(out.subList(0, MAX_ROWS)) : out;
     }
 
+    /**
+     * When the rows next change by themselves, with no new snapshot: the soonest time ahead of an
+     * open todo (it moves from Scheduled to Now), else the next midnight (today's look-ahead and
+     * "Done today" move on). The widget redraws then (TodoListWidget.scheduleNext).
+     */
+    static long nextChange(JSONObject snapshot, long now, ZoneId zone) {
+        long next = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        JSONArray todos = snapshot == null ? null : snapshot.optJSONArray("todos");
+        if (todos == null) return next;
+        for (int k = 0; k < todos.length(); k++) {
+            JSONObject t = todos.optJSONObject(k);
+            if (t == null || !"open".equals(t.optString("status", "open")) || t.optBoolean("counting", false) || !t.has("at")) continue;
+            long at = t.optLong("at", 0);
+            if (at > now && at < next) next = at;
+        }
+        return next;
+    }
+
     /** "", "Tomorrow ", "Fri ", "Nov 28 ": the day before a time, as the Todos tab says it. */
     static String dayWord(long at, long now, ZoneId zone) {
         LocalDate day = Instant.ofEpochMilli(at).atZone(zone).toLocalDate();

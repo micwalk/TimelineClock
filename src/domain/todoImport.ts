@@ -190,6 +190,18 @@ export function readSpoken(text: string, now: number): SpokenTodo {
     durationMs = ms
   })
 
+  const onWeekday = (next: string | undefined, w: string) => {
+    if (out.date) return false
+    const k = weekdayIndex(w)
+    if (k < 0) return false
+    out.date = weekdayKey(k, now, !!next)
+  }
+  // A bare short weekday right next to a clock time is that day ("vet sun 9a", "sun at 9",
+  // "9a sun"); alone it stays a word ("enjoy the sun"). Before times, which take the time away.
+  const CLOCK_NEAR = `(?:(?:at|by|around|@)\\s+)?\\d{1,2}(?::\\d{2})?(?:\\s*(?:am|pm|[ap]))?(?![\\w'’])`
+  take(new RegExp(`\\b(${WEEKDAY_SHORT})\\.?(?=\\s+${CLOCK_NEAR})${END}`, 'i'), (_m, w) => onWeekday(undefined, w))
+  take(new RegExp(`(?<=\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm|[ap])\\s+)(${WEEKDAY_SHORT})\\.?${END}`, 'i'), (_m, w) => onWeekday(undefined, w))
+
   // Times.
   const at = `(?:at|by|around|@)\\s+`
   const MIN = `(?:oh[\\s-]+(?:${ONE_WORDS})|${TEN_WORDS}(?:[\\s-](?:${ONE_WORDS}))?|fifteen|\\d{2})`
@@ -227,12 +239,6 @@ export function readSpoken(text: string, now: number): SpokenTodo {
   })
 
   // A weekday or a date: "on Friday", "next Tuesday", "Nov 28", "28 November", "11/28", "2026-11-28".
-  const onWeekday = (next: string | undefined, w: string) => {
-    if (out.date) return false
-    const k = weekdayIndex(w)
-    if (k < 0) return false
-    out.date = weekdayKey(k, now, !!next)
-  }
   take(new RegExp(`\\b(?:(?:on|this|by)\\s+)?(next\\s+)?(${WEEKDAY_FULL})${END}`, 'i'), (_m, next, w) => onWeekday(next, w))
   take(new RegExp(`\\b(?:(?:on|this|by)\\s+|(next)\\s+)(${WEEKDAY_SHORT})\\.?${END}`, 'i'), (_m, next, w) => onWeekday(next, w))
   take(/\b(?:on\s+)?(\d{4})-(\d{2})-(\d{2})\b/i, (_m, y, mo, d) => { if (out.date) return false; out.date = monthDayKey(Number(mo) - 1, Number(d), now, Number(y)) })

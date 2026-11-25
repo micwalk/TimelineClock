@@ -93,4 +93,13 @@ public class TodoWidgetFilterTest {
         assertEquals("Today · Now, Scheduled", TodoWidgetFilter.summary(TodoWidgetFilter.NOW | TodoWidgetFilter.SCHEDULED, 1));
         assertEquals("Unscheduled", TodoWidgetFilter.summary(TodoWidgetFilter.UNSCHEDULED, 7));
     }
+
+    @Test
+    public void nextChangeIsTheSoonestTimeAheadOrMidnight() throws Exception {
+        // "later today" at 4:00p is the soonest open todo ahead (done and passed times don't count).
+        assertEquals(at(25, 16, 0), TodoWidgetFilter.nextChange(sample(), NOW, ZONE));
+        // Past it, tomorrow's 9:00a is after midnight: midnight comes first.
+        assertEquals(at(26, 0, 0), TodoWidgetFilter.nextChange(sample(), at(25, 16, 0), ZONE));
+        assertEquals(at(26, 0, 0), TodoWidgetFilter.nextChange(null, NOW, ZONE));
+    }
 }

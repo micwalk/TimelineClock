@@ -86,6 +86,7 @@ public class TodoWidgetConfigActivity extends Activity {
             for (int k = 0; k < ids.length; k++) if (ids[k] == ahead.getCheckedRadioButtonId()) picked = k;
             TodoWidgetStore.setFilter(this, widgetId, s == 0 ? TodoWidgetFilter.DEFAULT_STATUSES : s, DAYS[picked]);
             TodoListWidget.update(this, AppWidgetManager.getInstance(this), widgetId);
+            TodoListWidget.scheduleNext(this);
             setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
             finish();
         });

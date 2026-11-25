@@ -7,6 +7,21 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.5 — 2026-11-25
+
+**Android app: install again** (the widgets and TC Preview).
+
+- **"sun" next to a time is Sunday**: "vet sun 9a" (or "sun at 9", "9a sun") is Sunday at 9:00a.
+  Short day names ("fri", "wed", "sat") count the same way. Without a time beside them they
+  stay words, so "enjoy the sun" is still a todo named that.
+- **Android: the Todos widget moves a todo to Now when its time comes**, and moves on at
+  midnight. Before, it waited for the next half-hourly update. It also redraws when the clock
+  or the time zone changes.
+- **Android: the widgets' dialogs follow the system theme** (Add todos, Widget settings): light
+  by day, dark at night. They were always dark.
+- **TC Preview: "Can't reach the site" retries the preview**. If the first load failed (no
+  network yet), its retry went to the live site, which opened in Chrome instead of the app.
+
 ## 0.9.4 — 2026-11-25
 
 **Android app: web only** (nothing to install).

@@ -1,5 +1,6 @@
 package com.micwalk.timelineclock;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -21,6 +22,21 @@ public class TodoListWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context c, AppWidgetManager manager, int[] ids) {
         for (int id : ids) update(c, manager, id);
+        scheduleNext(c);
+    }
+
+    @Override
+    public void onReceive(Context c, Intent intent) {
+        String action = intent.getAction();
+        // The clock or the time zone changed: what is Now, today and ahead moved with it.
+        if (Intent.ACTION_TIME_CHANGED.equals(action) || Intent.ACTION_TIMEZONE_CHANGED.equals(action)) refreshAll(c);
+        else super.onReceive(c, intent);
+    }
+
+    @Override
+    public void onDisabled(Context c) {
+        AlarmManager alarms = c.getSystemService(AlarmManager.class);
+        if (alarms != null) alarms.cancel(nextRedraw(c));
     }
 
     @Override
@@ -33,6 +49,33 @@ public class TodoListWidget extends AppWidgetProvider {
         AppWidgetManager manager = AppWidgetManager.getInstance(c);
         int[] ids = manager.getAppWidgetIds(new ComponentName(c, TodoListWidget.class));
         for (int id : ids) update(c, manager, id);
+        scheduleNext(c);
+    }
+
+    /**
+     * Redraws the widgets when their rows next change by themselves (a todo's time comes, or
+     * midnight: TodoWidgetFilter.nextChange), so a todo moves to Now when it is due, not at the
+     * next half-hourly update. Not a wakeup: a sleeping phone redraws when it wakes.
+     */
+    static void scheduleNext(Context c) {
+        AlarmManager alarms = c.getSystemService(AlarmManager.class);
+        if (alarms == null) return;
+        int[] ids = AppWidgetManager.getInstance(c).getAppWidgetIds(new ComponentName(c, TodoListWidget.class));
+        PendingIntent redraw = nextRedraw(c);
+        if (ids.length == 0) {
+            alarms.cancel(redraw);
+            return;
+        }
+        long at = TodoWidgetFilter.nextChange(TodoWidgetStore.snapshot(c), System.currentTimeMillis(), ZoneId.systemDefault());
+        // A second late, so the todo's time has surely come when the rows are worked out.
+        if (alarms.canScheduleExactAlarms()) alarms.setExact(AlarmManager.RTC, at + 1000, redraw);
+        else alarms.setWindow(AlarmManager.RTC, at + 1000, 60_000, redraw);
+    }
+
+    private static PendingIntent nextRedraw(Context c) {
+        Intent i = new Intent(c, TodoListWidget.class).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, AppWidgetManager.getInstance(c).getAppWidgetIds(new ComponentName(c, TodoListWidget.class)));
+        return PendingIntent.getBroadcast(c, 0, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     static void update(Context c, AppWidgetManager manager, int widgetId) {

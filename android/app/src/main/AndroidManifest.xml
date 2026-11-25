@@ -58,7 +58,7 @@
             android:label="@string/quick_add_title"
             android:launchMode="singleInstance"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.DeviceDefault.Dialog"
+            android:theme="@style/WidgetDialog"
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
 
         <activity
@@ -75,7 +75,7 @@
             android:excludeFromRecents="true"
             android:label="@string/todo_widget_settings"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.DeviceDefault.Dialog">
+            android:theme="@style/WidgetDialog">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
@@ -99,6 +99,11 @@
             android:label="@string/todo_widget_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <!-- The clock or zone changed: redraw (what is Now and today moved). Allowed implicit broadcasts. -->
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

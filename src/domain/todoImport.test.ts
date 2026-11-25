@@ -52,6 +52,15 @@ describe('speech', () => {
     expect(readOne('dentist on friday at 9', NOW).at).toBe(at(27, 9))
   })
 
+  it('a short weekday next to a time is that day', () => {
+    const sun9 = new Date(2026, 10, 29, 9).getTime()
+    expect(read('vet sun 9a')).toEqual([{ label: 'vet', at: sun9 }])
+    expect(read('vet sun at 9am')).toEqual([{ label: 'vet', at: sun9 }])
+    expect(read('vet 9a sun')).toEqual([{ label: 'vet', at: sun9 }])
+    expect(read('call Sam fri 3:30p')).toEqual([{ label: 'call Sam', at: at(27, 15, 30) }])
+    expect(read('vet sun 9a\nread book')).toEqual([{ label: 'vet', at: sun9 }, { label: 'read book', at: null }])
+  })
+
   it('leaves words that only look like times or days in the name', () => {
     expect(read('buy 2 eggs')).toEqual([{ label: 'buy 2 eggs', at: null }])
     expect(read('enjoy the sun')).toEqual([{ label: 'enjoy the sun', at: null }])

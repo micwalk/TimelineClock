@@ -21,4 +21,7 @@
         <item name="android:background">@drawable/splash</item>
         <item name="windowSplashScreenBackground">@color/app_background</item>
     </style>
+
+    <!-- The widgets' dialogs (Add todos, Widget settings): light by day; values-night has the dark one. -->
+    <style name="WidgetDialog" parent="@android:style/Theme.DeviceDefault.Light.Dialog" />
 </resources>
