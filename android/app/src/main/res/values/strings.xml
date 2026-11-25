@@ -6,10 +6,10 @@
     <string name="custom_url_scheme">com.micwalk.timelineclock</string>
     <!-- Todo widgets (docs/prd_todo_import_widgets.md) -->
     <string name="quick_add_widget">Add todo</string>
-    <string name="quick_add_widget_description">Add todos by typing or with the keyboard's mic</string>
-    <string name="quick_add_mic">Dictate with the keyboard's mic</string>
+    <string name="quick_add_widget_description">Add todos by typing or with the keyboard’s mic</string>
+    <string name="quick_add_mic">Dictate with the keyboard’s mic</string>
     <string name="quick_add_title">Add todos</string>
-    <string name="quick_add_hint">Type or tap the keyboard's mic: "buy milk tomorrow at 3 then call mom". You'll see each todo before it's added.</string>
+    <string name="quick_add_hint">Type or tap the keyboard’s mic: “buy milk tomorrow at 3 then call mom”. You’ll see each todo before it’s added.</string>
     <string name="quick_add_placeholder">laundry 4p 20m</string>
     <string name="quick_add_add">Add</string>
     <string name="todo_widget_title">Todos</string>
