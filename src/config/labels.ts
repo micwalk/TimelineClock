@@ -121,7 +121,7 @@ export const TODO_UI = {
   placeGoLabel: (range: string) => `Put it on the timeline: ${range}`,
   placePick: 'Pick when it started',
   /** A pasted list or dictation in the Add box (TodoImportPreview). */
-  importCount: (n: number) => (n === 1 ? '1 todo: check it, then Add' : `${n} todos: check them, then Add`),
+  importCount: (n: number) => (n === 1 ? '1 todo' : `${n} todos`),
   importAdd: (n: number) => (n === 1 ? 'Add 1 todo' : `Add ${n} todos`),
   importInclude: (name: string) => `Add ${name}`,
   importEdit: 'Todo text',

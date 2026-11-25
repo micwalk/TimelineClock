@@ -31,7 +31,7 @@ describe('the Todos tab', () => {
     render(<TodosList />)
     const box = screen.getByRole('textbox', { name: /Add a todo/ })
     fireEvent.change(box, { target: { value: '- [ ] laundry 20m\n- [x] taxes\n- [ ] call mom' } })
-    expect(screen.getByText('3 todos: check them, then Add')).toBeTruthy()
+    expect(screen.getByText('3 todos')).toBeTruthy()
     expect(useEntities.getState().todos).toEqual([])
     fireEvent.click(screen.getByRole('checkbox', { name: 'Add call mom' }))
     fireEvent.click(screen.getByText('Add 2 todos'))

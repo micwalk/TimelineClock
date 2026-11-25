@@ -7,6 +7,13 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.2 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **A pasted or dictated list** says just "3 todos" over its rows, and its Add and Cancel sit at
+  the left.
+
 ## 0.9.1 — 2026-11-25
 
 **Android app: web only** (nothing to install).

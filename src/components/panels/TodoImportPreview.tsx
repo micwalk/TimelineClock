@@ -28,8 +28,8 @@ export function TodoImportPreview({ state, onAdd, onCancel }: {
         </div>
       ))}
       <div className="todo-import__foot">
-        <button type="button" className="alarm-link glow-box" onClick={onCancel}>{TODO_UI.importCancel}</button>
         <button type="button" className="alarm-link todo-import__add glow-box" disabled={chosen.length === 0} onClick={onAdd}>{TODO_UI.importAdd(chosen.length)}</button>
+        <button type="button" className="alarm-link glow-box" onClick={onCancel}>{TODO_UI.importCancel}</button>
       </div>
     </div>
   )
