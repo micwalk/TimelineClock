@@ -7,6 +7,13 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.6 — 2026-11-25
+
+**Android app:** web only.
+
+- Todos widget: tapping a todo's name opens the app on the timeline at it when it has a time
+  there (scheduled, worked on or done); an unscheduled one still opens its row in the Todos tab.
+
 ## 0.9.5 — 2026-11-25
 
 **Android app: install again** (the widgets and TC Preview).

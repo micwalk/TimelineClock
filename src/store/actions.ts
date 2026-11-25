@@ -1941,6 +1941,17 @@ export function findTodo(todoId: string) {
   ui.findTodo(todoId)
 }
 
+/**
+ * A tap on a todo's row in the Android app's Todos widget: one on the timeline (scheduled, worked
+ * on or done there) goes there, as its Todos row does (the drawer closed so it isn't hidden);
+ * one with nothing on the timeline (unscheduled) opens the Todos tab at its row.
+ */
+export function openTodoFromWidget(todoId: string) {
+  if (todoInstants(todoId).length === 0) { findTodo(todoId); return }
+  showTodo(todoId)
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.closeAgenda()
+}
+
 /** The Todos tab, shown (never closed, unlike the Todo button's toggle): the Android app's widgets. */
 export function showTodosTab() {
   ui.setListTab('todos')

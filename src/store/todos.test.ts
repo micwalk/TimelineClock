@@ -477,6 +477,17 @@ describe('stretches: pause, a hidden lane, opening one again', () => {
     expect(useView.getState()).toMatchObject({ viewFocusMode: 'span', focusedSpanId: last.id })
   })
 
+  it('a tap on its widget row goes to the timeline when it is scheduled, else to its Todos row', () => {
+    const later = act.addTodo('Dentist')!
+    act.scheduleTodo(later, Date.now() + HOUR)
+    act.openTodoFromWidget(later)
+    expect(useView.getState()).toMatchObject({ viewFocusMode: 'instant', focusedInstantId: atOf(later)!.id })
+    expect(useUi.getState().foundTodo).toBeNull()
+    const loose = act.addTodo('Book appointment')!
+    act.openTodoFromWidget(loose)
+    expect(useUi.getState()).toMatchObject({ listTab: 'todos', foundTodo: { id: loose } })
+  })
+
   it('Not a todo does nothing once it was worked on (a stretch saved, or counting)', () => {
     const { id, atId } = ringingTodo()
     act.startTodo(id, { fromAlarm: true })

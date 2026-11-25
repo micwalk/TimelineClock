@@ -71,7 +71,8 @@ own settings, picked when it is placed (and later from a ⚙ in its header):
 - **Look ahead**: Today · 3 days · 7 days · All.
 
 Rows show the box, name and time/length the way the Todos tab does ("4:00p · ⏱ 20m", "since
-7:00a"). A tap on a row opens the app at that todo (`act.findTodo`). The widget's header (a
+7:00a"). A tap on a row opens the app at that todo: on the timeline when it has a time there (scheduled,
+worked on or done), else at its row in the Todos tab (`act.openTodoFromWidget`). The widget's header (a
 tap opens the Todos tab) and its ＋ are the quick add from §3.
 
 **Data:** the page writes a snapshot of the todos (next 30 days, plus the last day's done ones)

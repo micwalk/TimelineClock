@@ -39,7 +39,7 @@ export async function drainTodoWidget() {
     act.showTodosTab()
     ui.setTodoDraft(text)
   } else if (inbox.open !== null) {
-    if (inbox.open && entities.getTodo(inbox.open)) act.findTodo(inbox.open)
+    if (inbox.open && entities.getTodo(inbox.open)) act.openTodoFromWidget(inbox.open)
     else act.showTodosTab()
   }
 }
