@@ -7,6 +7,19 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.3 — 2026-11-25
+
+**Android app: install again** (for the widgets).
+
+- **The cursor's hours read "4:00p"**, not "4p", when zoomed out to hours.
+- **Days are counted from today**: zoomed out to days or more, the cursor's offset reads
+  "Today +3d" (not "Now +3d"), and on today itself just "Today".
+- **Quick add always asks first**: text from the Android quick-add box is shown for approval
+  ("1 todo", **Add 1 todo**) even when it is a single todo, whether the app was closed or
+  already open.
+- **Android: the Add todo widget comes 1×1** (just a ＋); stretched wider it reads "＋ Add todo".
+- **Android: the Todos widget** has a rule between its header and its list (which scrolls).
+
 ## 0.9.2 — 2026-11-25
 
 **Android app: web only** (nothing to install).

@@ -25,7 +25,7 @@ describe('the cursor’s clock', () => {
     expect(cursorClock(ts, 15 * SECOND)).toBe('3:41:30p')
     expect(cursorClock(ts, MINUTE)).toBe('3:42p')
     expect(cursorClock(ts, 15 * MINUTE)).toBe('3:45p')
-    expect(cursorClock(ts, HOUR)).toBe('4p')
+    expect(cursorClock(ts, HOUR)).toBe('4:00p')
     expect(cursorClock(ts, CURSOR_DAY)).toBe('')
   })
   it('says only the month or the year further out', () => {

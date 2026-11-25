@@ -80,8 +80,11 @@ export function AddBox({ autoFocus, onAdded, onCancel, takesDraft }: { autoFocus
   // Text from outside (the Android app's quick add): shown here, read, added only on Add.
   const draft = useUi(s => (takesDraft ? s.todoDraft : null))
   const boxRef = useRef<HTMLTextAreaElement>(null)
+  // From quick add: always shown for approval first, even a single todo (owner 2026-11-25).
+  const [fromDraft, setFromDraft] = useState(false)
   useEffect(() => {
     if (draft === null) return
+    setFromDraft(true)
     setText(t => (t.trim() ? `${t}\n${draft}` : draft))
     ui.setTodoDraft(null)
     boxRef.current?.focus()
@@ -89,14 +92,14 @@ export function AddBox({ autoFocus, onAdded, onCancel, takesDraft }: { autoFocus
   const rows = useMemo(() => readTodoText(text, Date.now(), getTodoTimes()), [text])
   const pick = useImportRows(rows)
   // A list, or speech that splits: each todo shown before any is made.
-  const many = rows.length > 1 || (rows.length === 1 && (rows[0].done || isList(text)))
+  const many = rows.length > 1 || (rows.length === 1 && (rows[0].done || isList(text) || fromDraft))
   const one = rows.length === 1 ? rows[0] : null
   const read = one && !many ? [
     one.at !== null ? whenText(one.at, Date.now()) : '',
     one.durationMs ? <Duration ms={one.durationMs} exact /> : '',
     one.repeat ? describeRepeatShort(one.repeat) : '',
   ].filter(Boolean) : []
-  const clear = () => { setText(''); pick.reset() }
+  const clear = () => { setText(''); pick.reset(); setFromDraft(false) }
   const submit = () => {
     if (!text.trim()) { onCancel?.(); return }
     act.addTodoRows(many ? pick.chosen : rows)

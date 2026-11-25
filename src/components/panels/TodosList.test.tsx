@@ -50,6 +50,15 @@ describe('the Todos tab', () => {
     expect(useEntities.getState().todos.map(t => t.label)).toEqual(['Buy milk', 'Call mom', 'Pick up the kids'])
   })
 
+  it('a single todo from quick add is shown for approval too', () => {
+    render(<TodosList />)
+    act(() => ui.setTodoDraft('call mom at 5pm'))
+    expect(screen.getByText('1 todo')).toBeTruthy()
+    expect(useEntities.getState().todos).toEqual([])
+    fireEvent.click(screen.getByText('Add 1 todo'))
+    expect(useEntities.getState().todos.map(t => t.label)).toEqual(['call mom'])
+  })
+
   it('shows what it read as you type, its duration with a stopwatch', () => {
     const { container } = render(<TodosList />)
     fireEvent.change(screen.getByRole('textbox', { name: /Add a todo/ }), { target: { value: 'laundry 20m' } })

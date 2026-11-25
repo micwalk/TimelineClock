@@ -60,6 +60,14 @@
             android:textSize="18sp" />
     </LinearLayout>
 
+    <!-- A rule between the header and the list. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="2dp"
+        android:background="@color/widget_edge" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -69,7 +77,9 @@
             android:id="@+id/widget_todo_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:divider="@null" />
+            android:divider="@null"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="true" />
 
         <TextView
             android:id="@+id/widget_todo_empty"

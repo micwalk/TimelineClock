@@ -19,8 +19,11 @@ beforeEach(() => {
 const cursorMode = (ts = engine.getFrame().now - 25 * 60_000) => {
   useView.setState({ viewFocusMode: 'cursor', timeCenter: ts })
   engine.cancelTransition()
-  // No animation frames in jsdom: the tag reads the frame as the engine would draw it now.
-  ;(engine as unknown as { frame: unknown }).frame = engine.sample()
+  // No animation frames in jsdom: the tag reads the frame as the engine would draw it now,
+  // with no zoom smoothing left over from an earlier test.
+  const e = engine as unknown as { frame: unknown; displayedWidth: number | null }
+  e.displayedWidth = null
+  e.frame = engine.sample()
 }
 
 describe('NowTag', () => {
@@ -110,10 +113,13 @@ describe('CursorTag', () => {
     expect(screen.getByText(/^Now -3h( \d+m)?$/)).toBeInTheDocument()
     expect(screen.queryByText(/\d:\d\d:\d\d/)).toBeNull()
     unmount()
+    // 60 days across 500 px: a day spans 8 px, an hour doesn't (domain/cursorPrecision).
+    engine.setSize(500, 800)
     useView.setState({ timeWidth: 60 * 86_400_000 })
     cursorMode(now - 20 * 86_400_000)
     render(<CursorTag />)
-    expect(screen.getByText(/^Now -(20|21)d$/)).toBeInTheDocument()
+    // Zoomed out to days, counted from today.
+    expect(screen.getByText(/^Today -(20|21)d$/)).toBeInTheDocument()
   })
 
   it('ignores a selection that no longer exists', () => {

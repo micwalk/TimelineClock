@@ -37,11 +37,11 @@ function roundTo(ts: number, step: number): number {
   return base + Math.round((ts - base) / step) * step
 }
 
-/** The cursor's clock: "3:41:35p", "3:45p", "4p"; "" once hours aren't told apart (the date line says the day). */
+/** The cursor's clock: "3:41:35p", "3:45p", "4:00p"; "" once hours aren't told apart (the date line says the day). */
 export function cursorClock(ts: number, unit: CursorUnit): string {
   if (unit < MINUTE) return formatClockCompact(roundTo(ts, unit), true)
   if (unit < HOUR) return formatClockCompact(roundTo(ts, unit), false)
-  if (unit < DAY) return formatClockCompact(roundTo(ts, HOUR), false).replace(':00', '')
+  if (unit < DAY) return formatClockCompact(roundTo(ts, HOUR), false)
   return ''
 }
 
@@ -135,6 +135,12 @@ export function cursorOffset(from: number, to: number, unit: CursorUnit): string
   }
   return rest ? `${sign}${months}mo ${rest}d` : `${sign}${months}mo`
 }
+
+/**
+ * What the offset from Now is counted from: "Now" while the clock shows, "Today" once the
+ * cursor speaks in days or more ("Today +3d": days are counted from today, owner 2026-11-25).
+ */
+export const nowName = (unit: CursorUnit) => (unit < DAY ? 'Now' : 'Today')
 
 /** Whether a unit is finer than days (the clock line still shows). */
 export const showsClock = (unit: CursorUnit) => unit < DAY

@@ -11,7 +11,7 @@ import { LiveText } from '../../engine/LiveText.tsx'
 import { DAY, SECOND } from '../../domain/time.ts'
 import { YEAR_ZOOM_MS, formatClockCompact, formatDayLabel, formatRelativeShort } from '../../domain/format.ts'
 import type { CursorUnit } from '../../domain/cursorPrecision.ts'
-import { cursorClock, cursorCoarseDate, cursorOffset, cursorUnit, showsClock } from '../../domain/cursorPrecision.ts'
+import { cursorClock, cursorCoarseDate, cursorOffset, cursorUnit, nowName, showsClock } from '../../domain/cursorPrecision.ts'
 import { getTunables } from '../../store/settings.ts'
 import { endpointName } from '../../domain/spans.ts'
 import { useEntities } from '../../store/entities.ts'
@@ -64,7 +64,9 @@ function writeStyle(el: HTMLElement | SVGElement | null, prop: 'translate' | 'op
 const offsetText = (name: string, from: number, to: number, unit: CursorUnit) => {
   const off = cursorOffset(from, to, unit)
   // Nothing between them: exactly on it (an exact time), or too close to tell at this zoom.
-  return off ? `${name} ${off}` : unit <= SECOND ? `at ${name}` : `≈ ${name}`
+  if (off) return `${name} ${off}`
+  // Today needs no "≈": it is today.
+  return unit <= SECOND ? `at ${name}` : name === 'Today' ? name : `≈ ${name}`
 }
 
 function clockPopover(anchor: 'now' | 'cursor') {
@@ -275,7 +277,7 @@ export function CursorTag() {
         ) : (
           <>
             {showsClock(unit) && <><LiveText compute={f => cursorClock(shownTime(f), unitAt(f))} />{' '}</>}
-            <LiveText className="tl-tag__sub" compute={f => offsetText('Now', f.now, shownTime(f), unitAt(f))} />
+            <LiveText className="tl-tag__sub" compute={f => offsetText(nowName(unitAt(f)), f.now, shownTime(f), unitAt(f))} />
           </>
         )}
         {!onInstant && selected && selectedAway && (

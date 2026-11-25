@@ -191,7 +191,7 @@ Try one alarm with the phone on vibrate or silent, to see how your phone handles
 ### Todo widgets
 
 Long-press the home screen › Widgets › TimelineClock:
-- **Add todo** (2×1): a tap opens a small box; type, or tap the keyboard's mic and say it
+- **Add todo** (1×1, just a ＋; wider it reads “＋ Add todo”): a tap opens a small box; type, or tap the keyboard's mic and say it
   ("buy milk tomorrow at three then call mom for twenty minutes"). **Add** opens the app on
   the Todos tab, showing each todo it read; tap **Add N todos** there.
 - **Todos** (3×3, resizable): your todos, filtered by what you pick when you place it (and
