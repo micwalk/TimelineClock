@@ -188,6 +188,18 @@ anything you add in the Android app (and vice versa).
 
 Try one alarm with the phone on vibrate or silent, to see how your phone handles the sound.
 
+### Todo widgets
+
+Long-press the home screen › Widgets › TimelineClock:
+- **Add todo** (2×1): a tap opens a small box; type, or tap the keyboard's mic and say it
+  ("buy milk tomorrow at three then call mom for twenty minutes"). **Add** opens the app on
+  the Todos tab, showing each todo it read; tap **Add N todos** there.
+- **Todos** (3×3, resizable): your todos, filtered by what you pick when you place it (and
+  later from its ⚙): Now, Scheduled, Unscheduled, Done today, and how far ahead scheduled ones
+  reach (Today, 3 days, 7 days, All). A row's box ticks it done (the app records it at that
+  time the next time it opens); the rest of the row opens it in the app; ＋ is quick add.
+  The widget shows what the app last wrote: open the app after changing todos elsewhere.
+
 ## Updates
 
 - **Web changes** arrive by themselves, exactly like the PWA: the app picks up the new
@@ -311,6 +323,14 @@ Netlify builds for every pull request).
     any of the app's notifications (including the tap that started the app). A tap on a
     ringing alarm silences it (`Alarms.silence`: the notification is posted again without
     sound); Silence in the app does the same for every ringing alarm.
+  - Todo widgets (docs/prd_todo_import_widgets.md): `QuickAddWidget` and `QuickAddActivity`
+    (the box; its text waits in `TodoWidgetStore` and the app opens), `TodoListWidget` (a
+    `RemoteCollectionItems` list, redrawn on each snapshot and every 30 minutes), its settings
+    `TodoWidgetConfigActivity`, the pure, unit-tested `TodoWidgetFilter` (which rows, and how
+    each reads), and `TodoWidgetActionActivity` (a row's tap: an invisible activity, so it may
+    open the app). `TodoWidgetPlugin` takes the page's snapshot (`src/domain/todoWidget.ts`,
+    `services/native/todoWidgetSync.ts`) and hands over what the widgets asked for (quick-add
+    text, ticks, a todo to open) when the page starts or comes back.
   - `FilesPlugin.java`: saving a file (a backup export). The WebView ignores download links,
     so `services/fileTransfer.saveText` hands the text to `Files.save`, which opens Android's
     "Save to…" picker (`ACTION_CREATE_DOCUMENT`, no storage permission) and writes it there.

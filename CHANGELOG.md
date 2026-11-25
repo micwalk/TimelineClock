@@ -7,6 +7,27 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.0 — 2026-11-25
+
+**Android app: install again** (for the new widgets; the rest is web).
+
+- **Paste a list of todos**: paste text or a Markdown checklist into the Todos tab's Add box and
+  it shows each todo it read (its time, length or repeat) before adding: untick one to leave it
+  out, edit one's text, then **Add N todos**. `- [x]` items come in done; a heading that names
+  a day ("## Tomorrow", "Friday:") dates the items under it; other headings are skipped, and
+  nested items are added as todos of their own for now.
+- **Dictate several todos**: speech from the keyboard's mic is read as said, all on the device:
+  "buy milk tomorrow at three pm then call mom for twenty minutes and laundry tonight" is three
+  todos. It splits at "then", "also", "after that", and at "and" or a comma before a verb ("salt
+  and pepper" stays one); it reads number words, "half past four", "noon", "in 20 minutes",
+  "this evening", "tomorrow morning", weekdays, dates and "every morning", and drops "um" and
+  "remind me to".
+- **Android: Add todo widget**: a tap opens a box over the home screen (type, or tap the
+  keyboard's mic); Add opens the app with what it read, ready to add.
+- **Android: Todos widget**: your todos on the home screen, filtered per widget by status (Now,
+  Scheduled, Unscheduled, Done today) and how far ahead (Today, 3 or 7 days, All). Tick a box to
+  mark a todo done (recorded at that time when the app next opens); tap a row to open it; ＋ adds.
+
 ## 0.8.2 — 2026-11-25
 
 **Android app: web only** (nothing to install).

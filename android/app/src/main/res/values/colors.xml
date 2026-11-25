@@ -4,4 +4,11 @@
     <color name="app_background">#02040C</color>
     <!-- The Now line's red: notification accents. -->
     <color name="now_red">#FF3B5C</color>
+    <!-- The todo widgets: the app's box, ink and todo purple (theme.css). -->
+    <color name="widget_bg">#E60B1020</color>
+    <color name="widget_edge">#66A78BFA</color>
+    <color name="widget_ink">#F1F5FF</color>
+    <color name="widget_dim">#9FB0CF</color>
+    <color name="widget_todo">#A78BFA</color>
+    <color name="widget_ok">#22C55E</color>
 </resources>

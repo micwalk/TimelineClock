@@ -1,6 +1,8 @@
 # Todo bulk import, spoken quick add, and Android widgets (proposal)
 
-Status: proposal (2026-11-25), for the owner to confirm before building (AGENTS.md principle 10).
+Status: built (0.9.0). Owner's answers (2026-11-25): C, quick add opens the app on the
+preview; D, a widget row's box ticks it done (queued); A/B, `[x]` comes in done, headings other
+than days are skipped, and nesting is flattened for now (subtasks later, not groups).
 Everything here is deterministic and local: no network calls and no model, just rules with unit tests in
 `src/domain/todoImport.ts`.
 

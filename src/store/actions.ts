@@ -1941,6 +1941,12 @@ export function findTodo(todoId: string) {
   ui.findTodo(todoId)
 }
 
+/** The Todos tab, shown (never closed, unlike the Todo button's toggle): the Android app's widgets. */
+export function showTodosTab() {
+  ui.setListTab('todos')
+  if (useLayout.getState().agendaPlacement === 'drawer') ui.openAgenda()
+}
+
 /**
  * The Todo button: the Agenda's Todos tab, opening the drawer when the Agenda is one (tapped
  * again while the drawer shows it, it closes).
