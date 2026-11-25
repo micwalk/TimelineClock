@@ -21,7 +21,7 @@ import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import type { TodoRow } from '../../domain/todos.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { doneOrigin } from '../common/doneOrigin.ts'
-import { TODO_DURATIONS_MIN, instantsOf, parseTodoInput, parsePlaceTime, parseWhen, quickChoices, todoActual, todoInputAt, todoReading, todoStretches, hasStretches } from '../../domain/todos.ts'
+import { TODO_DURATIONS_MIN, instantsOf, parsePlaceTime, parseWhen, quickChoices, todoActual, todoReading, todoStretches, hasStretches } from '../../domain/todos.ts'
 import { genieKeyframes, genieMs } from '../../domain/genie.ts'
 import { todoIndex, useTodoSections } from '../../hooks/useTodos.ts'
 import { describeRepeatShort } from '../../domain/series.ts'
@@ -37,6 +37,9 @@ import { IconButton } from '../common/IconButton.tsx'
 import { InlineInput } from '../common/InlineInput.tsx'
 import { NotTodoIcon, ScheduleIcon, StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { PhraseBox } from '../common/PhraseBox.tsx'
+import { TodoImportPreview } from './TodoImportPreview.tsx'
+import { useImportRows } from '../../hooks/useImportRows.ts'
+import { isList, readTodoText } from '../../domain/todoImport.ts'
 import { TimeEntry } from '../timeline/TimeEntryPopover.tsx'
 import { reducedMotion } from '../../engine/viewportEngine.ts'
 
@@ -72,36 +75,58 @@ const dotted = (parts: ReactNode[]) => parts.filter(Boolean).map((p, k) => <span
  * picker reads times and Timer reads lengths ("book appt 3p", "laundry 20m", "feed cats 7a daily");
  * what it read shows under it as you type. `onAdded`: the capture box closes then.
  */
-export function AddBox({ autoFocus, onAdded, onCancel }: { autoFocus?: boolean; onAdded?: () => void; onCancel?: () => void }) {
+export function AddBox({ autoFocus, onAdded, onCancel, takesDraft }: { autoFocus?: boolean; onAdded?: () => void; onCancel?: () => void; takesDraft?: boolean }) {
   const [text, setText] = useState('')
-  const input = useMemo(() => parseTodoInput(text), [text])
-  const at = text.trim() ? todoInputAt(input, Date.now(), getTodoTimes()) : null
-  const read = [
-    at !== null ? whenText(at, Date.now()) : '',
-    input.durationMs ? <Duration ms={input.durationMs} exact /> : '',
-    input.repeat && at !== null ? describeRepeatShort(input.repeat) : '',
-  ].filter(Boolean)
+  // Text from outside (the Android app's quick add): shown here, read, added only on Add.
+  const draft = useUi(s => (takesDraft ? s.todoDraft : null))
+  const boxRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (draft === null) return
+    setText(t => (t.trim() ? `${t}\n${draft}` : draft))
+    ui.setTodoDraft(null)
+    boxRef.current?.focus()
+  }, [draft])
+  const rows = useMemo(() => readTodoText(text, Date.now(), getTodoTimes()), [text])
+  const pick = useImportRows(rows)
+  // A list, or speech that splits: each todo shown before any is made.
+  const many = rows.length > 1 || (rows.length === 1 && (rows[0].done || isList(text)))
+  const one = rows.length === 1 ? rows[0] : null
+  const read = one && !many ? [
+    one.at !== null ? whenText(one.at, Date.now()) : '',
+    one.durationMs ? <Duration ms={one.durationMs} exact /> : '',
+    one.repeat ? describeRepeatShort(one.repeat) : '',
+  ].filter(Boolean) : []
+  const clear = () => { setText(''); pick.reset() }
   const submit = () => {
     if (!text.trim()) { onCancel?.(); return }
-    act.addTodo(text)
-    setText('')
+    act.addTodoRows(many ? pick.chosen : rows)
+    clear()
     onAdded?.()
   }
   return (
     <form className="todo-add" onSubmit={e => { e.preventDefault(); submit() }}>
-      <input
+      <textarea
+        ref={boxRef}
+        rows={1}
         className="todo-add__input glow-box"
         value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') { setText(''); onCancel?.() } }}
+        onChange={e => { setText(e.target.value); pick.reset() }}
+        onKeyDown={e => {
+          e.stopPropagation()
+          if (e.key === 'Escape') { clear(); onCancel?.() }
+          // Enter adds; Shift+Enter is a new line (a list typed by hand).
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+        }}
         placeholder={TODO_UI.addPlaceholder}
         aria-label={TODO_UI.addLabel}
         autoFocus={autoFocus}
         enterKeyHint="done"
         autoComplete="off"
       />
-      <button type="submit" className="todo-add__go glow-box" aria-label="Add todo" disabled={!text.trim()}><PlusIcon aria-hidden /></button>
-      {read.length > 0 && <span className="todo-add__read" aria-live="polite">{dotted([input.label, ...read])}</span>}
+      <button type="submit" className="todo-add__go glow-box" aria-label={many ? TODO_UI.importAdd(pick.chosen.length) : 'Add todo'} disabled={!text.trim() || (many && pick.chosen.length === 0)}><PlusIcon aria-hidden /></button>
+      {read.length > 0 && one && <span className="todo-add__read" aria-live="polite">{dotted([one.label, ...read])}</span>}
+      {many && <span className="todo-add__read todo-add__read--many" aria-live="polite">{TODO_UI.importCount(rows.length)}</span>}
+      {many && <TodoImportPreview state={pick} onAdd={submit} onCancel={() => { clear(); onCancel?.() }} />}
     </form>
   )
 }
@@ -543,7 +568,7 @@ export function TodosList() {
   const empty = s.active.length + s.now.length + s.today.length + s.upcoming.length + s.unscheduled.length + s.done.length === 0
   return (
     <div ref={listRef} className="todos-list alarms-list">
-      <AddBox />
+      <AddBox takesDraft />
       {empty && <p className="alarms-empty">No todos yet. Type one above and press Enter, or press <b>N</b> anywhere. Add a time ("3p") to be reminded, a length ("20m") to plan it.</p>}
       {/* Counting now, then what rang and waits. */}
       {s.active.length > 0 && <h3 className="alarms-list__head">{TODO_UI.sections.active}</h3>}

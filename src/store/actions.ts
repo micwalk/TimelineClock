@@ -37,6 +37,7 @@ import {
 import { newAlarmId, newInstantId, storedInstants } from '../domain/entities.ts'
 import type { AlarmRecord, InstantRecord } from '../domain/entities.ts'
 import type { TodoRecord } from '../domain/todos.ts'
+import type { ImportRow } from '../domain/todoImport.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
   addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
@@ -1438,7 +1439,11 @@ export function addTodo(text: string): string | undefined {
   const input = parseTodoInput(text)
   if (!input.label.trim()) return
   const now = nowTime()
-  const at = todoInputAt(input, now, getTodoTimes())
+  return addTodoFrom(input, todoInputAt(input, now, getTodoTimes()), now)
+}
+
+/** Makes one todo: a series when it repeats (and has a time), else a record and its `at`. */
+function addTodoFrom(input: { label: string; durationMs?: number; repeat?: Repeat }, at: number | null, now: number): string | undefined {
   if (input.repeat && at !== null) {
     const { alarmRings } = useSettings.getState()
     const series: SeriesRecord = {
@@ -1456,6 +1461,24 @@ export function addTodo(text: string): string | undefined {
   entities.putTodo(todo)
   if (at !== null) createTodoAt(todo, at)
   return todo.id
+}
+
+/**
+ * Many todos at once (docs/prd_todo_import_widgets.md): the rows the Add box read from a pasted
+ * list or from dictation (domain/todoImport readTodoText), as the user left them. A done row
+ * ("- [x]") comes in done, with nothing on the timeline. Returns the new todos' ids.
+ */
+export function addTodoRows(rows: readonly ImportRow[]): string[] {
+  const now = nowTime()
+  const ids: string[] = []
+  for (const r of rows) {
+    if (!r.label.trim()) continue
+    const id = addTodoFrom({ label: r.label.trim(), durationMs: r.durationMs, repeat: r.repeat }, r.done ? null : r.at, now)
+    if (!id) continue
+    if (r.done) entities.patchTodo(id, { status: 'done', closedAt: now })
+    ids.push(id)
+  }
+  return ids
 }
 
 /** Schedule an unscheduled todo (or reschedule one: Later). */

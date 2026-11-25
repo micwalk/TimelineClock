@@ -6,7 +6,7 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { useAlarms } from '../../store/alarms.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { MINUTE } from '../../domain/time.ts'
-import { useUi } from '../../store/ui.ts'
+import { ui, useUi } from '../../store/ui.ts'
 import { getTunables } from '../../store/settings.ts'
 import * as actions from '../../store/actions.ts'
 
@@ -25,6 +25,29 @@ describe('the Todos tab', () => {
     expect(useEntities.getState().todos).toMatchObject([{ label: 'Book appointment', status: 'open' }])
     expect(screen.getByText('Unscheduled')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Schedule and more' })).toBeTruthy()
+  })
+
+  it('a pasted list shows each todo it read; unticked ones are left out, and nothing is made until Add', () => {
+    render(<TodosList />)
+    const box = screen.getByRole('textbox', { name: /Add a todo/ })
+    fireEvent.change(box, { target: { value: '- [ ] laundry 20m\n- [x] taxes\n- [ ] call mom' } })
+    expect(screen.getByText('3 todos: check them, then Add')).toBeTruthy()
+    expect(useEntities.getState().todos).toEqual([])
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add call mom' }))
+    fireEvent.click(screen.getByText('Add 2 todos'))
+    expect(useEntities.getState().todos).toMatchObject([
+      { label: 'laundry', durationMs: 20 * MINUTE, status: 'open' },
+      { label: 'taxes', status: 'done' },
+    ])
+  })
+
+  it("dictation splits into todos, and the Android app's quick add fills the box (Add still to tap)", () => {
+    render(<TodosList />)
+    act(() => ui.setTodoDraft('buy milk then call mom and pick up the kids'))
+    expect(useUi.getState().todoDraft).toBeNull()
+    expect(screen.getAllByRole('textbox', { name: 'Todo text' }).map(e => (e as HTMLInputElement).value)).toEqual(['buy milk', 'call mom', 'pick up the kids'])
+    fireEvent.submit(screen.getByRole('textbox', { name: /Add a todo/ }))
+    expect(useEntities.getState().todos.map(t => t.label)).toEqual(['Buy milk', 'Call mom', 'Pick up the kids'])
   })
 
   it('shows what it read as you type, its duration with a stopwatch', () => {
