@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -13,6 +14,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.annotation.StringRes;
 
 /**
  * A list widget's settings (docs/prd_todo_import_widgets.md §4), when it is placed and from its
@@ -59,14 +61,18 @@ public class TodoWidgetConfigActivity extends Activity {
 
         root.addView(heading(R.string.todo_widget_ahead));
         RadioGroup ahead = new RadioGroup(this);
+        // Generated view ids (lint: a radio button's id must be an id, not an index).
+        int[] ids = new int[DAYS.length];
+        int checked = -1;
         for (int k = 0; k < DAYS.length; k++) {
             RadioButton b = new RadioButton(this);
-            b.setId(k + 1);
+            ids[k] = View.generateViewId();
+            b.setId(ids[k]);
             b.setText(DAY_LABELS[k]);
             ahead.addView(b);
-            if (DAYS[k] == days) ahead.check(k + 1);
+            if (DAYS[k] == days) checked = ids[k];
         }
-        if (ahead.getCheckedRadioButtonId() == -1) ahead.check(1);
+        ahead.check(checked != -1 ? checked : ids[0]);
         root.addView(ahead);
 
         LinearLayout buttons = new LinearLayout(this);
@@ -76,8 +82,9 @@ public class TodoWidgetConfigActivity extends Activity {
         save.setOnClickListener(v -> {
             int s = (now.isChecked() ? TodoWidgetFilter.NOW : 0) | (scheduled.isChecked() ? TodoWidgetFilter.SCHEDULED : 0)
                 | (unscheduled.isChecked() ? TodoWidgetFilter.UNSCHEDULED : 0) | (done.isChecked() ? TodoWidgetFilter.DONE : 0);
-            int picked = ahead.getCheckedRadioButtonId() - 1;
-            TodoWidgetStore.setFilter(this, widgetId, s == 0 ? TodoWidgetFilter.DEFAULT_STATUSES : s, DAYS[Math.max(0, Math.min(DAYS.length - 1, picked))]);
+            int picked = 0;
+            for (int k = 0; k < ids.length; k++) if (ids[k] == ahead.getCheckedRadioButtonId()) picked = k;
+            TodoWidgetStore.setFilter(this, widgetId, s == 0 ? TodoWidgetFilter.DEFAULT_STATUSES : s, DAYS[picked]);
             TodoListWidget.update(this, AppWidgetManager.getInstance(this), widgetId);
             setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
             finish();
@@ -90,7 +97,7 @@ public class TodoWidgetConfigActivity extends Activity {
         setContentView(scroll, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
-    private TextView heading(int text) {
+    private TextView heading(@StringRes int text) {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(13);
@@ -99,7 +106,7 @@ public class TodoWidgetConfigActivity extends Activity {
         return t;
     }
 
-    private CheckBox check(int text, boolean on) {
+    private CheckBox check(@StringRes int text, boolean on) {
         CheckBox b = new CheckBox(this);
         b.setText(text);
         b.setChecked(on);
