@@ -28,8 +28,9 @@ describe('the cursor’s clock', () => {
     expect(cursorClock(ts, HOUR)).toBe('4:00p')
     expect(cursorClock(ts, CURSOR_DAY)).toBe('')
   })
-  it('says only the month or the year further out', () => {
-    expect(cursorCoarseDate(at(2026, 11, 25), CURSOR_MONTH)).toBe(new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' }).format(at(2026, 12, 1)))
+  it('says only the month or the year it is in further out (never the next one)', () => {
+    expect(cursorCoarseDate(at(2026, 11, 25), CURSOR_MONTH)).toBe(new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' }).format(at(2026, 11, 1)))
+    expect(cursorCoarseDate(at(2027, 9, 20), CURSOR_YEAR)).toBe('2027')
     expect(cursorCoarseDate(at(2026, 3, 2), CURSOR_YEAR)).toBe('2026')
     expect(cursorCoarseDate(at(2026, 3, 2), CURSOR_DAY)).toBeNull()
   })

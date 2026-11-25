@@ -7,6 +7,14 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.4 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **The cursor names the month or year it is in**: zoomed out to months or years its date line
+  read the nearest one, so a cursor in September 2027 said "2028". It now says "2027" (and
+  "Nov 2026" anywhere in November).
+
 ## 0.9.3 — 2026-11-25
 
 **Android app: install again** (for the widgets).

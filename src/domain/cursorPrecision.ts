@@ -48,17 +48,14 @@ export function cursorClock(ts: number, unit: CursorUnit): string {
 const monthYearFmt = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' })
 const yearFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric' })
 
-/** The cursor's date line at month or year precision ("Nov 2026", "2026"); null: the usual day label. */
+/**
+ * The cursor's date line at month or year precision ("Nov 2026", "2026"); null: the usual day
+ * label. It names the month or year the cursor is in, never the nearest one (a cursor in Sep
+ * 2027 reads "2027", not "2028"), as the day label names its day.
+ */
 export function cursorCoarseDate(ts: number, unit: CursorUnit): string | null {
-  if (unit === MONTH_MS) {
-    // Nearest month: past the 15th reads as the next.
-    const d = new Date(ts)
-    return monthYearFmt.format(new Date(d.getFullYear(), d.getMonth() + (d.getDate() > 15 ? 1 : 0), 1))
-  }
-  if (unit >= YEAR_MS) {
-    const d = new Date(ts)
-    return yearFmt.format(new Date(d.getFullYear() + (d.getMonth() >= 6 ? 1 : 0), 0, 1))
-  }
+  if (unit === MONTH_MS) return monthYearFmt.format(ts)
+  if (unit >= YEAR_MS) return yearFmt.format(ts)
   return null
 }
 
