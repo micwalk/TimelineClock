@@ -15,7 +15,13 @@ beforeEach(() => {
   useUi.setState({ timeInput: null, tagMenu: null, cursorHidden: false, plusMorph: null })
 })
 
-const cursorMode = () => useView.setState({ viewFocusMode: 'cursor', timeCenter: engine.getFrame().center })
+/** The free cursor, 25 minutes before Now (or at `ts`). */
+const cursorMode = (ts = engine.getFrame().now - 25 * 60_000) => {
+  useView.setState({ viewFocusMode: 'cursor', timeCenter: ts })
+  engine.cancelTransition()
+  // No animation frames in jsdom: the tag reads the frame as the engine would draw it now.
+  ;(engine as unknown as { frame: unknown }).frame = engine.sample()
+}
 
 describe('NowTag', () => {
   it('shows NOW and the clock with seconds', () => {
@@ -87,12 +93,27 @@ describe('CursorTag', () => {
   })
 
   it('hides the selected-offset line while the selected instant sits under the cursor', () => {
-    const id = entities.createInstant(engine.getFrame().center, 'Rice')
+    const ts = engine.getFrame().now - 25 * 60_000
+    const id = entities.createInstant(ts, 'Rice')
     useView.setState({ currentSelectedInstantId: id })
-    cursorMode()
+    cursorMode(ts)
     render(<CursorTag />)
     expect(screen.queryByText(/^Rice [+-]/)).toBeNull()
     expect(screen.getByText(/^Now [+-]/)).toBeInTheDocument()
+  })
+
+  it('says no more than the zoom can tell: no seconds zoomed out, calendar days further out', () => {
+    const now = engine.getFrame().now
+    useView.setState({ timeWidth: 12 * 3_600_000 })
+    cursorMode(now - 3 * 3_600_000 - 7_000)
+    const { unmount } = render(<CursorTag />)
+    expect(screen.getByText(/^Now -3h( \d+m)?$/)).toBeInTheDocument()
+    expect(screen.queryByText(/\d:\d\d:\d\d/)).toBeNull()
+    unmount()
+    useView.setState({ timeWidth: 60 * 86_400_000 })
+    cursorMode(now - 20 * 86_400_000)
+    render(<CursorTag />)
+    expect(screen.getByText(/^Now -(20|21)d$/)).toBeInTheDocument()
   })
 
   it('ignores a selection that no longer exists', () => {

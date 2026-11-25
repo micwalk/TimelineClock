@@ -7,6 +7,22 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.1 — 2026-11-25
+
+**Android app: web only** (nothing to install).
+
+- **The cursor says no more than the zoom can tell**: its time and its offsets ("Now …", from the
+  selected instant) round to the finest step that spans a few pixels (Settings › Advanced,
+  "The cursor shows seconds, minutes, hours… once one spans", 4 px): 1s, 5s, 15s, 1m, 5m, 15m,
+  1h, then days, months and years. Zoomed out, "3:41:27p · Now -01:05:30" reads "3:40p · Now
+  -1h 5m", then "4p · Now -1h"; past hours the clock goes (the date line says the day), then
+  the date reads "Nov 2026" and "2026".
+- **Days are counted as people count them**: once hours aren't told apart, offsets count
+  midnights from one end to the other, so Monday 10p to Thursday's first minutes reads "+3d", not
+  "+2d 2h"; months and years are calendar months ("+2y 5mo", "+3mo", "+12y"). Too close to tell
+  reads "≈ Now"; exactly on it, "at Now". An instant the cursor is about to land on keeps its exact
+  time.
+
 ## 0.9.0 — 2026-11-25
 
 **Android app: install again** (for the new widgets; the rest is web).
