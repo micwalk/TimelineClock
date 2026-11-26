@@ -420,6 +420,19 @@ describe('offset alarms (TLC-1)', () => {
     expect(act.pinBell(id, keep)).toBeUndefined()
   })
 
+  it('a past bell pins too, its alarm moving over as history', () => {
+    const ts = Date.now() + 10 * MINUTE
+    const id = entities.createInstant(ts, 'Call')
+    const a = act.addAlarm(id)!
+    act.setAlarmOffset(id, a, 5 * MINUTE)
+    entities.setAlarmOffset(id, a, 20 * MINUTE) // rang 10 minutes ago
+    entities.answerAlarms(id, [a], 'dismissed')
+    const pinned = act.pinBell(id, a)!
+    expect(instant(id).alarms).toBeUndefined()
+    expect(instant(pinned).tsEpochMs).toBe(ts - 20 * MINUTE)
+    expect(instant(pinned).alarms).toEqual([expect.objectContaining({ offsetMs: 0, answered: 'dismissed' })])
+  })
+
   it('a new bell is selected, so its tools (offset, sound) are one tap away', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Tea')
     const a = act.addAlarm(id)!

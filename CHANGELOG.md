@@ -13,7 +13,10 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
 
 - A bell dragged off its instant (a warning or a snooze) has a 📌 in its tools: it becomes an
   instant of its own where it rings, with the alarm (and its sound), in the same group, selected
-  with its name box open. The old instant keeps its other alarms.
+  with its name box open. The old instant keeps its other alarms. Past (hollow) bells pin too,
+  their alarm moving over as history.
+- Bells tell an alarm from a notification: an alarm (a tone that rings until answered) is a bell
+  with ringing waves, a chime (one sound, once) a plain bell; hollow ones likewise.
 
 ## 0.9.6 — 2026-11-25
 
