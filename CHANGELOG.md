@@ -7,7 +7,7 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
-## 0.10.0 — 2026-11-26
+## 0.9.8 — 2026-11-26
 
 **Android app:** web only.
 
