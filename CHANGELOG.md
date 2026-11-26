@@ -7,6 +7,16 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.9 — 2026-11-26
+
+**Android app: install again** (the export fix is native).
+
+- Android app: exporting a backup works again with a lot of data. The app closed as soon as the
+  "Save to…" picker opened and left an empty file there: the backup (twice) was more than
+  Android lets an app keep while another screen is in front (about 1 MB). The backup now waits in
+  a file of the app's while you pick where it goes, and is written there even if Android restarted
+  the app meanwhile.
+
 ## 0.9.8 — 2026-11-26
 
 **Android app:** web only.

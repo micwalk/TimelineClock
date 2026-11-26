@@ -334,6 +334,11 @@ Netlify builds for every pull request).
   - `FilesPlugin.java`: saving a file (a backup export). The WebView ignores download links,
     so `services/fileTransfer.saveText` hands the text to `Files.save`, which opens Android's
     "Save to…" picker (`ACTION_CREATE_DOCUMENT`, no storage permission) and writes it there.
+    The text waits in `no_backup/pending-save` while the picker is open, not in the call:
+    Capacitor keeps a call's data in the activity's saved state (twice), and a backup over about
+    a quarter of a megabyte broke Android's 1 MB limit (`TransactionTooLargeException`: the app
+    died as the picker opened, leaving an empty file). Not the cache dir: Android clears it when
+    storage runs low.
     An app from before it answers UNIMPLEMENTED, and the page says to update the app.
 - `src/services/nativeShell.ts` detects the shell (`window.Capacitor`, set by the shell before
   the page runs) and loads `src/services/native/` with a dynamic `import()`, so browsers never
