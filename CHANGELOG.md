@@ -7,6 +7,14 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.7 — 2026-11-26
+
+**Android app:** web only.
+
+- A bell dragged off its instant (a warning or a snooze) has a 📌 in its tools: it becomes an
+  instant of its own where it rings, with the alarm (and its sound), in the same group, selected
+  with its name box open. The old instant keeps its other alarms.
+
 ## 0.9.6 — 2026-11-25
 
 **Android app:** web only.

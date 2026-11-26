@@ -730,6 +730,27 @@ export function setAlarmSound(id: string, alarmId: string, sound: AlarmSound) {
   if (!alarm.snoozeOf) touchOccurrence(id)
 }
 
+/**
+ * An off-set bell's 📌: the bell becomes an instant of its own where it rings, in its instant's
+ * group, with the alarm (and its sound) at it; the old instant keeps its other alarms. The new
+ * instant is selected with its name box open (leaving it empty keeps it unnamed). Returns its id.
+ */
+export function pinBell(id: string, alarmId: string): string | undefined {
+  const inst = entities.getInstant(id)
+  const alarm = findAlarm(inst, alarmId)
+  if (!inst || !alarm || alarm.answered || alarm.offsetMs === 0) return
+  const ts = inst.tsEpochMs - alarm.offsetMs
+  if (ts <= nowTime() || isAlarmRinging(ringKey(id, alarmId))) return
+  removeAlarm(id, alarmId)
+  endNaming()
+  const newId = entities.createInstant(ts, '')
+  entities.addAlarm(newId, alarm.sound ? { sound: alarm.sound } : {})
+  if (inst.collectionId) entities.setInstantCollection(newId, inst.collectionId)
+  view.selectInstant(newId)
+  view.editInstant(newId)
+  return newId
+}
+
 /** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
 export function selectBell(alarmId: string | null) {
   ui.selectBell(useUi.getState().selectedBell === alarmId ? null : alarmId)

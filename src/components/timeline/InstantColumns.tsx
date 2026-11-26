@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
@@ -490,6 +490,7 @@ function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
       {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
+      {alarm.offsetMs !== 0 && !alarm.answered && <IconButton icon={MapPinIcon} label="Make an instant here" color={bellColor} bare onClick={() => act.pinBell(inst.id, alarm.id)} />}
       {canTodo && <IconButton icon={TodoBoxIcon} label={makeTodo} color="var(--c-todo)" bare onClick={() => act.makeInstantTodo(inst.id, { name: true })} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
