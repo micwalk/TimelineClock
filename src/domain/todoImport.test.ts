@@ -15,6 +15,20 @@ describe('number words', () => {
 })
 
 describe('speech', () => {
+  it('drops instructions before the todo ("set an alarm to", "timer for"), not part of its name', () => {
+    expect(read('set an alarm to take out the trash at 7pm')).toEqual([{ label: 'take out the trash', at: at(25, 19) }])
+    expect(read('timer for pasta 10 minutes')).toEqual([{ label: 'pasta', at: null, len: 10 }])
+    expect(read('add a todo to buy milk')).toEqual([{ label: 'buy milk', at: null }])
+    expect(read('can you set a reminder about the vet tomorrow at 9am')).toEqual([{ label: 'the vet', at: at(26, 9) }])
+    expect(read('Reminder: water plants')).toEqual([{ label: 'water plants', at: null }])
+    expect(read('start a timer for twenty minutes to check the rice')).toEqual([{ label: 'check the rice', at: null, len: 20 }])
+    // Nothing else said: named after what it was.
+    expect(read('set an alarm for 7am')).toEqual([{ label: 'Alarm', at: at(26, 7) }])
+    // Only as a starter: a name that merely has the word keeps it.
+    expect(read('task force meeting')).toEqual([{ label: 'task force meeting', at: null }])
+    expect(read('fix the alarm clock')).toEqual([{ label: 'fix the alarm clock', at: null }])
+  })
+
   it('splits run-on dictation into todos, each read as said', () => {
     expect(read('buy milk tomorrow at three pm then call mom for twenty minutes and also laundry tonight')).toEqual([
       { label: 'Buy milk', at: at(26, 15) },

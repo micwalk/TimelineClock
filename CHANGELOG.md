@@ -17,6 +17,9 @@ the old one keeps your data. See [docs/android.md](docs/android.md).
   their alarm moving over as history.
 - Bells tell an alarm from a notification: an alarm (a tone that rings until answered) is a bell
   with ringing waves, a chime (one sound, once) a plain bell; hollow ones likewise.
+- The Todos Add box drops instructions said or typed before a todo: "set an alarm to take out
+  the trash at 7pm" is "take out the trash" at 7pm ("timer for", "add a todo to", "set a
+  reminder about", "Reminder:"…). With nothing else said, it is named after them ("Alarm").
 
 ## 0.9.6 — 2026-11-25
 
