@@ -2,18 +2,20 @@
 // shared. Saved-side lane chips (selected/focused saved spans and implied selection spans,
 // with their tools) go first, near the middle of their visible span; then live lanes' chips
 // (left side); then flags at Now for spans containing Now; then label boxes for the other
-// spans. None of them overlap (domain/nowFlags); flags also keep clear of saved instant chips.
+// spans, longer spans first. None of them overlap (domain/nowFlags); flags also keep clear of
+// saved instant chips. A label box stays on its span: with no room there it is left off and its
+// span shows its bar alone (a tap on the bar selects it).
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import { layoutNowFlags } from '../../domain/nowFlags.ts'
-import type { LabelGroup } from '../../domain/labelGroups.ts'
-import { groupTrackLabels } from '../../domain/labelGroups.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
 import type { SavedLayout } from './savedLayout.ts'
 import { CHIP_HEIGHT, CLUSTER_WIDTH, chipToolsExtent, estimateChipWidth, savedLayoutAt } from './savedLayout.ts'
 import { GEOMETRY_VERTICAL, verticalLiveLaneX } from './geometry.ts'
 import { engine } from '../../engine/viewportEngine.ts'
+import { getTunables } from '../../store/settings.ts'
+import { createLookWidths } from './lookWidths.ts'
 import type { TagSize } from '../../domain/tagAvoid.ts'
 import { cursorPush } from '../../domain/tagAvoid.ts'
 import { captureFlowAt } from './capture.ts'
@@ -26,10 +28,9 @@ const GAP = 4
 /** A lane chip with its tools above and/or below it, px along the time axis. */
 const LANE_CHIP_SIZE = 32
 const LANE_TOOLS_SIZE = 36
-/** A flag's width before it has been measured, px. */
+/** A flag's width before it has been measured, px: with its name, and its reading alone. */
 const FLAG_WIDTH_GUESS = 150
-/** An "N spans" box's width before it has been measured, px. */
-const GROUP_FLAG_WIDTH_GUESS = 80
+const COMPACT_FLAG_WIDTH_GUESS = 56
 /** Gap between a live lane's bar and its chip (matches .tl-lane--live .tl-lane__chip-wrap in vertical). */
 const CHIP_OFFSET = 10
 /** A saved-side chip runs into its bar, like a label box (matches .tl-lane__chip-wrap in vertical). */
@@ -39,18 +40,9 @@ const CHIP_WIDTH_GUESS = 160
 /** The tools row under or over a saved-side chip (pencil, eye, trash / pin), px wide. */
 const TOOLS_WIDTH = 120
 
-// Measured lane chip widths, kept current by one ResizeObserver (no layout reads mid-frame).
-const chipWidths = new Map<string, number>()
-const observed = new Map<Element, string>()
-const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
-  for (const e of entries) {
-    const key = observed.get(e.target)
-    if (key === undefined) continue
-    const w = Math.round((e.target as HTMLElement).offsetWidth)
-    if (chipWidths.get(key) !== w) { chipWidths.set(key, w); version++ }
-  }
-  engine.requestFrame()
-})
+// Measured lane chip widths, kept current by one ResizeObserver (no layout reads mid-frame). A
+// saved-side chip may show compact (its reading alone: lookWidths), so both widths are known.
+const laneChips = createLookWidths(() => { version++; engine.requestFrame() })
 
 // The Now and Cursor tags' boxes (vertical), measured the same way: live chips keep clear of them.
 const tagSizes = new Map<'now' | 'cursor', { w: number; h: number }>()
@@ -101,46 +93,19 @@ export function observeTag(key: 'now' | 'cursor', el: HTMLElement): () => void {
 }
 
 // Lane label boxes (NowFlags), measured the same way: reading their width mid-frame forced a
-// layout every frame.
-const flagWidths = new Map<string, number>()
-const observedFlags = new Map<Element, string>()
-const flagObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
-  for (const e of entries) {
-    const key = observedFlags.get(e.target)
-    if (key === undefined) continue
-    const box = e.borderBoxSize?.[0]
-    const w = Math.round(box ? box.inlineSize : (e.target as HTMLElement).offsetWidth)
-    if (w > 0 && flagWidths.get(key) !== w) { flagWidths.set(key, w); version++ }
-  }
-  engine.requestFrame()
-})
+// layout every frame. Crowded, a box shows its reading alone (compact).
+const flagBoxes = createLookWidths(() => { version++; engine.requestFrame() })
 
 /** A lane label box registers itself while it is mounted; returns the cleanup. */
-export function observeFlag(key: string, el: HTMLElement): () => void {
-  observedFlags.set(el, key)
-  flagObserver?.observe(el)
-  return () => {
-    flagObserver?.unobserve(el)
-    observedFlags.delete(el)
-    if (![...observedFlags.values()].includes(key)) flagWidths.delete(key)
-  }
-}
+export const observeFlag = (key: string, el: HTMLElement): (() => void) => flagBoxes.observe(key, el)
 
-/** A lane chip's measured width, if it has been measured. */
-export const laneChipWidth = (key: string): number | undefined => chipWidths.get(key)
+/** A lane chip's measured width (`compact`: its reading alone), if it has been measured. */
+export const laneChipWidth = (key: string, compact = false): number | undefined => laneChips.width(key, compact)
 /** Changes whenever a measured width changes (for per-frame caches). */
 export const laneChipWidthsVersion = (): number => version
 
 /** SpanLane registers its chip so the layout knows how wide it is; returns the cleanup. */
-export function observeLaneChip(key: string, el: HTMLElement): () => void {
-  observed.set(el, key)
-  resizeObserver?.observe(el)
-  return () => {
-    resizeObserver?.unobserve(el)
-    observed.delete(el)
-    if (![...observed.values()].includes(key)) chipWidths.delete(key)
-  }
-}
+export const observeLaneChip = (key: string, el: HTMLElement): (() => void) => laneChips.observe(key, el)
 
 export interface RightSideInputs {
   lanes: readonly BottomLane[]
@@ -160,10 +125,10 @@ export interface RightSideInputs {
 export interface RightSidePlacement {
   /** Lane key → center of its chip along the time axis, px (saved-side and live lanes). */
   chips: Record<string, number>
-  /** Labels on one bar that would crowd it, folded into one "N spans" box (its key is in `flags`). */
-  flagGroups: LabelGroup[]
-  /** Lane key → center of its flag, px. */
+  /** Lane key → center of its flag, px; absent: no room on its span (its bar shows alone). */
   flags: Record<string, number>
+  /** Flags shown compact (their reading alone, no name): no room on their span for the whole box. */
+  compact: Record<string, true>
 }
 
 let inputs: RightSideInputs | null = null
@@ -176,7 +141,7 @@ export function setRightSideInputs(next: RightSideInputs) {
   version++
 }
 
-const EMPTY: RightSidePlacement = { chips: {}, flags: {}, flagGroups: [] }
+const EMPTY: RightSidePlacement = { chips: {}, flags: {}, compact: {} }
 
 /** Lanes that draw a chip with tools on the saved side (vertical). */
 const chipLane = (lane: BottomLane, selectedSpanId: string | null) =>
@@ -224,8 +189,10 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
 
   const chipItems: FlagItem[] = []
   const liveItems: FlagItem[] = []
-  const running: FlagItem[] = []
-  const others: (FlagItem & { track: number })[] = []
+  /** A label box, and the same box compact (its reading alone: narrower, hugging its bar). */
+  type Flag = FlagItem & { short: FlagItem }
+  const running: Flag[] = []
+  const others: (Flag & { length: number })[] = []
   for (const lane of c.lanes) {
     const pa = f.pos(resolveTimeRef(lane.a, f.now, f.center))
     const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
@@ -233,7 +200,7 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
     if (!g.onScreen) continue
     // Across the axis: live chips sit right of their bar at the left; saved-side chips hang
     // left of their bar at the right, with their tools row under or over them.
-    const width = chipWidths.get(lane.key) ?? CHIP_WIDTH_GUESS
+    const width = laneChips.width(lane.key, false) ?? CHIP_WIDTH_GUESS
     if (isLiveLane(lane)) {
       const x = verticalLiveLaneX(lane.index) + CHIP_OFFSET
       liveItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, xlo: x, xhi: x + width })
@@ -248,28 +215,21 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
       continue
     }
     if (lane.kind !== 'saved') continue
-    const flagWidth = flagWidths.get(lane.key) || FLAG_WIDTH_GUESS
-    const item = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - flagWidth, xhi: laneX }
+    const full = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - (flagBoxes.width(lane.key, false) || FLAG_WIDTH_GUESS), xhi: laneX }
+    const item = { ...full, short: { ...full, xlo: laneX - (flagBoxes.width(lane.key, true) || COMPACT_FLAG_WIDTH_GUESS) } }
     if (containsNow) running.push(item)
-    else others.push({ ...item, prefer: g.mid, track: lane.index })
+    else others.push({ ...item, prefer: g.mid, length: Math.abs(pb - pa) })
   }
 
   // Lane chips (with their tools) first: they are what you're working with. Lane chips draw
-  // over saved instant chips, so they don't avoid those, except the selected or focused one,
-  // which draws over them; and each other, where they meet across the axis too.
+  // over saved instant chips, so they don't avoid those (their tools draw over them), except the
+  // selected or focused one, which draws over them; and each other, where they meet across the
+  // axis too. A chip stays on its span (covering a span shorter than itself); only where the
+  // selected instant's chip or another lane chip leaves it no room there does it step past its
+  // span's end, to the nearest free spot (escape).
   const chipSize = LANE_CHIP_SIZE + 2 * LANE_TOOLS_SIZE
-  // A span too short to hold its box clear of the others lets it out past its ends (escape).
-  const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP, onTop, { escape: true })
-  // A chip that had to leave its span isn't tied to a spot there any more: place it clear of
-  // every instant chip too, so its tools don't land on them.
-  const half = chipSize / 2
-  const escaped = chipItems.filter(it => chips[it.key] - half < it.lo || chips[it.key] + half > it.hi)
-  if (escaped.length > 0) {
-    const stay: Interval[] = chipItems
-      .filter(it => !escaped.includes(it))
-      .map(it => ({ lo: chips[it.key] - half, hi: chips[it.key] + half, xlo: it.xlo, xhi: it.xhi }))
-    Object.assign(chips, layoutNowFlags(escaped, nowPos, chipSize, GAP, [...blockers, ...stay], { escape: true }))
-  }
+  const cover = getTunables().chipLineInsetPx
+  const chips = layoutNowFlags(chipItems, nowPos, chipSize, GAP, onTop, { escape: true, cover })
   const chipBoxes: Interval[] = chipItems.map(it => ({ lo: chips[it.key] - chipSize / 2, hi: chips[it.key] + chipSize / 2, xlo: it.xlo, xhi: it.xhi }))
   // Live lanes' chips (left side) next, clear of those they would actually touch: a wide
   // selected chip can reach across the axis; the Now and Cursor tags sit on the live side.
@@ -282,19 +242,25 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   }
   const live = layoutNowFlags(liveItems, nowPos, LANE_CHIP_SIZE, GAP, [...chipBoxes, ...onTop, ...tags], { escape: true })
   Object.assign(chips, live)
-  // Then flags at Now (nearest Now), then the other labels, clear of chips and each other.
-  // Labels on one bar (spans sharing a lane, like laps) that would touch fold into one box first.
-  const folded = groupTrackLabels(others.map(o => ({ key: o.key, track: o.track, want: o.prefer ?? (o.lo + o.hi) / 2, size: FLAG_SIZE })), { gap: GAP, groupSize: FLAG_SIZE })
-  const byKey = new Map(others.map(o => [o.key, o]))
-  const singles = others.filter(o => o.key in folded.shown).map(o => ({ ...o, prefer: folded.shown[o.key] }))
-  const groupItems: FlagItem[] = folded.groups.map(g => {
-    const ms = g.members.map(k => byKey.get(k)!)
-    const xhi = ms[0].xhi
-    const width = flagWidths.get(g.key) || GROUP_FLAG_WIDTH_GUESS
-    return { key: g.key, prefer: g.center, lo: Math.min(...ms.map(m => m.lo)), hi: Math.max(...ms.map(m => m.hi)), xlo: (xhi ?? 0) - width, xhi }
-  })
-  const flags = layoutNowFlags([...running, ...groupItems, ...singles], nowPos, FLAG_SIZE, GAP, [...blockers, ...chipBoxes], { escape: true })
-  const result = { chips, flags, flagGroups: folded.groups }
+  // Then flags at Now (nearest Now), then the other labels (longer spans first: their whole
+  // length, so a pan never reorders them), clear of chips and each other, each on its span or
+  // not at all: whole where there is room, else compact (its reading alone, clear of most
+  // instant chips), else its bar alone.
+  others.sort((a, b) => b.length - a.length || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  const taken: Interval[] = [...blockers, ...chipBoxes]
+  const flags: Record<string, number> = {}
+  const compact: Record<string, true> = {}
+  for (const it of [...running, ...others]) {
+    for (const look of [it, it.short]) {
+      const y = layoutNowFlags([look], nowPos, FLAG_SIZE, GAP, taken, { drop: true, cover })[it.key]
+      if (y === undefined) continue
+      flags[it.key] = y
+      if (look === it.short) compact[it.key] = true
+      taken.push({ lo: y - FLAG_SIZE / 2, hi: y + FLAG_SIZE / 2, xlo: look.xlo, xhi: look.xhi })
+      break
+    }
+  }
+  const result = { chips, flags, compact }
   cache = { frame: f, version, result }
   return result
 }

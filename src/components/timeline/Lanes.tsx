@@ -316,6 +316,9 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
       chipEnd={stoppable ? (todoName !== null ? <DoneButton instant={r.start} name={todoName} /> : <StopButton instant={r.start} />) : undefined}
       onChipClick={() => (live ? ui.toggleLaneTools(laneKey) : act.selectSpan(r.span.id))}
       onChipDoubleClick={() => act.activateSpan(r.span.id)}
+      onBarClick={live ? undefined : () => act.selectSpan(r.span.id)}
+      onBarDoubleClick={live ? undefined : () => act.activateSpan(r.span.id)}
+      barLabel={live ? undefined : `${spanHeader(r) ?? `${endpointName(r.start)} → ${r.end ? endpointName(r.end) : 'Now'}`}: tap to select`}
       tools={controls ? () => ({ right: <SavedSpanTools spanId={r.span.id} visible={r.span.visible !== false} onTypeLength={typeLength}
         favoriteOf={isFavoriteNowSpan(r) ? r.start : undefined} /> }) : undefined}
       below={lengthEntry}
@@ -400,6 +403,9 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               chipLabel={`Planned: ${b.label}, ${formatDuration(b.end - b.start, { exact: true })}`}
               onChipClick={b.instantId ? () => act.selectInstant(b.instantId!) : undefined}
               onChipDoubleClick={b.instantId ? () => act.focusInstant(b.instantId!) : undefined}
+              onBarClick={b.instantId ? () => act.selectInstant(b.instantId!) : undefined}
+              onBarDoubleClick={b.instantId ? () => act.focusInstant(b.instantId!) : undefined}
+              barLabel={`Planned: ${b.label}`}
             />
           )
         }

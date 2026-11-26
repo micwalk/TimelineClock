@@ -58,6 +58,11 @@ export interface SpanLaneProps {
   selected?: boolean
   /** Vertical: key in the shared lane layout (rightSideLayout), which places the chip clear of other lane chips. */
   layoutKey?: string
+  /** A tap on the bar itself (a saved span's: it selects it), for a span whose chip has no room or isn't drawn. */
+  onBarClick?: () => void
+  onBarDoubleClick?: () => void
+  /** What the bar's tap does, for its title. */
+  barLabel?: string
 }
 
 /** An endpoint arrow's center stays this far from the screen's ends (half its 26px button, and a margin). */
@@ -78,7 +83,7 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, chipEnd, selected, layoutKey } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, chipEnd, selected, layoutKey, onBarClick, onBarDoubleClick, barLabel } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
@@ -91,7 +96,7 @@ export function SpanLane(props: SpanLaneProps) {
   const linesLayerRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false })
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false, compact: false })
 
   useFrameListener(f => {
     const pa = f.pos(resolveTimeRef(a, f.now, f.center))
@@ -122,21 +127,28 @@ export function SpanLane(props: SpanLaneProps) {
       lineRef.current.style[v ? 'height' : 'width'] = `${width}px`
     }
     // Lane chips take their spot from a shared layout, so they never overlap each other: vertical,
-    // clear of every other chip; horizontal (saved side), along their lane, where chips that
-    // would touch fold into an "N spans" chip (LaneGroupChips).
+    // clear of every other chip; horizontal (saved side), on their span along their lane, where a
+    // chip with no room is left off (its bar shows alone: laneChipLayout).
     let mid = g.mid
     let folded = false
+    let compact = false
     if (layoutKey && v) mid = rightSideLayout(f).chips[layoutKey] ?? g.mid
     else if (layoutKey && !live) {
       const placed = laneChipLayout(f)
-      mid = placed.shown[layoutKey] ?? g.mid
-      folded = layoutKey in placed.groupOf
+      folded = !!placed.bare[layoutKey]
+      compact = !!placed.compact[layoutKey]
+      mid = placed.shown[layoutKey] ?? (folded ? s.mid : g.mid)
     }
     if (anchorRef.current && (folded !== s.folded || anchorRef.current !== s.anchor)) {
       s.folded = folded
       anchorRef.current.classList.toggle('is-folded', folded)
     }
-    if (anchorRef.current && (anchorRef.current !== s.anchor || !(Math.abs(mid - s.mid) <= 0.01))) {
+    // Crowded: its reading alone (the measured element carries the look: lookWidths).
+    if (chipWrapRef.current && (compact !== s.compact || anchorRef.current !== s.anchor)) {
+      s.compact = compact
+      chipWrapRef.current.classList.toggle('is-compact', compact)
+    }
+    if (anchorRef.current && !Number.isNaN(mid) && (anchorRef.current !== s.anchor || !(Math.abs(mid - s.mid) <= 0.01))) {
       s.anchor = anchorRef.current
       s.mid = mid
       anchorRef.current.style.transform = v ? `translate3d(0,${mid}px,0)` : `translate3d(${mid}px,0,0)`
@@ -184,7 +196,11 @@ export function SpanLane(props: SpanLaneProps) {
   return (
     <>
       <div ref={linesLayerRef} className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
-        <div ref={lineRef} className="tl-lane__line" />
+        <div ref={lineRef} className="tl-lane__line">
+          {/* A band along the bar: anything drawn over it (chips, tags) still takes its own taps. */}
+          {onBarClick && <div className="tl-lane__hit" role="button" title={barLabel}
+            onClick={onBarClick} onDoubleClick={onBarDoubleClick} />}
+        </div>
         <div ref={leftChevRef} className="tl-lane__chev tl-lane__chev--left" />
         <div ref={rightChevRef} className="tl-lane__chev tl-lane__chev--right" />
       </div>

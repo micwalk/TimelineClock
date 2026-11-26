@@ -95,9 +95,11 @@ interface ChipProps {
   editing: boolean
   moving: boolean
   fineSeconds: boolean
+  /** Shrinking away into a mark: no longer measured (savedLayout useChipWidth). */
+  leaving?: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, leaving, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
   // A todo's `at` leads with its state (☐ open, ✓ done, ↷ passed, – won't do: config/labels).
   const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
@@ -119,7 +121,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const groupRef = useRef<HTMLDivElement>(null)
   const chipRef = useRef<HTMLDivElement>(null)
   // The layout measures the chip with its bell (the group); the ＋ flows into the chip itself.
-  useChipWidth(groupRef, inst.id)
+  useChipWidth(groupRef, inst.id, !leaving)
   useMorphChip(chipRef, inst.id)
   const name = chipName(inst.label)
   const vertical = useLayout(s => s.orientation === 'vertical')
@@ -700,7 +702,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined} data-instant={inst.id}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
       <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
-        selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
+        selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} leaving={leaving} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
   )

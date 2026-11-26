@@ -7,6 +7,25 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.10.0 — 2026-11-26
+
+**Android app:** web only.
+
+Zoomed out after a lot of timers and todos, the timeline reads again:
+
+- A chip always sits on its own line. Chips that collide still slide aside a little, but only
+  while their line runs into them; past that, the less important one becomes a **Mark** (the
+  short line from the axis) instead of being pushed far away or swallowed by a "+N". Unnamed
+  instants (a timer's start, a quick drop) and a todo's ▶, ⏸ and ✓ give way first, then the
+  one further from Now. Tap a Mark to select it; zoom in and its chip comes back. There are no
+  "+N" chips any more.
+- A span's chip always sits on its span (inside it, or covering a short one). Where span chips
+  crowd, one shows just its length ("13:00"), then only its bar; there are no "N spans" chips
+  any more. Tap a span's bar to select it. Longer spans get their chips first. In vertical, a
+  span's label box hugs its bar the same way, shrinking to its length beside wide chips.
+- Settings › Advanced: chips slide at most 40px (was 80) and keep their line 12px inside
+  ("A sliding chip keeps its line this far inside it").
+
 ## 0.9.7 — 2026-11-26
 
 **Android app:** web only.

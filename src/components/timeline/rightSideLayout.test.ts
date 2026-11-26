@@ -25,7 +25,7 @@ describe('rightSideLayout', () => {
     // Each chip block (chip plus its tools, 104px) clears the other.
     expect(Math.abs(chips.s1 - chips['implied-secondary'])).toBeGreaterThanOrEqual(104)
   })
-  it('keeps a selected span’s chip off the instant chips once it has to leave its span, and always off the selected one', () => {
+  it('keeps a selected span’s chip on its span, over plain instant chips, stepping off it only for the selected one', () => {
     // A one-second span (too short to hold its chip): its chip wants y 400, right on the selected instant's chip.
     const a = inst('a', -1), b = inst('b', 0)
     const selectedSpan: BottomLane = {
@@ -34,10 +34,10 @@ describe('rightSideLayout', () => {
     }
     const saved = { ...savedLayout, visibleIds: ['b'], rows: { b: 0 }, crossOffsets: { b: 0 } }
     const inputs = { lanes: [selectedSpan], selectedSpanId: 's1', savedAt: () => saved, instants: [a, b], widths: { b: 300 }, moving: null }
-    // A chip too big for its span leaves it, and then keeps clear of instant chips: b's spans y 386–414.
+    // Its tools draw over plain instant chips: it stays on its span (y 399–400), over b's chip (386–414).
     setRightSideInputs(inputs)
-    const free = rightSideLayout(frame()).chips.s1
-    expect(free + 52 <= 386 || free - 52 >= 414).toBe(true)
+    const on = rightSideLayout(frame()).chips.s1
+    expect(on - 16 <= 399 && on + 16 >= 400).toBe(true)
     // Selected, b's chip has its tools row under it too (y 386–444), and draws over the lanes.
     setRightSideInputs({ ...inputs, selectedInstantId: 'b' })
     const y = rightSideLayout(frame()).chips.s1

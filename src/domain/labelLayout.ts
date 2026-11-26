@@ -11,15 +11,17 @@
 //      nothing beside it is placed next to the axis even past the budget.
 //   2b. A chip with no room at its own time may slide along the time axis (up to
 //      `maxShift`) next to the chips in its way, keeping time order: the earlier
-//      chip goes before (above / left), the later one after.
-//   3. Chips that don't fit collapse into "+N" clusters. A cluster with no room
+//      chip goes before (above / left), the later one after. With `lineInset`, it never
+//      slides off its own line: its marker stays at least that far inside its box.
+//   3. Chips that don't fit become marks (`overflow: 'mark'`: their line's stub, no chip),
+//      or collapse into "+N" clusters (`overflow: 'cluster'`). A cluster with no room
 //      takes the place of the least important chip it overlaps, absorbing it, and
 //      so does a cluster that would hold a single chip ("+1" hides one chip to show
 //      a counter no smaller than the chip's own place). With only pinned chips in its
 //      way it slides along the time axis like a chip, or else takes the place of the
 //      least important chip near it, rather than going off the edge.
 //
-// Nothing disappears: every item ends up placed, folded or in a cluster, and
+// Nothing disappears: every item ends up placed, folded, marked or in a cluster, and
 // markers are always drawn whatever happens to their chips.
 
 export interface LabelItem {
@@ -59,6 +61,13 @@ export interface LabelLayoutOptions {
   foldBadgeExtent: number
   /** How far a chip may slide along the time axis to avoid collapsing into a cluster, px (default 0). */
   maxShift?: number
+  /**
+   * A sliding chip keeps its own marker at least this far inside its box, px (capped at a quarter
+   * of the chip), so its line still runs into it: a chip never slides off its line. Absent: no cap.
+   */
+  lineInset?: number
+  /** What a chip with no room becomes: a mark (its line's stub, no chip) or part of a "+N" cluster (default). */
+  overflow?: 'mark' | 'cluster'
 }
 
 export interface LabelPlacement {
@@ -92,6 +101,8 @@ export interface LabelLayoutResult {
   foldCount: Record<string, number>
   /** In time order. */
   clusters: LabelCluster[]
+  /** `overflow: 'mark'`: items with no room (and snoozes folded into them), drawn as marks; in time order. */
+  marked: string[]
 }
 
 interface Box {
@@ -187,17 +198,23 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
 
   const maxShift = o.maxShift ?? 0
   const sign = (x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0)
+  /** How far a chip `main` long may slide: maxShift, and (lineInset) no further than keeps its line inside it. */
+  const shiftLimit = (main: number) => {
+    if (o.lineInset === undefined) return maxShift
+    const half = main / 2
+    return Math.min(maxShift, Math.max(0, half - Math.min(o.lineInset, half / 2)))
+  }
   /**
-   * A spot for `it` slid along the time axis by at most maxShift, right before or after a
+   * A spot for `it` slid along the time axis by at most its shift limit, right before or after a
    * box in its way, keeping time order with every box it shares a column (row) with.
    */
-  const slide = (it: LabelItem, main: number, cross: number, tail = 0) => {
-    if (maxShift <= 0) return null
-    const reach = maxShift + main / 2 + tail
+  const slide = (it: LabelItem, main: number, cross: number, tail = 0, limit = shiftLimit(main)) => {
+    if (limit <= 0) return null
+    const reach = limit + main / 2 + tail
     const near = boxes.filter(b => mainOverlap(it.pos - reach, it.pos + reach, b.lo, b.hi))
     const centers = near
       .flatMap(b => [b.lo - o.slotGap - main / 2 - tail, b.hi + o.slotGap + main / 2])
-      .filter(c => Math.abs(c - it.pos) <= maxShift)
+      .filter(c => Math.abs(c - it.pos) <= limit)
       .sort((a, b) => Math.abs(a - it.pos) - Math.abs(b - it.pos) || a - b)
     for (const center of centers) {
       const spot = findSpot(center - main / 2, center + main / 2 + tail, cross, !it.pinned)
@@ -231,6 +248,23 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
       continue
     }
     unplaced.push(it)
+  }
+
+  // --- 3. Marks: the rest draw as their line's stub (no chip) ---------------------
+  if (o.overflow === 'mark') {
+    const marked = new Set<string>()
+    for (const it of unplaced) {
+      marked.add(it.id)
+      for (const [snooze, anchor] of Object.entries(folded)) {
+        if (anchor !== it.id) continue
+        marked.add(snooze)
+        delete folded[snooze]
+      }
+      delete foldCount[it.id]
+    }
+    const placed: Record<string, LabelPlacement> = {}
+    for (const b of boxes) placed[b.id] = { slot: b.slot, crossOffset: b.crossStart, shift: b.center - b.pos }
+    return { placed, folded, foldCount, clusters: [], marked: [...marked].map(id => byId.get(id)!).sort(byPos).map(i => i.id) }
   }
 
   // --- 3. Collapse the rest into clusters ---------------------------------------
@@ -295,7 +329,7 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
     let center = pos
     if (!spot) {
       const probe: LabelItem = { id, pos, mainExtent: o.cluster.mainExtent, crossExtent: o.cluster.crossExtent, priority: Infinity, pinned: false }
-      const moved = slide(probe, o.cluster.mainExtent, o.cluster.crossExtent)
+      const moved = slide(probe, o.cluster.mainExtent, o.cluster.crossExtent, 0, maxShift)
       if (moved) { center = moved.center; spot = moved.spot }
     }
     // Nor that (its neighbours fill every place in time order): take the place of the least
@@ -336,5 +370,5 @@ export function layoutLabels(items: readonly LabelItem[], o: LabelLayoutOptions)
   for (const b of boxes) {
     if (b.kind === 'chip') placed[b.id] = { slot: b.slot, crossOffset: b.crossStart, shift: b.center - b.pos }
   }
-  return { placed, folded, foldCount, clusters }
+  return { placed, folded, foldCount, clusters, marked: [] }
 }

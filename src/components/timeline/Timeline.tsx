@@ -14,7 +14,6 @@ import { PlusMorphLayer } from './PlusMorphLayer.tsx'
 import { Toast } from '../common/Toast.tsx'
 import { BottomLanes } from './Lanes.tsx'
 import { NowFlags } from './NowFlags.tsx'
-import { LaneGroupChips } from './LaneGroupChips.tsx'
 import { NO_LANE_SLOTS, isLiveLane, placeLanes, useVisibleLanes } from './useBottomLanes.ts'
 import type { LaneSlots } from './useBottomLanes.ts'
 import { useSavedLayoutSource } from './savedLayout.ts'
@@ -72,7 +71,7 @@ export function Timeline() {
       <NowTag />
       <CursorTag />
       <BottomLanes lanes={lanes} />
-      {orientation === 'vertical' ? <NowFlags lanes={lanes} /> : <LaneGroupChips lanes={lanes} />}
+      {orientation === 'vertical' && <NowFlags lanes={lanes} />}
       <RotateButton />
       <PlusMorphLayer />
       <Toast />
