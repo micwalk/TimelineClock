@@ -42,6 +42,7 @@ const SPECS = {
   cursorUnitPx: { label: 'The cursor shows seconds, minutes, hours… once one spans (px)', default: 4, min: 0.5, max: 60, step: 0.5, group: 'Labels' },
   secondsBelowTickMs: { label: 'Show seconds when ticks are finer than (ms)', default: 60000, min: 1000, max: 3600000, step: 1000, group: 'Labels' },
   doneFoldPx: { label: 'A done ✓ folds into its todo’s chip when closer than (px)', default: 48, min: 0, max: 300, step: 2, group: 'Todos' },
+  planFoldPx: { label: 'A todo’s plan folds its length into the todo’s chip when shorter than (px; horizontal, vertical always folds)', default: 56, min: 0, max: 400, step: 2, group: 'Todos' },
   doneChargeMs: { label: 'Done box charges before it pops (ms; 0: pops at once)', default: 600, min: 0, max: 2000, step: 50, group: 'Todos' },
   doneInflowCount: { label: 'Motes rushing into a Done box', default: 28, min: 0, max: 120, step: 1, group: 'Todos' },
   sparkCount: { label: 'Confetti on Done', default: 42, min: 0, max: 200, step: 1, group: 'Todos' },

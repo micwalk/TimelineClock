@@ -7,6 +7,23 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.11 — 2026-11-26
+
+**Android app:** web only.
+
+- A todo's plan (the dashed bar of a todo with a length) says only its length: "15m", never the
+  todo's name again (the todo's chip names it).
+- Close to its todo, the length becomes part of the todo's chip: "Sprouts prep 8:45p ⏱15m", and
+  the plan draws its bar alone. In vertical this is always so; in horizontal once the plan is
+  shorter on screen than Settings › Advanced › Todos "A todo’s plan folds…" (56px).
+- A plan follows its todo's chip: while that chip is a Mark (zoomed out or crowded) the plan
+  isn't drawn, so no dashed bar floats among other chips with nothing naming it.
+- A focused todo's plan bar draws over the other chips (only focused, not selected).
+- In vertical, a plan's own chip (its todo off screen) stays on its span, as span label boxes do;
+  several plans close together no longer push each other half an hour or more off their times.
+- In vertical, a crowded span label box (its length alone) stays at its span's middle instead of
+  the end nearest Now.
+
 ## 0.9.10 — 2026-11-26
 
 **Android app:** web only.

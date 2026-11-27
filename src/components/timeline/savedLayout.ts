@@ -24,7 +24,9 @@ import type { Stage, Visibility } from '../../domain/displayGroups.ts'
 import { groupVisibility, markFade, recurringGroupOf, stageAt } from '../../domain/displayGroups.ts'
 import { HOUR } from '../../domain/time.ts'
 import { instantVisibility, longestSpans } from '../../domain/reach.ts'
-import { doneFolds } from '../../domain/todos.ts'
+import { doneFolds, instantsByTodo, plannedBlocks } from '../../domain/todos.ts'
+import type { TimeBlock } from '../../domain/blocks.ts'
+import { planFolds } from '../../domain/blocks.ts'
 import type { SpanRecord } from '../../domain/entities.ts'
 import { useUi } from '../../store/ui.ts'
 import { bellDragAt } from './bellDrag.ts'
@@ -243,6 +245,8 @@ export interface SavedLayout {
   bellFolded: Record<string, string>
   /** A todo's `at` id → its ✓ (`done`) instant folded into its chip (too close to stand apart; domain/todos doneFolds). The ✓ draws as a mark. */
   doneFolded: Record<string, string>
+  /** A todo's `at` id → its plan's length, ms, folded into its chip (domain/blocks planFolds): close to its start, or vertical. Its plan draws its bar alone. */
+  planFolded: Record<string, number>
   /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups), or crowded (no room for their chip). */
   marks: Record<string, true>
   /** Marks fading out before their zoom hides them (id → opacity, absent = 1); not structure. */
@@ -263,7 +267,7 @@ export function layoutEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameStrings(a.visibleIds, b.visibleIds) &&
     sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameRecord(a.doneFolded, b.doneFolded) &&
-    sameRecord(a.marks, b.marks) &&
+    sameRecord(a.planFolded, b.planFolded) && sameRecord(a.marks, b.marks) &&
     sameRecord(a.rows, b.rows) && sameRecord(a.crossOffsets, b.crossOffsets) && sameRecord(a.shifts, b.shifts) &&
     sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
@@ -306,6 +310,8 @@ export interface SavedLayoutInputs {
   revealIds?: readonly string[]
   /** The spans (an instant reaches further when it ends a long span: domain/reach). Absent = none. */
   spans?: readonly SpanRecord[]
+  /** Todos' plans (domain/todos plannedBlocks): close to their start they fold into their `at` chips. Absent = none. */
+  plans?: readonly TimeBlock[]
 }
 
 type FrameLike = Pick<Frame, 'now' | 'pos' | 'start' | 'end' | 'pxPerMs' | 'mainSize' | 'crossSize'>
@@ -481,6 +487,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       bellIds: shownBells.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
       bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !marks[id])),
       doneFolded: Object.fromEntries(Object.entries(doneFolded).filter(([id]) => !marks[id])),
+      // A plan close to its start (or any, in vertical) says its length in its todo's chip.
+      planFolded: Object.fromEntries(Object.entries(planFolds(c.plans ?? [], f.pos, t.planFoldPx, vertical)).filter(([id]) => r.placed[id] && !marks[id])),
       marks,
       markFade: fades,
       rowsUsed: Math.max(1, deepest + 1),
@@ -521,6 +529,7 @@ export interface SavedLayoutStructure {
   bellIds: string[]
   bellFolded: Record<string, string>
   doneFolded: Record<string, string>
+  planFolded: Record<string, number>
   /** Instants shown as marks (they leave the chips, so the chips' change covers it). */
   marks: Record<string, true>
   rowsUsed: number
@@ -536,7 +545,7 @@ export function layoutStructureEqual(a: SavedLayout, b: SavedLayout): boolean {
   if (a === b) return true
   return a.rowsUsed === b.rowsUsed && sameKeys(a.rows, b.rows) &&
     sameStrings(a.bellIds, b.bellIds) && sameRecord(a.bellFolded, b.bellFolded) && sameRecord(a.doneFolded, b.doneFolded) &&
-    sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
+    sameRecord(a.planFolded, b.planFolded) && sameRecord(a.folded, b.folded) && sameRecord(a.foldCount, b.foldCount) &&
     a.clusters.length === b.clusters.length &&
     a.clusters.every((c, k) => {
       const d = b.clusters[k]
@@ -552,11 +561,12 @@ export const structureOf = (l: SavedLayout): SavedLayoutStructure => ({
   bellIds: l.bellIds,
   bellFolded: l.bellFolded,
   doneFolded: l.doneFolded,
+  planFolded: l.planFolded,
   marks: l.marks,
   rowsUsed: l.rowsUsed,
 })
 
-export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, doneFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
+export const EMPTY_LAYOUT: SavedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, doneFolded: {}, planFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
 
 const source: {
   compute: ReturnType<typeof createSavedLayoutCache>
@@ -668,6 +678,9 @@ export function useSavedLayoutSource(laneCount = 0): number {
   // The selected or focused span's endpoints, so hidden ones show with it.
   const spanIds = useView(useShallow(s => [s.selectedSpanId, s.viewFocusMode === 'span' ? s.focusedSpanId : null]))
   const spans = useEntities(s => s.spans)
+  // Todos' plans: what changes them is the data, not the clock (as the lanes' plans: useBottomLanes).
+  const todos = useEntities(s => s.todos)
+  const plans = useMemo(() => (todos?.length ? plannedBlocks(todos, instantsByTodo(instants), Date.now()) : undefined), [todos, instants])
   const revealIds = useMemo(() => spans
     .filter(sp => spanIds.includes(sp.id))
     .flatMap(sp => [sp.startInstantId, sp.endInstantId]), [spans, spanIds])
@@ -679,8 +692,8 @@ export function useSavedLayoutSource(laneCount = 0): number {
   const groupVisibility = useSettings(s => s.groupVisibility) // so do the groups' visibility
   useEffect(() => { useChipWidths.getState().prune(new Set(instants.map(i => i.id))) }, [instants])
   const inputs = useMemo<SavedLayoutInputs>(
-    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans }),
-    [orientation, dir, instants, v, ringing, bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans],
+    () => ({ orientation, dir, instants, ...v, ringing, ...bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans, plans }),
+    [orientation, dir, instants, v, ringing, bellUi, widths, heights, tunables, groupVisibility, laneCount, revealIds, spans, plans],
   )
   // Set during render so the children rendering next (the chips) read these inputs.
   source.inputs = inputs

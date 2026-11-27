@@ -4,7 +4,10 @@
 // (left side); then flags at Now for spans containing Now; then label boxes for the other
 // spans, longer spans first. None of them overlap (domain/nowFlags); flags also keep clear of
 // saved instant chips. A label box stays on its span: with no room there it is left off and its
-// span shows its bar alone (a tap on the bar selects it).
+// span shows its bar alone (a tap on the bar selects it). A block (a todo's plan) follows its
+// todo's chip (domain/blocks planLook): folded into it (in vertical, always while it shows) its
+// bar draws alone; with the chip a Mark, nothing; with it off screen, its own chip (its length,
+// no tools) is placed like a label box, on its span or not at all.
 import type { Frame } from '../../engine/viewportEngine.ts'
 import type { InstantRecord } from '../../domain/entities.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
@@ -21,6 +24,7 @@ import { cursorPush } from '../../domain/tagAvoid.ts'
 import { captureFlowAt } from './capture.ts'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls } from './useBottomLanes.ts'
+import { planLook } from '../../domain/blocks.ts'
 
 /** A flag's height and the gap kept around boxes, px. */
 export const FLAG_SIZE = 26
@@ -127,8 +131,12 @@ export interface RightSidePlacement {
   chips: Record<string, number>
   /** Lane key → center of its flag, px; absent: no room on its span (its bar shows alone). */
   flags: Record<string, number>
-  /** Flags shown compact (their reading alone, no name): no room on their span for the whole box. */
+  /** Flags and block chips shown compact (their reading alone, no name): no room on their span for the whole box, or (a block) its instant's chip names it. */
   compact: Record<string, true>
+  /** Block chips with no room on their span, or folded into their todo's chip: their bar shows alone. */
+  bare: Record<string, true>
+  /** Blocks (todos' plans) not drawn: their todo's chip doesn't show. */
+  hidden: Record<string, true>
 }
 
 let inputs: RightSideInputs | null = null
@@ -141,11 +149,11 @@ export function setRightSideInputs(next: RightSideInputs) {
   version++
 }
 
-const EMPTY: RightSidePlacement = { chips: {}, flags: {}, compact: {} }
+const EMPTY: RightSidePlacement = { chips: {}, flags: {}, compact: {}, bare: {}, hidden: {} }
 
 /** Lanes that draw a chip with tools on the saved side (vertical). */
 const chipLane = (lane: BottomLane, selectedSpanId: string | null) =>
-  !isLiveLane(lane) && (lane.kind === 'secondary' || lane.kind === 'block' || (lane.kind === 'saved' && laneHasControls(lane, selectedSpanId)))
+  !isLiveLane(lane) && (lane.kind === 'secondary' || (lane.kind === 'saved' && laneHasControls(lane, selectedSpanId)))
 
 export function rightSideLayout(f: Frame): RightSidePlacement {
   if (f.orientation !== 'vertical' || !inputs) return EMPTY
@@ -189,8 +197,10 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
 
   const chipItems: FlagItem[] = []
   const liveItems: FlagItem[] = []
-  /** A label box, and the same box compact (its reading alone: narrower, hugging its bar). */
-  type Flag = FlagItem & { short: FlagItem }
+  /** A label box, and the same box compact (its reading alone: narrower, hugging its bar). A block's chip (`block`) is placed the same way. */
+  type Flag = FlagItem & { short: FlagItem; block?: boolean }
+  const bare: Record<string, true> = {}
+  const hidden: Record<string, true> = {}
   const running: Flag[] = []
   const others: (Flag & { length: number })[] = []
   for (const lane of c.lanes) {
@@ -214,11 +224,22 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
       chipItems.push({ key: lane.key, lo: g.left, hi: g.right, prefer: containsNow ? nowPos : g.mid, xlo: laneX - SAVED_CHIP_OFFSET - Math.max(width, TOOLS_WIDTH), xhi: laneX - SAVED_CHIP_OFFSET })
       continue
     }
+    if (lane.kind === 'block') {
+      const at = lane.block.instantId
+      const look = at === undefined ? 'chip' : planLook({ chip: saved.rows[at] !== undefined, folded: saved.planFolded[at] !== undefined, mark: !!saved.marks[at], onScreen: pa >= 0 && pa <= f.mainSize })
+      if (look === 'hidden') { hidden[lane.key] = true; continue }
+      if (look === 'bar') { bare[lane.key] = true; continue }
+      const xhi = laneX - SAVED_CHIP_OFFSET
+      const full = { key: lane.key, lo: g.left, hi: g.right, prefer: g.mid, size: LANE_CHIP_SIZE, xlo: xhi - width, xhi }
+      others.push({ ...full, short: full, block: true, length: Math.abs(pb - pa) })
+      continue
+    }
     if (lane.kind !== 'saved') continue
-    const full = { key: lane.key, lo: g.left, hi: g.right, xlo: laneX - (flagBoxes.width(lane.key, false) || FLAG_WIDTH_GUESS), xhi: laneX }
+    // Compact or whole, a box wants the same spot (its span's middle, or Now).
+    const full = { key: lane.key, lo: g.left, hi: g.right, prefer: containsNow ? undefined : g.mid, xlo: laneX - (flagBoxes.width(lane.key, false) || FLAG_WIDTH_GUESS), xhi: laneX }
     const item = { ...full, short: { ...full, xlo: laneX - (flagBoxes.width(lane.key, true) || COMPACT_FLAG_WIDTH_GUESS) } }
     if (containsNow) running.push(item)
-    else others.push({ ...item, prefer: g.mid, length: Math.abs(pb - pa) })
+    else others.push({ ...item, length: Math.abs(pb - pa) })
   }
 
   // Lane chips (with their tools) first: they are what you're working with. Lane chips draw
@@ -245,22 +266,24 @@ export function rightSideLayout(f: Frame): RightSidePlacement {
   // Then flags at Now (nearest Now), then the other labels (longer spans first: their whole
   // length, so a pan never reorders them), clear of chips and each other, each on its span or
   // not at all: whole where there is room, else compact (its reading alone, clear of most
-  // instant chips), else its bar alone.
+  // instant chips), else its bar alone. Blocks' chips go with them, by length.
   others.sort((a, b) => b.length - a.length || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
   const taken: Interval[] = [...blockers, ...chipBoxes]
   const flags: Record<string, number> = {}
   const compact: Record<string, true> = {}
   for (const it of [...running, ...others]) {
-    for (const look of [it, it.short]) {
-      const y = layoutNowFlags([look], nowPos, FLAG_SIZE, GAP, taken, { drop: true, cover })[it.key]
+    const size = it.size ?? FLAG_SIZE
+    for (const look of it.block ? [it] : [it, it.short]) {
+      const y = layoutNowFlags([look], nowPos, size, GAP, taken, { drop: true, cover })[it.key]
       if (y === undefined) continue
-      flags[it.key] = y
+      ;(it.block ? chips : flags)[it.key] = y
       if (look === it.short) compact[it.key] = true
-      taken.push({ lo: y - FLAG_SIZE / 2, hi: y + FLAG_SIZE / 2, xlo: look.xlo, xhi: look.xhi })
+      taken.push({ lo: y - size / 2, hi: y + size / 2, xlo: look.xlo, xhi: look.xhi })
       break
     }
+    if (it.block && chips[it.key] === undefined) bare[it.key] = true
   }
-  const result = { chips, flags, compact }
+  const result = { chips, flags, compact, bare, hidden }
   cache = { frame: f, version, result }
   return result
 }
