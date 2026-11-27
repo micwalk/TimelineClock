@@ -63,6 +63,8 @@ export interface SpanLaneProps {
   onBarDoubleClick?: () => void
   /** What the bar's tap does, for its title. */
   barLabel?: string
+  /** Its bar draws over the chips (a focused todo's plan). */
+  over?: boolean
 }
 
 /** An endpoint arrow's center stays this far from the screen's ends (half its 26px button, and a margin). */
@@ -83,7 +85,7 @@ function arrowFor(target: EndTarget | undefined, side: 'left' | 'right', vertica
 }
 
 export function SpanLane(props: SpanLaneProps) {
-  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, chipEnd, selected, layoutKey, onBarClick, onBarDoubleClick, barLabel } = props
+  const { top, barOnly, live, toolsOpen, onDismissTools, index = 0, variant, a, b, aTarget, bTarget, arrows, emphasis, hot, chip, onChipClick, onChipDoubleClick, chipLabel, tools, below, chipEnd, selected, layoutKey, onBarClick, onBarDoubleClick, barLabel, over } = props
   const vertical = useLayout(s => s.orientation === 'vertical')
   const lineRef = useRef<HTMLDivElement>(null)
   const leftChevRef = useRef<HTMLDivElement>(null)
@@ -96,7 +98,7 @@ export function SpanLane(props: SpanLaneProps) {
   const linesLayerRef = useRef<HTMLDivElement>(null)
   const showTools = !live || !!toolsOpen
   usePopoverDismiss(labelsRef, () => onDismissTools?.(), !!live && !!toolsOpen)
-  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false, compact: false })
+  const last = useRef({ left: NaN, width: NaN, mid: NaN, l: false, r: false, on: true, o: 'horizontal' as 'horizontal' | 'vertical', anchor: null as HTMLDivElement | null, folded: false, compact: false, hidden: false })
 
   useFrameListener(f => {
     const pa = f.pos(resolveTimeRef(a, f.now, f.center))
@@ -128,16 +130,31 @@ export function SpanLane(props: SpanLaneProps) {
     }
     // Lane chips take their spot from a shared layout, so they never overlap each other: vertical,
     // clear of every other chip; horizontal (saved side), on their span along their lane, where a
-    // chip with no room is left off (its bar shows alone: laneChipLayout).
+    // chip with no room is left off (its bar shows alone: laneChipLayout). In vertical a block's
+    // chip (a todo's plan) steps down the same way (rightSideLayout).
     let mid = g.mid
     let folded = false
     let compact = false
-    if (layoutKey && v) mid = rightSideLayout(f).chips[layoutKey] ?? g.mid
-    else if (layoutKey && !live) {
+    // A todo's plan follows its todo's chip: not drawn while that is a Mark (fading, both layers).
+    let hidden = false
+    if (layoutKey && v) {
+      const placed = rightSideLayout(f)
+      hidden = !!placed.hidden[layoutKey]
+      folded = hidden || !!placed.bare[layoutKey]
+      compact = !!placed.compact[layoutKey]
+      mid = placed.chips[layoutKey] ?? (folded ? s.mid : g.mid)
+    } else if (layoutKey && !live) {
       const placed = laneChipLayout(f)
-      folded = !!placed.bare[layoutKey]
+      hidden = !!placed.hidden[layoutKey]
+      folded = hidden || !!placed.bare[layoutKey]
       compact = !!placed.compact[layoutKey]
       mid = placed.shown[layoutKey] ?? (folded ? s.mid : g.mid)
+    }
+    // An attribute, not a class: React rewrites className when the lane re-renders.
+    if (hidden !== s.hidden) {
+      s.hidden = hidden
+      linesLayerRef.current?.toggleAttribute('data-hidden', hidden)
+      labelsRef.current?.toggleAttribute('data-hidden', hidden)
     }
     if (anchorRef.current && (folded !== s.folded || anchorRef.current !== s.anchor)) {
       s.folded = folded
@@ -195,7 +212,7 @@ export function SpanLane(props: SpanLaneProps) {
   // Two sibling layers: the bar and chevrons sit below every label; the chip and tools above them.
   return (
     <>
-      <div ref={linesLayerRef} className={`${laneClass} tl-lane--lines`} style={laneStyle} aria-hidden>
+      <div ref={linesLayerRef} className={`${laneClass} tl-lane--lines${over ? ' is-over' : ''}`} style={laneStyle} aria-hidden>
         <div ref={lineRef} className="tl-lane__line">
           {/* A band along the bar: anything drawn over it (chips, tags) still takes its own taps. */}
           {onBarClick && <div className="tl-lane__hit" role="button" title={barLabel}

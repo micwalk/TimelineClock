@@ -240,11 +240,14 @@ function DoneButton({ instant, name }: { instant: InstantRecord; name: string })
 }
 
 /** A block's chip (domain/blocks): its name and length, "Laundry · 20m". */
+/**
+ * A block's chip (a todo's plan): its length alone, "15m". Its todo's chip, at its start, names it;
+ * close to its start (or in vertical) even the length goes there and the bar draws alone
+ * (savedLayout planFolded; laneChipLayout, rightSideLayout).
+ */
 function BlockChip({ block }: { block: TimeBlock }) {
   return (
-    <span className="span-chip__text">
-      <span className="span-chip__name">{truncateText(block.label, 24)}</span>
-      <span className="span-chip__sep" aria-hidden>·</span>
+    <span className="span-chip__text span-read">
       <span className="mono">{formatDuration(block.end - block.start, { exact: true })}</span>
     </span>
   )
@@ -331,6 +334,8 @@ function SavedSpanLane({ r, laneKey, top, index, variant, controls, emphasis, li
 
 export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
   const selectedSpanId = useView(s => s.selectedSpanId)
+  // A focused todo's plan draws its bar over the chips (only focused: a selection doesn't).
+  const focusedInstantId = useView(s => (s.viewFocusMode === 'instant' ? s.focusedInstantId : null))
   const laneTools = useUi(s => s.laneTools)
   // Horizontal: the chips' shared layout (which fold into "N spans") reads the placed lanes.
   useLayoutEffect(() => {
@@ -388,7 +393,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
           )
         }
         if (lane.kind === 'block') {
-          // A todo's plan: a tap selects its `at`, a double-tap goes to it.
+          // A todo's plan: a tap selects its `at`, a double-tap goes to it; its todo focused, its bar draws over the chips.
           const b = lane.block
           return (
             <SpanLane
@@ -406,6 +411,7 @@ export function BottomLanes({ lanes }: { lanes: BottomLane[] }) {
               onBarClick={b.instantId ? () => act.selectInstant(b.instantId!) : undefined}
               onBarDoubleClick={b.instantId ? () => act.focusInstant(b.instantId!) : undefined}
               barLabel={`Planned: ${b.label}`}
+              over={!!b.instantId && b.instantId === focusedInstantId}
             />
           )
         }

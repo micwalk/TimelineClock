@@ -218,6 +218,9 @@
 }
 .chip__time { font: 700 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .chip__rel { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); }
+/* A todo's plan folded into its chip (savedLayout planFolded): "⏱ 15m" after its time, in the plan's colour. */
+.chip__plan { display: inline-flex; align-items: center; gap: 2px; font: 600 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--c-planned); white-space: nowrap; }
+.chip__plan-icon { width: 13px; height: 13px; flex: none; filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-planned)); }
 /* A focused chip: its time, and under it how far it is from Now. */
 .chip__when { display: inline-grid; justify-items: start; gap: 3px; }
 /* Tools hang off the chip's right edge, so a selected chip stays centered on its line and the layout measures the chip alone. */
@@ -1418,6 +1421,13 @@
   background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, transparent) 0 8px, transparent 8px 13px);
 }
 .tl-lane--planned .span-chip { border-style: dashed; background: var(--box-bg); color: var(--ink-dim); }
+/* A plan follows its todo's chip: while that is a Mark or hidden, the plan isn't drawn (laneChipLayout, rightSideLayout `hidden`; SpanLane sets data-hidden). */
+.tl-lane[data-hidden] { opacity: 0; pointer-events: none; }
+.tl-lane[data-hidden] * { pointer-events: none; }
+.tl-lane--planned { transition: opacity 180ms ease; }
+@media (prefers-reduced-motion: reduce) { .tl-lane--planned { transition: none; } }
+/* Its todo focused (not just selected): the plan's bar draws over the chips, the focused one too. */
+.tl-lane--lines.is-over { z-index: calc(var(--z-popovers) - 1); }
 
 /* A todo's ☐ / ✓ / ↷ / – before its name. */
 .chip__todo { flex: none; width: 18px; height: 18px; margin-right: 1px; color: var(--c-todo); filter: drop-shadow(0 0 calc(3px * var(--glow)) var(--c-todo)); }

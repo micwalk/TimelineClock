@@ -9,7 +9,7 @@ const frame = (crossSize = 390): Frame => ({
 } as unknown as Frame)
 
 const inst = (id: string, ts: number) => ({ id, tsEpochMs: ts, label: id })
-const savedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, doneFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
+const savedLayout = { visibleIds: [], rows: {}, crossOffsets: {}, shifts: {}, folded: {}, foldCount: {}, clusters: [], bellIds: [], bellFolded: {}, doneFolded: {}, planFolded: {}, marks: {}, markFade: {}, rowsUsed: 1 }
 
 describe('rightSideLayout', () => {
   it('keeps the chips of overlapping selected lanes apart (the selected span and the implied selection span)', () => {
@@ -80,5 +80,57 @@ describe('rightSideLayout', () => {
     expect(placed.flags.t).toBeUndefined()
     // At Now, where the label box was (its 104px chip block fits inside the span there).
     expect(placed.chips.t).toBe(400)
+  })
+
+  // A todo's plan (domain/blocks): it follows its todo's chip (planLook).
+  const plan = (key: string, start: number, end: number, instantId: string, index = 0): BottomLane => ({
+    key, kind: 'block', a: start, b: end, top: 0, index,
+    block: { key, start, end, label: key, look: 'planned', instantId },
+  })
+
+  it('draws a plan’s bar alone while its length is folded into its todo’s chip, and nothing while that is a Mark', () => {
+    const at = inst('at', -200)
+    const lane = plan('plan:t', -200, 100, 'at')
+    const folded = { ...savedLayout, visibleIds: ['at'], rows: { at: 0 }, crossOffsets: { at: 0 }, planFolded: { at: 300 } }
+    setRightSideInputs({ lanes: [lane], selectedSpanId: null, savedAt: () => folded, instants: [at], widths: { at: 40 }, moving: null })
+    let placed = rightSideLayout(frame())
+    expect(placed.bare['plan:t']).toBe(true)
+    expect(placed.chips['plan:t']).toBeUndefined()
+    // Its todo a Mark: the plan isn't drawn (it comes back with the chip).
+    setRightSideInputs({ lanes: [lane], selectedSpanId: null, savedAt: () => ({ ...savedLayout, visibleIds: ['at'], marks: { at: true } }), instants: [at], widths: {}, moving: null })
+    placed = rightSideLayout(frame())
+    expect(placed.hidden['plan:t']).toBe(true)
+    expect(placed.chips['plan:t']).toBeUndefined()
+  })
+
+  it('puts a plan’s chip on what shows of it when its todo is off screen, never past its ends', () => {
+    // A long plan from above the screen (y -100) to y 400: its chip at the middle of what shows (y 200).
+    const at = inst('at', -500)
+    const lane = plan('plan:t', -500, 0, 'at')
+    setRightSideInputs({ lanes: [lane], selectedSpanId: null, savedAt: () => savedLayout, instants: [at], widths: {}, moving: null })
+    expect(rightSideLayout(frame()).chips['plan:t']).toBe(200)
+    // What shows of it (y 0–40) is taken by an instant chip at y 20: its bar alone, not a chip off its span.
+    const short = plan('plan:s', -500, -360, 'at')
+    const c = inst('c', -380)
+    const withChip = { ...savedLayout, visibleIds: ['c'], rows: { c: 0 }, crossOffsets: { c: 0 } }
+    setRightSideInputs({ lanes: [short], selectedSpanId: null, savedAt: () => withChip, instants: [at, c], widths: { c: 300 }, moving: null })
+    const placed = rightSideLayout(frame())
+    expect(placed.chips['plan:s']).toBeUndefined()
+    expect(placed.bare['plan:s']).toBe(true)
+  })
+
+  it('aims a crowded (compact) label box at its span’s middle, not at Now', () => {
+    // A span y 580–620 (middle 600), Now at 400. An instant chip at 600 leaves room only for the compact box.
+    const a = inst('a', 180), b = inst('b', 220), c = inst('c', 200)
+    const span: BottomLane = {
+      key: 's', kind: 'saved', a: a.tsEpochMs, b: b.tsEpochMs, top: 0, index: 0,
+      span: { span: { id: 's', startInstantId: 'a', endInstantId: 'b', label: 'Roast' }, start: a, end: b, priority: 2, focused: false },
+    }
+    const withChip = { ...savedLayout, visibleIds: ['c'], rows: { c: 0 }, crossOffsets: { c: 0 } }
+    // The chip reaches x 272 (chipStart + 120): clear of the compact box (x 316–372), not of the whole one (x 222–372).
+    setRightSideInputs({ lanes: [span], selectedSpanId: null, savedAt: () => withChip, instants: [a, b, c], widths: { c: 120 }, moving: null })
+    const placed = rightSideLayout(frame())
+    expect(placed.compact.s).toBe(true)
+    expect(placed.flags.s).toBe(600)
   })
 })

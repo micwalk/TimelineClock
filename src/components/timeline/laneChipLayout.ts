@@ -5,7 +5,9 @@
 // length, no name); with no room even for that, it is left off and its span shows its bar alone
 // (`bare`: a span's smaller states, as a mark is an instant's; a tap on the bar selects it). A
 // selected or focused span's chip (with its tools) always shows whole; the others keep off it.
-// Longer spans go first.
+// Longer spans go first. A block (a todo's plan) follows its todo's chip: while that is a Mark or
+// hidden, the plan isn't drawn (`hidden`); folded into it (savedLayout planFolded), its bar
+// draws alone; otherwise its chip, its length alone, sits on its bar like any span's.
 import type { Frame } from '../../engine/viewportEngine.ts'
 import { resolveTimeRef, spanGeometry } from '../../domain/spans.ts'
 import type { FlagItem, Interval } from '../../domain/nowFlags.ts'
@@ -14,6 +16,9 @@ import { getTunables } from '../../store/settings.ts'
 import type { BottomLane } from './useBottomLanes.ts'
 import { isLiveLane, laneHasControls } from './useBottomLanes.ts'
 import { laneChipWidth, laneChipWidthsVersion } from './rightSideLayout.ts'
+import type { SavedLayout } from './savedLayout.ts'
+import { savedLayoutAt } from './savedLayout.ts'
+import { planLook } from '../../domain/blocks.ts'
 
 /** A chip's width before it has been measured, px: whole, and its reading alone. */
 const CHIP_WIDTH_GUESS = 150
@@ -30,13 +35,20 @@ export interface LaneChipPlacement {
   compact: Record<string, true>
   /** Lanes whose chip has no room on its span: their bar shows alone. */
   bare: Record<string, true>
+  /** Blocks (todos' plans) not drawn: their todo's chip doesn't show. */
+  hidden: Record<string, true>
 }
 
-interface Inputs { lanes: readonly BottomLane[]; selectedSpanId: string | null }
+interface Inputs {
+  lanes: readonly BottomLane[]
+  selectedSpanId: string | null
+  /** The saved chips' layout per frame (default: the timeline's, savedLayoutAt): which instants show their chips. */
+  savedAt?: (f: Frame) => SavedLayout
+}
 let inputs: Inputs = { lanes: [], selectedSpanId: null }
 let version = 0
 let cache: { f: Frame; version: number; widths: number; result: LaneChipPlacement } | null = null
-const EMPTY: LaneChipPlacement = { shown: {}, compact: {}, bare: {} }
+const EMPTY: LaneChipPlacement = { shown: {}, compact: {}, bare: {}, hidden: {} }
 
 /** BottomLanes hands over the placed lanes (each render). */
 export function setLaneChipInputs(next: Inputs) {
@@ -50,12 +62,23 @@ export function laneChipLayout(f: Frame): LaneChipPlacement {
   if (cache && cache.f === f && cache.version === version && cache.widths === laneChipWidthsVersion()) return cache.result
   const pinned: FlagItem[] = []
   const others: (FlagItem & { length: number; short: number })[] = []
+  const bare: Record<string, true> = {}
+  const hidden: Record<string, true> = {}
+  let saved: SavedLayout | undefined
+  const savedNow = () => (saved ??= (inputs.savedAt ?? savedLayoutAt)(f))
   for (const lane of inputs.lanes) {
     if (isLiveLane(lane)) continue
     const pa = f.pos(resolveTimeRef(lane.a, f.now, f.center))
     const pb = f.pos(resolveTimeRef(lane.b, f.now, f.center))
     const g = spanGeometry(pa, pb, f.mainSize)
     if (!g.onScreen) continue
+    const at = lane.kind === 'block' ? lane.block.instantId : undefined
+    if (at !== undefined) {
+      const s = savedNow()
+      const look = planLook({ chip: s.rows[at] !== undefined, folded: s.planFolded[at] !== undefined, mark: !!s.marks[at], onScreen: pa >= 0 && pa <= f.mainSize })
+      if (look === 'hidden') { hidden[lane.key] = true; continue }
+      if (look === 'bar') { bare[lane.key] = true; continue }
+    }
     const pin = laneHasControls(lane, inputs.selectedSpanId)
     const width = laneChipWidth(lane.key) ?? CHIP_WIDTH_GUESS
     // Chips meet only on their own track (lane slot): a track is a band across the axis.
@@ -70,7 +93,6 @@ export function laneChipLayout(f: Frame): LaneChipPlacement {
   const box = (c: number, it: FlagItem): Interval => ({ lo: c - it.size! / 2, hi: c + it.size! / 2, xlo: it.xlo, xhi: it.xhi })
   const taken: Interval[] = pinned.map(p => box(shown[p.key], p))
   const compact: Record<string, true> = {}
-  const bare: Record<string, true> = {}
   for (const o of others) {
     const looks = o.short < o.size! ? [o, { ...o, size: o.short }] : [o]
     const look = looks.find(l => {
@@ -83,7 +105,7 @@ export function laneChipLayout(f: Frame): LaneChipPlacement {
     if (!look) bare[o.key] = true
     else if (look !== o) compact[o.key] = true
   }
-  const result = { shown, compact, bare }
+  const result = { shown, compact, bare, hidden }
   cache = { f, version, widths: laneChipWidthsVersion(), result }
   return result
 }

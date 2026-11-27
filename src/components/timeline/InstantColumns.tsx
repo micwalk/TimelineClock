@@ -25,7 +25,7 @@ import { ui, useUi } from '../../store/ui.ts'
 import { getTunables, useSettings } from '../../store/settings.ts'
 import { soundOf } from '../../domain/sounds.ts'
 import { SoundChips, SoundSettingsButton } from '../common/SoundPicker.tsx'
-import { NotTodoIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
+import { NotTodoIcon, StopwatchIcon, TodoBoxIcon } from '../common/TodoIcons.tsx'
 import { doneOrigin } from '../common/doneOrigin.ts'
 import { hasStretches } from '../../domain/todos.ts'
 import { useLongPress } from '../../hooks/useLongPress.ts'
@@ -90,6 +90,8 @@ interface ChipProps {
   bellFolded: string
   /** A todo's ✓ folded into this chip (its `at`; too close to stand apart): the ✓ instant's id, or ''. */
   doneFolded: string
+  /** Its todo's plan folded into this chip (close to its start, or vertical: savedLayout planFolded): its length, ms, or 0. */
+  planFolded: number
   selected: boolean
   focused: boolean
   editing: boolean
@@ -99,7 +101,7 @@ interface ChipProps {
   leaving?: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, leaving, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, planFolded, selected, focused, editing, moving, fineSeconds, leaving, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
   // A todo's `at` leads with its state (☐ open, ✓ done, ↷ passed, – won't do: config/labels).
   const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
@@ -290,6 +292,12 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
             ) : (
               <span className="chip__time">
                 {moving ? <LiveText compute={f => formatChipTime(f.center, f.now, f.end - f.start, true)} /> : <LiveText watch={chipZoom} compute={f => formatChipTime(ts, f.now, f.end - f.start, withSeconds)} />}
+              </span>
+            )}
+            {/* Its plan, folded in: how long it takes, right after when ("8:45p ⏱ 15m"); its bar draws alone. */}
+            {planFolded > 0 && (
+              <span className="chip__plan" title={`Planned: ${formatDuration(planFolded, { exact: true })}`}>
+                <StopwatchIcon className="chip__plan-icon" aria-hidden />{formatDuration(planFolded, { exact: true })}
               </span>
             )}
             {showRelative && !moving && <LiveText className="chip__rel" watch={bySecond} compute={f => `· ${formatRelativeShort(ts - f.now)}`} />}
@@ -659,8 +667,8 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
  * A chip that the layout placed: moved along the time axis to its line each frame, plus its
  * animated layout offsets. Its line is drawn by InstantLines (clustered and folded instants keep theirs).
  */
-const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, doneFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
-  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; doneFolded: string; bellLinked: boolean; captured: boolean } & SavedFlags) {
+const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bellFolded, doneFolded, planFolded, bellLinked, selected, focused, secondary, spanEnd, editing, moving, fineSeconds, captured, leaving }:
+  { inst: InstantRecord; foldCount: number; foldedIds: string; bellFolded: string; doneFolded: string; planFolded: number; bellLinked: boolean; captured: boolean } & SavedFlags) {
   const ts = inst.tsEpochMs
   const name = endpointName(inst)
   const dropped = useUi(s => s.droppedId === inst.id)
@@ -701,7 +709,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
   return (
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined} data-instant={inst.id}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
-      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
+      <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} planFolded={planFolded} belowRef={belowRef}
         selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} leaving={leaving} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
@@ -820,6 +828,7 @@ export function SavedInstantColumns() {
             foldedIds={(foldedIds[id] ?? []).join(',')}
             bellFolded={layout.bellFolded[id] ?? ''}
             doneFolded={layout.doneFolded[id] ?? ''}
+            planFolded={layout.planFolded[id] ?? 0}
             bellLinked={bellsByInstant.has(id)}
             selected={v.selected === id}
             focused={focusedId === id}
