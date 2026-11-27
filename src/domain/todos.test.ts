@@ -4,7 +4,7 @@ import { NOW_SENTINEL, sanitizeInstants } from './entities.ts'
 import type { TodoRecord, TodoRole } from './todos.ts'
 import {
   addExtra, MAX_EXTRA_MS, parsePlaceTime, countingInstant, doneFolds, instantsByTodo, makeTodo, nextOrder, nextPassTime, nowCount, parseTodoInput, passedTodos, plannedBlocks, quickChoices,
-  sanitizeTodos, todoActual, todoInputAt, todoOccurrences, todoReading, todoSections, todoState, todoStretches,
+  sanitizeTodos, todoActual, todoInputAt, todoOccurrences, todoReading, todoSections, todoSnoozed, todoState, todoStretches,
 } from './todos.ts'
 import type { SeriesRecord } from './series.ts'
 import { formatDurationShort } from './format.ts'
@@ -85,6 +85,22 @@ describe('actual time and readings', () => {
   it('done straight away reads done', () => {
     expect(todoReading(todo('t1', { status: 'done', durationMs: 20 * MINUTE }), { ms: 0, stretches: 0, counting: false }, len)).toBe('done · planned 20m')
     expect(todoReading(todo('t1', { status: 'passed' }), { ms: 0, stretches: 0, counting: false }, len)).toBe('passed')
+  })
+})
+
+describe('todoSnoozed', () => {
+  const plan = inst('a', NOW, { todo: { id: 't', role: 'at' }, alarms: [{ id: 'on', offsetMs: 0 }, { id: 'warn', offsetMs: 10 * MINUTE }, { id: 'late', offsetMs: -5 * MINUTE, snoozeOf: 'on' }] })
+  it('moves an open todo from an alarm at or after its time, never from a warning', () => {
+    expect(todoSnoozed(plan, 'on', [todo('t')])).toBe('t')
+    expect(todoSnoozed(plan, 'late', [todo('t')])).toBe('t')
+    expect(todoSnoozed(plan, 'warn', [todo('t')])).toBeUndefined()
+  })
+  it('only for an open todo’s `at`', () => {
+    expect(todoSnoozed(plan, 'on', [todo('t', { status: 'done' })])).toBeUndefined()
+    expect(todoSnoozed(plan, 'on', [])).toBeUndefined()
+    expect(todoSnoozed({ ...plan, todo: { id: 't', role: 'was' } }, 'on', [todo('t')])).toBeUndefined()
+    expect(todoSnoozed(inst('b', NOW, { alarms: [{ id: 'on', offsetMs: 0 }] }), 'on', [todo('t')])).toBeUndefined()
+    expect(todoSnoozed(plan, 'gone', [todo('t')])).toBeUndefined()
   })
 })
 

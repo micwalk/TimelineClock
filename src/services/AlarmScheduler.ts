@@ -32,6 +32,8 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let started = false
 /** Goes to an alarm's instant when its notification is clicked (set by startAlarmScheduler). */
 let onNotificationClick: (instantId: string) => void = () => {}
+/** Snoozes an unanswered alarm (set by startAlarmScheduler: store/actions snoozeElsewhere, which moves a todo instead). */
+let snoozeUnanswered: (key: string) => void = key => { snooze(key) }
 
 function hasRinging() {
   return useAlarms.getState().ringing.length > 0
@@ -74,7 +76,7 @@ function check() {
   const expired = ringing.filter(r => now - r.triggeredAt > autoDismissMs)
   for (const r of expired) {
     const key = ringKey(r.instantId, r.alarmId)
-    if (unattended === 'snooze') snooze(key)
+    if (unattended === 'snooze') snoozeUnanswered(key)
     else dismiss(key)
   }
 
@@ -272,8 +274,9 @@ export async function primeNotifications() {
   }
 }
 
-export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: string) => void } = {}) {
+export function startAlarmScheduler(opts: { onNotificationClick?: (instantId: string) => void; snooze?: (key: string) => void } = {}) {
   if (opts.onNotificationClick) onNotificationClick = opts.onNotificationClick
+  if (opts.snooze) snoozeUnanswered = opts.snooze
   if (started) return
   started = true
   // Reschedule whenever instants change (new alarm, moved alarm, deleted alarm).

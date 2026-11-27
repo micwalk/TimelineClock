@@ -9,7 +9,8 @@ import { desiredNativeAlarms, replayAlarmActions, sanitizeAlarmActions } from '.
 import { useAlarms } from '../../store/alarms.ts'
 import { entities, useEntities } from '../../store/entities.ts'
 import { useShell } from '../../store/shell.ts'
-import { SNOOZE_MINUTES, chimed, dismiss, snooze } from '../AlarmScheduler.ts'
+import { SNOOZE_MINUTES, chimed, dismiss } from '../AlarmScheduler.ts'
+import { snoozeElsewhere } from '../../store/actions.ts'
 import { useSettings } from '../../store/settings.ts'
 import { Alarms } from './alarmsPlugin.ts'
 import { diag, timed } from './diagLog.ts'
@@ -35,7 +36,8 @@ async function syncOnce() {
     },
     dismiss,
     chimed,
-    snooze: (key, at) => snooze(key, SNOOZE_MINUTES, at),
+    // A todo's alarm at its time moves the todo, as the card's Snooze does.
+    snooze: (key, at) => snoozeElsewhere(key, at),
   })
 
   const { spans } = useEntities.getState()

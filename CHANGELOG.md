@@ -7,6 +7,18 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.10 — 2026-11-26
+
+**Android app:** web only.
+
+- Snooze on a todo's alarm notification (Android) moves the todo, as Snooze on its card in the
+  app does, instead of adding another bell to it. So does an unanswered todo alarm when Settings ›
+  Alarms says to snooze those. A warning before a todo's time still snoozes as a reminder.
+- For other AI assistants: [docs/skills/timeline-clock-import.md](docs/skills/timeline-clock-import.md)
+  is a skill in one Markdown file that explains how to write a file this app imports (Settings ›
+  Data › Import…): moments, spans, alarms, countdowns, repeating alarms, todos and groups. Hand it
+  to a chat and ask it to plan something into Timeline Clock.
+
 ## 0.9.9 — 2026-11-26
 
 **Android app: install again** (the export fix is native).

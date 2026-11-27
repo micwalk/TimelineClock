@@ -40,7 +40,7 @@ import type { TodoRecord } from '../domain/todos.ts'
 import type { ImportRow } from '../domain/todoImport.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences, todoSnoozed,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -1815,6 +1815,24 @@ export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
   const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
   if (!todo) return
   snoozeTodoUntil(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+}
+
+/**
+ * A snooze from off the card: the Android notification's Snooze (and its auto-snooze of an
+ * unanswered alarm), or the page's own auto-snooze. On a todo's alarm at its time the todo itself
+ * moves until `at` (rescheduleTodo), as the card's Snooze does (domain/todos todoSnoozed); any
+ * other alarm gets a snooze (services/AlarmScheduler snoozeUntil). Nothing is revealed: the app
+ * may not be on screen. Returns the key that rings next (the notification keeps naming it by the
+ * first: domain/nativeNotifications replayAlarmActions).
+ */
+export function snoozeElsewhere(key: string, at = Date.now() + SNOOZE_MINUTES * MINUTE): string | undefined {
+  const { instantId, alarmId } = parseRingKey(key)
+  const todoId = todoSnoozed(entities.getInstant(instantId), alarmId, useEntities.getState().todos ?? [])
+  if (!todoId) return snoozeUntil(key, at)
+  rescheduleTodo(todoId, Math.round(at / SECOND) * SECOND)
+  const moved = todoAt(todoInstants(todoId))
+  const next = moved && (moved.alarms ?? []).find(a => a.offsetMs === 0 && isArmed(moved, a, Date.now()))
+  return moved && next ? ringKey(moved.id, next.id) : undefined
 }
 
 /** A todo's ringing card's box (a length, a time, "tomorrow"): it moves there, shown with Now as a snooze is. */

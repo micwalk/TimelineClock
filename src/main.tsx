@@ -10,7 +10,7 @@ import { startNotificationClicks } from './services/notificationClicks.ts'
 import { startPwaUpdates } from './services/pwaUpdate.ts'
 import { startSeriesSync } from './services/seriesSync.ts'
 import { startTodoSync } from './services/todoSync.ts'
-import { revealInstant } from './store/actions.ts'
+import { revealInstant, snoozeElsewhere } from './store/actions.ts'
 import { applySettingsToDocument } from './store/settings.ts'
 import { startLayoutTracking } from './store/layout.ts'
 import { runMigrations } from './store/migrations.ts'
@@ -19,7 +19,7 @@ applySettingsToDocument()
 runMigrations()
 startLayoutTracking()
 engine.start()
-startAlarmScheduler({ onNotificationClick: id => revealInstant(id) })
+startAlarmScheduler({ onNotificationClick: id => revealInstant(id), snooze: key => snoozeElsewhere(key) })
 startNotificationClicks()
 startSeriesSync()
 startTodoSync()
