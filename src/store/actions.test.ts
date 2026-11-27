@@ -402,6 +402,37 @@ describe('offset alarms (TLC-1)', () => {
     expect(instant(id).alarms).toBeUndefined()
   })
 
+  it("an off-set bell's pin makes it an instant of its own where it rings, with the alarm", () => {
+    const ts = Date.now() + HOUR
+    const id = entities.createInstant(ts, 'Meeting')
+    const keep = act.addAlarm(id)!
+    const a = act.addAlarm(id)!
+    act.setAlarmOffset(id, a, 15 * MINUTE)
+    act.setAlarmSound(id, a, 'chime')
+    const pinned = act.pinBell(id, a)!
+    expect(instant(id).alarms).toEqual([{ id: keep, offsetMs: 0 }])
+    expect(instant(pinned).tsEpochMs).toBe(ts - 15 * MINUTE)
+    expect(instant(pinned).label).toBe('')
+    expect(instant(pinned).alarms).toEqual([expect.objectContaining({ offsetMs: 0, sound: 'chime' })])
+    expect(view().currentSelectedInstantId).toBe(pinned)
+    expect(view().editingInstantId).toBe(pinned)
+    // The bell at the instant has nothing to pin.
+    expect(act.pinBell(id, keep)).toBeUndefined()
+  })
+
+  it('a past bell pins too, its alarm moving over as history', () => {
+    const ts = Date.now() + 10 * MINUTE
+    const id = entities.createInstant(ts, 'Call')
+    const a = act.addAlarm(id)!
+    act.setAlarmOffset(id, a, 5 * MINUTE)
+    entities.setAlarmOffset(id, a, 20 * MINUTE) // rang 10 minutes ago
+    entities.answerAlarms(id, [a], 'dismissed')
+    const pinned = act.pinBell(id, a)!
+    expect(instant(id).alarms).toBeUndefined()
+    expect(instant(pinned).tsEpochMs).toBe(ts - 20 * MINUTE)
+    expect(instant(pinned).alarms).toEqual([expect.objectContaining({ offsetMs: 0, answered: 'dismissed' })])
+  })
+
   it('a new bell is selected, so its tools (offset, sound) are one tap away', () => {
     const id = entities.createInstant(Date.now() + HOUR, 'Tea')
     const a = act.addAlarm(id)!

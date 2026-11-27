@@ -1,5 +1,6 @@
 // Backup files: one JSON blob holding the settings and/or the saved instants and spans.
 // Parsing never trusts the file; merging keeps the "one span to Now per instant" rule.
+// Other agents write these files from docs/skills/timeline-clock-import.md: change it with this.
 import type { InstantRecord, SpanRecord } from './entities.ts'
 import { NOW_SENTINEL, sanitizeInstants, sanitizeSpans } from './entities.ts'
 import type { GroupRecord } from './series.ts'

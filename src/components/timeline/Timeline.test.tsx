@@ -6,6 +6,7 @@ import { entities, useEntities } from '../../store/entities.ts'
 import { initialViewState, useView } from '../../store/view.ts'
 import { useLayout } from '../../store/layout.ts'
 import { useChipWidths } from './savedLayout.ts'
+import { laneChipLayout } from './laneChipLayout.ts'
 import { MINUTE } from '../../domain/time.ts'
 
 class FakeResizeObserver {
@@ -112,18 +113,43 @@ describe('Timeline tap to deselect', () => {
 })
 
 describe('crowded span names', () => {
-  it('put spans that follow each other on one lane, their names folded into "N spans" that zooms in', () => {
+  it('put spans that follow each other on one lane; chips with no room on their span leave their bar alone, which a tap selects', () => {
     const c = engine.getFrame().center
     const ids = [0, 1, 2, 3, 4].map(k => entities.createInstant(c + k * 2000, `Lap ${k}`))
-    for (let k = 0; k < 4; k++) entities.createSpan(ids[k], ids[k + 1], `Lap ${k + 1}`, { visible: true })
+    const spans = [0, 1, 2, 3].map(k => entities.createSpan(ids[k], ids[k + 1], `Lap ${k + 1}`, { visible: true }))
     const { container } = render(<Timeline />)
-    const group = screen.getByRole('button', { name: /^4 spans: Lap 1, Lap 2, Lap 3, Lap 4/ })
-    expect(group).toHaveTextContent('4 spans')
     // One lane for all four: every lane line sits at the same height.
     const tops = new Set([...container.querySelectorAll<HTMLElement>('.tl-lane--lines')].map(l => l.style.top))
     expect(tops.size).toBe(1)
-    const before = useView.getState().timeWidth
-    fireEvent.click(group)
-    expect(useView.getState().timeWidth).toBeLessThan(before)
+    // No "N spans" stand-in: two-second spans side by side have room for one chip; the rest are bars.
+    expect(screen.queryByRole('button', { name: /spans:/ })).not.toBeInTheDocument()
+    const placed = laneChipLayout(engine.getFrame())
+    expect(Object.keys(placed.shown)).toHaveLength(1)
+    expect(Object.keys(placed.bare).sort()).toEqual(spans.filter(id => !(id in placed.shown)).sort())
+    const bars = container.querySelectorAll<HTMLElement>('.tl-lane__hit')
+    expect(bars).toHaveLength(4)
+    fireEvent.click(bars[2])
+    expect(spans).toContain(useView.getState().selectedSpanId)
+  })
+
+  it('shows a crowded span’s length alone (compact) where its whole chip has no room, still on its span', () => {
+    const c = engine.getFrame().center
+    const ids = [0, 1, 2].map(k => entities.createInstant(c + k * 25 * MINUTE, `Step ${k}`))
+    const [first, second] = [0, 1].map(k => entities.createSpan(ids[k], ids[k + 1], `Step ${k + 1}`, { visible: true }))
+    render(<Timeline />)
+    const f = engine.getFrame()
+    const placed = laneChipLayout(f)
+    expect(placed.bare).toEqual({})
+    // Whichever is placed first shows whole, the other its length alone.
+    expect(Object.keys(placed.compact)).toHaveLength(1)
+    const short = Object.keys(placed.compact)[0]
+    const whole = short === first ? second : first
+    expect(Object.keys(placed.shown).sort()).toEqual([first, second].sort())
+    // Unmeasured in jsdom: a 60px compact chip inside its span (about 114px long here).
+    const span = (id: string) => { const sp = useEntities.getState().spans.find(x => x.id === id)!; const t = (iid: string) => useEntities.getState().instants.find(i => i.id === iid)!.tsEpochMs; return [f.pos(t(sp.startInstantId)), f.pos(t(sp.endInstantId))] }
+    const [lo, hi] = span(short)
+    expect(placed.shown[short] - 30).toBeGreaterThanOrEqual(lo)
+    expect(placed.shown[short] + 30).toBeLessThanOrEqual(hi)
+    expect(placed.shown[whole]).toBeDefined()
   })
 })

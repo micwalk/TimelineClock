@@ -151,22 +151,23 @@ describe('overlap layout', () => {
     expect([rowOf('Rice'), rowOf('Beans')].sort()).toEqual(['0', '1'])
   })
 
-  it('collapses overflow into a +N chip that zooms in when tapped', () => {
+  it('makes chips with no room marks (the one nearest Now keeps its chip); a tap on a mark selects it', () => {
     useSettings.setState({ tunables: { chipRowsMax: 1 } })
     const t = twentyMinutesAgo()
-    entities.createInstant(t, 'Rice')
+    const rice = entities.createInstant(t, 'Rice')
     entities.createInstant(t + 1000, 'Beans')
     entities.createInstant(t + 2000, 'Corn')
     const { container } = render(<Columns />)
-    const more = screen.getByRole('button', { name: /^3 more instants: .*Rice/ })
-    expect(more).toHaveTextContent('+3')
+    expect(screen.queryByRole('button', { name: /more instants/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Corn')).toBeInTheDocument()
     expect(screen.queryByText('Rice')).not.toBeInTheDocument()
-    // Members keep their lines.
+    expect(screen.queryByText('Beans')).not.toBeInTheDocument()
+    // Every instant keeps its line: the crowded ones as marks.
     expect(lines(container)).toHaveLength(3)
-    const before = useView.getState().timeWidth
-    fireEvent.click(more)
-    expect(useView.getState().viewFocusMode).toBe('cursor')
-    expect(useView.getState().timeWidth).toBeLessThan(before)
+    expect(container.querySelectorAll('.tl-world .tl-col--line.is-mark')).toHaveLength(2)
+    const hit = container.querySelector<HTMLElement>(`.tl-col__hit[data-id="${rice}"]`)!
+    fireEvent.click(hit)
+    expect(useView.getState().currentSelectedInstantId).toBe(rice)
   })
 
   it('folds an old snooze instant (from before snoozes were alarms) into its original as a ⟲N badge, keeping its line', () => {

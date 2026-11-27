@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstantRecord, SpanRecord } from '../../domain/entities.ts'
 import type { NativeAlarm } from '../../domain/nativeNotifications.ts'
+import type { TodoRecord } from '../../domain/todos.ts'
 import { MINUTE } from '../../domain/time.ts'
 import type { InstantOpts } from '../../test/fixtures.ts'
 import { instantFields } from '../../test/fixtures.ts'
@@ -32,10 +33,10 @@ const span = (id: string, a: string, b: string, label = ''): SpanRecord =>
   ({ id, startInstantId: a, endInstantId: b, label, visible: true, endIsNow: false })
 
 // Fresh module state for each test.
-async function load(instants: InstantRecord[], spans: SpanRecord[] = []) {
+async function load(instants: InstantRecord[], spans: SpanRecord[] = [], todos: TodoRecord[] = []) {
   vi.resetModules()
   const { useEntities, entities } = await import('../../store/entities.ts')
-  useEntities.setState({ instants, spans })
+  useEntities.setState({ instants, spans, todos })
   const { useAlarms } = await import('../../store/alarms.ts')
   useAlarms.setState({ ringing: [], autoDismissMs: 5 * MINUTE, unattended: 'dismiss' })
   const { useShell } = await import('../../store/shell.ts')
@@ -94,6 +95,32 @@ describe('syncAlarms', () => {
     expect(snoozed).toMatchObject({ offsetMs: instants[0].tsEpochMs - at, snoozeOf: first.id })
     expect(snoozed.answered).toBeUndefined()
     expect(fake.synced?.alarms.map(a => a.instantId)).toEqual([`wake|${snoozed.id}`])
+  })
+
+  it('a Snooze on a todo’s alarm at its time moves the todo, as the card’s Snooze does', async () => {
+    const at = now + 4 * MINUTE + 300
+    const todo: TodoRecord = { id: 't1', label: 'Laundry', createdAt: 0, status: 'open', order: 0 }
+    fake.actions = [{ type: 'snooze', instantId: 'laundry', at }, { type: 'dismiss', instantId: 'laundry' }]
+    const { syncAlarms, useEntities } = await load([inst('laundry', -MINUTE, { alarm: true, label: 'Laundry', todo: { id: 't1', role: 'at' } })], [], [todo])
+    await syncAlarms()
+    // No bell added: the todo's `at` moved (to the whole second), its alarm rings there.
+    const { instants } = useEntities.getState()
+    expect(instants).toHaveLength(1)
+    expect(instants[0].tsEpochMs).toBe(Math.round(at / 1000) * 1000)
+    expect(instants[0].alarms).toHaveLength(1)
+    expect(instants[0].alarms![0].snoozeOf).toBeUndefined()
+    // The later Dismiss (named by the first key) answers the alarm that rings next.
+    expect(instants[0].alarms![0].answered).toBe('dismissed')
+  })
+
+  it('a Snooze on a todo’s warning stays a reminder', async () => {
+    const todo: TodoRecord = { id: 't1', label: 'Laundry', createdAt: 0, status: 'open', order: 0 }
+    fake.actions = [{ type: 'snooze', instantId: 'laundry|w', at: now + 4 * MINUTE }]
+    const { syncAlarms, useEntities } = await load([inst('laundry', 9 * MINUTE, { label: 'Laundry', todo: { id: 't1', role: 'at' }, alarms: [{ id: 'w', offsetMs: 10 * MINUTE }] })], [], [todo])
+    await syncAlarms()
+    const [laundry] = useEntities.getState().instants
+    expect(laundry.tsEpochMs).toBe(now + 9 * MINUTE)
+    expect(laundry.alarms!.map(a => a.answered ?? a.snoozeOf)).toEqual(['snoozed', 'w'])
   })
 
   it('runs overlapping calls one after another, the last one seeing the latest state', async () => {

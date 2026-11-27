@@ -132,18 +132,20 @@ const chipObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeOb
 /**
  * Reports the element's width into the widths store. Entries outlive the element: a
  * chip that folds or clusters unmounts, and the layout must still know how wide it was.
+ * Not while `active` is false: a chip shrinking away into a mark loses what was folded into it
+ * (its ✓, its bells), and measuring it narrower would fit it again, a frame later, folds and all.
  */
-export function useChipWidth(ref: RefObject<HTMLElement | null>, id: string) {
+export function useChipWidth(ref: RefObject<HTMLElement | null>, id: string, active = true) {
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el || !chipObserver) return
+    if (!el || !chipObserver || !active) return
     chipIds.set(el, id)
     chipObserver.observe(el)
     return () => {
       chipObserver.unobserve(el)
       chipIds.delete(el)
     }
-  }, [ref, id])
+  }, [ref, id, active])
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +173,14 @@ export interface LayoutContext {
   orientation?: 'horizontal' | 'vertical'
 }
 
-/** Layout items for the given instants. Priority: focused 0, selected 1, secondary 1.5, moving/editing 2, ringing 3, (bells 3.5), upcoming alarm 4, favorite 5, other 6. */
+/**
+ * An instant that says least on its own: unnamed (a timer's start, a quick drop), or a todo's
+ * ▶ start, ⏸ pause, ✓ done or earlier plan (its `at` chip and its stretch's lane tell its story).
+ * Crowded, it is the first to become a mark.
+ */
+export const isMinorInstant = (i: InstantRecord): boolean => !i.label || (!!i.todo && i.todo.role !== 'at')
+
+/** Layout items for the given instants. Priority: focused 0, selected 1, secondary 1.5, moving/editing 2, ringing 3, (bells 3.5), upcoming alarm 4, favorite 5, other 6, minor 6.5 (isMinorInstant). */
 export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext): LabelItem[] {
   const vertical = c.orientation === 'vertical'
   return instants.map(i => {
@@ -184,7 +193,7 @@ export function layoutItems(instants: readonly InstantRecord[], c: LayoutContext
     const width = c.widths[i.id] ?? estimateChipWidth(i.label)
     const height = c.heights?.[i.id] ?? CHIP_HEIGHT
     const priority = focused ? 0 : selected ? 1 : secondary ? 1.5 : moving || editing ? 2 : ringing ? 3
-      : hasArmedAlarm(i, c.now) ? 4 : i.favorite ? 5 : 6
+      : hasArmedAlarm(i, c.now) ? 4 : i.favorite ? 5 : isMinorInstant(i) ? 6.5 : 6
     // Its tools take room too, so neighbours keep clear of them.
     const { tail, below, toolsWidth } = chipToolsExtent(i, { selected, focused, moving, editing, now: c.now, vertical, selectedBell: c.selectedBell })
     const rowWidth = below > 0 ? toolsWidth : 0
@@ -234,7 +243,7 @@ export interface SavedLayout {
   bellFolded: Record<string, string>
   /** A todo's `at` id → its ✓ (`done`) instant folded into its chip (too close to stand apart; domain/todos doneFolds). The ✓ draws as a mark. */
   doneFolded: Record<string, string>
-  /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups). */
+  /** Instants shown as a Mark (a line from the axis, no chip): past their Label zoom (domain/displayGroups), or crowded (no room for their chip). */
   marks: Record<string, true>
   /** Marks fading out before their zoom hides them (id → opacity, absent = 1); not structure. */
   markFade: Record<string, number>
@@ -391,8 +400,8 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
     const ringingIds = new Set(c.ringing.map(k => parseRingKey(k).instantId))
     const worked = new Set([c.selected, c.secondary, c.mode === 'instant' ? c.focusedInstantId : null, c.editing, c.moving].filter(Boolean))
     // Marks: past its Label zoom an instant is a line from the axis, no chip; it fades out before
-    // it is Hidden. What you are working with keeps its label. Crowded labels slide aside or fold
-    // into "+N" in the overlap layout, like any chips: crowding never makes a mark.
+    // it is Hidden. What you are working with keeps its label. Crowded labels become marks too
+    // (the overlap layout's `marked`), rather than sliding far from their lines.
     const marks: Record<string, true> = {}
     const fades: Record<string, number> = {}
     for (const i of visible) {
@@ -443,7 +452,13 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       cluster: vertical ? { mainExtent: CHIP_HEIGHT, crossExtent: CLUSTER_WIDTH } : { mainExtent: CLUSTER_WIDTH, crossExtent: CHIP_HEIGHT },
       foldBadgeExtent: FOLD_BADGE_WIDTH,
       maxShift: t.chipShiftMaxPx,
+      lineInset: t.chipLineInsetPx,
+      overflow: 'mark',
+      // Ties go to the chip nearer Now (pan-invariant: positions are relative to the origin).
+      centerPos: f.pos(f.now) - originPos,
     })
+    // Crowded: no room for its chip, so a mark (its bells and ✓ fold with it).
+    for (const id of r.marked) marks[id] = true
     const rows = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.slot]))
     const crossOffsets = Object.fromEntries(Object.entries(r.placed).map(([id, p]) => [id, p.crossOffset]))
     const shifts = Object.fromEntries(Object.entries(r.placed).filter(([, p]) => p.shift !== 0).map(([id, p]) => [id, Math.round(p.shift)]))
@@ -465,7 +480,7 @@ export function createSavedLayoutCache(): (f: FrameLike, inputs: SavedLayoutInpu
       clusters: r.clusters.map(k => ({ id: k.id, memberIds: k.memberIds, slot: k.slot, crossOffset: k.crossOffset, shift: Math.round(k.shift), topPriority: k.topPriority })),
       bellIds: shownBells.filter(b => r.placed[bellItemId(b.alarm.id)]).sort((a, b) => a.ringTs - b.ringTs).map(b => b.alarm.id),
       bellFolded: Object.fromEntries(Object.entries(bells.folded).filter(([id]) => !marks[id])),
-      doneFolded,
+      doneFolded: Object.fromEntries(Object.entries(doneFolded).filter(([id]) => !marks[id])),
       marks,
       markFade: fades,
       rowsUsed: Math.max(1, deepest + 1),

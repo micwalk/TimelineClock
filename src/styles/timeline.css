@@ -793,7 +793,7 @@
 .tl-lane__chev--right { right: 0; clip-path: polygon(0 0, 100% 50%, 0 100%); }
 .tl-lane__chev.is-visible { display: block; }
 
-.tl-lane__anchor { position: absolute; left: 0; top: 0; will-change: transform; }
+.tl-lane__anchor { position: absolute; left: 0; top: 0; will-change: transform; transition: opacity 180ms ease; }
 .tl-lane__chip-wrap {
   position: absolute;
   left: 0;
@@ -870,10 +870,14 @@
 }
 .span-chip__end-btn:hover, .span-chip__end-btn:focus-visible { background: var(--box-bg-raised); }
 
-/* Span names that would crowd a lane fold into one "N spans" chip (LaneGroupChips, NowFlags). */
-.tl-lane__anchor.is-folded { visibility: hidden; }
-.span-chip--group { color: var(--accent); animation: chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
-.span-chip--group .span-chip__text { font: 700 13.5px/1.1 var(--font-ui); color: var(--accent); }
+/* A span chip with no room on its span (laneChipLayout `bare`) fades out where it was: the span
+   shows its bar alone, its smaller state (as a mark is an instant's), and comes back as there is room. */
+.tl-lane__anchor.is-folded { opacity: 0; pointer-events: none; }
+.tl-lane__anchor.is-folded * { pointer-events: none; }
+/* A tap on a span's bar selects it: a band along the bar, under every chip and tag (lines layer). */
+.tl-lane__hit { position: absolute; left: 0; right: 0; top: -7px; bottom: -7px; pointer-events: auto; cursor: pointer; }
+.timeline[data-orientation='vertical'] .tl-lane__hit { top: 0; bottom: 0; left: -7px; right: -7px; }
+@media (prefers-reduced-motion: reduce) { .tl-lane__anchor { transition: none; } }
 
 /* --- Popovers ----------------------------------------------------------- */
 
@@ -1290,7 +1294,10 @@
 .span-read__value { font: 700 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--accent); }
 .span-read__total { font: 600 10px/1 var(--font-mono); color: var(--ink-faint); }
 .span-read__total:empty { display: none; }
-.tl-nowflag--group .span-read__value { font: 700 12px/1 var(--font-ui); }
+/* A crowded span chip or label box shows its reading alone (laneChipLayout, NowFlags); its name
+   stays measured, out of the flow (lookWidths). */
+.tl-nowflag.is-compact .span-read__name,
+.tl-lane__chip-wrap.is-compact .span-read__name { position: absolute; visibility: hidden; pointer-events: none; }
 
 /* --- Motion -----------------------------------------------------------------
    State changes ease instead of snapping: colours as something is selected or focused, tools

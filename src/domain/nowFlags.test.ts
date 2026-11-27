@@ -47,3 +47,28 @@ describe('layoutNowFlags', () => {
     expect(out.a).toBe(293) // just above the blocker: 310 - 4 - 13
   })
 })
+
+describe('layoutNowFlags: crowded boxes', () => {
+  it('with drop, leaves out a box with no free spot in its span (its bar shows alone)', () => {
+    const r = layoutNowFlags([{ key: 'a', lo: 390, hi: 412 }, { key: 'b', lo: 390, hi: 412 }], 400, 26, 4, [], { drop: true })
+    expect(r).toEqual({ a: 401 })
+  })
+
+  it('takes each box’s own size', () => {
+    // a is 100 long at 0; b (40 long) clears it at 100 / 2 + 4 + 20 = 74.
+    const r = layoutNowFlags([{ key: 'a', lo: -500, hi: 500, prefer: 0, size: 100 }, { key: 'b', lo: -500, hi: 500, prefer: 10, size: 40 }], 0, 26, 4)
+    expect(r).toEqual({ a: 0, b: 74 })
+  })
+
+  it('with cover, a box longer than its span may slide while it still covers the span (never off it)', () => {
+    // A 100px box on a 20px span (100–120): its middle is 110; it may slide while both ends of the
+    // span stay 12px inside it: centers 82 (120 - 50 + 12) to 138 (100 + 50 - 12).
+    const blocker = [{ lo: 0, hi: 120 }]
+    const r = layoutNowFlags([{ key: 'a', lo: 100, hi: 120, prefer: 110, size: 100 }], 0, 26, 4, blocker, { cover: 12, drop: true })
+    expect(r).toEqual({})
+    const free = layoutNowFlags([{ key: 'a', lo: 100, hi: 120, prefer: 110, size: 100 }], 0, 26, 4, [{ lo: 0, hi: 80 }], { cover: 12, drop: true })
+    expect(free.a).toBe(134) // 80 + 4 + 50
+    const span = { lo: 100, hi: 120 }
+    expect(free.a - 50 <= span.lo && free.a + 50 >= span.hi).toBe(true)
+  })
+})

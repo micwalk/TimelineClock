@@ -4,9 +4,9 @@ import { MARKS, TODO_COPY, TODO_UI } from '../../config/labels.ts'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { StarIcon as StarOutline, BellIcon as BellOutline } from '@heroicons/react/24/outline'
-import { StarIcon as StarSolid, BellAlertIcon } from '@heroicons/react/24/solid'
-import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { StarIcon as StarOutline, BellIcon as BellOutline, BellAlertIcon as BellAlertOutline } from '@heroicons/react/24/outline'
+import { StarIcon as StarSolid, BellAlertIcon, BellIcon as BellSolid } from '@heroicons/react/24/solid'
+import { ArrowPathIcon, ArrowsRightLeftIcon, SunIcon, BellSlashIcon, CheckIcon, ClockIcon, EyeIcon, EyeSlashIcon, MapPinIcon, MusicalNoteIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { useFrameValue, useFrameValueWhile } from '../../engine/hooks.ts'
 import { LiveText } from '../../engine/LiveText.tsx'
 import { formatChipTime } from '../../domain/format.ts'
@@ -95,9 +95,11 @@ interface ChipProps {
   editing: boolean
   moving: boolean
   fineSeconds: boolean
+  /** Shrinking away into a mark: no longer measured (savedLayout useChipWidth). */
+  leaving?: boolean
 }
 
-function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
+function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selected, focused, editing, moving, fineSeconds, leaving, belowRef }: ChipProps & { belowRef: React.RefObject<HTMLDivElement | null> }) {
   const ts = inst.tsEpochMs
   // A todo's `at` leads with its state (☐ open, ✓ done, ↷ passed, – won't do: config/labels).
   const todoStatus = useEntities(s => (inst.todo?.role === 'at' ? s.todos?.find(t => t.id === inst.todo!.id)?.status : undefined))
@@ -119,7 +121,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
   const groupRef = useRef<HTMLDivElement>(null)
   const chipRef = useRef<HTMLDivElement>(null)
   // The layout measures the chip with its bell (the group); the ＋ flows into the chip itself.
-  useChipWidth(groupRef, inst.id)
+  useChipWidth(groupRef, inst.id, !leaving)
   useMorphChip(chipRef, inst.id)
   const name = chipName(inst.label)
   const vertical = useLayout(s => s.orientation === 'vertical')
@@ -239,7 +241,7 @@ function SavedChip({ inst, foldCount, foldedIds, bellFolded, doneFolded, selecte
           onPointerDown={bellAlarm ? e => startBellDrag(e, inst.id, bellAlarm.id) : undefined}
           onClick={onBell}>
           {bellCount > 1 && <span className="chip-bell__count">{bellCount}</span>}
-          <BellAlertIcon aria-hidden />
+          <AlarmBellIcon alarms={atInstant} />
         </button>
       )}
       <div ref={chipRef} className={`chip chip--saved${editing ? ' chip--editing' : ' glow-box glow-text'}${focused && !editing ? ' chip--full' : ''}${inst.label ? '' : ' chip--empty'}${armed || ringingIds.length > 0 ? ' has-alarm' : ''}${todoStatus ? ` is-todo is-todo-${todoStatus}` : ''}${celebrating ? ' is-celebrating' : ''}${popping ? ' is-done-popping' : ''}`}>
@@ -470,7 +472,7 @@ function FoldedBells({ inst, alarms, selected, ringing }: { inst: InstantRecord;
       aria-label={label} title={label}
       onPointerDown={lone ? e => startBellDrag(e, inst.id, lone.id) : undefined}
       onClick={onTap}>
-      <BellAlertIcon aria-hidden />
+      <AlarmBellIcon alarms={alarms} />
       <span className="chip-bell__offset">{offsets}</span>
       {alarms.some(a => a.snoozeOf) && <span className="chip-bell__snooze" aria-hidden>{SNOOZE_MARK}</span>}
     </button>
@@ -490,6 +492,7 @@ function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
     <>
       <IconButton icon={ClockIcon} label="Type how long before it rings" color={bellColor} bare pressed={typing} onClick={() => setTyping(true)} />
       {!alarm.answered && <SoundTool inst={inst} alarm={alarm} />}
+      {alarm.offsetMs !== 0 && <PinBellTool inst={inst} alarm={alarm} />}
       {canTodo && <IconButton icon={TodoBoxIcon} label={makeTodo} color="var(--c-todo)" bare onClick={() => act.makeInstantTodo(inst.id, { name: true })} />}
       <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
       {typing && (
@@ -502,6 +505,22 @@ function BellTools({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord })
       )}
     </>
   )
+}
+
+/** An off-set bell's 📌: it becomes an instant of its own where it rings (a past one too). */
+function PinBellTool({ inst, alarm }: { inst: InstantRecord; alarm: AlarmRecord }) {
+  return <IconButton icon={MapPinIcon} label="Make an instant here" color={bellColor} bare onClick={() => act.pinBell(inst.id, alarm.id)} />
+}
+
+/**
+ * A bell's icon: an alarm (a tone that rings until answered) has the ringing waves; a chime (a
+ * notification, once) is a plain bell. Hollow for history. Several: waves if any of them rings.
+ */
+function AlarmBellIcon({ alarms, past = false }: { alarms: readonly AlarmRecord[]; past?: boolean }) {
+  const fallback = useSettings(s => s.alarmRings.sound)
+  const rings = alarms.some(a => soundOf(a, fallback) !== 'chime')
+  const Icon = past ? (rings ? BellAlertOutline : BellOutline) : (rings ? BellAlertIcon : BellSolid)
+  return <Icon aria-hidden />
 }
 
 /** A bell's sound (domain/sounds): a tone that rings until answered, or the chime. */
@@ -611,7 +630,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
             aria-label={label} title={label}
             onPointerDown={past ? undefined : e => startBellDrag(e, inst.id, alarm.id)}
             onClick={onTap}>
-            {past ? <BellOutline aria-hidden /> : <BellAlertIcon aria-hidden />}
+            <AlarmBellIcon alarms={[alarm]} past={past} />
             {alarm.snoozeOf && <span className="chip-bell__snooze" aria-hidden>{SNOOZE_MARK}</span>}
           </button>
           {/* How long before its instant: while dragged (live) or selected. */}
@@ -625,7 +644,7 @@ const BellMarker = memo(function BellMarker({ inst, alarm, siblings, past, selec
             <div className="tl-col__below tl-col__below--bell">
               <div className="tl-col__tools">
                 {past
-                  ? <IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} />
+                  ? <><PinBellTool inst={inst} alarm={alarm} /><IconButton icon={TrashIcon} label="Delete alarm" color="var(--c-danger)" className="glow-box" onClick={() => act.removeAlarm(inst.id, alarm.id)} /></>
                   : <BellTools inst={inst} alarm={alarm} />}
               </div>
             </div>
@@ -683,7 +702,7 @@ const SavedMarker = memo(function SavedMarker({ inst, foldCount, foldedIds, bell
     <div ref={ref} className={`tl-col tl-col--label ${stateClass}${inst.virtual ? ' is-virtual' : ''}${leaving ? ' is-leaving' : ''}`} role="group" aria-label={`Instant ${name}`} aria-hidden={leaving || undefined} data-instant={inst.id}>
       {linked && <div ref={alarmStubRef} className="tl-col__alarm-stub" aria-hidden />}
       <SavedChip inst={inst} foldCount={foldCount} foldedIds={foldedIds} bellFolded={bellFolded} doneFolded={doneFolded} belowRef={belowRef}
-        selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} />
+        selected={selected} focused={focused} editing={editing} moving={moving} fineSeconds={fineSeconds} leaving={leaving} />
       {moving && <div className="tl-col__badge glow-box glow-text">Moving</div>}
     </div>
   )

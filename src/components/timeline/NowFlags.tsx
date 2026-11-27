@@ -15,10 +15,7 @@ import { FLAG_SIZE, observeFlag, rightSideLayout, setRightSideInputs } from './r
 import { engine } from '../../engine/viewportEngine.ts'
 import * as act from '../../store/actions.ts'
 import type { BottomLane } from './useBottomLanes.ts'
-import { isLiveLane, laneName, savedLaneVariant } from './useBottomLanes.ts'
-import { useFrameValue } from '../../engine/hooks.ts'
-import { sameLabelGroups } from '../../domain/labelGroups.ts'
-import { resolveTimeRef as resolveRef } from '../../domain/spans.ts'
+import { isLiveLane, savedLaneVariant } from './useBottomLanes.ts'
 
 type SavedLane = Extract<BottomLane, { kind: 'saved' }>
 
@@ -31,11 +28,9 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
   const widths = useChipWidths(s => s.widths)
   const heights = useChipWidths(s => s.heights)
   const saved = lanes.filter((l): l is SavedLane => l.kind === 'saved' && !isLiveLane(l))
-  // Labels that would crowd a bar fold into "N spans" boxes.
-  const flagGroups = useFrameValue(f => rightSideLayout(f).flagGroups, sameLabelGroups)
-  const byKey = new Map<string, BottomLane>(lanes.map(l => [l.key, l]))
   const refs = useRef(new Map<string, HTMLDivElement>())
   const shown = useRef(new Map<string, number | null>())
+  const compacts = useRef(new Map<string, boolean>())
   // One stable ref callback per lane, so a re-render doesn't re-observe the box.
   const refFns = useRef(new Map<string, (el: HTMLDivElement | null) => void>())
   const refFor = (key: string) => {
@@ -49,6 +44,7 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
         } else {
           refs.current.delete(key)
           shown.current.delete(key)
+          compacts.current.delete(key)
           off?.()
           off = null
           refFns.current.delete(key)
@@ -68,9 +64,12 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
 
   useFrameListener(f => {
     if (f.orientation !== 'vertical') return
-    const placed = rightSideLayout(f).flags
-    // Each lane's box, and each "N spans" box standing in for several.
+    const { flags: placed, compact } = rightSideLayout(f)
+    // Each lane's box; crowded, its reading alone (compact); with no room on its span at all,
+    // hidden (its bar shows alone).
     for (const [key, el] of refs.current) {
+      const small = !!compact[key]
+      if (compacts.current.get(key) !== small) { compacts.current.set(key, small); el.classList.toggle('is-compact', small) }
       const y = placed[key] ?? null
       if (shown.current.get(key) === y) continue
       shown.current.set(key, y)
@@ -97,33 +96,6 @@ export function NowFlags({ lanes }: { lanes: BottomLane[] }) {
               onKeyDown={e => { if (e.key === 'Enter') act.selectSpan(r.span.id) }}
             >
               <SpanReading name={name} a={lane.a} b={lane.b} />
-            </div>
-          </div>
-        )
-      })}
-      {flagGroups.map(g => {
-        const members = g.members.map(k => byKey.get(k)).filter((l): l is BottomLane => !!l)
-        if (members.length < 2) return null
-        const label = `${members.length} spans: ${members.map(laneName).join(', ')}`
-        const zoom = () => {
-          const now = act.nowTime()
-          const center = act.cursorTime()
-          act.zoomToTimes(members.flatMap(l => [resolveRef(l.a, now, center), resolveRef(l.b, now, center)]))
-        }
-        return (
-          <div key={g.key} className="tl-lane tl-lane--span tl-lane--labels tl-nowflag-lane" style={{ '--i': g.track } as CSSProperties}>
-            <div
-              ref={refFor(g.key)}
-              className="tl-nowflag tl-nowflag--group glow-text"
-              style={{ display: 'none', height: FLAG_SIZE }}
-              role="button"
-              tabIndex={0}
-              aria-label={`${label}. Zoom in to show them`}
-              title={label}
-              onClick={zoom}
-              onKeyDown={e => { if (e.key === 'Enter') zoom() }}
-            >
-              <span className="span-read__value">{members.length} spans</span>
             </div>
           </div>
         )

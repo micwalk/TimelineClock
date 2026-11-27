@@ -7,6 +7,61 @@ themselves, like PWA updates; only native changes (anything under `android/`,
 [Releases](https://github.com/micwalk/TimelineClock/releases). Installing a newer APK over
 the old one keeps your data. See [docs/android.md](docs/android.md).
 
+## 0.9.10 — 2026-11-26
+
+**Android app:** web only.
+
+- Snooze on a todo's alarm notification (Android) moves the todo, as Snooze on its card in the
+  app does, instead of adding another bell to it. So does an unanswered todo alarm when Settings ›
+  Alarms says to snooze those. A warning before a todo's time still snoozes as a reminder.
+- For other AI assistants: [docs/skills/timeline-clock-import.md](docs/skills/timeline-clock-import.md)
+  is a skill in one Markdown file that explains how to write a file this app imports (Settings ›
+  Data › Import…): moments, spans, alarms, countdowns, repeating alarms, todos and groups. Hand it
+  to a chat and ask it to plan something into Timeline Clock.
+
+## 0.9.9 — 2026-11-26
+
+**Android app: install again** (the export fix is native).
+
+- Android app: exporting a backup works again with a lot of data. The app closed as soon as the
+  "Save to…" picker opened and left an empty file there: the backup (twice) was more than
+  Android lets an app keep while another screen is in front (about 1 MB). The backup now waits in
+  a file of the app's while you pick where it goes, and is written there even if Android restarted
+  the app meanwhile.
+
+## 0.9.8 — 2026-11-26
+
+**Android app:** web only.
+
+Zoomed out after a lot of timers and todos, the timeline reads again:
+
+- A chip always sits on its own line. Chips that collide still slide aside a little, but only
+  while their line runs into them; past that, the less important one becomes a **Mark** (the
+  short line from the axis) instead of being pushed far away or swallowed by a "+N". Unnamed
+  instants (a timer's start, a quick drop) and a todo's ▶, ⏸ and ✓ give way first, then the
+  one further from Now. Tap a Mark to select it; zoom in and its chip comes back. There are no
+  "+N" chips any more.
+- A span's chip always sits on its span (inside it, or covering a short one). Where span chips
+  crowd, one shows just its length ("13:00"), then only its bar; there are no "N spans" chips
+  any more. Tap a span's bar to select it. Longer spans get their chips first. In vertical, a
+  span's label box hugs its bar the same way, shrinking to its length beside wide chips.
+- Settings › Advanced: chips slide at most 40px (was 80) and keep their line 12px inside
+  ("A sliding chip keeps its line this far inside it").
+
+## 0.9.7 — 2026-11-26
+
+**Android app:** web only.
+
+- A bell dragged off its instant (a warning or a snooze) has a 📌 in its tools: it becomes an
+  instant of its own where it rings, with the alarm (and its sound), in the same group, selected
+  with its name box open. The old instant keeps its other alarms. Past (hollow) bells pin too,
+  their alarm moving over as history.
+- Bells tell an alarm from a notification: an alarm (a tone that rings until answered) is a bell
+  with ringing waves, a chime (one sound, once) a plain bell; hollow ones likewise.
+- The Todos Add box drops instructions said or typed before a todo: "set an alarm to take out
+  the trash at 7pm" is "take out the trash" at 7pm ("timer for", "add a todo to", "set a
+  reminder about", "Reminder:"…). With nothing else said, it is named after them ("Alarm").
+
 ## 0.9.6 — 2026-11-25
 
 **Android app:** web only.

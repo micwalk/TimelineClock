@@ -40,7 +40,7 @@ import type { TodoRecord } from '../domain/todos.ts'
 import type { ImportRow } from '../domain/todoImport.ts'
 import type { DoneOrigin } from '../domain/doneBurst.ts'
 import {
-  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences,
+  addExtra, countingInstant, todoStretches, hasStretches, firstOrder, makeTodo, newTodoId, nextOrder, parseTodoInput, passedTodos, todoAt, todoInputAt, todoOccurrences, todoSnoozed,
 } from '../domain/todos.ts'
 import { TODO_COPY } from '../config/labels.ts'
 import type { RingingChoices, SnoozeLanding } from '../domain/alarms.ts'
@@ -728,6 +728,28 @@ export function setAlarmSound(id: string, alarmId: string, sound: AlarmSound) {
   if (!alarm || alarm.answered || alarm.sound === sound) return
   entities.setAlarmSound(id, alarmId, sound)
   if (!alarm.snoozeOf) touchOccurrence(id)
+}
+
+/**
+ * An off-set bell's 📌: the bell becomes an instant of its own where it rings, in its instant's
+ * group, with the alarm (and its sound) at it; the old instant keeps its other alarms. A past
+ * bell works too: its alarm moves over as it was (answered, or missed), so history stays. The new
+ * instant is selected with its name box open (leaving it empty keeps it unnamed). Returns its id.
+ */
+export function pinBell(id: string, alarmId: string): string | undefined {
+  const inst = entities.getInstant(id)
+  const alarm = findAlarm(inst, alarmId)
+  if (!inst || !alarm || alarm.offsetMs === 0 || isAlarmRinging(ringKey(id, alarmId))) return
+  const ts = inst.tsEpochMs - alarm.offsetMs
+  removeAlarm(id, alarmId)
+  endNaming()
+  const newId = entities.createInstant(ts, '')
+  const moved = entities.addAlarm(newId, alarm.sound ? { sound: alarm.sound } : {})
+  if (alarm.answered) entities.answerAlarms(newId, [moved], alarm.answered)
+  if (inst.collectionId) entities.setInstantCollection(newId, inst.collectionId)
+  view.selectInstant(newId)
+  view.editInstant(newId)
+  return newId
 }
 
 /** Taps a bell: selects it (its tools show), or lets go of it on a second tap. */
@@ -1793,6 +1815,24 @@ export function snoozeTodo(key: string, minutes = SNOOZE_MINUTES) {
   const todo = openTodoOf(entities.getInstant(parseRingKey(key).instantId))
   if (!todo) return
   snoozeTodoUntil(todo.id, Math.round((nowTime() + minutes * MINUTE) / SECOND) * SECOND)
+}
+
+/**
+ * A snooze from off the card: the Android notification's Snooze (and its auto-snooze of an
+ * unanswered alarm), or the page's own auto-snooze. On a todo's alarm at its time the todo itself
+ * moves until `at` (rescheduleTodo), as the card's Snooze does (domain/todos todoSnoozed); any
+ * other alarm gets a snooze (services/AlarmScheduler snoozeUntil). Nothing is revealed: the app
+ * may not be on screen. Returns the key that rings next (the notification keeps naming it by the
+ * first: domain/nativeNotifications replayAlarmActions).
+ */
+export function snoozeElsewhere(key: string, at = Date.now() + SNOOZE_MINUTES * MINUTE): string | undefined {
+  const { instantId, alarmId } = parseRingKey(key)
+  const todoId = todoSnoozed(entities.getInstant(instantId), alarmId, useEntities.getState().todos ?? [])
+  if (!todoId) return snoozeUntil(key, at)
+  rescheduleTodo(todoId, Math.round(at / SECOND) * SECOND)
+  const moved = todoAt(todoInstants(todoId))
+  const next = moved && (moved.alarms ?? []).find(a => a.offsetMs === 0 && isArmed(moved, a, Date.now()))
+  return moved && next ? ringKey(moved.id, next.id) : undefined
 }
 
 /** A todo's ringing card's box (a length, a time, "tomorrow"): it moves there, shown with Now as a snooze is. */

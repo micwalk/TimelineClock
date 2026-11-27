@@ -354,3 +354,65 @@ describe('layoutLabels: sliding along the time axis', () => {
     expect(r.clusters).toHaveLength(1)
   })
 })
+
+describe('layoutLabels: crowded chips become marks', () => {
+  const M: LabelLayoutOptions = { ...H, maxSlots: 1, overflow: 'mark' }
+
+  it('marks the chips with no room instead of clustering them; the more important keep their chips', () => {
+    const r = layoutLabels([chip('a', 0, { priority: 6 }), chip('b', 10, { priority: 4 }), chip('c', 20, { priority: 6.5 })], M)
+    expect(Object.keys(r.placed)).toEqual(['b'])
+    expect(r.marked).toEqual(['a', 'c'])
+    expect(r.clusters).toEqual([])
+  })
+
+  it('accounts for every item: placed, folded or marked', () => {
+    const items = [chip('a', 0), chip('b', 30), chip('c', 60, { pinned: true }), chip('d', 400), chip('e', 420)]
+    const r = layoutLabels(items, M)
+    expect([...Object.keys(r.placed), ...Object.keys(r.folded), ...r.marked].sort()).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  it('never marks a pinned chip', () => {
+    const r = layoutLabels([chip('a', 0, { priority: 1 }), chip('sel', 5, { pinned: true, priority: 9 })], M)
+    expect(r.placed.sel).toBeDefined()
+    expect(r.marked).toEqual(['a'])
+  })
+
+  it('breaks ties toward the center (Now): the chip nearer it keeps its label', () => {
+    const r = layoutLabels([chip('old', 0), chip('recent', 50)], { ...M, centerPos: 500 })
+    expect(Object.keys(r.placed)).toEqual(['recent'])
+    expect(r.marked).toEqual(['old'])
+  })
+
+  it('marks the snoozes folded into a chip that becomes a mark', () => {
+    const r = layoutLabels([
+      chip('top', 0, { priority: 1 }),
+      chip('orig', 10, { groupId: 'orig' }),
+      chip('s1', 15, { groupId: 'orig' }),
+    ], M)
+    expect(r.marked).toEqual(['orig', 's1'])
+    expect(r.folded).toEqual({})
+    expect(r.foldCount).toEqual({})
+  })
+})
+
+describe('layoutLabels: a sliding chip stays on its line', () => {
+  it('slides no further than keeps its marker lineInset inside its box', () => {
+    // b (100 wide) would have to slide 104px to clear a; with the line inside it may slide 38.
+    const o: LabelLayoutOptions = { ...H, maxSlots: 1, maxShift: 300, lineInset: 12, overflow: 'mark' }
+    const r = layoutLabels([chip('a', 0, { priority: 1 }), chip('b', 60)], o)
+    expect(r.marked).toEqual(['b'])
+    const near = layoutLabels([chip('a', 0, { priority: 1 }), chip('b', 70)], o)
+    expect(near.placed.b.shift).toBe(34)
+    expect(Math.abs(near.placed.b.shift)).toBeLessThanOrEqual(50 - 12)
+  })
+
+  it('caps the inset at a quarter of the chip (short vertical chips may still nudge)', () => {
+    const o: LabelLayoutOptions = { ...V, maxSlots: 1, crossBudget: 100, maxShift: 300, lineInset: 12, overflow: 'mark' }
+    // 20px chips: half 10, inset capped at 5, so a 5px slide at most.
+    // b at 19 overlaps a by a pixel: clear of it (and the gap) at 24, a 5px slide.
+    const r = layoutLabels([vchip('a', 0, { priority: 1 }), vchip('b', 19)], o)
+    expect(r.placed.b.shift).toBe(5)
+    const far = layoutLabels([vchip('a', 0, { priority: 1 }), vchip('b', 15)], o)
+    expect(far.marked).toEqual(['b'])
+  })
+})

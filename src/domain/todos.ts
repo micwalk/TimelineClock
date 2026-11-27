@@ -147,6 +147,20 @@ export const instantsOf = (byTodo: ReadonlyMap<string, readonly InstantRecord[]>
 /** When it is to be done: its `at` instant (at most one). */
 export const todoAt = (mine: readonly InstantRecord[]) => mine.find(i => i.todo?.role === 'at')
 
+/**
+ * The open todo that a snooze of this alarm moves, if any: an alarm at (or after) an open todo's
+ * `at`, so its Snooze moves the todo itself (owner, 2026-11-21), wherever it is pressed (the
+ * ringing card, the Android notification, an unanswered alarm's auto-snooze). A warning (before
+ * its time) stays a reminder: its snooze is another alarm.
+ */
+export function todoSnoozed(inst: InstantRecord | undefined, alarmId: string, todos: readonly TodoRecord[]): string | undefined {
+  if (inst?.todo?.role !== 'at') return undefined
+  const alarm = inst.alarms?.find(a => a.id === alarmId)
+  if (!alarm || alarm.offsetMs > 0) return undefined
+  const id = inst.todo.id
+  return todos.some(t => t.id === id && t.status === 'open') ? id : undefined
+}
+
 /** Where it was done. */
 export const todoDoneInstant = (mine: readonly InstantRecord[]) => [...mine].reverse().find(i => i.todo?.role === 'done')
 

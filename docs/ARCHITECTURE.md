@@ -82,8 +82,8 @@ paint, which measured three times the paint work while zooming.
 The overlap layout (`domain/labelLayout.ts`) runs from `savedLayoutAt(frame)`, once per frame at
 most and reused for pans and for zoom steps under 0.5% (`ZOOM_REUSE`). The Timeline feeds it
 (`useSavedLayoutSource`, which returns the rows in use); `SavedInstantColumns` subscribes to its
-*structure* only (which chips exist, "+N" and "⟲N" contents), so a zoom re-renders nothing until
-a chip appears, goes or joins a cluster. Each chip (and "+N" chip) places itself every frame:
+*structure* only (which chips exist, which are marks, "⟲N" contents), so a zoom re-renders nothing
+until a chip appears or goes. Each chip places itself every frame:
 its line's position plus the layout's slide and cross offset, both on critically damped springs
 (`domain/spring.ts`: 220ms along time, 160ms for a pop to another row), so chips are pushed aside
 smoothly and never teleport. Springs ask for frames only while they move.
@@ -183,7 +183,8 @@ recent instant undo itself.
   holds the px distances across the timeline (axis, tag slots, lane offsets, vertical cross
   budget) and writes them as `--tl-*` custom properties.
 - **Chip overlap layout.** `domain/labelLayout.ts` is pure: positions and chip sizes in,
-  rows/columns, "+N" clusters and snooze folds out. `components/timeline/savedLayout.ts` builds
+  rows/columns, marks (`overflow: 'mark'`: a crowded chip that can't stay on its line draws as
+  its line's stub; the layout still has a "+N" cluster mode the app doesn't use) and snooze folds out. `components/timeline/savedLayout.ts` builds
   its inputs from the visible instants and measured chip widths (`useChipWidths`, pruned when an
   instant is deleted) and exposes a structural result (`useSavedLayout`). It is **pan-invariant
   and cached**: item positions are taken relative to the earliest visible instant, and the last
@@ -191,12 +192,13 @@ recent instant undo itself.
   unchanged, so a pure pan costs a cheap probe per frame and no layout. While an instant is
   being moved the cache is skipped. The limits are the `chipRowsMax` (horizontal) and
   `chipColumnsMax` (vertical) tunables.
-- **Lane packing and crowded names.** Saved-side lanes are packed (`domain/laneSlots.packSlots`):
+- **Lane packing and crowded spans.** Saved-side lanes are packed (`domain/laneSlots.packSlots`):
   spans that don't overlap in time share a slot, a span's containers are placed just before it
-  so it sits inside them, and a lane keeps its slot while it still fits. Names on one slot that
-  would touch fold into an "N spans" chip (`domain/labelGroups`; horizontal: `laneChipLayout.ts`
-  and `LaneGroupChips.tsx`, read per frame by `SpanLane`; vertical: the label boxes in
-  `rightSideLayout.ts` / `NowFlags.tsx`).
+  so it sits inside them, and a lane keeps its slot while it still fits. A span's chip (horizontal:
+  `laneChipLayout.ts`, read per frame by `SpanLane`) or label box (vertical: `rightSideLayout.ts` /
+  `NowFlags.tsx`) stays on its span (`domain/nowFlags`, `cover`); crowded, it shows its length
+  alone (compact; `lookWidths.ts` measures a box's name apart, so both widths are known whichever
+  shows), then only its bar, which a tap selects.
 - **Span readings (`SpanReading.tsx`, `domain/spans` `spanReadingValue` / `spanReadingTotal`).**
   Label boxes (vertical) and saved-side span chips (both orientations) read the same: the name,
   then while the span contains Now the time left in the lane's colour and the whole length small,

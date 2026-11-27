@@ -145,6 +145,21 @@ const FILLER = new RegExp(
   'don\'t forget to|dont forget to|do not forget to|remember to|need to|have to|gotta|got to|to)\\s+)?', 'i')
 
 /**
+ * Instructions said before a todo, not part of its name: "set an alarm to", "timer for",
+ * "add a todo to", "create a reminder about". The noun is kept: a todo left with no name is named
+ * after it ("set an alarm for 7am" is "Alarm").
+ */
+const COMMAND_NOUN = '(alarm|timer|reminder|todo|to-do|task)'
+const COMMAND_LINK = '(?:\\s+(?:for|to|about|that|at|in|on)\\b|\\s*:)'
+const COMMAND = new RegExp(
+  '^(?:(?:um+|uh+|er+|so|okay|ok|please|hey)[,\\s]+)*(?:(?:can|could|would) you\\s+)?(?:please\\s+)?(?:' +
+  // A verb before it: "set an alarm for", "add a todo", "start a timer".
+  `(?:set|start|make|create|add|put|schedule)\\s+(?:me\\s+)?(?:up\\s+)?(?:an?\\s+|the\\s+|one\\s+)?(?:new\\s+)?${COMMAND_NOUN}${COMMAND_LINK}?` +
+  // Or the noun alone, only with what links it on ("timer for", "reminder:"): "task force" stays.
+  `|(?:an?\\s+|new\\s+)?${COMMAND_NOUN}${COMMAND_LINK})(?=\\s|$)`, 'i')
+const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+
+/**
  * Reads a todo as said. Phrases it understands come out of the words; what is left goes through
  * parseTodoInput, which may still find typed ones ("3p", "20m", "daily") at its end.
  */
@@ -257,7 +272,9 @@ export function readSpoken(text: string, now: number): SpokenTodo {
     if (out.date) return false; out.date = monthDayKey(Number(mo) - 1, Number(d), now) })
 
   const rest = s.replace(/\s+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').trim()
-  const cleaned = rest.replace(FILLER, '').replace(/^[,.;:\-–—\s]+|[,;:\-–—\s]+$/g, '').replace(/[.!?]+$/, '').trim()
+  let command: string | undefined
+  const afterCommand = rest.replace(COMMAND, (_m, a?: string, b?: string) => { command = a ?? b; return '' })
+  const cleaned = afterCommand.replace(FILLER, '').replace(/^[,.;:\-–—\s]+|[,;:\-–—\s]+$/g, '').replace(/[.!?]+$/, '').trim()
   const typed = parseTodoInput(cleaned)
   const input: TodoInput = { label: typed.label }
   const t = time ?? typed.time
@@ -269,6 +286,7 @@ export function readSpoken(text: string, now: number): SpokenTodo {
   const r = repeat ?? typed.repeat
   if (r) input.repeat = r
   // Nothing left for a name: what was said is the name (as the Add box does).
+  if (!input.label && command) return { input: { ...input, label: capitalize(command.toLowerCase().replace('to-do', 'todo')) }, ...out }
   if (!input.label) return { input: { label: text.trim() } }
   return { input, ...out }
 }
@@ -415,8 +433,6 @@ export function isList(text: string): boolean {
   const m = lines[0] ? MARKER.exec(lines[0]) : null
   return !!m && m[0].trim() !== ''
 }
-
-const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
 /** One todo from its text (a list line, a spoken piece, or a row being edited). */
 export function readOne(source: string, now: number, times: TodoTimes = DEFAULT_TODO_TIMES, opts: { done?: boolean; headingDay?: string; capitalize?: boolean; key?: number } = {}): ImportRow {
